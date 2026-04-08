@@ -638,7 +638,7 @@ function processFile(mode) {
     } }).catch(e => { logBox.innerText = "❌ Lỗi đọc file Word: " + e.message; btnBox.disabled = false; }); }; reader.readAsArrayBuffer(fileInput.files[0]); }
 
 // ==========================================================
-// HÀM HÚT ĐỀ TỪ IFRAME DÀNH RIÊNG CHO BẢN V8
+// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11
 // ==========================================================
 async function layDeTuIframe(btnElement) {
     if (!checkWorkspaceAction()) return;
@@ -650,35 +650,116 @@ async function layDeTuIframe(btnElement) {
 
     try {
         let iframeWindow = document.getElementById('frameV8').contentWindow;
-        
-        let danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+        let danhSachDeIframe = [];
 
-        if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
-            return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm '🚀 Quét & Trộn' trong khung Iframe trước.");
+        // --- KIỂM TRA: NẾU LÀ BẢN V11 ---
+        if (iframeWindow.__v11native && typeof iframeWindow.__v11native.getState === 'function') {
+            let v11State = iframeWindow.__v11native.getState();
+            
+            if (!v11State.generated || v11State.generated.length === 0) {
+                return alert("⚠️ V11 chưa trộn đề! Thầy hãy thao tác tải file DOCX, cấu hình số lượng và bấm nút [2. Trộn + Preview] bên trong khung V11 trước khi hút.");
+            }
+
+            // Bắt đầu bóc tách Cây dữ liệu V11 sang dạng Phẳng của V8
+            v11State.generated.forEach(exam => {
+                let maDe = exam.examCode;
+                
+                exam.canonical.sections.forEach(sec => {
+                    let phan = "1";
+                    if (sec.section_kind === 'true_false') phan = "2";
+                    if (sec.section_kind === 'short_answer') phan = "3";
+                    
+                    let processQuestion = (q, sharedBlocks = []) => {
+                        let noiDung = `<b>Câu ${q.display_number || q.source_number}:</b> ${q.opener_text || ""}`;
+                        
+                        // Lấy các đoạn văn bản (nếu có xuống dòng)
+                        let allBlocks = [...sharedBlocks, ...(q.stem_blocks || [])];
+                        allBlocks.forEach(b => {
+                            if (b.type === 'paragraph') noiDung += `<br>${b.text || ""}`;
+                            else if (b.type === 'table') noiDung += `<br>[Nội dung có chứa Bảng - Vui lòng xem bản Word]`;
+                        });
+
+                        let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
+                        let opts = q.display_options || [];
+
+                        if (phan === "1") {
+                            dapAnA = opts[0] ? opts[0].text : "";
+                            dapAnB = opts[1] ? opts[1].text : "";
+                            dapAnC = opts[2] ? opts[2].text : "";
+                            dapAnD = opts[3] ? opts[3].text : "";
+                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
+                        } else if (phan === "2") {
+                            dapAnA = opts[0] ? opts[0].text : "";
+                            dapAnB = opts[1] ? opts[1].text : "";
+                            dapAnC = opts[2] ? opts[2].text : "";
+                            dapAnD = opts[3] ? opts[3].text : "";
+                            let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
+                            dapAnDung = ansArr.join("-");
+                        } else if (phan === "3") {
+                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
+                            if (dapAnDung && !dapAnDung.startsWith("'")) dapAnDung = "'" + dapAnDung;
+                        }
+
+                        danhSachDeIframe.push({
+                            MaPhong: maPhong,
+                            MaDe: String(maDe),
+                            Phan: phan,
+                            NoiDung: noiDung,
+                            DapAnA: dapAnA,
+                            DapAnB: dapAnB,
+                            DapAnC: dapAnC,
+                            DapAnD: dapAnD,
+                            DapAnDung: dapAnDung
+                        });
+                    };
+
+                    // Duyệt từng item trong section (có thể là câu lẻ hoặc câu chùm)
+                    (sec.items || []).forEach(item => {
+                        if (item.kind === 'question_group') {
+                            let shared = item.shared_blocks || [];
+                            let leadText = item.display_lead_text || item.lead_in_text || "";
+                            if (leadText) {
+                                shared = [{type: 'paragraph', text: `<i>${leadText}</i>`}].concat(shared);
+                            }
+                            (item.child_questions || []).forEach(cq => processQuestion(cq, shared));
+                        } else {
+                            processQuestion(item, []);
+                        }
+                    });
+                });
+            });
+
+        } 
+        // --- KIỂM TRA: NẾU LÀ BẢN V8 CŨ ---
+        else {
+            danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+            if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
+                return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
+            }
+            danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
+            danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
         }
 
-        let deThiDayLen = JSON.parse(JSON.stringify(danhSachDeIframe));
-
-        deThiDayLen.forEach(q => q.MaPhong = maPhong);
-
+        // ĐẨY LÊN SUPABASE
         let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
         btnElement.disabled = true;
 
-        let result = await luuDeThiLenSupabase(deThiDayLen);
+        let result = await luuDeThiLenSupabase(danhSachDeIframe);
         
         btnElement.innerText = oldText;
         btnElement.disabled = false;
 
         if (result.status === 'success') {
-            alert(`🎉 HOÀN TẤT! Đã hút thành công ${deThiDayLen.length} bản thể câu hỏi từ công cụ V8 và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
+            alert(`🎉 HOÀN TẤT! Đã bóc tách thành công ${danhSachDeIframe.length} câu hỏi và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
         } else {
             alert("❌ Lỗi máy chủ Supabase: " + result.message);
         }
     } catch (e) {
         btnElement.innerText = "🚀 Hút đề & Đẩy lên mạng";
         btnElement.disabled = false;
-        alert("❌ Lỗi kết nối hoặc Iframe chưa tải xong. Chi tiết: " + e.message);
+        console.error("Lỗi khi hút đề:", e);
+        alert("❌ Lỗi kết nối hoặc cấu trúc Iframe không hợp lệ. Chi tiết: " + e.message);
     }
 }
 // ==========================================================
