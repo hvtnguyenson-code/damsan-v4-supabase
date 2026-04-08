@@ -1656,3 +1656,100 @@ async function xoaDeTrongPhong(maPhong) {
     } catch(e) { alert("❌ Lỗi khi xóa đề: " + e.message); }
     btn.innerText = oldText; btn.disabled = false;
 }
+// ==========================================================
+// CÁC HÀM QUẢN LÝ DỮ LIỆU HỆ THỐNG (TRƯỜNG & MÔN) BỊ THIẾU
+// ==========================================================
+
+async function loadSysData() {
+    document.getElementById('sysTruongBody').innerHTML = '<tr><td colspan="4" style="text-align: center;">⏳ Đang tải...</td></tr>';
+    document.getElementById('sysMonBody').innerHTML = '<tr><td colspan="3" style="text-align: center;">⏳ Đang tải...</td></tr>';
+
+    try {
+        let [resTruong, resMon] = await Promise.all([
+            sb.from('truong_hoc').select('*').order('created_at', {ascending: true}),
+            sb.from('mon_hoc').select('*').order('created_at', {ascending: true})
+        ]);
+
+        let htmlTruong = "";
+        if(resTruong.data && resTruong.data.length > 0) {
+            resTruong.data.forEach((t, i) => {
+                htmlTruong += `<tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${i+1}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">${t.ma_truong || ''}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd;">${t.ten_truong || ''}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                        <button onclick="xoaTruong('${t.id}')" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Xóa</button>
+                    </td>
+                </tr>`;
+            });
+        } else {
+            htmlTruong = '<tr><td colspan="4" style="padding: 10px; text-align: center;">Chưa có dữ liệu trường học.</td></tr>';
+        }
+        document.getElementById('sysTruongBody').innerHTML = htmlTruong;
+
+        let htmlMon = "";
+        if(resMon.data && resMon.data.length > 0) {
+            resMon.data.forEach((m, i) => {
+                htmlMon += `<tr>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">${i+1}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">${m.ten_mon || ''}</td>
+                    <td style="padding: 10px; border: 1px solid #ddd; text-align: center;">
+                        <button onclick="xoaMon('${m.id}')" style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Xóa</button>
+                    </td>
+                </tr>`;
+            });
+        } else {
+            htmlMon = '<tr><td colspan="3" style="padding: 10px; text-align: center;">Chưa có dữ liệu môn học.</td></tr>';
+        }
+        document.getElementById('sysMonBody').innerHTML = htmlMon;
+
+    } catch(e) {
+        console.error("Lỗi tải dữ liệu hệ thống:", e);
+        document.getElementById('sysTruongBody').innerHTML = '<tr><td colspan="4" style="text-align: center; color: red;">❌ Lỗi kết nối máy chủ!</td></tr>';
+        document.getElementById('sysMonBody').innerHTML = '<tr><td colspan="3" style="text-align: center; color: red;">❌ Lỗi kết nối máy chủ!</td></tr>';
+    }
+}
+
+async function themTruongMoi() {
+    let ma = document.getElementById('newMaTruong').value.trim().toUpperCase();
+    let ten = document.getElementById('newTenTruong').value.trim();
+    if(!ma || !ten) return alert("Vui lòng nhập đủ Mã trường và Tên trường!");
+    
+    let btn = document.getElementById('btnThemTruong');
+    let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
+
+    let {error} = await sb.from('truong_hoc').insert({ ma_truong: ma, ten_truong: ten });
+    
+    btn.innerText = oldText; btn.disabled = false;
+    
+    if(error) {
+        if(error.code === '23505') alert("❌ Lỗi: Mã trường này đã tồn tại!");
+        else alert("❌ Lỗi máy chủ Supabase: " + error.message);
+    } else {
+        document.getElementById('newMaTruong').value = "";
+        document.getElementById('newTenTruong').value = "";
+        loadSysData();
+    }
+}
+
+async function themMonMoi() {
+    let ten = document.getElementById('newTenMon').value.trim();
+    if(!ten) return alert("Vui lòng nhập Tên môn học!");
+    
+    let btn = document.getElementById('btnThemMon');
+    let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
+
+    let {error} = await sb.from('mon_hoc').insert({ ten_mon: ten });
+    
+    btn.innerText = oldText; btn.disabled = false;
+    
+    if(error) {
+        if(error.code === '23505') alert("❌ Lỗi: Tên môn này đã tồn tại!");
+        else alert("❌ Lỗi máy chủ Supabase: " + error.message);
+    } else {
+        document.getElementById('newTenMon').value = "";
+        loadSysData();
+        // Cập nhật lại dropdown danh sách môn trên thanh menu ngay lập tức
+        khoiTaoWorkspace(); 
+    }
+}
