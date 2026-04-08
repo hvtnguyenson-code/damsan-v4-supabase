@@ -12,6 +12,7 @@ let danhSachThuCong = [];
 let previewExamData = []; 
 let ketQuaChannel = null;
 let g_danhSachLopCache = []; 
+let g_sysMonList = []; // Biến lưu danh sách môn học toàn cục
 
 async function hashPassword(message) {
     const msgBuffer = new TextEncoder().encode(message);
@@ -617,29 +618,6 @@ function parseHTMLToJSON(htmlText) {
 function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode = 1) { danhSachDeThi = []; for (let i = 0; i < soLuongDe; i++) { const maDe = startCode + (i * stepCode); let deThiClone = JSON.parse(JSON.stringify(cauHoiGoc)); let p1 = deThiClone.filter(c => String(c.Phan).trim() === "1"); let p2 = deThiClone.filter(c => String(c.Phan).trim() === "2"); let p3 = deThiClone.filter(c => String(c.Phan).trim() === "3"); shuffleArray(p1); p1.forEach((cauHoi, idx) => { cauHoi.CauSo = "P1_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); let dapAnDungText = ""; if (cauHoi.DapAnDung === "A") dapAnDungText = cauHoi.DapAnA; if (cauHoi.DapAnDung === "B") dapAnDungText = cauHoi.DapAnB; if (cauHoi.DapAnDung === "C") dapAnDungText = cauHoi.DapAnC; if (cauHoi.DapAnDung === "D") dapAnDungText = cauHoi.DapAnD; let options = [ { text: cauHoi.DapAnA }, { text: cauHoi.DapAnB }, { text: cauHoi.DapAnC }, { text: cauHoi.DapAnD } ]; shuffleArray(options); cauHoi.DapAnA = options[0].text; cauHoi.DapAnB = options[1].text; cauHoi.DapAnC = options[2].text; cauHoi.DapAnD = options[3].text; if (options[0].text === dapAnDungText) cauHoi.DapAnDung = "A"; if (options[1].text === dapAnDungText) cauHoi.DapAnDung = "B"; if (options[2].text === dapAnDungText) cauHoi.DapAnDung = "C"; if (options[3].text === dapAnDungText) cauHoi.DapAnDung = "D"; danhSachDeThi.push(cauHoi); }); shuffleArray(p2); p2.forEach((cauHoi, idx) => { cauHoi.CauSo = "P2_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); let arrDung = cauHoi.DapAnDung.split("-"); let optionsP2 = [ { text: cauHoi.DapAnA, ans: arrDung[0] }, { text: cauHoi.DapAnB, ans: arrDung[1] }, { text: cauHoi.DapAnC, ans: arrDung[2] }, { text: cauHoi.DapAnD, ans: arrDung[3] } ]; shuffleArray(optionsP2); cauHoi.DapAnA = optionsP2[0].text; cauHoi.DapAnB = optionsP2[1].text; cauHoi.DapAnC = optionsP2[2].text; cauHoi.DapAnD = optionsP2[3].text; cauHoi.DapAnDung = `${optionsP2[0].ans}-${optionsP2[1].ans}-${optionsP2[2].ans}-${optionsP2[3].ans}`; danhSachDeThi.push(cauHoi); }); shuffleArray(p3); p3.forEach((cauHoi, idx) => { cauHoi.CauSo = "P3_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); danhSachDeThi.push(cauHoi); }); } }
 function shuffleArray(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
 
-function processFile(mode) { 
-    if(!checkWorkspaceAction()) return;
-    let fileInput, logBox, btnBox, btnDocx; let baiHocNap = "", maPhong = "", soLuongDe = 1, startCode = 101, stepCode = 1; 
-    if(mode === 'direct') { fileInput = document.getElementById("uploadFileDirect"); logBox = document.getElementById("logDirect"); btnBox = document.getElementById("btnDirect"); btnDocx = document.getElementById("btnXuatWordDirect"); maPhong = document.getElementById("maPhongDirect").value.trim(); if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); soLuongDe = parseInt(document.getElementById("soLuongDeDirect").value) || 1; startCode = parseInt(document.getElementById("startCodeDirect").value) || 101; stepCode = parseInt(document.getElementById("stepCodeDirect").value) || 1; btnDocx.style.display = "none"; } 
-    else if(mode === 'offline') { fileInput = document.getElementById("uploadFileOffline"); logBox = document.getElementById("logOffline"); btnBox = document.getElementById("btnOffline"); soLuongDe = parseInt(document.getElementById("soLuongDeOffline").value) || 1; startCode = parseInt(document.getElementById("startCodeOffline").value) || 101; stepCode = parseInt(document.getElementById("stepCodeOffline").value) || 1; maPhong = "OFFLINE_PRINT_ONLY"; } 
-    else if(mode === 'bank') { fileInput = document.getElementById("uploadFileBank"); logBox = document.getElementById("logBank"); btnBox = document.getElementById("btnBank"); baiHocNap = safeHTML(document.getElementById("baiHocNap").value.trim()); if(!baiHocNap) return alert("Vui lòng nhập Tên Bài Học để dán nhãn!"); } 
-    if (fileInput.files.length === 0) return alert("Vui lòng chọn file Word!"); logBox.innerText = "⏳ Đang quét định dạng..."; btnBox.disabled = true; const reader = new FileReader(); reader.onload = function(event) { const options = { convertImage: mammoth.images.imgElement(function(image) { return image.read("base64").then(function(base64Str) { return compressImage(base64Str, image.contentType); }); }) }; mammoth.convertToHtml({arrayBuffer: event.target.result}, options).then(async function(result) { const ketQua = parseHTMLToJSON(result.value); if (!ketQua.hopLe) { logBox.innerHTML = `❌ ${ketQua.thongBao}`; btnBox.disabled = false; return; } if (mode === 'direct') { generateExams(ketQua.duLieu, soLuongDe, maPhong, startCode, stepCode); logBox.innerText = "⏳ Đang đẩy đề lên máy chủ Supabase..."; 
-        try {
-            await luuDeThiLenSupabase(danhSachDeThi);
-            btnBox.disabled = false; logBox.innerText = `🎉 Đã đẩy lên Server thành công! Sẵn sàng thi!`; btnDocx.style.display = "block";
-        } catch(e) { btnBox.disabled = false; logBox.innerText = "❌ Lỗi mạng: " + e.message; }
-    } else if (mode === 'offline') { generateExams(ketQua.duLieu, soLuongDe, maPhong, startCode, stepCode); logBox.innerText = `🎉 Đã trộn xong ${soLuongDe} đề. Trình duyệt đang tải file Word...`; xuatBaoCaoWord(); btnBox.disabled = false; } 
-    else if (mode === 'bank') { logBox.innerText = "⏳ Đang nạp câu hỏi vào CSDL..."; 
-        try {
-            let rows = ketQua.duLieu.map(q => ({ truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId, ma_cau_hoi: "Q_" + Date.now() + "_" + Math.floor(Math.random()*100), bai_hoc: baiHocNap, phan: q.Phan, muc_do: q.MucDo, noi_dung: q.NoiDung, a: q.DapAnA, b: q.DapAnB, c: q.DapAnC, d: q.DapAnD, dap_an_dung: q.DapAnDung, loi_giai: q.LoiGiai }));
-            await sb.from('ngan_hang').insert(rows);
-            btnBox.disabled = false; logBox.innerText = `✅ Đã nạp thành công!`; document.getElementById("baiHocNap").value = ""; loadBankMeta(true); 
-        } catch(e) { btnBox.disabled = false; logBox.innerText = "❌ Lỗi mạng!"; }
-    } }).catch(e => { logBox.innerText = "❌ Lỗi đọc file Word: " + e.message; btnBox.disabled = false; }); }; reader.readAsArrayBuffer(fileInput.files[0]); }
-
-// ==========================================================
-// HÀM HÚT ĐỀ TỪ IFRAME DÀNH RIÊNG CHO BẢN V8
-// ==========================================================
 async function layDeTuIframe(btnElement) {
     if (!checkWorkspaceAction()) return;
 
@@ -650,38 +628,151 @@ async function layDeTuIframe(btnElement) {
 
     try {
         let iframeWindow = document.getElementById('frameV8').contentWindow;
-        
-        let danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+        let danhSachDeIframe = [];
 
-        if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
-            return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm '🚀 Quét & Trộn' trong khung Iframe trước.");
+        if (iframeWindow.__v11native && typeof iframeWindow.__v11native.getState === 'function') {
+            let v11State = iframeWindow.__v11native.getState();
+            
+            if (!v11State.generated || v11State.generated.length === 0) {
+                return alert("⚠️ V11 chưa trộn đề! Thầy hãy thao tác tải file DOCX, cấu hình số lượng và bấm nút [2. Trộn + Preview] bên trong khung V11 trước khi hút.");
+            }
+
+            const deepExtractContent = (block) => {
+                if (!block) return "";
+                if (typeof block === 'string') return block;
+                let res = block.html || block.outerHTML || block.content || block.text || "";
+                if (block.type === 'image' && block.src) {
+                    res = `<img src="${block.src}" style="max-width:100%; height:auto; margin: 10px 0; display: block;" />`;
+                }
+                return res;
+            };
+
+            v11State.generated.forEach(exam => {
+                let maDe = exam.examCode;
+                
+                exam.canonical.sections.forEach(sec => {
+                    let phan = "1";
+                    if (sec.section_kind === 'true_false') phan = "2";
+                    if (sec.section_kind === 'short_answer') phan = "3";
+                    
+                    let processQuestion = (q, sharedBlocks = [], isFirstInGroup = false) => {
+                        let noiDung = "";
+
+                        if (isFirstInGroup && sharedBlocks && sharedBlocks.length > 0) {
+                            noiDung += `<div style="background-color: #f8f9fa; padding: 12px; border-left: 4px solid #1a73e8; margin-bottom: 10px; border-radius: 4px; overflow-x: auto;">`;
+                            sharedBlocks.forEach(b => {
+                                noiDung += `<div style="margin-bottom: 5px;">${deepExtractContent(b)}</div>`;
+                            });
+                            noiDung += `</div>`;
+                        }
+
+                        let rawStem = "";
+                        
+                        let opener = deepExtractContent(q.opener_text || q.lead_in_text || q.stem_text || q.text);
+                        if (opener) rawStem += opener + "<br>";
+
+                        (q.stem_blocks || []).forEach(b => {
+                            let bContent = deepExtractContent(b);
+                            if (bContent) rawStem += bContent + "<br>";
+                        });
+
+                        let startingTags = "";
+                        rawStem = rawStem.replace(/^(\s*<[^>]+>\s*)*/, function(match) {
+                            startingTags = match; return "";
+                        });
+                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*([(\[][A-Za-z0-9]+[)\]])?\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match) {
+                            let closingTags = match.match(/<\/[^>]+>/g); 
+                            return closingTags ? closingTags.join("") : ""; 
+                        });
+                        rawStem = startingTags + rawStem;
+                        rawStem = rawStem.replace(/^(<br>\s*)+/, "").replace(/(<br>\s*)+$/, "").trim();
+
+                        noiDung += rawStem;
+
+                        let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
+                        let opts = q.display_options || [];
+
+                        if (phan === "1") {
+                            dapAnA = opts[0] ? deepExtractContent(opts[0]) : "";
+                            dapAnB = opts[1] ? deepExtractContent(opts[1]) : "";
+                            dapAnC = opts[2] ? deepExtractContent(opts[2]) : "";
+                            dapAnD = opts[3] ? deepExtractContent(opts[3]) : "";
+                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
+                        } else if (phan === "2") {
+                            dapAnA = opts[0] ? deepExtractContent(opts[0]) : "";
+                            dapAnB = opts[1] ? deepExtractContent(opts[1]) : "";
+                            dapAnC = opts[2] ? deepExtractContent(opts[2]) : "";
+                            dapAnD = opts[3] ? deepExtractContent(opts[3]) : "";
+                            let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
+                            dapAnDung = ansArr.join("-");
+                        } else if (phan === "3") {
+                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
+                            if (dapAnDung && !dapAnDung.startsWith("'")) dapAnDung = "'" + dapAnDung;
+                        }
+
+                        danhSachDeIframe.push({
+                            MaPhong: maPhong,
+                            MaDe: String(maDe),
+                            Phan: phan,
+                            NoiDung: noiDung,
+                            DapAnA: dapAnA,
+                            DapAnB: dapAnB,
+                            DapAnC: dapAnC,
+                            DapAnD: dapAnD,
+                            DapAnDung: dapAnDung
+                        });
+                    };
+
+                    (sec.items || []).forEach(item => {
+                        if (item.kind === 'question_group') {
+                            let shared = item.shared_blocks || [];
+                            let leadText = deepExtractContent(item.display_lead_text || item.lead_in_text);
+                            if (leadText) {
+                                shared = [{type: 'paragraph', html: `<b><i>${leadText}</i></b>`}].concat(shared);
+                            }
+                            
+                            let cqs = item.child_questions || [];
+                            cqs.forEach((cq, cqIdx) => {
+                                processQuestion(cq, shared, cqIdx === 0);
+                            });
+                        } else {
+                            processQuestion(item, [], false);
+                        }
+                    });
+                });
+            });
+
+        } 
+        else {
+            danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+            if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
+                return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
+            }
+            danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
+            danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
         }
-
-        let deThiDayLen = JSON.parse(JSON.stringify(danhSachDeIframe));
-
-        deThiDayLen.forEach(q => q.MaPhong = maPhong);
 
         let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
         btnElement.disabled = true;
 
-        let result = await luuDeThiLenSupabase(deThiDayLen);
+        let result = await luuDeThiLenSupabase(danhSachDeIframe);
         
         btnElement.innerText = oldText;
         btnElement.disabled = false;
 
         if (result.status === 'success') {
-            alert(`🎉 HOÀN TẤT! Đã hút thành công ${deThiDayLen.length} bản thể câu hỏi từ công cụ V8 và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
+            alert(`🎉 HOÀN TẤT! Đã bóc tách thành công ${danhSachDeIframe.length} câu hỏi và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
         } else {
             alert("❌ Lỗi máy chủ Supabase: " + result.message);
         }
     } catch (e) {
         btnElement.innerText = "🚀 Hút đề & Đẩy lên mạng";
         btnElement.disabled = false;
-        alert("❌ Lỗi kết nối hoặc Iframe chưa tải xong. Chi tiết: " + e.message);
+        console.error("Lỗi khi hút đề:", e);
+        alert("❌ Lỗi kết nối hoặc cấu trúc Iframe không hợp lệ. Chi tiết: " + e.message);
     }
 }
-// ==========================================================
 
 function safeTextForWord(htmlCode) { if(!htmlCode) return ""; let temp = document.createElement('div'); temp.innerHTML = htmlCode; let imgs = temp.querySelectorAll('img'); imgs.forEach(img => { if(img.parentElement && img.parentElement.getAttribute('align') === 'center') return; let div = document.createElement('div'); div.setAttribute('align', 'center'); div.style.marginTop = '6pt'; div.style.marginBottom = '6pt'; img.parentNode.insertBefore(div, img); div.appendChild(img); }); let tables = temp.querySelectorAll('table'); tables.forEach(tbl => { tbl.setAttribute('border', '1'); tbl.setAttribute('cellpadding', '5'); tbl.setAttribute('cellspacing', '0'); tbl.setAttribute('align', 'center'); tbl.style.borderCollapse = 'collapse'; tbl.style.width = '80%'; tbl.style.marginLeft = 'auto'; tbl.style.marginRight = 'auto'; tbl.style.marginTop = '6pt'; tbl.style.marginBottom = '6pt'; }); let out = temp.innerHTML; out = out.replace(/<br\s*\/?>/gi, '</p><p>'); out = out.replace(/<p>\s*<\/p>/gi, ''); return out.trim(); }
 function getLayoutHtml(a, b, c, d) { let sa = safeTextForWord(a), sb = safeTextForWord(b), sc = safeTextForWord(c), sd = safeTextForWord(d); function calcLen(str) { let raw = str.replace(/<[^>]*>?/g, ''); return raw.length + (str.includes('<img') ? 40 : 0); } let maxLen = Math.max(calcLen(sa), calcLen(sb), calcLen(sc), calcLen(sd)); const tab = `<span style="mso-tab-count:1">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`; if (maxLen > 35) { return `<p>A. ${sa}</p><p>B. ${sb}</p><p>C. ${sc}</p><p>D. ${sd}</p>`; } else if (maxLen > 14) { return `<p style="tab-stops:240.0pt;">A. ${sa}${tab}B. ${sb}</p><p style="tab-stops:240.0pt;">C. ${sc}${tab}D. ${sd}</p>`; } else { return `<p style="tab-stops:120.0pt 240.0pt 360.0pt;">A. ${sa}${tab}B. ${sb}${tab}C. ${sc}${tab}D. ${sd}</p>`; } }
@@ -1249,6 +1340,10 @@ async function xuatExcel() {
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
+// ==========================================================
+// QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
+// ==========================================================
+
 async function fetchStudents(forceReload = false) { 
     document.getElementById('hsBody').innerHTML = '<tr><td colspan="6">⏳ Đang tải...</td></tr>'; 
     let cached = sessionStorage.getItem('cache_students');
@@ -1283,29 +1378,83 @@ function renderStudentTable() {
 }
 
 async function fetchTeachers(forceReload = false) { 
-    document.getElementById('gvBody').innerHTML = '<tr><td colspan="5">⏳ Đang tải...</td></tr>'; 
-    let cached = sessionStorage.getItem('cache_teachers');
-    if (!forceReload && cached) {
-        allTeachers = JSON.parse(cached); renderTeacherTable(); return;
-    }
-    let {data} = await sb.from('giao_vien').select('*').eq('truong_id', gvData.truong_id);
-    if(data) {
-        allTeachers = data.map(d => ({ MaGV: d.ma_gv, HoTen: d.ho_ten, TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', Quyen: d.quyen, id: d.id }));
-        sessionStorage.setItem('cache_teachers', JSON.stringify(allTeachers));
-        renderTeacherTable();
+    document.getElementById('gvBody').innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Đang tải dữ liệu...</td></tr>'; 
+    
+    try {
+        // 1. Tải danh sách môn học
+        let resMon = await sb.from('mon_hoc').select('*').order('created_at', {ascending: true});
+        g_sysMonList = resMon.data || [];
+
+        // 2. Tải danh sách giáo viên (Tải độc lập, KHÔNG gộp bảng để tránh lỗi Khóa ngoại)
+        let {data, error} = await sb.from('giao_vien').select('*').eq('truong_id', gvData.truong_id).order('ma_gv', {ascending: true});
+        
+        if (error) throw error;
+
+        if(data) {
+            allTeachers = data.map(d => {
+                // 3. Tự động đối chiếu ID để tìm tên môn học bằng Javascript
+                let matchedMon = g_sysMonList.find(m => m.id === d.mon_id);
+                return { 
+                    MaGV: d.ma_gv, 
+                    HoTen: d.ho_ten, 
+                    MonId: d.mon_id,
+                    TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
+                    TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
+                    Quyen: d.quyen, 
+                    id: d.id 
+                };
+            });
+            renderTeacherTable();
+        }
+    } catch (err) {
+        console.error("Lỗi tải danh sách giáo viên:", err);
+        document.getElementById('gvBody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:#c0392b; font-weight:bold;">❌ Lỗi tải dữ liệu: Vui lòng kiểm tra lại kết nối mạng.</td></tr>`;
     }
 }
 
 function renderTeacherTable() {
+    let thead = document.querySelector('#gvBody').previousElementSibling;
+    if(thead && !thead.innerHTML.includes('Môn Phụ Trách')) {
+        thead.innerHTML = `<tr><th style="width:40px; text-align:center;"><input type="checkbox" id="chkAllGV" onchange="toggleAll('GV')"></th><th>Mã GV</th><th>Họ và Tên</th><th>Môn Phụ Trách</th><th>Trạng Thái</th><th>Thao Tác</th></tr>`;
+    }
+
     let html = ""; 
-    if(allTeachers.length === 0) html = '<tr><td colspan="5">Không có dữ liệu.</td></tr>'; 
+    if(allTeachers.length === 0) html = '<tr><td colspan="6" style="text-align:center;">Không có dữ liệu.</td></tr>'; 
     else { 
         allTeachers.forEach(gv => { 
             let statusHTML = gv.TrangThai === "DaDoi" ? `<span style="color:green;font-weight:bold;">Đã đổi</span>` : `<span style="color:red;">Mặc định</span>`; 
-            html += `<tr><td><input type="checkbox" class="chk-GV" value="${gv.id}"></td><td><b>${gv.MaGV}</b></td><td>${gv.HoTen}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer;" onclick="resetPass('${gv.MaGV}', '${gv.id}', 'GV')">Khôi phục</button></td></tr>`; 
+            
+            let selHtml = `<select onchange="capNhatMonGiaoVien('${gv.id}', this.value)" style="padding:6px; border-radius:4px; border:1px solid #ccc; font-weight:bold; color:#1a73e8; cursor:pointer; width:100%; outline:none; background:#f8faff;">`;
+            selHtml += `<option value="">-- Chưa phân công --</option>`;
+            g_sysMonList.forEach(m => {
+                let sel = (gv.MonId === m.id) ? 'selected' : '';
+                selHtml += `<option value="${m.id}" ${sel}>${m.ten_mon}</option>`;
+            });
+            selHtml += `</select>`;
+
+            let chucVuHtml = gv.Quyen === 'Admin' ? `<span style="background:#fadbd8; color:#e74c3c; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:12px; display:inline-block; margin-top:4px;">Admin Toàn quyền</span>` : selHtml;
+
+            html += `<tr>
+                <td style="text-align:center;"><input type="checkbox" class="chk-GV" value="${gv.id}" style="transform: scale(1.2);"></td>
+                <td><b>${gv.MaGV}</b></td>
+                <td>${gv.HoTen}</td>
+                <td style="min-width: 150px;">${chucVuHtml}</td>
+                <td>${statusHTML}</td>
+                <td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${gv.MaGV}', '${gv.id}', 'GV')">Khôi phục MK</button></td>
+            </tr>`; 
         }); 
     } 
     document.getElementById('gvBody').innerHTML = html; 
+}
+
+async function capNhatMonGiaoVien(gvId, monId) {
+    let valToUpdate = monId ? monId : null;
+    let {error} = await sb.from('giao_vien').update({mon_id: valToUpdate}).eq('id', gvId);
+    
+    if(error) {
+        alert("❌ Lỗi cập nhật phân công bộ môn trên máy chủ: " + error.message);
+        fetchTeachers(); 
+    } 
 }
 
 function toggleAll(type) {
@@ -1579,6 +1728,53 @@ async function docFileExcelVaNap(loai) {
     btn.innerText = oldText; btn.disabled = false; btn.style.opacity = 1;
 }
 
+// ==========================================================
+// HÚT ĐỀ THÔNG MINH TỪ IFRAME V8 (CÂU CHÙM, HÌNH ẢNH)
+// ==========================================================
+
+async function layDeTuIframe(btnElement) {
+    if (!checkWorkspaceAction()) return;
+
+    let inputMaPhong = document.getElementById('maPhongLienKet');
+    let maPhong = inputMaPhong ? inputMaPhong.value.trim() : prompt("Vui lòng nhập MÃ PHÒNG THI đích đến:");
+    
+    if (!maPhong) return alert("⚠️ Cần phải có Mã Phòng Thi để đẩy đề lên mạng!");
+
+    try {
+        let iframeWindow = document.getElementById('frameV8').contentWindow;
+        let danhSachDeIframe = [];
+
+        danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+        if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
+            return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
+        }
+        
+        danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
+        
+        danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
+
+        let oldText = btnElement.innerText;
+        btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
+        btnElement.disabled = true;
+
+        let result = await luuDeThiLenSupabase(danhSachDeIframe);
+        
+        btnElement.innerText = oldText;
+        btnElement.disabled = false;
+
+        if (result.status === 'success') {
+            alert(`🎉 HOÀN TẤT! Đã bóc tách thành công ${danhSachDeIframe.length} câu hỏi và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
+        } else {
+            alert("❌ Lỗi máy chủ Supabase: " + result.message);
+        }
+    } catch (e) {
+        btnElement.innerText = "🚀 Hút đề & Đẩy lên mạng";
+        btnElement.disabled = false;
+        console.error("Lỗi khi hút đề:", e);
+        alert("❌ Lỗi kết nối hoặc cấu trúc Iframe không hợp lệ. Chi tiết: " + e.message);
+    }
+}
+
 async function taiDanhSachPhong() {
     let selectBoxTab2 = document.getElementById("ctrlMaPhong"); let selectBoxTab3 = document.getElementById("dashMaPhong");
     if(selectBoxTab2) selectBoxTab2.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
@@ -1621,43 +1817,8 @@ async function taiDanhSachPhong() {
 
 function xuLyLiveSearch() { renderDashboardTable(); }
 
-async function xoaTruong(id) {
-    if(!confirm("⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa trường này?\n\nHành động này không thể hoàn tác!")) return;
-    let { error } = await sb.from('truong_hoc').delete().eq('id', id);
-    if(error) {
-        if(error.code === '23503') alert("❌ KHÔNG THỂ XÓA: Trường này đang có dữ liệu trực thuộc!");
-        else alert("❌ Lỗi máy chủ Supabase: " + error.message);
-    } else { alert("✅ Đã xóa Trường học thành công!"); loadSysData(); }
-}
-
-async function xoaMon(id) {
-    if(!confirm("⚠️ Bạn có chắc chắn muốn xóa môn học này?")) return;
-    let { error } = await sb.from('mon_hoc').delete().eq('id', id);
-    if(error) {
-        if(error.code === '23503') alert("❌ KHÔNG THỂ XÓA: Môn học này đang được sử dụng!");
-        else alert("❌ Lỗi máy chủ Supabase: " + error.message);
-    } else { alert("✅ Đã xóa Môn học thành công!"); loadSysData(); }
-}
-
-async function xoaDeTrongPhong(maPhong) {
-    if(!confirm(`XÓA ĐỀ THI của phòng [${maPhong}]?\n\nHành động này sẽ xóa sạch các câu hỏi đang có trong phòng này trên máy chủ, nhưng vẫn giữ nguyên thông tin Phòng thi để bạn có thể đẩy đề mới vào.`)) return;
-    let btn = event.target; let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
-
-    try {
-        let query = sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        
-        let {data: room} = await query.single();
-        if(room) {
-            let {error} = await sb.from('de_thi').delete().eq('phong_id', room.id);
-            if(error) throw error;
-            alert("✅ Đã xóa sạch đề thi trong phòng! Bây giờ bạn có thể trộn và đẩy lại đề mới.");
-        } else { alert("❌ Lỗi: Không tìm thấy phòng thi này!"); }
-    } catch(e) { alert("❌ Lỗi khi xóa đề: " + e.message); }
-    btn.innerText = oldText; btn.disabled = false;
-}
 // ==========================================================
-// CÁC HÀM QUẢN LÝ DỮ LIỆU HỆ THỐNG (TRƯỜNG & MÔN) BỊ THIẾU
+// CÁC HÀM QUẢN LÝ DỮ LIỆU HỆ THỐNG (TRƯỜNG & MÔN)
 // ==========================================================
 
 async function loadSysData() {
@@ -1749,7 +1910,42 @@ async function themMonMoi() {
     } else {
         document.getElementById('newTenMon').value = "";
         loadSysData();
-        // Cập nhật lại dropdown danh sách môn trên thanh menu ngay lập tức
         khoiTaoWorkspace(); 
     }
+}
+
+async function xoaTruong(id) {
+    if(!confirm("⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa trường này?\n\nHành động này không thể hoàn tác!")) return;
+    let { error } = await sb.from('truong_hoc').delete().eq('id', id);
+    if(error) {
+        if(error.code === '23503') alert("❌ KHÔNG THỂ XÓA: Trường này đang có dữ liệu trực thuộc!");
+        else alert("❌ Lỗi máy chủ Supabase: " + error.message);
+    } else { alert("✅ Đã xóa Trường học thành công!"); loadSysData(); }
+}
+
+async function xoaMon(id) {
+    if(!confirm("⚠️ Bạn có chắc chắn muốn xóa môn học này?")) return;
+    let { error } = await sb.from('mon_hoc').delete().eq('id', id);
+    if(error) {
+        if(error.code === '23503') alert("❌ KHÔNG THỂ XÓA: Môn học này đang được sử dụng!");
+        else alert("❌ Lỗi máy chủ Supabase: " + error.message);
+    } else { alert("✅ Đã xóa Môn học thành công!"); loadSysData(); }
+}
+
+async function xoaDeTrongPhong(maPhong) {
+    if(!confirm(`XÓA ĐỀ THI của phòng [${maPhong}]?\n\nHành động này sẽ xóa sạch các câu hỏi đang có trong phòng này trên máy chủ, nhưng vẫn giữ nguyên thông tin Phòng thi để bạn có thể đẩy đề mới vào.`)) return;
+    let btn = event.target; let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
+
+    try {
+        let query = sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
+        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
+        
+        let {data: room} = await query.single();
+        if(room) {
+            let {error} = await sb.from('de_thi').delete().eq('phong_id', room.id);
+            if(error) throw error;
+            alert("✅ Đã xóa sạch đề thi trong phòng! Bây giờ bạn có thể trộn và đẩy lại đề mới.");
+        } else { alert("❌ Lỗi: Không tìm thấy phòng thi này!"); }
+    } catch(e) { alert("❌ Lỗi khi xóa đề: " + e.message); }
+    btn.innerText = oldText; btn.disabled = false;
 }
