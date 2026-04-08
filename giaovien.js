@@ -618,7 +618,7 @@ function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode 
 function shuffleArray(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
 
 // ==========================================================
-// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11 (ĐÃ VÁ LỖI CÂU CHÙM)
+// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11 (ĐÃ VÁ LỖI CÂU CHÙM, ĐỊA LÝ)
 // ==========================================================
 async function layDeTuIframe(btnElement) {
     if (!checkWorkspaceAction()) return;
@@ -652,49 +652,69 @@ async function layDeTuIframe(btnElement) {
                     let processQuestion = (q, sharedBlocks = []) => {
                         let noiDung = "";
 
-                        // 1. XỬ LÝ CÂU CHÙM (SHARED BLOCKS)
+                        // 1. XỬ LÝ CÂU CHÙM (SHARED BLOCKS) - Cho vào khung highlight
                         if (sharedBlocks && sharedBlocks.length > 0) {
                             noiDung += `<div style="background-color: #f8f9fa; padding: 12px; border-left: 4px solid #1a73e8; margin-bottom: 10px; border-radius: 4px;">`;
                             sharedBlocks.forEach(b => {
-                                noiDung += `<div style="margin-bottom: 5px;">${b.html || b.text || ""}</div>`;
+                                // Lấy triệt để nội dung từ V11 (bao gồm cả bảng biểu, hình ảnh)
+                                let bContent = typeof b === 'string' ? b : (b.html || b.outerHTML || b.content || b.text || "");
+                                noiDung += `<div style="margin-bottom: 5px; overflow-x: auto;">${bContent}</div>`;
                             });
                             noiDung += `</div>`;
                         }
 
-                        // 2. XỬ LÝ NỘI DUNG CÂU HỎI CHÍNH (STEM BLOCKS)
+                        // 2. XỬ LÝ NỘI DUNG CÂU HỎI CHÍNH (STEM)
                         let rawStem = "";
+                        
+                        // Lấy phần Câu dẫn (Khắc phục lỗi xóa trắng câu hỏi)
+                        let opener = q.opener_text || q.lead_in_text || q.stem_text || q.text || "";
+                        if (opener) {
+                            rawStem += opener + "<br>";
+                        }
+
+                        // Lấy nội dung các block phụ (Hình ảnh bản đồ, bảng số liệu Địa Lý)
                         (q.stem_blocks || []).forEach(b => {
-                            rawStem += `${b.html || b.text || ""}<br>`;
+                            let bContent = typeof b === 'string' ? b : (b.html || b.outerHTML || b.content || b.text || "");
+                            if (bContent) {
+                                rawStem += bContent + "<br>";
+                            }
                         });
 
-                        // Thuật toán tia Laser: Lọc sạch chữ "Câu X:" và dấu "#" ở đầu câu
+                        // 3. THUẬT TOÁN TIA LASER: Dọn rác tránh lặp chữ "Câu X:"
                         let startingTags = "";
+                        
+                        // Rút hết các thẻ HTML mở đầu cất tạm
                         rawStem = rawStem.replace(/^(\s*<[^>]+>\s*)*/, function(match) {
                             startingTags = match; return "";
                         });
-                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match, p1) {
-                            return p1 || ""; 
+                        
+                        // Tiêu diệt chữ "Câu X" hoặc "# Câu X" hoặc "Câu X (TH)" ở mọi biến thể
+                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*([(\[][A-Za-z0-9]+[)\]])?\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match) {
+                            let closingTags = match.match(/<\/[^>]+>/g); // Giữ lại thẻ đóng nếu có (ví dụ </b>)
+                            return closingTags ? closingTags.join("") : ""; 
                         });
+                        
+                        // Ghép lại thẻ mở đầu và dọn thẻ <br> thừa
                         rawStem = startingTags + rawStem;
                         rawStem = rawStem.replace(/^(<br>\s*)+/, "").replace(/(<br>\s*)+$/, "").trim();
 
                         noiDung += rawStem;
 
-                        // 3. XỬ LÝ ĐÁP ÁN
+                        // 4. XỬ LÝ ĐÁP ÁN
                         let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
                         let opts = q.display_options || [];
 
                         if (phan === "1") {
-                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
-                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
-                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
-                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text || "") : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text || "") : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text || "") : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text || "") : "";
                             dapAnDung = q.display_answer ? q.display_answer.normalized : "";
                         } else if (phan === "2") {
-                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
-                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
-                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
-                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text || "") : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text || "") : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text || "") : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text || "") : "";
                             let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
                             dapAnDung = ansArr.join("-");
                         } else if (phan === "3") {
@@ -715,6 +735,7 @@ async function layDeTuIframe(btnElement) {
                         });
                     };
 
+                    // Duyệt từng item trong section (xử lý tốt Câu Chùm / Nhóm câu hỏi)
                     (sec.items || []).forEach(item => {
                         if (item.kind === 'question_group') {
                             let shared = item.shared_blocks || [];
@@ -741,6 +762,7 @@ async function layDeTuIframe(btnElement) {
             danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
         }
 
+        // ĐẨY LÊN SUPABASE
         let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
         btnElement.disabled = true;
@@ -1737,8 +1759,9 @@ async function xoaDeTrongPhong(maPhong) {
     } catch(e) { alert("❌ Lỗi khi xóa đề: " + e.message); }
     btn.innerText = oldText; btn.disabled = false;
 }
+
 // ==========================================================
-// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11 (ĐÃ VÁ LỖI CÂU CHÙM)
+// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11 (ĐÃ VÁ LỖI CÂU CHÙM, ĐỊA LÝ)
 // ==========================================================
 async function layDeTuIframe(btnElement) {
     if (!checkWorkspaceAction()) return;
@@ -1772,49 +1795,69 @@ async function layDeTuIframe(btnElement) {
                     let processQuestion = (q, sharedBlocks = []) => {
                         let noiDung = "";
 
-                        // 1. XỬ LÝ CÂU CHÙM (SHARED BLOCKS)
+                        // 1. XỬ LÝ CÂU CHÙM (SHARED BLOCKS) - Cho vào khung highlight
                         if (sharedBlocks && sharedBlocks.length > 0) {
                             noiDung += `<div style="background-color: #f8f9fa; padding: 12px; border-left: 4px solid #1a73e8; margin-bottom: 10px; border-radius: 4px;">`;
                             sharedBlocks.forEach(b => {
-                                noiDung += `<div style="margin-bottom: 5px;">${b.html || b.text || ""}</div>`;
+                                // Lấy triệt để nội dung từ V11 (bao gồm cả bảng biểu, hình ảnh)
+                                let bContent = typeof b === 'string' ? b : (b.html || b.outerHTML || b.content || b.text || "");
+                                noiDung += `<div style="margin-bottom: 5px; overflow-x: auto;">${bContent}</div>`;
                             });
                             noiDung += `</div>`;
                         }
 
-                        // 2. XỬ LÝ NỘI DUNG CÂU HỎI CHÍNH (STEM BLOCKS)
+                        // 2. XỬ LÝ NỘI DUNG CÂU HỎI CHÍNH (STEM)
                         let rawStem = "";
+                        
+                        // Lấy phần Câu dẫn (Khắc phục lỗi xóa trắng câu hỏi)
+                        let opener = q.opener_text || q.lead_in_text || q.stem_text || q.text || "";
+                        if (opener) {
+                            rawStem += opener + "<br>";
+                        }
+
+                        // Lấy nội dung các block phụ (Hình ảnh bản đồ, bảng số liệu Địa Lý)
                         (q.stem_blocks || []).forEach(b => {
-                            rawStem += `${b.html || b.text || ""}<br>`;
+                            let bContent = typeof b === 'string' ? b : (b.html || b.outerHTML || b.content || b.text || "");
+                            if (bContent) {
+                                rawStem += bContent + "<br>";
+                            }
                         });
 
-                        // Thuật toán tia Laser: Lọc sạch chữ "Câu X:" và dấu "#" ở đầu câu
+                        // 3. THUẬT TOÁN TIA LASER: Dọn rác tránh lặp chữ "Câu X:"
                         let startingTags = "";
+                        
+                        // Rút hết các thẻ HTML mở đầu cất tạm
                         rawStem = rawStem.replace(/^(\s*<[^>]+>\s*)*/, function(match) {
                             startingTags = match; return "";
                         });
-                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match, p1) {
-                            return p1 || ""; 
+                        
+                        // Tiêu diệt chữ "Câu X" hoặc "# Câu X" hoặc "Câu X (TH)" ở mọi biến thể
+                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*([(\[][A-Za-z0-9]+[)\]])?\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match) {
+                            let closingTags = match.match(/<\/[^>]+>/g); // Giữ lại thẻ đóng nếu có (ví dụ </b>)
+                            return closingTags ? closingTags.join("") : ""; 
                         });
+                        
+                        // Ghép lại thẻ mở đầu và dọn thẻ <br> thừa
                         rawStem = startingTags + rawStem;
                         rawStem = rawStem.replace(/^(<br>\s*)+/, "").replace(/(<br>\s*)+$/, "").trim();
 
                         noiDung += rawStem;
 
-                        // 3. XỬ LÝ ĐÁP ÁN
+                        // 4. XỬ LÝ ĐÁP ÁN
                         let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
                         let opts = q.display_options || [];
 
                         if (phan === "1") {
-                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
-                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
-                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
-                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text || "") : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text || "") : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text || "") : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text || "") : "";
                             dapAnDung = q.display_answer ? q.display_answer.normalized : "";
                         } else if (phan === "2") {
-                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
-                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
-                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
-                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text || "") : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text || "") : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text || "") : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text || "") : "";
                             let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
                             dapAnDung = ansArr.join("-");
                         } else if (phan === "3") {
@@ -1835,6 +1878,7 @@ async function layDeTuIframe(btnElement) {
                         });
                     };
 
+                    // Duyệt từng item trong section (xử lý tốt Câu Chùm / Nhóm câu hỏi)
                     (sec.items || []).forEach(item => {
                         if (item.kind === 'question_group') {
                             let shared = item.shared_blocks || [];
@@ -1861,6 +1905,7 @@ async function layDeTuIframe(btnElement) {
             danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
         }
 
+        // ĐẨY LÊN SUPABASE
         let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
         btnElement.disabled = true;
