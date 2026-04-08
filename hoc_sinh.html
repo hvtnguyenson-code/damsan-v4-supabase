@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phòng Thi Trực Tuyến - Hệ Thống Đam San V4</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <style>
+        /* --- CSS RESET & CƠ BẢN --- */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; margin: 0; padding: 0; color: #333; height: 100vh; overflow: hidden; }
+        * { box-sizing: border-box; }
+        .section { display: none; width: 100%; height: 100%; }
+        .section.active { display: block; }
+        
+        /* --- MÀN HÌNH ĐĂNG NHẬP & CHỜ --- */
+        .auth-container { max-width: 450px; margin: 80px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; }
+        .auth-title { color: #1a73e8; margin-top: 0; margin-bottom: 25px; font-size: 24px; text-transform: uppercase; letter-spacing: 1px; }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; font-size: 13px; font-weight: 600; color: #5f6368; margin-bottom: 8px; }
+        .auth-container input { width: 100%; padding: 14px; border: 1px solid #dadce0; border-radius: 8px; font-size: 15px; outline: none; transition: 0.3s; }
+        .auth-container input:focus:not([readonly]) { border-color: #1a73e8; box-shadow: 0 0 0 3px rgba(26,115,232,0.2); }
+        .btn-primary { width: 100%; padding: 14px; background: #1a73e8; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+        .btn-primary:hover { background: #1557b0; }
+        
+        .status-box { background: #e8f5e9; border: 1px solid #34a853; padding: 20px; border-radius: 8px; margin-bottom: 20px; color: #1e8e3e; }
+        .auto-scan-box { background: #e8f0fe; border: 2px dashed #1a73e8; padding: 25px; border-radius: 8px; margin-top: 20px; }
+
+        /* --- MÀN HÌNH THI (TRÁI ĐIỀU KHIỂN - PHẢI CÂU HỎI) --- */
+        .exam-layout { display: flex; height: 100vh; width: 100vw; background: #fff; }
+        
+        /* CỘT TRÁI: Bảng điều khiển & Lưới */
+        .exam-sidebar { width: 320px; flex-shrink: 0; height: 100%; background: #f8f9fa; border-right: 1px solid #dadce0; display: flex; flex-direction: column; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.02); z-index: 10; }
+        
+        .timer-box { background: #fff; border: 2px solid #1a73e8; border-radius: 10px; padding: 15px; text-align: center; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(26,115,232,0.1); }
+        .timer-title { font-size: 12px; font-weight: bold; color: #5f6368; text-transform: uppercase; margin-bottom: 5px; }
+        .timer-clock { font-size: 32px; font-weight: 900; color: #1a73e8; font-variant-numeric: tabular-nums; }
+        .timer-clock.danger { color: #d93025; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .student-info-panel { background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #dadce0; margin-bottom: 20px; font-size: 14px; }
+        .student-info-panel p { margin: 5px 0; color: #3c4043; }
+        .student-info-panel b { color: #202124; }
+
+        .question-grid-container { flex: 1; overflow-y: auto; background: #fff; border: 1px solid #dadce0; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+        .grid-title { font-size: 13px; font-weight: bold; color: #5f6368; margin-top: 0; margin-bottom: 10px; text-transform: uppercase; }
+        .question-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+        
+        .q-btn { background: #f1f3f4; border: 1px solid #dadce0; border-radius: 6px; padding: 8px 0; font-size: 14px; font-weight: bold; color: #5f6368; cursor: pointer; transition: 0.2s; text-align: center; position: relative;}
+        .q-btn:hover { background: #e8eaed; }
+        .q-btn.answered { background: #1a73e8; color: white; border-color: #1a73e8; }
+        .q-btn.active-view { box-shadow: 0 0 0 3px #fbbc04; border-color: #fbbc04; transform: scale(1.1); z-index: 2; }
+        
+        .btn-submit { width: 100%; background: #34a853; color: white; border: none; padding: 16px; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; text-transform: uppercase; box-shadow: 0 4px 6px rgba(52,168,83,0.2); }
+        .btn-submit:hover { background: #2d9249; box-shadow: 0 6px 10px rgba(52,168,83,0.3); }
+
+        /* CỘT PHẢI: Nội dung câu hỏi (Focus Mode) */
+        .exam-main { flex: 1; height: 100%; overflow-y: auto; padding: 30px; background: #fff; display: flex; flex-direction: column; }
+        .exam-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f3f4; padding-bottom: 15px; margin-bottom: 25px; }
+        .mon-title { font-size: 20px; font-weight: 800; color: #d93025; text-transform: uppercase; margin: 0; }
+        .ma-de-badge { background: #f8f9fa; border: 1px solid #dadce0; padding: 6px 15px; border-radius: 20px; font-weight: bold; color: #1a73e8; }
+        
+        #exam-content { flex: 1; position: relative; }
+        
+        /* KHÓA CỨNG HIỂN THỊ CÂU HỎI */
+        .question-block { display: none; padding-bottom: 25px; animation: fadeIn 0.3s; }
+        .question-block.active-q { display: block; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .q-text { font-size: 18px; font-weight: 600; line-height: 1.6; margin-bottom: 20px; color: #202124; }
+        .q-text img { max-width: 100%; height: auto; display: block; margin: 10px 0; border-radius: 4px; }
+        
+        .options-list { display: flex; flex-direction: column; gap: 12px; }
+        .option-lbl { display: flex; align-items: flex-start; padding: 15px; background: #f8f9fa; border: 2px solid #e8eaed; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .option-lbl:hover { background: #e8f0fe; border-color: #8ab4f8; }
+        .option-lbl:has(input[type="radio"]:checked) { background: #e8f0fe; border-color: #1a73e8; }
+        .option-lbl input[type="radio"] { margin-top: 3px; margin-right: 12px; transform: scale(1.3); cursor: pointer; }
+        .option-text { font-size: 17px; line-height: 1.5; }
+
+        .tf-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .tf-table th, .tf-table td { border: 1px solid #dadce0; padding: 15px 12px; text-align: center; }
+        .tf-table th { background: #f1f3f4; color: #5f6368; font-weight: bold; font-size: 16px;}
+        .tf-table td:first-child { text-align: left; font-size: 17px; }
+        .tf-table input[type="radio"] { transform: scale(1.4); cursor: pointer; }
+
+        .short-answer-input { width: 100%; max-width: 400px; padding: 15px; border: 2px solid #1a73e8; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center; color: #d93025; outline: none; }
+
+        /* Nút điều hướng */
+        .nav-buttons { display: flex; justify-content: space-between; margin-top: 30px; border-top: 2px solid #f1f3f4; padding-top: 20px; }
+        .btn-nav { padding: 12px 25px; background: #e8f0fe; color: #1a73e8; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 16px; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
+        .btn-nav:hover:not(:disabled) { background: #d2e3fc; }
+        .btn-nav:disabled { background: #f1f3f4; color: #9aa0a6; cursor: not-allowed; }
+
+        /* --- MÀN HÌNH KẾT QUẢ --- */
+        .result-container { max-width: 800px; margin: 40px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); height: 90vh; overflow-y: auto;}
+        .score-circle { width: 150px; height: 150px; border-radius: 50%; border: 8px solid #1a73e8; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; font-size: 48px; font-weight: 900; color: #1a73e8; }
+        .review-box { margin-top: 30px; text-align: left; }
+
+        /* SCROLLBAR CUSTOM */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* CẢNH BÁO GIAN LẬN CỔ ĐIỂN */
+        #cheat-warning { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(217, 48, 37, 0.98); z-index: 9999; color: white; text-align: center; padding-top: 20vh; }
+        #cheat-warning h1 { font-size: 45px; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px;}
+        #cheat-warning p { font-size: 20px; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.5; }
+        .btn-warning { background: white; color: #d93025; padding: 15px 40px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: 0.2s;}
+        .btn-warning:hover { transform: scale(1.05); }
+
+        @media (max-width: 768px) {
+            .exam-layout { flex-direction: column; }
+            .exam-sidebar { width: 100%; height: auto; border-right: none; border-bottom: 2px solid #dadce0; flex-direction: row; flex-wrap: wrap; justify-content: space-between; padding: 10px; }
+            .exam-main { padding: 15px; }
+            .timer-box { width: 100%; margin-bottom: 10px; padding: 10px; }
+            .student-info-panel { display: none; }
+            .question-grid-container { width: 100%; max-height: 120px; margin-bottom: 10px; }
+            .btn-submit { width: 100%; }
+            .nav-buttons { position: sticky; bottom: 0; background: #fff; padding-bottom: 10px;}
+        }
+    </style>
+</head>
+<body>
+
+    <div id="login-section" class="section active">
+        <div class="auth-container">
+            <h2 class="auth-title">CỔNG THI SINH</h2>
+            <p style="color: #5f6368; margin-bottom: 25px; font-size: 14px;">Hệ thống Kiểm tra Đánh giá Đam San V4</p>
+            
+            <div class="input-group">
+                <label>Mã Trường học</label>
+                <input type="text" id="ma_truong" value="DAMSAN" readonly style="background-color: #f1f3f4; color: #1a73e8; font-weight: bold; cursor: not-allowed; text-align: center; letter-spacing: 2px;">
+            </div>
+            <div class="input-group">
+                <label>Số báo danh (Mã HS)</label>
+                <input type="text" id="ma_hs" placeholder="VD: HS01" autocomplete="off" oninput="this.value = this.value.toUpperCase()">
+            </div>
+            <div class="input-group">
+                <label>Mật khẩu</label>
+                <input type="password" id="mat_khau" placeholder="Nhập mật khẩu của bạn">
+            </div>
+            <button onclick="login()" class="btn-primary" id="btn-login">ĐĂNG NHẬP VÀO HỆ THỐNG</button>
+        </div>
+    </div>
+
+    <div id="room-section" class="section">
+        <div class="auth-container" style="max-width: 550px;">
+            <div class="status-box">
+                <h3 style="margin-top: 0;">Xác thực thành công!</h3>
+                <p style="margin: 5px 0;">Họ và tên: <b id="ten_hs_hien_thi"></b></p>
+                <p style="margin: 0;">Lớp: <b id="lop_hs_hien_thi"></b></p>
+            </div>
+            <div id="auto-room-area" class="auto-scan-box">
+                <p style="font-weight: bold; color: #1a73e8; margin: 0;">⏳ Đang quét tìm phòng thi đang mở...</p>
+            </div>
+            <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+                <p style="font-size: 13px; color: #888;">Chế độ nhập mã phòng thủ công</p>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="ma_phong" placeholder="Nhập Mã Phòng..." style="flex: 1; padding: 12px; border: 1px solid #ccc; border-radius: 6px; outline: none; font-weight: bold; text-align: center;">
+                    <button onclick="joinRoom()" style="background: #5f6368; color: white; border: none; border-radius: 6px; padding: 0 20px; font-weight: bold; cursor: pointer;">VÀO</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="exam-section" class="section">
+        <div class="exam-layout">
+            
+            <div class="exam-sidebar">
+                <div class="timer-box">
+                    <div class="timer-title">THỜI GIAN CÒN LẠI</div>
+                    <div class="timer-clock" id="display-timer">--:--</div>
+                </div>
+                <div class="student-info-panel">
+                    <p>Thí sinh: <b id="panel_ten_hs"></b></p>
+                    <p>SBD: <b id="panel_ma_hs"></b> | Lớp: <b id="panel_lop_hs"></b></p>
+                </div>
+                <div class="question-grid-container">
+                    <div class="grid-title">BẢNG TIẾN ĐỘ LÀM BÀI</div>
+                    <div class="question-grid" id="question-grid"></div>
+                </div>
+                <button onclick="xacNhanNopBai()" class="btn-submit" id="btn-submit-exam">NỘP BÀI THI</button>
+            </div>
+
+            <div class="exam-main" id="exam-main-area">
+                <div class="exam-header">
+                    <h2 class="mon-title">MÔN: <span id="ten_mon_hien_thi"></span></h2>
+                    <span class="ma-de-badge">MÃ ĐỀ: <span id="ma_de_hien_thi"></span></span>
+                </div>
+                
+                <div id="exam-content"></div>
+
+                <div class="nav-buttons">
+                    <button onclick="cauTruoc()" class="btn-nav" id="btn-prev">⬅ Câu Trước</button>
+                    <button onclick="cauTiep()" class="btn-nav" id="btn-next">Câu Tiếp ➡</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="result-section" class="section">
+        <div class="result-container" style="text-align: center;">
+            <h2 style="color: #1e8e3e; margin-bottom: 5px; font-size: 28px;">NỘP BÀI THÀNH CÔNG!</h2>
+            <p style="color: #5f6368; margin-bottom: 30px;">Hệ thống đã ghi nhận bài làm của thí sinh <strong id="finish_name" style="color: #202124;"></strong>.</p>
+            
+            <div id="score-display-area" style="display: none; background: #f8f9fa; padding: 30px; border-radius: 12px; border: 2px dashed #1a73e8; margin-bottom: 30px;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #5f6368; text-transform: uppercase;">ĐIỂM SỐ CỦA BẠN</p>
+                <div class="score-circle" id="final_score_val">0.0</div>
+                <p style="margin: 0; font-size: 14px; color: #d93025; font-weight: bold;">(Điểm số đã được Giáo viên công bố chính thức)</p>
+            </div>
+
+            <button onclick="checkTeacherCommand()" style="background: #f39c12; color: white; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; margin-bottom: 10px;">🔄 TẢI LẠI TRẠNG THÁI</button>
+            <div id="review-content" class="review-box"></div>
+            <button onclick="location.reload()" style="background: #5f6368; color: white; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 30px;">🏠 QUAY VỀ TRANG CHỦ</button>
+        </div>
+    </div>
+
+    <div id="cheat-warning">
+        <h1>🚨 CẢNH BÁO GIAN LẬN!</h1>
+        <p>Hệ thống phát hiện bạn đã rời khỏi màn hình làm bài hoặc cố tình chuyển Tab/Mở ứng dụng khác!</p>
+        <p style="font-weight: bold; color: #fbbc04; font-size: 24px;">Số lần vi phạm: <span id="cheat-count">1</span> / 3</p>
+        <p>Nếu vi phạm đủ 3 lần, hệ thống sẽ <b>TỰ ĐỘNG THU BÀI</b> và ghi nhận điểm 0 đối với các câu chưa làm.</p>
+        <button class="btn-warning" onclick="closeCheatWarning()">TÔI ĐÃ HIỂU VÀ SẼ KHÔNG TÁI PHẠM</button>
+    </div>
+
+    <script src="hoc_sinh.js"></script>
+</body>
+</html>

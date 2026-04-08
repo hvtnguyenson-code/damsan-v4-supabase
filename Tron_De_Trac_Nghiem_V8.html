@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HỆ THỐNG TRỘN ĐỀ OFFLINE (BỘ GD&ĐT)</title>
+
+  <script>
+    (function loadMammoth() {
+      if (typeof mammoth !== "undefined") return;
+      const cdns = [
+        "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js",
+        "https://cdn.jsdelivr.net/npm/mammoth@1.4.21/mammoth.browser.min.js"
+      ];
+      let i = 0;
+      function tryNext() {
+        if (i >= cdns.length) { console.warn("Lỗi tải Mammoth."); return; }
+        const s = document.createElement("script");
+        s.src = cdns[i]; s.async = true;
+        s.onload = () => console.log("Mammoth Loaded");
+        s.onerror = () => { i++; tryNext(); };
+        document.head.appendChild(s);
+      }
+      tryNext();
+    })();
+  </script>
+
+  <style>
+    :root{
+      --bg:#f3f4f6; --card:#fff; --primary:#6f42c1; --accent:#1a73e8; --ok:#10b981; --warn:#f59e0b; --danger:#ef4444;
+      --text:#1f2937; --muted:#6b7280; --line:#e5e7eb;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);font-family:Segoe UI, Tahoma, Arial, sans-serif;color:var(--text);padding:16px}
+    .container{max-width:1100px;margin:0 auto}
+
+    .header{
+      background:linear-gradient(90deg, rgba(111,66,193,.1), rgba(26,115,232,.1));
+      border:1px solid var(--line); border-radius:10px; padding:14px 18px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+    }
+    h1{margin:0; font-size:17px; font-weight:700; text-transform:uppercase; color:var(--primary);}
+    .sub{margin-top:4px; color:var(--muted); font-size:12px;}
+    .badge{font-size:11px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; font-weight:600;}
+    .badge.ok{border-color:rgba(16,185,129,.3); background:rgba(16,185,129,.1); color:#047857;}
+    .badge.warn{border-color:rgba(245,158,11,.3); background:rgba(245,158,11,.1); color:#b45309;}
+
+    .grid{display:grid; grid-template-columns:1.2fr .8fr; gap:16px; margin-top:16px;}
+    @media(max-width:920px){ .grid{grid-template-columns:1fr;} }
+
+    .card{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05);}
+    .card h2{margin:0 0 10px 0; font-size:14px; text-transform:uppercase; color:var(--primary); border-bottom:1px solid var(--line); padding-bottom:6px;}
+
+    .row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+    .field{flex:1; min-width:130px;}
+    label{display:block; font-size:12px; font-weight:600; margin:0 0 4px 0; color:#4b5563;}
+    input[type="text"], input[type="number"], input[type="file"], textarea, select{
+      width:100%; border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:13px; background:#fff; outline:none; transition:0.2s;
+    }
+    input:focus, select:focus, textarea:focus{ border-color:var(--primary); box-shadow:0 0 0 2px rgba(111,66,193,0.1); }
+    textarea{min-height:100px; resize:vertical;}
+
+    .radio{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .radio label{margin:0; font-weight:600; font-size:12.5px;}
+    .radio .opt{display:flex; align-items:center; gap:6px; background:#fff; border:1px solid var(--line); padding:6px 10px; border-radius:6px; cursor:pointer; transition:0.15s;}
+    .radio .opt:hover{background:#f9fafb;}
+    .radio input{cursor:pointer; margin:0;}
+
+    .btnbar{display:flex; gap:8px; margin-top:14px; width:100%; flex-wrap:nowrap;}
+    .btnbar button{flex:1 1 0px; min-width:0; white-space:nowrap; padding:10px 5px; font-weight:700; font-size:13px; color:#fff; border:none; border-radius:8px; cursor:pointer; transition:0.15s; margin-bottom:4px;}
+    @media(max-width:600px){ .btnbar{flex-wrap:wrap;} .btnbar button{flex:1 1 45%;} }
+
+    .btnbar-small{display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;}
+    .btnbar-small button{flex:none; min-width:140px; padding:10px 14px; font-weight:700; font-size:13px; color:#fff; border:none; border-radius:8px; cursor:pointer; transition:0.15s; margin-bottom:4px;}
+
+    .btn-primary{background:var(--primary); box-shadow:0 4px 0 #4c2d85;}
+    .btn-primary:active:not(:disabled){transform:translateY(4px); box-shadow:0 0px 0 #4c2d85;}
+    .btn-primary:hover:not(:disabled){filter:brightness(1.05);}
+
+    .btn-accent{background:var(--accent); box-shadow:0 4px 0 #1255ab;}
+    .btn-accent:active:not(:disabled){transform:translateY(4px); box-shadow:0 0px 0 #1255ab;}
+    .btn-accent:hover:not(:disabled){filter:brightness(1.05);}
+
+    .btn-preview{background:var(--ok); box-shadow:0 4px 0 #047857;}
+    .btn-preview:active:not(:disabled){transform:translateY(4px); box-shadow:0 0px 0 #047857;}
+    .btn-preview:hover:not(:disabled){filter:brightness(1.05);}
+
+    .btn-ghost{background:#1f2937; box-shadow:0 4px 0 #000;}
+    .btn-ghost:active:not(:disabled){transform:translateY(4px); box-shadow:0 0px 0 #000;}
+    .btn-ghost:hover:not(:disabled){filter:brightness(1.1);}
+
+    button:disabled{opacity:0.5; cursor:not-allowed; transform:translateY(4px); box-shadow:none !important;}
+
+    .log{margin-top:10px; border:1px dashed #c7c7c7; background:#f9fafb; border-radius:8px; padding:8px 10px; font-family:ui-monospace, monospace; font-size:11.5px; white-space:pre-wrap; min-height:60px; color:#1f2937; line-height:1.5;}
+    .kpi{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;}
+    .pill{display:inline-block; padding:4px 10px; border-radius:6px; border:1px solid var(--line); background:#fff; font-size:11.5px;}
+    .pill b{font-size:12.5px; color:var(--primary);}
+
+    .pasteBox{border:1px solid #d1d5db; border-radius:8px; padding:10px; min-height:120px; background:#fff; outline:none; overflow:auto;}
+    .divider{height:1px; background:var(--line); margin:14px 0;}
+    details summary{cursor:pointer; font-weight:700; color:#374151; font-size:13px; outline:none;}
+
+    .fp-box{border:1px solid var(--line); border-radius:8px; padding:12px; background:#f9fafb; margin-top:8px;}
+    .target-selector{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; border-bottom:1px solid var(--line); padding-bottom:10px;}
+    .target-selector .opt{background:#fff; border:1px solid #d1d5db; padding:4px 8px; border-radius:4px; font-size:11.5px;}
+    .target-selector .opt:hover{background:#f3f4f6;}
+    .target-selector input:checked + label{color:var(--primary); font-weight:700;}
+    .btnpill{display:inline-flex; align-items:center; gap:4px; border:1px solid var(--line); background:#fff; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:12px;}
+    .btnpill input{margin:0;}
+
+    /* MODAL XEM TRƯỚC */
+    .modal-overlay{position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:9999; display:none; justify-content:center; align-items:flex-start; overflow-y:auto; padding:20px;}
+    .modal-container{background:#e5e7eb; width:100%; max-width:900px; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.3); display:flex; flex-direction:column; margin-bottom:40px; margin-top:20px;}
+    .modal-header{background:#fff; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #d1d5db; position:sticky; top:0; z-index:10; border-radius:8px 8px 0 0;}
+    .modal-header h3{margin:0; font-size:15px; color:var(--primary); display:flex; align-items:center; gap:6px;}
+    .modal-header button{background:#e74c3c; color:white; border:none; font-weight:bold; min-width:80px; padding:8px 16px; border-radius:6px; cursor:pointer; box-shadow:0 3px 0 #b91c1c; margin-bottom:3px;}
+    .modal-header button:active{transform:translateY(3px); box-shadow:0 0px 0 #b91c1c;}
+    .modal-body.paper{background:#fff; margin:20px auto; padding:40px 50px; width:100%; max-width:794px; min-height:1123px; box-shadow:0 4px 6px rgba(0,0,0,0.1); color:#000; overflow:hidden;}
+    .preview-flex-row{display:flex; width:100%;}
+    .preview-flex-col{flex:1;}
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div>
+      <h1>🖨️ HỆ THỐNG TRỘN ĐỀ OFFLINE (BỘ GD&ĐT)</h1>
+      <div class="sub">Lõi bóc tách Smart Block O(N) - Chống treo tuyệt đối - Độ chính xác 100%</div>
+    </div>
+    <div id="mammothBadge" class="badge warn">Mammoth: Đang kiểm tra...</div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>1) Nhập liệu đề gốc</h2>
+      <div class="radio">
+        <div class="opt"><input type="radio" id="modeDocx" name="mode" value="docx" checked /><label for="modeDocx">Tải file .docx</label></div>
+        <div class="opt"><input type="radio" id="modePaste" name="mode" value="paste" /><label for="modePaste">Dán nội dung</label></div>
+      </div>
+      <div id="boxDocx" style="margin-top:10px;"><input type="file" id="fileDocx" accept=".docx" /></div>
+      <div id="boxPaste" style="margin-top:10px;display:none;">
+        <div id="pasteArea" class="pasteBox" contenteditable="true" placeholder="Dán nội dung text đề gốc vào đây..."></div>
+      </div>
+      <div class="divider"></div>
+
+      <h2>2) Tham số trộn đề</h2>
+      <div class="row">
+        <div class="field"><label>Số lượng đề</label><input type="number" id="soLuongDe" min="1" max="60" value="4" /></div>
+        <div class="field"><label>Mã đề bắt đầu</label><input type="number" id="startCode" value="101" /></div>
+        <div class="field"><label>Bước nhảy</label><input type="number" id="stepCode" value="1" /></div>
+      </div>
+      <div style="margin-top:4px;">
+        <label>Chế độ xáo trộn:</label>
+        <div class="row">
+          <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleQ" checked /><label for="optShuffleQ">Đảo vị trí câu hỏi</label></div></div>
+          <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleP1" checked /><label for="optShuffleP1">Đảo A/B/C/D (Phần I)</label></div></div>
+          <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleP2" checked /><label for="optShuffleP2">Đảo a/b/c/d (Phần II)</label></div></div>
+          <div class="field" style="min-width:100%;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optDetectStyledAnswer" checked /><label for="optDetectStyledAnswer">Tự động nhận diện phương án đúng (Tô đỏ/In đậm/Gạch chân)</label></div></div>
+        </div>
+      </div>
+
+      <div class="btnbar">
+        <button class="btn-primary" id="btnScan" onclick="scanAndMix()">🚀 Quét & Trộn</button>
+        <button class="btn-preview" id="btnPreview" onclick="previewExam()" disabled>👁️ Xem trước</button>
+        <button class="btn-ghost" id="btnClear" onclick="resetAll()">🧹 Làm mới</button>
+      </div>
+
+      <div class="log" id="log">Trạng thái: Sẵn sàng làm việc.</div>
+      <div class="kpi" id="kpi" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>3) Khung Tiêu đề Bản in</h2>
+      <div class="row">
+        <div class="field"><label>Cơ quan chủ quản (Sở/Phòng)</label><input type="text" id="pcCoQuan" value="SỞ GIÁO DỤC VÀ ĐÀO TẠO ĐẮK LẮK" /></div>
+        <div class="field"><label>Tên Kỳ thi / Kiểm tra</label><input type="text" id="pcKyThi" value="KIỂM TRA GIỮA KÌ II" /></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Trường/Đơn vị</label><input type="text" id="pcTruong" value="TRƯỜNG PTDTNT THPT ĐAM SAN" /></div>
+        <div class="field"><label>Môn thi</label><input type="text" id="pcMon" value="Lịch sử" /></div>
+        <div class="field" style="flex: 0.4; min-width: 80px;"><label>Lớp</label><input type="text" id="pcLop" placeholder="VD: 12A1" /></div>
+      </div>
+      <div class="field" style="margin-bottom: 12px;"><label>Thời gian làm bài</label><input type="text" id="pcThoiGian" value="45 phút (không kể thời gian phát đề)" /></div>
+
+      <div class="divider"></div>
+
+      <details open style="margin-top:8px;">
+        <summary>🎨 Chỉnh Font & Giãn dòng (Word Paragraph)</summary>
+        <div class="fp-box">
+          <div class="target-selector radio">
+            <span style="font-size:12px; font-weight:bold; color:var(--primary); width:100%; display:block; margin-bottom:4px;">Chỉnh định dạng độc lập cho:</span>
+            <div class="opt"><input type="radio" name="fpTarget" value="coquan" id="tgtCoQuan" checked onchange="loadFpUI()"><label for="tgtCoQuan">Sở/Phòng</label></div>
+            <div class="opt"><input type="radio" name="fpTarget" value="truong" id="tgtTruong" onchange="loadFpUI()"><label for="tgtTruong">Trường</label></div>
+            <div class="opt"><input type="radio" name="fpTarget" value="kythi" id="tgtKyThi" onchange="loadFpUI()"><label for="tgtKyThi">Kỳ thi</label></div>
+            <div class="opt"><input type="radio" name="fpTarget" value="mon" id="tgtMon" onchange="loadFpUI()"><label for="tgtMon">Môn & Lớp</label></div>
+            <div class="opt"><input type="radio" name="fpTarget" value="thoigian" id="tgtThoiGian" onchange="loadFpUI()"><label for="tgtThoiGian">Thời gian</label></div>
+            <div class="opt" style="border-color:var(--primary);"><input type="radio" name="fpTarget" value="body" id="tgtBody" onchange="loadFpUI()"><label for="tgtBody">Nội dung Đề</label></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Font chữ</label><select id="fp_font" onchange="saveFpUI()"><option value="Times New Roman">Times New Roman</option><option value="Arial">Arial</option></select></div>
+            <div class="field"><label>Cỡ (pt)</label><input type="number" id="fp_size" value="12" step="0.5" onchange="saveFpUI()"/></div>
+          </div>
+          <div class="row">
+            <div class="field" style="width: 100%;">
+              <label>Kiểu chữ & Định dạng</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                <label class="btnpill"><input type="checkbox" id="fp_bold" onchange="saveFpUI()"> Đậm</label>
+                <label class="btnpill"><input type="checkbox" id="fp_italic" onchange="saveFpUI()"> Nghiêng</label>
+                <label class="btnpill"><input type="checkbox" id="fp_underline" onchange="saveFpUI()"> Gạch chân</label>
+                <label class="btnpill" id="wrap_fp_upper"><input type="checkbox" id="fp_upper" onchange="saveFpUI()"> IN HOA</label>
+              </div>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Căn lề</label><select id="fp_align" onchange="saveFpUI()"><option value="left">Trái</option><option value="center">Giữa</option><option value="right">Phải</option><option value="justify">Đều 2 bên</option></select></div>
+            <div class="field"><label>Giãn dòng</label><select id="fp_line" onchange="saveFpUI()"><option value="1.0">1.0</option><option value="1.15">1.15</option><option value="1.25">1.25</option><option value="1.5">1.5</option></select></div>
+          </div>
+          <div class="row" style="margin-bottom:0;">
+            <div class="field"><label>Cách Trước (pt)</label><input type="number" id="fp_before" value="0" step="1" onchange="saveFpUI()"/></div>
+            <div class="field"><label>Cách Sau (pt)</label><input type="number" id="fp_after" value="0" step="1" onchange="saveFpUI()"/></div>
+          </div>
+        </div>
+      </details>
+      
+      <details style="margin-top:10px;">
+        <summary>📐 Cài đặt Lề giấy (Margin cm)</summary>
+        <div class="fp-box">
+          <div class="row" style="margin-bottom:0;">
+            <div class="field"><label>Trên</label><input type="number" id="fp_margin_top" step="0.1" value="1.5" /></div>
+            <div class="field"><label>Dưới</label><input type="number" id="fp_margin_bottom" step="0.1" value="1.5" /></div>
+            <div class="field"><label>Trái</label><input type="number" id="fp_margin_left" step="0.1" value="2.0" /></div>
+            <div class="field"><label>Phải</label><input type="number" id="fp_margin_right" step="0.1" value="1.5" /></div>
+          </div>
+        </div>
+      </details>
+
+      <div class="divider"></div>
+
+      <h2>4) Xuất bản Word</h2>
+      <div class="btnbar-small">
+        <button class="btn-accent" onclick="exportWordExamOnly()" id="btnExamOnly" disabled>📄 Chỉ xuất Đề</button>
+        <button class="btn-accent" onclick="exportWordAnswerOnly()" id="btnAnsOnly" disabled>🧾 Chỉ xuất Đáp án</button>
+        <button class="btn-primary" onclick="saveToLocal()">💾 Lưu Cấu Hình</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="previewModal" class="modal-overlay">
+  <div class="modal-container">
+    <div class="modal-header">
+      <h3>👁️ Mô phỏng bản in - Mã đề: <span id="previewMaDe" style="font-weight:bold; color:#e74c3c;"></span></h3>
+      <button onclick="closePreview()">Đóng (X)</button>
+    </div>
+    <div class="modal-body paper" id="previewContent"></div>
+  </div>
+</div>
+
+<script>
+  let danhSachDeThi = [];
+  let lastMaDes = [];
+  let lastCounts = {p1:0, p2:0, p3:0, total:0};
+
+  let fpConfig = {
+    coquan:   { font: "Times New Roman", size: 12, bold: false, italic: false, underline: false, upper: true, align: "center", line: 1.15, before: 0, after: 0 },
+    truong:   { font: "Times New Roman", size: 12, bold: true, italic: false, underline: true, upper: true, align: "center", line: 1.15, before: 0, after: 0 },
+    kythi:    { font: "Times New Roman", size: 12, bold: true, italic: false, underline: false, upper: true, align: "center", line: 1.15, before: 0, after: 0 },
+    mon:      { font: "Times New Roman", size: 12, bold: false, italic: false, underline: false, upper: false, align: "center", line: 1.15, before: 0, after: 0 },
+    thoigian: { font: "Times New Roman", size: 12, bold: false, italic: true, underline: false, upper: false, align: "center", line: 1.15, before: 0, after: 0 },
+    body:     { font: "Times New Roman", size: 12, bold: false, italic: false, underline: false, upper: false, align: "justify", line: 1.15, before: 0, after: 3 }
+  };
+
+  function setLog(msg){ document.getElementById("log").textContent = msg; }
+  
+  function setBusy(isBusy){
+    const hasMixed = danhSachDeThi.length > 0;
+    
+    let btnScan = document.getElementById("btnScan");
+    if(btnScan) btnScan.disabled = isBusy;
+    
+    let btnClear = document.getElementById("btnClear");
+    if(btnClear) btnClear.disabled = isBusy;
+
+    // Kích hoạt tất cả các nút xuất và xem trước
+    ["btnPreview", "btnExamOnly", "btnAnsOnly"].forEach(id => {
+      let btn = document.getElementById(id);
+      if(btn) btn.disabled = isBusy || !hasMixed;
+    });
+  }
+
+  setInterval(() => {
+    const badge = document.getElementById("mammothBadge");
+    if (typeof mammoth !== "undefined") {
+      badge.className = "badge ok"; badge.textContent = "Mammoth: Sẵn sàng (.docx)";
+    } else {
+      badge.className = "badge warn"; badge.textContent = "Mammoth: Lỗi tải thư viện";
+    }
+  }, 1000);
+
+  function currentMode(){ return document.querySelector('input[name="mode"]:checked').value; }
+  document.getElementById("modeDocx").addEventListener("change", () => {
+    document.getElementById("boxDocx").style.display = "block"; document.getElementById("boxPaste").style.display = "none";
+  });
+  document.getElementById("modePaste").addEventListener("change", () => {
+    document.getElementById("boxDocx").style.display = "none"; document.getElementById("boxPaste").style.display = "block";
+  });
+
+  function currentTarget() { return document.querySelector('input[name="fpTarget"]:checked').value; }
+  
+  function loadFpUI() {
+    const t = currentTarget();
+    const cfg = fpConfig[t];
+    document.getElementById("fp_font").value = cfg.font;
+    document.getElementById("fp_size").value = cfg.size;
+    document.getElementById("fp_bold").checked = cfg.bold;
+    document.getElementById("fp_italic").checked = cfg.italic;
+    document.getElementById("fp_underline").checked = cfg.underline;
+    document.getElementById("fp_upper").checked = cfg.upper;
+    document.getElementById("fp_align").value = cfg.align;
+    document.getElementById("fp_line").value = cfg.line;
+    document.getElementById("fp_before").value = cfg.before;
+    document.getElementById("fp_after").value = cfg.after;
+    
+    const isBody = (t === 'body');
+    document.getElementById("fp_upper").disabled = isBody;
+    document.getElementById("wrap_fp_upper").style.opacity = isBody ? "0.5" : "1";
+  }
+  
+  function saveFpUI() {
+    const t = currentTarget();
+    fpConfig[t] = {
+      font: document.getElementById("fp_font").value,
+      size: parseFloat(document.getElementById("fp_size").value) || 12,
+      bold: document.getElementById("fp_bold").checked,
+      italic: document.getElementById("fp_italic").checked,
+      underline: document.getElementById("fp_underline").checked,
+      upper: document.getElementById("fp_upper").checked,
+      align: document.getElementById("fp_align").value,
+      line: parseFloat(document.getElementById("fp_line").value) || 1.15,
+      before: parseFloat(document.getElementById("fp_before").value) || 0,
+      after: parseFloat(document.getElementById("fp_after").value) || 0
+    };
+  }
+
+  function saveToLocal() {
+    saveFpUI();
+    const cfg = {
+      pcCoQuan: document.getElementById("pcCoQuan").value,
+      pcTruong: document.getElementById("pcTruong").value,
+      pcKyThi: document.getElementById("pcKyThi").value,
+      pcMon: document.getElementById("pcMon").value,
+      pcLop: document.getElementById("pcLop").value,
+      pcThoiGian: document.getElementById("pcThoiGian").value,
+      fpConfig: fpConfig,
+      margins: {
+        top: document.getElementById("fp_margin_top").value,
+        bottom: document.getElementById("fp_margin_bottom").value,
+        left: document.getElementById("fp_margin_left").value,
+        right: document.getElementById("fp_margin_right").value
+      }
+    };
+    localStorage.setItem("TRON_DE_OFFLINE_PRO_FINAL4", JSON.stringify(cfg));
+    setLog("✅ Đã lưu cấu hình Form vào trình duyệt.");
+  }
+
+  function loadFromLocal() {
+    const raw = localStorage.getItem("TRON_DE_OFFLINE_PRO_FINAL4");
+    if(raw) {
+      try {
+        const cfg = JSON.parse(raw);
+        if(cfg.pcCoQuan !== undefined) document.getElementById("pcCoQuan").value = cfg.pcCoQuan;
+        if(cfg.pcTruong !== undefined) document.getElementById("pcTruong").value = cfg.pcTruong;
+        if(cfg.pcKyThi !== undefined) document.getElementById("pcKyThi").value = cfg.pcKyThi;
+        if(cfg.pcMon !== undefined) document.getElementById("pcMon").value = cfg.pcMon;
+        if(cfg.pcLop !== undefined) document.getElementById("pcLop").value = cfg.pcLop;
+        if(cfg.pcThoiGian !== undefined) document.getElementById("pcThoiGian").value = cfg.pcThoiGian;
+        if(cfg.fpConfig) fpConfig = cfg.fpConfig;
+        if(cfg.margins){
+          document.getElementById("fp_margin_top").value = cfg.margins.top;
+          document.getElementById("fp_margin_bottom").value = cfg.margins.bottom;
+          document.getElementById("fp_margin_left").value = cfg.margins.left;
+          document.getElementById("fp_margin_right").value = cfg.margins.right;
+        }
+      } catch(e) {}
+    }
+    loadFpUI();
+  }
+  window.onload = loadFromLocal;
+
+  function cmToPt(cm){ return (parseFloat(cm)||0) * 28.3464567; }
+  
+  function getMammothOptions() {
+      return {
+          styleMap: [
+              "u => u",
+              "strike => del",
+              "b => b",
+              "i => i"
+          ],
+          convertImage: mammoth.images.imgElement(img => {
+              return img.read("base64").then(b64 => compressImage(b64, img.contentType));
+          })
+      };
+  }
+
+  function compressImage(base64Str, mimeType) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width, height = img.height;
+        if (width > 600) { height = Math.round(height * 600 / width); width = 600; }
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve({ src: canvas.toDataURL('image/jpeg', 0.6) });
+      };
+      img.onerror = () => resolve({ src: "data:" + mimeType + ";base64," + base64Str });
+      img.src = "data:" + mimeType + ";base64," + base64Str;
+    });
+  }
+  function fileToArrayBuffer(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error("Lỗi đọc file."));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // ==========================================
+  // THUẬT TOÁN TỰ ĐỘNG SỬA LỖI & DỊCH NGƯỢC LIST
+  // ==========================================
+  function autoFixHTML(html) {
+    let h = html.replace(/&nbsp;/g, ' ');
+    
+    // Khôi phục danh sách đánh số tự động của MS Word (Auto-numbering list)
+    h = h.replace(/<(ol|ul)[^>]*>([\s\S]*?)<\/\1>/gi, function(match, tag, content) {
+        let i = 0;
+        const labels = ["A. ", "B. ", "C. ", "D. "];
+        return content.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, function(liMatch, liContent) {
+            let label = labels[i] || ""; i++;
+            let textOnly = liContent.replace(/<[^>]+>/g, '').trim();
+            if (/^[a-d]\s*[.)/]/i.test(textOnly)) { label = ""; }
+            return `<p>${label}${liContent}</p>`;
+        });
+    });
+
+    h = h.replace(/([^>\s])([A-D][:.)])/g, "$1 $2"); 
+    h = h.replace(/(^|>|\s)([A-D][:.)])([^\s<])/g, "$1$2 $3"); 
+    h = h.replace(/(^|>|\s)([Cc]âu\s*\d+\s*[:.])([^\s<])/g, "$1$2 $3"); 
+    return h;
+  }
+
+  async function scanAndMix(){
+    try{
+      setBusy(true); setLog("⏳ Đang xử lý thuật toán O(N)...");
+      let htmlT = "";
+      if(currentMode() === "docx"){
+        if (typeof mammoth === "undefined") throw new Error("Thư viện đọc Word chưa tải xong.");
+        const fI = document.getElementById("fileDocx"); if(!fI.files.length) throw new Error("Vui lòng chọn file .docx");
+        const aB = await fileToArrayBuffer(fI.files[0]);
+        const res = await mammoth.convertToHtml({arrayBuffer: aB}, getMammothOptions());
+        htmlT = res.value || "";
+      } else {
+        htmlT = document.getElementById("pasteArea").innerHTML; if(htmlT.length < 30) throw new Error("Vui lòng dán đề gốc.");
+      }
+      
+      const fixedHtml = autoFixHTML(htmlT);
+      processMixing(fixedHtml);
+
+    }catch(e){ setBusy(false); setLog("❌ Lỗi: " + e.message); }
+  }
+
+  // ==========================================
+  // PARSER LÕI MỚI (O(N) BLOCK SPLITTING - CHỐNG TREO)
+  // ==========================================
+  function splitQuestions(htmlBlocks) {
+      // Tìm chính xác chữ "Câu X:"
+      const regex = /(?:^|>|\s|&nbsp;)((?:\[(?:NB|TH|VD|VDC)\](?:\s|<[^>]+>)*)?[Cc]âu(?:\s|<[^>]+>)*\d+(?:\s|<[^>]+>)*[:.\-])/g;
+      let matches = [];
+      let match;
+      while ((match = regex.exec(htmlBlocks)) !== null) {
+          matches.push({ index: match.index, length: match[0].length, full: match[1] });
+      }
+      let qs = [];
+      for (let i = 0; i < matches.length; i++) {
+          let start = matches[i].index + matches[i].length;
+          let end = (i + 1 < matches.length) ? matches[i+1].index : htmlBlocks.length;
+          let m = matches[i].full.match(/\[(NB|TH|VD|VDC)\]/i);
+          qs.push({ mucDo: m ? m[1].toUpperCase() : "NB", html: htmlBlocks.substring(start, end) });
+      }
+      return qs;
+  }
+
+  function findStyledAnswer(qHtml, letter, chunkHtml) {
+      if (/<u\b|<\/u>|text-decoration\s*:\s*underline|<b\b|<\/b>|<strong>|<\/strong>|color\s*:\s*(?:red|#f00|rgb\(\s*255\s*,\s*0\s*,\s*0\s*\))/i.test(chunkHtml)) return true;
+      let re = new RegExp(`<[^>]*?(?:color\\s*:\\s*(?:red|#f00|rgb\\(\\s*255\\s*,\\s*0\\s*,\\s*0\\s*\\))|\\bb\\b|strong|\\bu\\b|text-decoration\\s*:\\s*underline)[^>]*>(?:\\s|<[^>]+>)*${letter}(?:\\s|<[^>]+>)*[.){/\\\\]`, 'i');
+      if (re.test(qHtml)) return true;
+      return false;
+  }
+
+  function processMixing(htmlSource) {
+    try {
+      const p = parseHTMLToJSON(htmlSource); if(!p.hopLe) throw new Error(p.thongBao);
+      const sL = parseInt(document.getElementById("soLuongDe").value)||1;
+      const st = parseInt(document.getElementById("startCode").value)||101;
+      const sp = parseInt(document.getElementById("stepCode").value)||1;
+      generateExams(p.duLieu, sL, st, sp);
+      
+      lastMaDes = [...new Set(danhSachDeThi.map(c => c.MaDe))].sort();
+      lastCounts = {p1: p.duLieu.filter(c=>c.Phan==="1").length, p2: p.duLieu.filter(c=>c.Phan==="2").length, p3: p.duLieu.filter(c=>c.Phan==="3").length, total: p.duLieu.length};
+      
+      document.getElementById("kpi").innerHTML = `<span class="pill">Mã đề: <b>${lastMaDes.length}</b></span><span class="pill">P1: <b>${lastCounts.p1}</b></span><span class="pill">P2: <b>${lastCounts.p2}</b></span><span class="pill">P3: <b>${lastCounts.p3}</b></span><span class="pill">Tổng: <b>${lastCounts.total}</b></span>`;
+      document.getElementById("kpi").style.display = "flex"; setLog(`✅ Trộn thành công ${sL} đề. Tổng: ${lastCounts.total} câu hỏi.`); 
+      
+      setBusy(false); 
+      
+    } catch(e) {
+      setBusy(false); setLog("❌ Lỗi bóc tách: " + e.message);
+    }
+  }
+
+  function parseHTMLToJSON(htmlText) {
+    let imgMap = [];
+    htmlText = htmlText.replace(/<img[^>]+>/gi, match => { imgMap.push(match); return `[[IMG_${imgMap.length - 1}]]`; });
+    
+    // FIX TỬ HUYỆT CŨ: Chỉ xóa chính xác câu hướng dẫn mà KHÔNG xóa lạm vào câu hỏi
+    htmlText = htmlText.replace(/Thí\s*sinh\s*trả\s*lời\s*từ\s*câu[^<]*?đến\s*câu[^<.]*[.]?/gi, "");
+
+    const reP2 = /PH(?:ẦN|AN)\s*(?:II|2)\b/i;
+    const reP3 = /PH(?:ẦN|AN)\s*(?:III|3)\b/i;
+    let idxP2 = htmlText.search(reP2); let idxP3 = htmlText.search(reP3);
+
+    if (idxP2 !== -1 && idxP3 !== -1 && idxP3 < idxP2) idxP3 = -1;
+
+    let p1H = htmlText, p2H = "", p3H = "";
+    if (idxP2 !== -1 && idxP3 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2, idxP3); p3H = htmlText.substring(idxP3); } 
+    else if (idxP2 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2); }
+
+    const cleanContent = h => (h||"").replace(/<\/?(p|div|ul|ol|li|span|font)[^>]*>/gi, '<br>').replace(/(<br>\s*)+/gi, '<br>').replace(/^<br>|<br>$/gi, '').replace(/<[^>]*$/g, '').trim();
+    const cleanAns = h => (h||"").replace(/<[^>]+>/g, ' ').replace(/<[^>]*$/g, '').replace(/\s+/g, ' ').trim();
+    
+    let questions = [];
+    const detectStyled = document.getElementById("optDetectStyledAnswer").checked;
+
+    // BÓC TÁCH PHẦN 1
+    let p1Qs = splitQuestions(p1H);
+    p1Qs.forEach(q => {
+        let h = q.html;
+        let optRe = /(?:^|>|\s|&nbsp;)([A-D])(?:\s|<[^>]+>)*[.)/]/gi;
+        let markers = [];
+        let mMatch;
+        while ((mMatch = optRe.exec(h)) !== null) {
+            markers.push({ letter: mMatch[1].toUpperCase(), index: mMatch.index, length: mMatch[0].length, full: mMatch[0] });
+        }
+        
+        let mA = markers.slice().reverse().find(x => x.letter === 'A');
+        let mB = markers.slice().reverse().find(x => x.letter === 'B');
+        let mC = markers.slice().reverse().find(x => x.letter === 'C');
+        let mD = markers.slice().reverse().find(x => x.letter === 'D');
+
+        if (mA && mB && mC && mD) {
+            let sortedOpts = [mA, mB, mC, mD].sort((x, y) => x.index - y.index);
+            let nDung = cleanContent(h.substring(0, sortedOpts[0].index));
+            
+            let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
+            let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
+            let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
+            
+            let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([A-D])/i);
+            let endD = mAns ? mAns.index : h.length;
+            let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
+            
+            let extracted = {
+                'A': { text: cleanAns(t0), raw: t0, marker: sortedOpts[0].full },
+                'B': { text: cleanAns(t1), raw: t1, marker: sortedOpts[1].full },
+                'C': { text: cleanAns(t2), raw: t2, marker: sortedOpts[2].full },
+                'D': { text: cleanAns(t3), raw: t3, marker: sortedOpts[3].full }
+            };
+            
+            let ansL = mAns ? mAns[1].toUpperCase() : "";
+            if (!ansL && detectStyled) {
+                let arr = ["A","B","C","D"].filter(l => findStyledAnswer(h, l, extracted[l].raw));
+                if (arr.length === 1) ansL = arr[0];
+            }
+            questions.push({ Phan: "1", MucDo: q.mucDo, NoiDung: nDung, DapAnA: extracted['A'].text, DapAnB: extracted['B'].text, DapAnC: extracted['C'].text, DapAnD: extracted['D'].text, DapAnDung: ansL });
+        }
+    });
+
+    // BÓC TÁCH PHẦN 2
+    let p2Qs = splitQuestions(p2H);
+    p2Qs.forEach(q => {
+        let h = q.html;
+        let optRe = /(?:^|>|\s|&nbsp;)([a-d])(?:\s|<[^>]+>)*[.)/]/gi;
+        let markers = [];
+        let mMatch;
+        while ((mMatch = optRe.exec(h)) !== null) {
+            markers.push({ letter: mMatch[1].toLowerCase(), index: mMatch.index, length: mMatch[0].length, full: mMatch[0] });
+        }
+        let ma = markers.slice().reverse().find(x => x.letter === 'a');
+        let mb = markers.slice().reverse().find(x => x.letter === 'b');
+        let mc = markers.slice().reverse().find(x => x.letter === 'c');
+        let md = markers.slice().reverse().find(x => x.letter === 'd');
+
+        if (ma && mb && mc && md) {
+            let sortedOpts = [ma, mb, mc, md].sort((x, y) => x.index - y.index);
+            let nDung = cleanContent(h.substring(0, sortedOpts[0].index));
+            
+            let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
+            let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
+            let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
+            
+            let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
+            let endD = mAns ? mAns.index : h.length;
+            let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
+            
+            let extracted = {
+                'a': { text: cleanAns(t0), raw: t0, marker: sortedOpts[0].full },
+                'b': { text: cleanAns(t1), raw: t1, marker: sortedOpts[1].full },
+                'c': { text: cleanAns(t2), raw: t2, marker: sortedOpts[2].full },
+                'd': { text: cleanAns(t3), raw: t3, marker: sortedOpts[3].full }
+            };
+            
+            let ansS = "";
+            if (mAns) {
+                ansS = cleanAns(mAns[1]).toUpperCase().replace(/[^ĐS]/g, '');
+                if(ansS.length >= 4) ansS = ansS.substring(0,4).split('').join('-');
+            }
+            if (!ansS && detectStyled) {
+                let sA = findStyledAnswer(h, 'a', extracted['a'].raw) ? 'Đ' : 'S';
+                let sB = findStyledAnswer(h, 'b', extracted['b'].raw) ? 'Đ' : 'S';
+                let sC = findStyledAnswer(h, 'c', extracted['c'].raw) ? 'Đ' : 'S';
+                let sD = findStyledAnswer(h, 'd', extracted['d'].raw) ? 'Đ' : 'S';
+                if (!(sA==='S' && sB==='S' && sC==='S' && sD==='S')) ansS = `${sA}-${sB}-${sC}-${sD}`;
+            }
+            questions.push({ Phan: "2", MucDo: q.mucDo, NoiDung: nDung, DapAnA: extracted['a'].text, DapAnB: extracted['b'].text, DapAnC: extracted['c'].text, DapAnD: extracted['d'].text, DapAnDung: ansS });
+        }
+    });
+
+    // BÓC TÁCH PHẦN 3
+    let p3Qs = splitQuestions(p3H);
+    p3Qs.forEach(q => {
+        let h = q.html;
+        let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
+        let nDung = cleanContent(mAns ? h.substring(0, mAns.index) : h);
+        
+        let ansStr = "";
+        if (mAns) { ansStr = cleanAns(mAns[1]); } 
+        else if (detectStyled) {
+            let spanMatch = h.match(/<span[^>]*color\s*:\s*(?:red|#f00)[^>]*>([\s\S]*?)<\/span>|<b\b[^>]*>([\s\S]*?)<\/b>|<strong[^>]*>([\s\S]*?)<\/strong>|<u\b[^>]*>([\s\S]*?)<\/u>/i);
+            if (spanMatch) {
+                ansStr = cleanAns(spanMatch[1] || spanMatch[2] || spanMatch[3] || spanMatch[4]);
+                nDung = cleanContent(h.replace(spanMatch[0], ''));
+            }
+        }
+        if (ansStr) ansStr = "'" + ansStr;
+        if (nDung || ansStr) questions.push({ Phan: "3", MucDo: q.mucDo, NoiDung: nDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: ansStr });
+    });
+
+    questions.forEach(q => {
+        let r = (t) => (t||"").replace(/\[\[IMG_(\d+)\]\]/g, (m, p1) => imgMap[parseInt(p1)] || m);
+        q.NoiDung = r(q.NoiDung); q.DapAnA = r(q.DapAnA); q.DapAnB = r(q.DapAnB); q.DapAnC = r(q.DapAnC); q.DapAnD = r(q.DapAnD);
+    });
+
+    if(questions.length===0) return {hopLe:false, thongBao:"⛔ Không tìm thấy câu hỏi hợp lệ. Hãy kiểm tra lại file Word."};
+    return {hopLe:true, duLieu:questions};
+  }
+
+  function shuffleArray(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } }
+
+  function generateExams(base, soLuong, startCode, stepCode) {
+    const sQ = document.getElementById("optShuffleQ").checked, sP1 = document.getElementById("optShuffleP1").checked, sP2 = document.getElementById("optShuffleP2").checked;
+    danhSachDeThi = [];
+    for(let i=0; i<soLuong; i++){
+      let maDe = String(startCode + i * stepCode);
+      let clone = JSON.parse(JSON.stringify(base));
+      let p1 = clone.filter(c=>c.Phan==="1"), p2 = clone.filter(c=>c.Phan==="2"), p3 = clone.filter(c=>c.Phan==="3");
+      
+      if(sQ) shuffleArray(p1);
+      p1.forEach((c, idx) => {
+        c.CauSo = "P1_"+(idx+1); c.MaDe = maDe;
+        if(sP1){
+          let ansTxt = c.DapAnDung==="A"?c.DapAnA : c.DapAnDung==="B"?c.DapAnB : c.DapAnDung==="C"?c.DapAnC : c.DapAnD;
+          let opts = [{t:c.DapAnA},{t:c.DapAnB},{t:c.DapAnC},{t:c.DapAnD}];
+          shuffleArray(opts);
+          c.DapAnA=opts[0].t; c.DapAnB=opts[1].t; c.DapAnC=opts[2].t; c.DapAnD=opts[3].t;
+          c.DapAnDung = opts.findIndex(o=>o.t===ansTxt)===0?"A" : opts.findIndex(o=>o.t===ansTxt)===1?"B" : opts.findIndex(o=>o.t===ansTxt)===2?"C" : "D";
+        }
+        danhSachDeThi.push(c);
+      });
+
+      if(sQ) shuffleArray(p2);
+      p2.forEach((c, idx) => {
+        c.CauSo = "P2_"+(idx+1); c.MaDe = maDe;
+        if(sP2){
+          let arrAns = (c.DapAnDung||"").replace(/-/g, '').split(""); if(arrAns.length<4) arrAns=["Đ","Đ","Đ","Đ"];
+          let opts = [{t:c.DapAnA, a:arrAns[0]},{t:c.DapAnB, a:arrAns[1]},{t:c.DapAnC, a:arrAns[2]},{t:c.DapAnD, a:arrAns[3]}];
+          shuffleArray(opts);
+          c.DapAnA=opts[0].t; c.DapAnB=opts[1].t; c.DapAnC=opts[2].t; c.DapAnD=opts[3].t;
+          c.DapAnDung = `${opts[0].a}-${opts[1].a}-${opts[2].a}-${opts[3].a}`;
+        }
+        danhSachDeThi.push(c);
+      });
+
+      if(sQ) shuffleArray(p3);
+      p3.forEach((c, idx) => { c.CauSo = "P3_"+(idx+1); c.MaDe = maDe; danhSachDeThi.push(c); });
+    }
+  }
+
+  // ==========================================
+  // XUẤT HTML LÕI & PREVIEW
+  // ==========================================
+  function safeTextForWord(htmlCode) {
+    if(!htmlCode) return "";
+    let t = document.createElement('div'); t.innerHTML = htmlCode;
+    t.querySelectorAll('img').forEach(img => {
+      if(img.parentElement && img.parentElement.getAttribute('align') === 'center') return;
+      let div = document.createElement('div'); div.setAttribute('align', 'center'); div.style.margin = '6pt 0';
+      img.parentNode.insertBefore(div, img); div.appendChild(img);
+    });
+    t.querySelectorAll('table').forEach(tbl => {
+      tbl.setAttribute('border','1'); tbl.setAttribute('cellpadding','5'); tbl.setAttribute('cellspacing','0');
+      tbl.style.borderCollapse='collapse'; tbl.style.width='80%'; tbl.style.margin='6pt auto'; tbl.setAttribute('align','center');
+    });
+    return t.innerHTML.replace(/<br\s*\/?>/gi, '</p><p>').replace(/<p>\s*<\/p>/gi, '').trim();
+  }
+
+  function getLayoutHtml(a, b, c, d, isPreview = false) {
+    let sa=safeTextForWord(a), sb=safeTextForWord(b), sc=safeTextForWord(c), sd=safeTextForWord(d);
+    let maxL = Math.max(sa.length, sb.length, sc.length, sd.length) + (a.includes('<img')||b.includes('<img')||c.includes('<img')||d.includes('<img')?40:0);
+    
+    if (isPreview) {
+      if (maxL > 35) return `<div style="margin-top:4px;"><div>A. ${sa}</div><div>B. ${sb}</div><div>C. ${sc}</div><div>D. ${sd}</div></div>`;
+      if (maxL > 14) return `<div style="margin-top:4px;"><div class="preview-flex-row"><div class="preview-flex-col">A. ${sa}</div><div class="preview-flex-col">B. ${sb}</div></div><div class="preview-flex-row"><div class="preview-flex-col">C. ${sc}</div><div class="preview-flex-col">D. ${sd}</div></div></div>`;
+      return `<div class="preview-flex-row" style="margin-top:4px;"><div class="preview-flex-col">A. ${sa}</div><div class="preview-flex-col">B. ${sb}</div><div class="preview-flex-col">C. ${sc}</div><div class="preview-flex-col">D. ${sd}</div></div>`;
+    } else {
+      const t = `<span style="mso-tab-count:1">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`;
+      if (maxL > 35) return `<p>A. ${sa}</p><p>B. ${sb}</p><p>C. ${sc}</p><p>D. ${sd}</p>`;
+      if (maxL > 14) return `<p style="tab-stops:240.0pt;">A. ${sa}${t}B. ${sb}</p><p style="tab-stops:240.0pt;">C. ${sc}${t}D. ${sd}</p>`;
+      return `<p style="tab-stops:120.0pt 240.0pt 360.0pt;">A. ${sa}${t}B. ${sb}${t}C. ${sc}${t}D. ${sd}</p>`;
+    }
+  }
+
+  function renderLine(cfgKey, text) {
+    let c = fpConfig[cfgKey];
+    let safe = (text||"").toString().trim().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    if(c.upper) safe = safe.toUpperCase();
+    let fw = c.bold ? "bold" : "normal";
+    let fs = c.italic ? "italic" : "normal";
+    let tdec = c.underline ? "underline" : "none";
+    return `<p style="font-family:'${c.font}', serif; font-size:${c.size}pt; font-weight:${fw}; font-style:${fs}; text-decoration:${tdec}; margin:${c.before}pt 0 ${c.after}pt 0; text-align:${c.align}; line-height:${Math.round(c.line*100)}%; white-space:nowrap;">${safe}</p>`;
+  }
+
+  function getHeaderConfigWithDefaults(){
+    let pcCoQuan   = document.getElementById('pcCoQuan').value.trim()   || 'SỞ GD&ĐT ...';
+    let pcTruong   = document.getElementById('pcTruong').value.trim()   || 'TRƯỜNG ...';
+    let pcKyThi    = document.getElementById('pcKyThi').value.trim()    || 'KIỂM TRA ...';
+    let pcMon      = document.getElementById('pcMon').value.trim()      || 'Môn ...';
+    let pcLop      = document.getElementById('pcLop').value.trim();
+    let pcThoiGian = document.getElementById('pcThoiGian').value.trim() || '... phút';
+    return {pcCoQuan, pcTruong, pcKyThi, pcMon, pcLop, pcThoiGian};
+  }
+
+  function previewExam() {
+    if (!lastMaDes || lastMaDes.length === 0) return alert("Chưa có đề để xem trước!");
+    saveFpUI();
+    const md = lastMaDes[0]; 
+    document.getElementById('previewMaDe').innerText = md;
+    
+    let cb = fpConfig.body;
+    const {pcCoQuan, pcTruong, pcKyThi, pcMon, pcLop, pcThoiGian} = getHeaderConfigWithDefaults();
+    let monText = pcLop ? `Môn: ${pcMon} - Lớp: ${pcLop}` : `Môn: ${pcMon}`;
+
+    let content = `
+      <div style="font-family: '${cb.font}', serif; font-size: ${cb.size}pt; text-align: ${cb.align}; line-height: ${Math.round(cb.line*100)}%; font-weight: ${cb.bold?'bold':'normal'}; font-style: ${cb.italic?'italic':'normal'}; text-decoration: ${cb.underline?'underline':'none'};">
+      <table border="0" cellspacing="0" cellpadding="0" style="width:100%; border:none; margin-bottom:10px; table-layout:auto;">
+        <tr>
+          <td style="white-space:nowrap; text-align:center; vertical-align:top; border:none; padding:4px 10px 4px 0;">
+            ${renderLine('coquan', pcCoQuan)}
+            ${renderLine('truong', pcTruong)}
+          </td>
+          <td style="white-space:nowrap; text-align:center; vertical-align:top; border:none; padding:4px 0 4px 10px;">
+            ${renderLine('kythi', pcKyThi)}
+            ${renderLine('mon', monText)}
+            ${renderLine('thoigian', 'Thời gian: ' + pcThoiGian)}
+          </td>
+        </tr>
+      </table>
+      <hr style="margin-bottom:12px; border:0; border-top:1px solid #000;"/>
+      <table style="width:100%; border:none; margin-bottom:15px; table-layout:auto;">
+        <tr>
+          <td style="white-space:nowrap; text-align:left; font-style:italic; font-size:12pt; vertical-align:middle;">Họ tên học sinh: .............................................................. Lớp: ....................</td>
+          <td style="white-space:nowrap; text-align:right; vertical-align:middle;">
+            <div style="border:1px solid #000; padding:6px 12px; font-weight:bold; font-style:normal; font-size:12pt; text-align:center; display:inline-block;">MÃ ĐỀ: ${md}</div>
+          </td>
+        </tr>
+      </table>
+    `;
+
+    let cQ = danhSachDeThi.filter(c => c.MaDe === md);
+    let p1 = cQ.filter(c => c.Phan === "1"), p2 = cQ.filter(c => c.Phan === "2"), p3 = cQ.filter(c => c.Phan === "3");
+
+    if(p1.length) { 
+      content += `<p style="font-weight:bold; text-align:justify; font-style:normal; margin-top:12pt; margin-bottom:6pt;">PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn. Thí sinh trả lời từ câu 1 đến câu ${p1.length}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.</p>`; 
+      p1.forEach(c => { 
+        content += `<div style="margin-bottom:${cb.after}pt; margin-top:${cb.before}pt;"><b>Câu ${c.CauSo.split('_')[1]}:</b> ${safeTextForWord(c.NoiDung)}`;
+        content += getLayoutHtml(c.DapAnA, c.DapAnB, c.DapAnC, c.DapAnD, true) + `</div>`; 
+      }); 
+    }
+    if(p2.length) { 
+      content += `<p style="font-weight:bold; text-align:justify; font-style:normal; margin-top:12pt; margin-bottom:6pt;">PHẦN II. Câu trắc nghiệm đúng sai. Thí sinh trả lời từ câu 1 đến câu ${p2.length}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.</p>`; 
+      p2.forEach(c => { 
+        content += `<div style="margin-bottom:${cb.after}pt; margin-top:${cb.before}pt;"><b>Câu ${c.CauSo.split('_')[1]}:</b> ${safeTextForWord(c.NoiDung)}<br><span style="margin-left:20px;">a) ${safeTextForWord(c.DapAnA)}</span><br><span style="margin-left:20px;">b) ${safeTextForWord(c.DapAnB)}</span><br><span style="margin-left:20px;">c) ${safeTextForWord(c.DapAnC)}</span><br><span style="margin-left:20px;">d) ${safeTextForWord(c.DapAnD)}</span></div>`; 
+      }); 
+    }
+    if(p3.length) { 
+      content += `<p style="font-weight:bold; text-align:justify; font-style:normal; margin-top:12pt; margin-bottom:6pt;">PHẦN III. Câu trắc nghiệm trả lời ngắn. Thí sinh trả lời từ câu 1 đến câu ${p3.length}.</p>`; 
+      p3.forEach(c => { content += `<div style="margin-bottom:${cb.after}pt; margin-top:${cb.before}pt;"><b>Câu ${c.CauSo.split('_')[1]}:</b> ${safeTextForWord(c.NoiDung)}</div>`; }); 
+    }
+
+    content += `<p style="text-align:center; font-weight:bold; font-style:normal; font-size:12pt; margin-top:30px; margin-bottom:6px;">----------HẾT---------</p>
+    <p style="text-align:center; font-style:italic; font-size:12pt; margin-top:0;">Học sinh không được sử dụng tài liệu khi làm bài.</p>
+    </div>`;
+
+    document.getElementById('previewContent').innerHTML = content;
+    document.getElementById('previewModal').style.display = 'flex';
+  }
+  function closePreview() { document.getElementById('previewModal').style.display = 'none'; }
+
+  // ==========================================
+  // XUẤT ĐỀ THI WORD (TẢI ĐỒNG BỘ CHỐNG BLOCK)
+  // ==========================================
+  function xuatBaoCaoWord(onlyExam=true, onlyAnswer=false) {
+    saveFpUI();
+    if(danhSachDeThi.length === 0) return alert("Chưa có đề!");
+    
+    let cb = fpConfig.body;
+    let top = cmToPt(document.getElementById("fp_margin_top").value);
+    let bot = cmToPt(document.getElementById("fp_margin_bottom").value);
+    let left = cmToPt(document.getElementById("fp_margin_left").value);
+    let right = cmToPt(document.getElementById("fp_margin_right").value);
+    
+    const {pcCoQuan, pcTruong, pcKyThi, pcMon, pcLop, pcThoiGian} = getHeaderConfigWithDefaults();
+    let monText = pcLop ? `Môn: ${pcMon} - Lớp: ${pcLop}` : `Môn: ${pcMon}`;
+
+    const maDes = [...new Set(danhSachDeThi.map(c => c.MaDe))];
+
+    if (onlyExam) {
+      maDes.forEach((md) => {
+        let content = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Đề ${md}</title>
+<style>
+@page WordSection1 { size: 595.3pt 841.9pt; margin: ${top}pt ${right}pt ${bot}pt ${left}pt; mso-footer-margin: 28.35pt; mso-footer: f1; }
+div.WordSection1 { page: WordSection1; }
+p { font-family: '${cb.font}', serif; font-size: ${cb.size}pt; text-align: ${cb.align}; margin-top: ${cb.before}pt; margin-bottom: ${cb.after}pt; line-height: ${Math.round(cb.line*100)}%; font-weight: ${cb.bold?'bold':'normal'}; font-style: ${cb.italic?'italic':'normal'}; text-decoration: ${cb.underline?'underline':'none'}; }
+p.MsoFooter { margin: 0; text-align: right; font-size: ${cb.size}pt; font-family: '${cb.font}', serif; font-weight: normal; font-style: normal; text-decoration: none; }
+h3 { font-family: '${cb.font}', serif; font-size: ${cb.size}pt; font-weight: bold; margin: 10pt 0 6pt 0; text-align: left; }
+table { width: 100%; border-collapse: collapse; border: none; }
+</style></head><body>
+
+<div class="WordSection1">
+<table border="0" cellspacing="0" cellpadding="0" style="width:100%; border:none; margin-bottom:10px; table-layout:auto;">
+<tr>
+  <td style="white-space:nowrap; text-align:center; vertical-align:top; border:none; padding:4pt 10pt 4pt 0;">
+    ${renderLine('coquan', pcCoQuan)}
+    ${renderLine('truong', pcTruong)}
+  </td>
+  <td style="white-space:nowrap; text-align:center; vertical-align:top; border:none; padding:4pt 0 4pt 10pt;">
+    ${renderLine('kythi', pcKyThi)}
+    ${renderLine('mon', monText)}
+    ${renderLine('thoigian', 'Thời gian: ' + pcThoiGian)}
+  </td>
+</tr>
+</table>
+<hr style="margin-bottom:12px;"/>
+<table style="width:100%; border:none; margin-bottom:15px; table-layout:auto;">
+<tr>
+<td style="white-space:nowrap; text-align:left; font-style:italic; font-size:12pt; vertical-align:middle; text-decoration:none; padding-right:10pt;">Họ tên học sinh: .............................................................. Lớp: ....................</td>
+<td style="white-space:nowrap; text-align:right; vertical-align:middle;">
+  <table style="display:inline-table; width:auto;"><tr><td style="border:1pt solid #000; padding:4pt 10pt; font-weight:bold; font-style:normal; font-size:12pt; text-align:center;">MÃ ĐỀ: ${md}</td></tr></table>
+</td>
+</tr></table>`;
+
+        let cQ = danhSachDeThi.filter(c => c.MaDe === md);
+        let p1 = cQ.filter(c => c.Phan === "1"), p2 = cQ.filter(c => c.Phan === "2"), p3 = cQ.filter(c => c.Phan === "3");
+
+        if(p1.length) { 
+          content += `<p style="font-weight:bold; text-align:justify; font-style:normal; margin-top:12pt; margin-bottom:6pt;">PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn. Thí sinh trả lời từ câu 1 đến câu ${p1.length}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.</p>`; 
+          p1.forEach(c => { content += `<p><b>Câu ${c.CauSo.split('_')[1]}:</b> ${safeTextForWord(c.NoiDung)}</p>` + getLayoutHtml(c.DapAnA, c.DapAnB, c.DapAnC, c.DapAnD); }); 
+        }
+        if(p2.length) { 
+          content += `<p style="font-weight:bold; text-align:justify; font-style:normal; margin-top:12pt; margin-bottom:6pt;">PHẦN II. Câu trắc nghiệm đúng sai. Thí sinh trả lời từ câu 1 đến câu ${p2.length}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.</p>`; 
+          p2.forEach(c => { content += `<p><b>Câu ${c.CauSo.split('_')[1]}:</b> ${safeTextForWord(c.NoiDung)}</p><p style="margin-left: 14pt;">a) ${safeTextForWord(c.DapAnA)}</p><p style="margin-left: 14pt;">b) ${safeTextForWord(c.DapAnB)}</p><p style="margin-left: 14pt;">c) ${safeTextForWord(c.DapAnC)}</p><p style="margin-left: 14pt;">d) ${safeTextForWord(c.DapAnD)}</p>`; }); 
+        }
+        if(p3.length) { 
+          content += `<p style="font-weight:bold; text-align:justify; font-style:normal; margin-top:12pt; margin-bottom:6pt;">PHẦN III. Câu trắc nghiệm trả lời ngắn. Thí sinh trả lời từ câu 1 đến câu ${p3.length}.</p>`; 
+          p3.forEach(c => { content += `<p><b>Câu ${c.CauSo.split('_')[1]}:</b> ${safeTextForWord(c.NoiDung)}</p>`; }); 
+        }
+
+        content += `<p style="text-align:center; font-weight:bold; font-style:normal; font-size:12pt; margin-top:20pt; margin-bottom:6pt;">----------HẾT---------</p>
+<p style="text-align:center; font-style:italic; font-size:12pt; margin-top:0pt; margin-bottom:0pt;">Học sinh không được sử dụng tài liệu khi làm bài.</p>
+<div style="mso-element:footer" id="f1">
+  <p class="MsoFooter">Mã đề ${md} - Trang <span style='mso-field-code:" PAGE "'></span> / <span style='mso-field-code:" NUMPAGES "'></span></p>
+</div>
+</div></body></html>`;
+
+        try { downloadWord(content, `DeThi_MaDe_${md}.doc`); } catch(e) { alert("Lỗi khi tải file Word Đề: " + e.message); }
+      });
+    }
+
+    if (onlyAnswer) {
+      xuatDapAnWord(pcCoQuan, pcTruong, pcKyThi, pcMon, pcLop, maDes);
+    }
+  }
+
+  function renderAnswerGrid(list, isP3 = false) {
+    let total = list.length;
+    if (total === 0) return "";
+    let cols = 10;
+    if (total <= 15) cols = total;
+    else if (total % 12 === 0) cols = 12; 
+    else if (total % 15 === 0) cols = 15; 
+    else cols = 10; 
+
+    let html = `<table class="da" style="width:100%; margin-bottom:15px; table-layout:fixed;">`;
+    for (let k = 0; k < total; k += cols) {
+      let chunk = list.slice(k, k + cols);
+      html += `<tr>`;
+      for (let i = 0; i < cols; i++) {
+        if (i < chunk.length) html += `<th>${k + i + 1}</th>`;
+        else html += `<th>&nbsp;</th>`;
+      }
+      html += `</tr><tr>`;
+      for (let i = 0; i < cols; i++) {
+        if (i < chunk.length) {
+          let ans = String(chunk[i].DapAnDung || "");
+          if (isP3) ans = ans.replace(/'/g, '');
+          html += `<td><b>${ans}</b></td>`;
+        } else {
+          html += `<td>&nbsp;</td>`;
+        }
+      }
+      html += `</tr>`;
+    }
+    html += `</table>`;
+    return html;
+  }
+
+  function xuatDapAnWord(cq, tr, kt, m, lop, mds) {
+    let cb = fpConfig.body;
+    let top = cmToPt(document.getElementById("fp_margin_top").value); let bot = cmToPt(document.getElementById("fp_margin_bottom").value);
+    let left = cmToPt(document.getElementById("fp_margin_left").value); let right = cmToPt(document.getElementById("fp_margin_right").value);
+    let monText = lop ? `Môn: ${m} - Lớp: ${lop}` : `Môn: ${m}`;
+
+    let content = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Đáp Án</title>
+<style>
+@page WordSection1 { size: 595.3pt 841.9pt; margin: ${top}pt ${right}pt ${bot}pt ${left}pt; mso-footer: f1; mso-footer-margin: 28.35pt; }
+div.WordSection1 { page: WordSection1; }
+p { font-family: '${cb.font}', serif; font-size: ${cb.size}pt; text-align: center; }
+p.MsoFooter { margin: 0; text-align: right; font-size: ${cb.size}pt; font-family: '${cb.font}', serif; }
+table.da { border-collapse: collapse; margin-bottom: 20px; text-align: center; width: 100%; font-family: '${cb.font}', serif; font-size: ${cb.size}pt;}
+table.da th, table.da td { border: 1px solid black; padding: 5px; } table.da th { background: #f2f2f2; font-weight: bold; }
+</style></head><body>
+
+<div class="WordSection1">
+<table border="0" cellspacing="0" cellpadding="0" style="width:100%; border:none; margin-bottom:15px; table-layout:auto;">
+<tr>
+<td style="white-space:nowrap; text-align:center; vertical-align:top; border:none; padding:4pt 10pt 4pt 0;">
+  ${renderLine('coquan', cq)}
+  ${renderLine('truong', tr)}
+</td>
+<td style="white-space:nowrap; text-align:center; vertical-align:top; border:none; padding:4pt 0 4pt 10pt;">
+  <p style="font-size:14pt; font-weight:bold; margin:0; text-transform:uppercase;">ĐÁP ÁN CHÍNH THỨC</p>
+  ${renderLine('kythi', kt)}
+  ${renderLine('mon', monText)}
+</td>
+</tr></table><hr/>`;
+
+    mds.forEach(md => {
+      content += `<h3 style="font-family:'${cb.font}', serif; font-weight:bold; font-size:13pt; text-align:center; margin-top:20pt; margin-bottom:12pt; color:red;">--- ĐÁP ÁN MÃ ĐỀ: ${md} ---</h3>`;
+      let cQ = danhSachDeThi.filter(c => c.MaDe === md);
+      let p1 = cQ.filter(c => String(c.Phan).trim() === "1");
+      let p2 = cQ.filter(c => String(c.Phan).trim() === "2");
+      let p3 = cQ.filter(c => String(c.Phan).trim() === "3");
+
+      if(p1.length) {
+        content += `<p style="font-weight:bold; text-align:left; margin-bottom:8pt;">PHẦN I. TRẮC NGHIỆM LỰA CHỌN</p>`;
+        content += renderAnswerGrid(p1, false);
+      }
+      if(p2.length) {
+        content += `<p style="font-weight:bold; text-align:left; margin-top:15pt; margin-bottom:8pt;">PHẦN II. ĐÚNG/SAI</p><table class="da" style="width:60%; margin: 0 auto;"><tr><th>Câu</th><th>Ý a</th><th>Ý b</th><th>Ý c</th><th>Ý d</th></tr>`;
+        p2.forEach((c, i) => { let a = String(c.DapAnDung||"").split('-'); content += `<tr><td><b>${i+1}</b></td><td>${a[0]||''}</td><td>${a[1]||''}</td><td>${a[2]||''}</td><td>${a[3]||''}</td></tr>`; });
+        content += `</table>`;
+      }
+      if(p3.length) {
+        content += `<p style="font-weight:bold; text-align:left; margin-top:15pt; margin-bottom:8pt;">PHẦN III. TRẢ LỜI NGẮN</p>`;
+        content += renderAnswerGrid(p3, true);
+      }
+    });
+
+    content += `<div style="mso-element:footer" id="f1"><p class="MsoFooter">Trang <span style='mso-field-code:" PAGE "'></span> / <span style='mso-field-code:" NUMPAGES "'></span></p></div></div></body></html>`;
+    
+    try { downloadWord(content, `DapAn_CacMaDe.doc`); } catch(e) { alert("Lỗi khi tải file Word Đáp án: " + e.message); }
+  }
+
+  function downloadWord(html, filename){
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  }
+
+  function exportWordAll(){ xuatBaoCaoWord(true, true); }
+  function exportWordExamOnly(){ xuatBaoCaoWord(true, false); }
+  function exportWordAnswerOnly(){
+    if(!danhSachDeThi.length) return alert("Chưa có đề!");
+    const {pcCoQuan, pcTruong, pcKyThi, pcMon, pcLop} = getHeaderConfigWithDefaults();
+    xuatDapAnWord(pcCoQuan, pcTruong, pcKyThi, pcMon, pcLop, [...new Set(danhSachDeThi.map(c => c.MaDe))]);
+  }
+  
+  function resetAll(){ 
+    danhSachDeThi=[]; document.getElementById("kpi").style.display="none"; 
+    setLog("Trạng thái: Sẵn sàng làm việc."); setBusy(false); 
+    ["btnPreview", "btnExport", "btnExamOnly", "btnAnsOnly"].forEach(id => {
+      let btn = document.getElementById(id);
+      if(btn) btn.disabled = true;
+    });
+  }
+</script>
+</body>
+</html>
