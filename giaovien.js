@@ -617,28 +617,8 @@ function parseHTMLToJSON(htmlText) {
 function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode = 1) { danhSachDeThi = []; for (let i = 0; i < soLuongDe; i++) { const maDe = startCode + (i * stepCode); let deThiClone = JSON.parse(JSON.stringify(cauHoiGoc)); let p1 = deThiClone.filter(c => String(c.Phan).trim() === "1"); let p2 = deThiClone.filter(c => String(c.Phan).trim() === "2"); let p3 = deThiClone.filter(c => String(c.Phan).trim() === "3"); shuffleArray(p1); p1.forEach((cauHoi, idx) => { cauHoi.CauSo = "P1_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); let dapAnDungText = ""; if (cauHoi.DapAnDung === "A") dapAnDungText = cauHoi.DapAnA; if (cauHoi.DapAnDung === "B") dapAnDungText = cauHoi.DapAnB; if (cauHoi.DapAnDung === "C") dapAnDungText = cauHoi.DapAnC; if (cauHoi.DapAnDung === "D") dapAnDungText = cauHoi.DapAnD; let options = [ { text: cauHoi.DapAnA }, { text: cauHoi.DapAnB }, { text: cauHoi.DapAnC }, { text: cauHoi.DapAnD } ]; shuffleArray(options); cauHoi.DapAnA = options[0].text; cauHoi.DapAnB = options[1].text; cauHoi.DapAnC = options[2].text; cauHoi.DapAnD = options[3].text; if (options[0].text === dapAnDungText) cauHoi.DapAnDung = "A"; if (options[1].text === dapAnDungText) cauHoi.DapAnDung = "B"; if (options[2].text === dapAnDungText) cauHoi.DapAnDung = "C"; if (options[3].text === dapAnDungText) cauHoi.DapAnDung = "D"; danhSachDeThi.push(cauHoi); }); shuffleArray(p2); p2.forEach((cauHoi, idx) => { cauHoi.CauSo = "P2_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); let arrDung = cauHoi.DapAnDung.split("-"); let optionsP2 = [ { text: cauHoi.DapAnA, ans: arrDung[0] }, { text: cauHoi.DapAnB, ans: arrDung[1] }, { text: cauHoi.DapAnC, ans: arrDung[2] }, { text: cauHoi.DapAnD, ans: arrDung[3] } ]; shuffleArray(optionsP2); cauHoi.DapAnA = optionsP2[0].text; cauHoi.DapAnB = optionsP2[1].text; cauHoi.DapAnC = optionsP2[2].text; cauHoi.DapAnD = optionsP2[3].text; cauHoi.DapAnDung = `${optionsP2[0].ans}-${optionsP2[1].ans}-${optionsP2[2].ans}-${optionsP2[3].ans}`; danhSachDeThi.push(cauHoi); }); shuffleArray(p3); p3.forEach((cauHoi, idx) => { cauHoi.CauSo = "P3_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); danhSachDeThi.push(cauHoi); }); } }
 function shuffleArray(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
 
-function processFile(mode) { 
-    if(!checkWorkspaceAction()) return;
-    let fileInput, logBox, btnBox, btnDocx; let baiHocNap = "", maPhong = "", soLuongDe = 1, startCode = 101, stepCode = 1; 
-    if(mode === 'direct') { fileInput = document.getElementById("uploadFileDirect"); logBox = document.getElementById("logDirect"); btnBox = document.getElementById("btnDirect"); btnDocx = document.getElementById("btnXuatWordDirect"); maPhong = document.getElementById("maPhongDirect").value.trim(); if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); soLuongDe = parseInt(document.getElementById("soLuongDeDirect").value) || 1; startCode = parseInt(document.getElementById("startCodeDirect").value) || 101; stepCode = parseInt(document.getElementById("stepCodeDirect").value) || 1; btnDocx.style.display = "none"; } 
-    else if(mode === 'offline') { fileInput = document.getElementById("uploadFileOffline"); logBox = document.getElementById("logOffline"); btnBox = document.getElementById("btnOffline"); soLuongDe = parseInt(document.getElementById("soLuongDeOffline").value) || 1; startCode = parseInt(document.getElementById("startCodeOffline").value) || 101; stepCode = parseInt(document.getElementById("stepCodeOffline").value) || 1; maPhong = "OFFLINE_PRINT_ONLY"; } 
-    else if(mode === 'bank') { fileInput = document.getElementById("uploadFileBank"); logBox = document.getElementById("logBank"); btnBox = document.getElementById("btnBank"); baiHocNap = safeHTML(document.getElementById("baiHocNap").value.trim()); if(!baiHocNap) return alert("Vui lòng nhập Tên Bài Học để dán nhãn!"); } 
-    if (fileInput.files.length === 0) return alert("Vui lòng chọn file Word!"); logBox.innerText = "⏳ Đang quét định dạng..."; btnBox.disabled = true; const reader = new FileReader(); reader.onload = function(event) { const options = { convertImage: mammoth.images.imgElement(function(image) { return image.read("base64").then(function(base64Str) { return compressImage(base64Str, image.contentType); }); }) }; mammoth.convertToHtml({arrayBuffer: event.target.result}, options).then(async function(result) { const ketQua = parseHTMLToJSON(result.value); if (!ketQua.hopLe) { logBox.innerHTML = `❌ ${ketQua.thongBao}`; btnBox.disabled = false; return; } if (mode === 'direct') { generateExams(ketQua.duLieu, soLuongDe, maPhong, startCode, stepCode); logBox.innerText = "⏳ Đang đẩy đề lên máy chủ Supabase..."; 
-        try {
-            await luuDeThiLenSupabase(danhSachDeThi);
-            btnBox.disabled = false; logBox.innerText = `🎉 Đã đẩy lên Server thành công! Sẵn sàng thi!`; btnDocx.style.display = "block";
-        } catch(e) { btnBox.disabled = false; logBox.innerText = "❌ Lỗi mạng: " + e.message; }
-    } else if (mode === 'offline') { generateExams(ketQua.duLieu, soLuongDe, maPhong, startCode, stepCode); logBox.innerText = `🎉 Đã trộn xong ${soLuongDe} đề. Trình duyệt đang tải file Word...`; xuatBaoCaoWord(); btnBox.disabled = false; } 
-    else if (mode === 'bank') { logBox.innerText = "⏳ Đang nạp câu hỏi vào CSDL..."; 
-        try {
-            let rows = ketQua.duLieu.map(q => ({ truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId, ma_cau_hoi: "Q_" + Date.now() + "_" + Math.floor(Math.random()*100), bai_hoc: baiHocNap, phan: q.Phan, muc_do: q.MucDo, noi_dung: q.NoiDung, a: q.DapAnA, b: q.DapAnB, c: q.DapAnC, d: q.DapAnD, dap_an_dung: q.DapAnDung, loi_giai: q.LoiGiai }));
-            await sb.from('ngan_hang').insert(rows);
-            btnBox.disabled = false; logBox.innerText = `✅ Đã nạp thành công!`; document.getElementById("baiHocNap").value = ""; loadBankMeta(true); 
-        } catch(e) { btnBox.disabled = false; logBox.innerText = "❌ Lỗi mạng!"; }
-    } }).catch(e => { logBox.innerText = "❌ Lỗi đọc file Word: " + e.message; btnBox.disabled = false; }); }; reader.readAsArrayBuffer(fileInput.files[0]); }
-
 // ==========================================================
-// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11
+// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11 (ĐÃ VÁ LỖI CÂU CHÙM)
 // ==========================================================
 async function layDeTuIframe(btnElement) {
     if (!checkWorkspaceAction()) return;
@@ -660,7 +640,7 @@ async function layDeTuIframe(btnElement) {
                 return alert("⚠️ V11 chưa trộn đề! Thầy hãy thao tác tải file DOCX, cấu hình số lượng và bấm nút [2. Trộn + Preview] bên trong khung V11 trước khi hút.");
             }
 
-            // Bắt đầu bóc tách Cây dữ liệu V11 sang dạng Phẳng của V8
+            // Bắt đầu bóc tách Cây dữ liệu V11 sang dạng Phẳng của hệ thống
             v11State.generated.forEach(exam => {
                 let maDe = exam.examCode;
                 
@@ -670,29 +650,51 @@ async function layDeTuIframe(btnElement) {
                     if (sec.section_kind === 'short_answer') phan = "3";
                     
                     let processQuestion = (q, sharedBlocks = []) => {
-                        let noiDung = `<b>Câu ${q.display_number || q.source_number}:</b> ${q.opener_text || ""}`;
-                        
-                        // Lấy các đoạn văn bản (nếu có xuống dòng)
-                        let allBlocks = [...sharedBlocks, ...(q.stem_blocks || [])];
-                        allBlocks.forEach(b => {
-                            if (b.type === 'paragraph') noiDung += `<br>${b.text || ""}`;
-                            else if (b.type === 'table') noiDung += `<br>[Nội dung có chứa Bảng - Vui lòng xem bản Word]`;
+                        let noiDung = "";
+
+                        // 1. XỬ LÝ CÂU CHÙM (SHARED BLOCKS)
+                        if (sharedBlocks && sharedBlocks.length > 0) {
+                            noiDung += `<div style="background-color: #f8f9fa; padding: 12px; border-left: 4px solid #1a73e8; margin-bottom: 10px; border-radius: 4px;">`;
+                            sharedBlocks.forEach(b => {
+                                noiDung += `<div style="margin-bottom: 5px;">${b.html || b.text || ""}</div>`;
+                            });
+                            noiDung += `</div>`;
+                        }
+
+                        // 2. XỬ LÝ NỘI DUNG CÂU HỎI CHÍNH (STEM BLOCKS)
+                        let rawStem = "";
+                        (q.stem_blocks || []).forEach(b => {
+                            rawStem += `${b.html || b.text || ""}<br>`;
                         });
 
+                        // Thuật toán tia Laser: Lọc sạch chữ "Câu X:" và dấu "#" ở đầu câu
+                        let startingTags = "";
+                        rawStem = rawStem.replace(/^(\s*<[^>]+>\s*)*/, function(match) {
+                            startingTags = match; return "";
+                        });
+                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match, p1) {
+                            return p1 || ""; 
+                        });
+                        rawStem = startingTags + rawStem;
+                        rawStem = rawStem.replace(/^(<br>\s*)+/, "").replace(/(<br>\s*)+$/, "").trim();
+
+                        noiDung += rawStem;
+
+                        // 3. XỬ LÝ ĐÁP ÁN
                         let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
                         let opts = q.display_options || [];
 
                         if (phan === "1") {
-                            dapAnA = opts[0] ? opts[0].text : "";
-                            dapAnB = opts[1] ? opts[1].text : "";
-                            dapAnC = opts[2] ? opts[2].text : "";
-                            dapAnD = opts[3] ? opts[3].text : "";
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
                             dapAnDung = q.display_answer ? q.display_answer.normalized : "";
                         } else if (phan === "2") {
-                            dapAnA = opts[0] ? opts[0].text : "";
-                            dapAnB = opts[1] ? opts[1].text : "";
-                            dapAnC = opts[2] ? opts[2].text : "";
-                            dapAnD = opts[3] ? opts[3].text : "";
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
                             let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
                             dapAnDung = ansArr.join("-");
                         } else if (phan === "3") {
@@ -713,13 +715,12 @@ async function layDeTuIframe(btnElement) {
                         });
                     };
 
-                    // Duyệt từng item trong section (có thể là câu lẻ hoặc câu chùm)
                     (sec.items || []).forEach(item => {
                         if (item.kind === 'question_group') {
                             let shared = item.shared_blocks || [];
                             let leadText = item.display_lead_text || item.lead_in_text || "";
                             if (leadText) {
-                                shared = [{type: 'paragraph', text: `<i>${leadText}</i>`}].concat(shared);
+                                shared = [{type: 'paragraph', html: `<b><i>${leadText}</i></b>`}].concat(shared);
                             }
                             (item.child_questions || []).forEach(cq => processQuestion(cq, shared));
                         } else {
@@ -740,7 +741,6 @@ async function layDeTuIframe(btnElement) {
             danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
         }
 
-        // ĐẨY LÊN SUPABASE
         let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
         btnElement.disabled = true;
@@ -1736,4 +1736,149 @@ async function xoaDeTrongPhong(maPhong) {
         } else { alert("❌ Lỗi: Không tìm thấy phòng thi này!"); }
     } catch(e) { alert("❌ Lỗi khi xóa đề: " + e.message); }
     btn.innerText = oldText; btn.disabled = false;
+}
+// ==========================================================
+// HÀM HÚT ĐỀ THÔNG MINH: TƯƠNG THÍCH CẢ V8 VÀ V11 (ĐÃ VÁ LỖI CÂU CHÙM)
+// ==========================================================
+async function layDeTuIframe(btnElement) {
+    if (!checkWorkspaceAction()) return;
+
+    let inputMaPhong = document.getElementById('maPhongLienKet');
+    let maPhong = inputMaPhong ? inputMaPhong.value.trim() : prompt("Vui lòng nhập MÃ PHÒNG THI đích đến:");
+    
+    if (!maPhong) return alert("⚠️ Cần phải có Mã Phòng Thi để đẩy đề lên mạng!");
+
+    try {
+        let iframeWindow = document.getElementById('frameV8').contentWindow;
+        let danhSachDeIframe = [];
+
+        // --- KIỂM TRA: NẾU LÀ BẢN V11 ---
+        if (iframeWindow.__v11native && typeof iframeWindow.__v11native.getState === 'function') {
+            let v11State = iframeWindow.__v11native.getState();
+            
+            if (!v11State.generated || v11State.generated.length === 0) {
+                return alert("⚠️ V11 chưa trộn đề! Thầy hãy thao tác tải file DOCX, cấu hình số lượng và bấm nút [2. Trộn + Preview] bên trong khung V11 trước khi hút.");
+            }
+
+            // Bắt đầu bóc tách Cây dữ liệu V11 sang dạng Phẳng của hệ thống
+            v11State.generated.forEach(exam => {
+                let maDe = exam.examCode;
+                
+                exam.canonical.sections.forEach(sec => {
+                    let phan = "1";
+                    if (sec.section_kind === 'true_false') phan = "2";
+                    if (sec.section_kind === 'short_answer') phan = "3";
+                    
+                    let processQuestion = (q, sharedBlocks = []) => {
+                        let noiDung = "";
+
+                        // 1. XỬ LÝ CÂU CHÙM (SHARED BLOCKS)
+                        if (sharedBlocks && sharedBlocks.length > 0) {
+                            noiDung += `<div style="background-color: #f8f9fa; padding: 12px; border-left: 4px solid #1a73e8; margin-bottom: 10px; border-radius: 4px;">`;
+                            sharedBlocks.forEach(b => {
+                                noiDung += `<div style="margin-bottom: 5px;">${b.html || b.text || ""}</div>`;
+                            });
+                            noiDung += `</div>`;
+                        }
+
+                        // 2. XỬ LÝ NỘI DUNG CÂU HỎI CHÍNH (STEM BLOCKS)
+                        let rawStem = "";
+                        (q.stem_blocks || []).forEach(b => {
+                            rawStem += `${b.html || b.text || ""}<br>`;
+                        });
+
+                        // Thuật toán tia Laser: Lọc sạch chữ "Câu X:" và dấu "#" ở đầu câu
+                        let startingTags = "";
+                        rawStem = rawStem.replace(/^(\s*<[^>]+>\s*)*/, function(match) {
+                            startingTags = match; return "";
+                        });
+                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match, p1) {
+                            return p1 || ""; 
+                        });
+                        rawStem = startingTags + rawStem;
+                        rawStem = rawStem.replace(/^(<br>\s*)+/, "").replace(/(<br>\s*)+$/, "").trim();
+
+                        noiDung += rawStem;
+
+                        // 3. XỬ LÝ ĐÁP ÁN
+                        let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
+                        let opts = q.display_options || [];
+
+                        if (phan === "1") {
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
+                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
+                        } else if (phan === "2") {
+                            dapAnA = opts[0] ? (opts[0].html || opts[0].text) : "";
+                            dapAnB = opts[1] ? (opts[1].html || opts[1].text) : "";
+                            dapAnC = opts[2] ? (opts[2].html || opts[2].text) : "";
+                            dapAnD = opts[3] ? (opts[3].html || opts[3].text) : "";
+                            let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
+                            dapAnDung = ansArr.join("-");
+                        } else if (phan === "3") {
+                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
+                            if (dapAnDung && !dapAnDung.startsWith("'")) dapAnDung = "'" + dapAnDung;
+                        }
+
+                        danhSachDeIframe.push({
+                            MaPhong: maPhong,
+                            MaDe: String(maDe),
+                            Phan: phan,
+                            NoiDung: noiDung,
+                            DapAnA: dapAnA,
+                            DapAnB: dapAnB,
+                            DapAnC: dapAnC,
+                            DapAnD: dapAnD,
+                            DapAnDung: dapAnDung
+                        });
+                    };
+
+                    (sec.items || []).forEach(item => {
+                        if (item.kind === 'question_group') {
+                            let shared = item.shared_blocks || [];
+                            let leadText = item.display_lead_text || item.lead_in_text || "";
+                            if (leadText) {
+                                shared = [{type: 'paragraph', html: `<b><i>${leadText}</i></b>`}].concat(shared);
+                            }
+                            (item.child_questions || []).forEach(cq => processQuestion(cq, shared));
+                        } else {
+                            processQuestion(item, []);
+                        }
+                    });
+                });
+            });
+
+        } 
+        // --- KIỂM TRA: NẾU LÀ BẢN V8 CŨ ---
+        else {
+            danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+            if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
+                return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
+            }
+            danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
+            danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
+        }
+
+        let oldText = btnElement.innerText;
+        btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
+        btnElement.disabled = true;
+
+        let result = await luuDeThiLenSupabase(danhSachDeIframe);
+        
+        btnElement.innerText = oldText;
+        btnElement.disabled = false;
+
+        if (result.status === 'success') {
+            alert(`🎉 HOÀN TẤT! Đã bóc tách thành công ${danhSachDeIframe.length} câu hỏi và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
+        } else {
+            alert("❌ Lỗi máy chủ Supabase: " + result.message);
+        }
+    } catch (e) {
+        btnElement.innerText = "🚀 Hút đề & Đẩy lên mạng";
+        btnElement.disabled = false;
+        console.error("Lỗi khi hút đề:", e);
+        alert("❌ Lỗi kết nối hoặc cấu trúc Iframe không hợp lệ. Chi tiết: " + e.message);
+    }
 }
