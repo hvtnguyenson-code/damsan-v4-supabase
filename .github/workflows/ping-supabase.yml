@@ -1,0 +1,18 @@
+name: Ping Supabase Keep Alive
+
+on:
+  schedule:
+    # Cấu hình tự động chạy vào lúc 00:00 mỗi 3 ngày
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Cho phép bấm chạy thủ công để test
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gọi API để đánh thức Supabase
+        run: |
+          curl --request GET \
+          --url 'https://xcervjnwlchwfqvbeahy.supabase.co/rest/v1/truong_hoc?select=id&limit=1' \
+          --header 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo' \
+          --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo'
