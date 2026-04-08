@@ -126,7 +126,7 @@
   <div class="header">
     <div>
       <h1>🖨️ HỆ THỐNG TRỘN ĐỀ OFFLINE (BỘ GD&ĐT)</h1>
-      <div class="sub">Lõi bóc tách Smart Block O(N) - Chống treo tuyệt đối - Độ chính xác 100%</div>
+      <div class="sub">Bóc tách V8 Smart Block + Nâng cấp nhận diện Câu Chùm (#)</div>
     </div>
     <div id="mammothBadge" class="badge warn">Mammoth: Đang kiểm tra...</div>
   </div>
@@ -153,7 +153,7 @@
       <div style="margin-top:4px;">
         <label>Chế độ xáo trộn:</label>
         <div class="row">
-          <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleQ" checked /><label for="optShuffleQ">Đảo vị trí câu hỏi</label></div></div>
+          <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleQ" checked /><label for="optShuffleQ">Đảo vị trí câu hỏi (Giữ nguyên cụm #)</label></div></div>
           <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleP1" checked /><label for="optShuffleP1">Đảo A/B/C/D (Phần I)</label></div></div>
           <div class="field" style="min-width:200px;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optShuffleP2" checked /><label for="optShuffleP2">Đảo a/b/c/d (Phần II)</label></div></div>
           <div class="field" style="min-width:100%;"><div class="opt" style="border-radius:6px;"><input type="checkbox" id="optDetectStyledAnswer" checked /><label for="optDetectStyledAnswer">Tự động nhận diện phương án đúng (Tô đỏ/In đậm/Gạch chân)</label></div></div>
@@ -258,6 +258,10 @@
 </div>
 
 <script>
+  // ==========================================
+  // THÔNG TIN BẢN VÁ: V8 + HỖ TRỢ CÂU CHÙM (#)
+  // ==========================================
+  
   let danhSachDeThi = [];
   let lastMaDes = [];
   let lastCounts = {p1:0, p2:0, p3:0, total:0};
@@ -282,7 +286,6 @@
     let btnClear = document.getElementById("btnClear");
     if(btnClear) btnClear.disabled = isBusy;
 
-    // Kích hoạt tất cả các nút xuất và xem trước
     ["btnPreview", "btnExamOnly", "btnAnsOnly"].forEach(id => {
       let btn = document.getElementById(id);
       if(btn) btn.disabled = isBusy || !hasMixed;
@@ -430,13 +433,10 @@
     });
   }
 
-  // ==========================================
-  // THUẬT TOÁN TỰ ĐỘNG SỬA LỖI & DỊCH NGƯỢC LIST
-  // ==========================================
   function autoFixHTML(html) {
     let h = html.replace(/&nbsp;/g, ' ');
     
-    // Khôi phục danh sách đánh số tự động của MS Word (Auto-numbering list)
+    // Khôi phục danh sách tự động của Word
     h = h.replace(/<(ol|ul)[^>]*>([\s\S]*?)<\/\1>/gi, function(match, tag, content) {
         let i = 0;
         const labels = ["A. ", "B. ", "C. ", "D. "];
@@ -456,7 +456,7 @@
 
   async function scanAndMix(){
     try{
-      setBusy(true); setLog("⏳ Đang xử lý thuật toán O(N)...");
+      setBusy(true); setLog("⏳ Đang xử lý thuật toán bóc tách Câu Chùm (#)...");
       let htmlT = "";
       if(currentMode() === "docx"){
         if (typeof mammoth === "undefined") throw new Error("Thư viện đọc Word chưa tải xong.");
@@ -474,25 +474,74 @@
     }catch(e){ setBusy(false); setLog("❌ Lỗi: " + e.message); }
   }
 
-  // ==========================================
-  // PARSER LÕI MỚI (O(N) BLOCK SPLITTING - CHỐNG TREO)
-  // ==========================================
-  function splitQuestions(htmlBlocks) {
-      // Tìm chính xác chữ "Câu X:"
-      const regex = /(?:^|>|\s|&nbsp;)((?:\[(?:NB|TH|VD|VDC)\](?:\s|<[^>]+>)*)?[Cc]âu(?:\s|<[^>]+>)*\d+(?:\s|<[^>]+>)*[:.\-])/g;
+  // ==============================================================
+  // V8 UPGRADED: TÁCH CÂU HỎI THÔNG MINH HỖ TRỢ CÂU CHÙM (Dấu #)
+  // ==============================================================
+  function splitQuestionsWithGroups(htmlBlocks) {
+      // Tìm các dấu hiệu: "Câu X:", "[NB] Câu X:", VÀ các dấu hiệu Câu chùm "# Câu X" hoặc "# Cho đoạn tư liệu"
+      const regex = /(?:^|>|\s|&nbsp;)(?:(?:\[(?:NB|TH|VD|VDC)\](?:\s|<[^>]+>)*)?#?(?:\s|<[^>]+>)*[Cc]âu(?:\s|<[^>]+>)*\d+(?:\s|<[^>]+>)*[:.\-])|(?:(?:^|>|\s|&nbsp;)#(?!\s*[Cc]âu\s*\d+))/g;
+      
       let matches = [];
       let match;
       while ((match = regex.exec(htmlBlocks)) !== null) {
-          matches.push({ index: match.index, length: match[0].length, full: match[1] });
+          matches.push({ index: match.index, length: match[0].length, full: match[0] });
       }
+      
       let qs = [];
       for (let i = 0; i < matches.length; i++) {
           let start = matches[i].index + matches[i].length;
           let end = (i + 1 < matches.length) ? matches[i+1].index : htmlBlocks.length;
-          let m = matches[i].full.match(/\[(NB|TH|VD|VDC)\]/i);
-          qs.push({ mucDo: m ? m[1].toUpperCase() : "NB", html: htmlBlocks.substring(start, end) });
+          
+          let fullMatch = matches[i].full;
+          let m = fullMatch.match(/\[(NB|TH|VD|VDC)\]/i);
+          let isGroupLead = fullMatch.includes('#') && !fullMatch.match(/[Cc]âu\s*\d+/i);
+          let isGroupChild = fullMatch.includes('#') && fullMatch.match(/[Cc]âu\s*\d+/i);
+          
+          let contentHtml = htmlBlocks.substring(start, end);
+          
+          // Dọn dẹp thẻ rác ở đầu
+          contentHtml = contentHtml.replace(/^(\s*<[^>]+>\s*)*/, '');
+
+          if (isGroupLead) {
+              qs.push({ type: "group_lead", html: contentHtml });
+          } else {
+              qs.push({ 
+                  type: "question", 
+                  mucDo: m ? m[1].toUpperCase() : "NB", 
+                  isGroupChild: isGroupChild,
+                  html: contentHtml 
+              });
+          }
       }
-      return qs;
+      
+      // BƯỚC GOM NHÓM (GROUPING)
+      let finalGroups = [];
+      let currentGroup = null;
+
+      for (let i = 0; i < qs.length; i++) {
+          let q = qs[i];
+          if (q.type === "group_lead") {
+              currentGroup = {
+                  isGroup: true,
+                  leadHtml: q.html,
+                  childQuestions: []
+              };
+              finalGroups.push(currentGroup);
+          } 
+          else if (q.type === "question") {
+              if (q.isGroupChild && currentGroup) {
+                  currentGroup.childQuestions.push(q);
+              } else {
+                  currentGroup = null; // Cắt mạch group
+                  finalGroups.push({
+                      isGroup: false,
+                      question: q
+                  });
+              }
+          }
+      }
+      
+      return finalGroups;
   }
 
   function findStyledAnswer(qHtml, letter, chunkHtml) {
@@ -527,7 +576,6 @@
     let imgMap = [];
     htmlText = htmlText.replace(/<img[^>]+>/gi, match => { imgMap.push(match); return `[[IMG_${imgMap.length - 1}]]`; });
     
-    // FIX TỬ HUYỆT CŨ: Chỉ xóa chính xác câu hướng dẫn mà KHÔNG xóa lạm vào câu hỏi
     htmlText = htmlText.replace(/Thí\s*sinh\s*trả\s*lời\s*từ\s*câu[^<]*?đến\s*câu[^<.]*[.]?/gi, "");
 
     const reP2 = /PH(?:ẦN|AN)\s*(?:II|2)\b/i;
@@ -546,120 +594,165 @@
     let questions = [];
     const detectStyled = document.getElementById("optDetectStyledAnswer").checked;
 
-    // BÓC TÁCH PHẦN 1
-    let p1Qs = splitQuestions(p1H);
-    p1Qs.forEach(q => {
-        let h = q.html;
-        let optRe = /(?:^|>|\s|&nbsp;)([A-D])(?:\s|<[^>]+>)*[.)/]/gi;
-        let markers = [];
-        let mMatch;
-        while ((mMatch = optRe.exec(h)) !== null) {
-            markers.push({ letter: mMatch[1].toUpperCase(), index: mMatch.index, length: mMatch[0].length, full: mMatch[0] });
-        }
+    // HÀM XỬ LÝ CHUNG CHO 1 CÂU HỎI CON
+    const parseSingleQuestion = (qData, phan, sharedLeadHtml = null) => {
+        let h = qData.html;
         
-        let mA = markers.slice().reverse().find(x => x.letter === 'A');
-        let mB = markers.slice().reverse().find(x => x.letter === 'B');
-        let mC = markers.slice().reverse().find(x => x.letter === 'C');
-        let mD = markers.slice().reverse().find(x => x.letter === 'D');
-
-        if (mA && mB && mC && mD) {
-            let sortedOpts = [mA, mB, mC, mD].sort((x, y) => x.index - y.index);
-            let nDung = cleanContent(h.substring(0, sortedOpts[0].index));
-            
-            let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
-            let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
-            let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
-            
-            let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([A-D])/i);
-            let endD = mAns ? mAns.index : h.length;
-            let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
-            
-            let extracted = {
-                'A': { text: cleanAns(t0), raw: t0, marker: sortedOpts[0].full },
-                'B': { text: cleanAns(t1), raw: t1, marker: sortedOpts[1].full },
-                'C': { text: cleanAns(t2), raw: t2, marker: sortedOpts[2].full },
-                'D': { text: cleanAns(t3), raw: t3, marker: sortedOpts[3].full }
-            };
-            
-            let ansL = mAns ? mAns[1].toUpperCase() : "";
-            if (!ansL && detectStyled) {
-                let arr = ["A","B","C","D"].filter(l => findStyledAnswer(h, l, extracted[l].raw));
-                if (arr.length === 1) ansL = arr[0];
+        // --- Xử lý tách đáp án ---
+        let extractedOpts = null, ansL = "", nDung = "";
+        
+        if (phan === "1") {
+            let optRe = /(?:^|>|\s|&nbsp;)([A-D])(?:\s|<[^>]+>)*[.)/]/gi;
+            let markers = [];
+            let mMatch;
+            while ((mMatch = optRe.exec(h)) !== null) {
+                markers.push({ letter: mMatch[1].toUpperCase(), index: mMatch.index, length: mMatch[0].length, full: mMatch[0] });
             }
-            questions.push({ Phan: "1", MucDo: q.mucDo, NoiDung: nDung, DapAnA: extracted['A'].text, DapAnB: extracted['B'].text, DapAnC: extracted['C'].text, DapAnD: extracted['D'].text, DapAnDung: ansL });
-        }
-    });
-
-    // BÓC TÁCH PHẦN 2
-    let p2Qs = splitQuestions(p2H);
-    p2Qs.forEach(q => {
-        let h = q.html;
-        let optRe = /(?:^|>|\s|&nbsp;)([a-d])(?:\s|<[^>]+>)*[.)/]/gi;
-        let markers = [];
-        let mMatch;
-        while ((mMatch = optRe.exec(h)) !== null) {
-            markers.push({ letter: mMatch[1].toLowerCase(), index: mMatch.index, length: mMatch[0].length, full: mMatch[0] });
-        }
-        let ma = markers.slice().reverse().find(x => x.letter === 'a');
-        let mb = markers.slice().reverse().find(x => x.letter === 'b');
-        let mc = markers.slice().reverse().find(x => x.letter === 'c');
-        let md = markers.slice().reverse().find(x => x.letter === 'd');
-
-        if (ma && mb && mc && md) {
-            let sortedOpts = [ma, mb, mc, md].sort((x, y) => x.index - y.index);
-            let nDung = cleanContent(h.substring(0, sortedOpts[0].index));
             
-            let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
-            let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
-            let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
-            
+            let mA = markers.slice().reverse().find(x => x.letter === 'A');
+            let mB = markers.slice().reverse().find(x => x.letter === 'B');
+            let mC = markers.slice().reverse().find(x => x.letter === 'C');
+            let mD = markers.slice().reverse().find(x => x.letter === 'D');
+
+            if (mA && mB && mC && mD) {
+                let sortedOpts = [mA, mB, mC, mD].sort((x, y) => x.index - y.index);
+                nDung = cleanContent(h.substring(0, sortedOpts[0].index));
+                
+                let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
+                let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
+                let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
+                
+                let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([A-D])/i);
+                let endD = mAns ? mAns.index : h.length;
+                let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
+                
+                ansL = mAns ? mAns[1].toUpperCase() : "";
+                let eOpts = {
+                    'A': { text: cleanAns(t0), raw: t0 },
+                    'B': { text: cleanAns(t1), raw: t1 },
+                    'C': { text: cleanAns(t2), raw: t2 },
+                    'D': { text: cleanAns(t3), raw: t3 }
+                };
+                
+                if (!ansL && detectStyled) {
+                    let arr = ["A","B","C","D"].filter(l => findStyledAnswer(h, l, eOpts[l].raw));
+                    if (arr.length === 1) ansL = arr[0];
+                }
+                
+                // Nếu là câu chùm, ghép sharedLeadHtml vào nội dung câu
+                let finalNoiDung = nDung;
+                if (sharedLeadHtml) finalNoiDung = sharedLeadHtml + "<br>" + nDung;
+
+                questions.push({ 
+                    Phan: "1", MucDo: qData.mucDo, NoiDung: finalNoiDung, 
+                    DapAnA: eOpts['A'].text, DapAnB: eOpts['B'].text, DapAnC: eOpts['C'].text, DapAnD: eOpts['D'].text, DapAnDung: ansL,
+                    isGroupChild: qData.isGroupChild // Phục vụ cho hàm trộn
+                });
+            }
+        } 
+        else if (phan === "2") {
+            let optRe = /(?:^|>|\s|&nbsp;)([a-d])(?:\s|<[^>]+>)*[.)/]/gi;
+            let markers = [];
+            let mMatch;
+            while ((mMatch = optRe.exec(h)) !== null) {
+                markers.push({ letter: mMatch[1].toLowerCase(), index: mMatch.index, length: mMatch[0].length, full: mMatch[0] });
+            }
+            let ma = markers.slice().reverse().find(x => x.letter === 'a');
+            let mb = markers.slice().reverse().find(x => x.letter === 'b');
+            let mc = markers.slice().reverse().find(x => x.letter === 'c');
+            let md = markers.slice().reverse().find(x => x.letter === 'd');
+
+            if (ma && mb && mc && md) {
+                let sortedOpts = [ma, mb, mc, md].sort((x, y) => x.index - y.index);
+                nDung = cleanContent(h.substring(0, sortedOpts[0].index));
+                
+                let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
+                let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
+                let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
+                
+                let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
+                let endD = mAns ? mAns.index : h.length;
+                let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
+                
+                let eOpts = {
+                    'a': { text: cleanAns(t0), raw: t0 },
+                    'b': { text: cleanAns(t1), raw: t1 },
+                    'c': { text: cleanAns(t2), raw: t2 },
+                    'd': { text: cleanAns(t3), raw: t3 }
+                };
+                
+                let ansS = "";
+                if (mAns) {
+                    ansS = cleanAns(mAns[1]).toUpperCase().replace(/[^ĐS]/g, '');
+                    if(ansS.length >= 4) ansS = ansS.substring(0,4).split('').join('-');
+                }
+                if (!ansS && detectStyled) {
+                    let sA = findStyledAnswer(h, 'a', eOpts['a'].raw) ? 'Đ' : 'S';
+                    let sB = findStyledAnswer(h, 'b', eOpts['b'].raw) ? 'Đ' : 'S';
+                    let sC = findStyledAnswer(h, 'c', eOpts['c'].raw) ? 'Đ' : 'S';
+                    let sD = findStyledAnswer(h, 'd', eOpts['d'].raw) ? 'Đ' : 'S';
+                    if (!(sA==='S' && sB==='S' && sC==='S' && sD==='S')) ansS = `${sA}-${sB}-${sC}-${sD}`;
+                }
+                
+                let finalNoiDung = nDung;
+                if (sharedLeadHtml) finalNoiDung = sharedLeadHtml + "<br>" + nDung;
+
+                questions.push({ 
+                    Phan: "2", MucDo: qData.mucDo, NoiDung: finalNoiDung, 
+                    DapAnA: eOpts['a'].text, DapAnB: eOpts['b'].text, DapAnC: eOpts['c'].text, DapAnD: eOpts['d'].text, DapAnDung: ansS,
+                    isGroupChild: qData.isGroupChild 
+                });
+            }
+        }
+        else if (phan === "3") {
             let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
-            let endD = mAns ? mAns.index : h.length;
-            let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
+            nDung = cleanContent(mAns ? h.substring(0, mAns.index) : h);
             
-            let extracted = {
-                'a': { text: cleanAns(t0), raw: t0, marker: sortedOpts[0].full },
-                'b': { text: cleanAns(t1), raw: t1, marker: sortedOpts[1].full },
-                'c': { text: cleanAns(t2), raw: t2, marker: sortedOpts[2].full },
-                'd': { text: cleanAns(t3), raw: t3, marker: sortedOpts[3].full }
-            };
+            let ansStr = "";
+            if (mAns) { ansStr = cleanAns(mAns[1]); } 
+            else if (detectStyled) {
+                let spanMatch = h.match(/<span[^>]*color\s*:\s*(?:red|#f00)[^>]*>([\s\S]*?)<\/span>|<b\b[^>]*>([\s\S]*?)<\/b>|<strong[^>]*>([\s\S]*?)<\/strong>|<u\b[^>]*>([\s\S]*?)<\/u>/i);
+                if (spanMatch) {
+                    ansStr = cleanAns(spanMatch[1] || spanMatch[2] || spanMatch[3] || spanMatch[4]);
+                    nDung = cleanContent(h.replace(spanMatch[0], ''));
+                }
+            }
+            if (ansStr) ansStr = "'" + ansStr;
             
-            let ansS = "";
-            if (mAns) {
-                ansS = cleanAns(mAns[1]).toUpperCase().replace(/[^ĐS]/g, '');
-                if(ansS.length >= 4) ansS = ansS.substring(0,4).split('').join('-');
-            }
-            if (!ansS && detectStyled) {
-                let sA = findStyledAnswer(h, 'a', extracted['a'].raw) ? 'Đ' : 'S';
-                let sB = findStyledAnswer(h, 'b', extracted['b'].raw) ? 'Đ' : 'S';
-                let sC = findStyledAnswer(h, 'c', extracted['c'].raw) ? 'Đ' : 'S';
-                let sD = findStyledAnswer(h, 'd', extracted['d'].raw) ? 'Đ' : 'S';
-                if (!(sA==='S' && sB==='S' && sC==='S' && sD==='S')) ansS = `${sA}-${sB}-${sC}-${sD}`;
-            }
-            questions.push({ Phan: "2", MucDo: q.mucDo, NoiDung: nDung, DapAnA: extracted['a'].text, DapAnB: extracted['b'].text, DapAnC: extracted['c'].text, DapAnD: extracted['d'].text, DapAnDung: ansS });
-        }
-    });
+            let finalNoiDung = nDung;
+            if (sharedLeadHtml) finalNoiDung = sharedLeadHtml + "<br>" + nDung;
 
-    // BÓC TÁCH PHẦN 3
-    let p3Qs = splitQuestions(p3H);
-    p3Qs.forEach(q => {
-        let h = q.html;
-        let mAns = h.match(/(?:^|>|\s)[Đđ]áp\s*[áa]n(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
-        let nDung = cleanContent(mAns ? h.substring(0, mAns.index) : h);
-        
-        let ansStr = "";
-        if (mAns) { ansStr = cleanAns(mAns[1]); } 
-        else if (detectStyled) {
-            let spanMatch = h.match(/<span[^>]*color\s*:\s*(?:red|#f00)[^>]*>([\s\S]*?)<\/span>|<b\b[^>]*>([\s\S]*?)<\/b>|<strong[^>]*>([\s\S]*?)<\/strong>|<u\b[^>]*>([\s\S]*?)<\/u>/i);
-            if (spanMatch) {
-                ansStr = cleanAns(spanMatch[1] || spanMatch[2] || spanMatch[3] || spanMatch[4]);
-                nDung = cleanContent(h.replace(spanMatch[0], ''));
+            if (finalNoiDung || ansStr) {
+                questions.push({ 
+                    Phan: "3", MucDo: qData.mucDo, NoiDung: finalNoiDung, 
+                    DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: ansStr,
+                    isGroupChild: qData.isGroupChild 
+                });
             }
         }
-        if (ansStr) ansStr = "'" + ansStr;
-        if (nDung || ansStr) questions.push({ Phan: "3", MucDo: q.mucDo, NoiDung: nDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: ansStr });
-    });
+    };
 
+    // QUÉT TỪNG PHẦN QUA BỘ LỌC GROUP
+    const parseSection = (htmlStr, phanStr) => {
+        let groups = splitQuestionsWithGroups(htmlStr);
+        groups.forEach(g => {
+            if (g.isGroup) {
+                // Đóng gói leadHtml để truyền cho từng câu con
+                let leadHtml = `<b><i>${cleanContent(g.leadHtml)}</i></b>`;
+                g.childQuestions.forEach(cq => {
+                    parseSingleQuestion(cq, phanStr, leadHtml);
+                });
+            } else {
+                parseSingleQuestion(g.question, phanStr, null);
+            }
+        });
+    };
+
+    parseSection(p1H, "1");
+    parseSection(p2H, "2");
+    parseSection(p3H, "3");
+
+    // Khôi phục hình ảnh
     questions.forEach(q => {
         let r = (t) => (t||"").replace(/\[\[IMG_(\d+)\]\]/g, (m, p1) => imgMap[parseInt(p1)] || m);
         q.NoiDung = r(q.NoiDung); q.DapAnA = r(q.DapAnA); q.DapAnB = r(q.DapAnB); q.DapAnC = r(q.DapAnC); q.DapAnD = r(q.DapAnD);
@@ -672,15 +765,42 @@
   function shuffleArray(arr) { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } }
 
   function generateExams(base, soLuong, startCode, stepCode) {
-    const sQ = document.getElementById("optShuffleQ").checked, sP1 = document.getElementById("optShuffleP1").checked, sP2 = document.getElementById("optShuffleP2").checked;
+    const sQ = document.getElementById("optShuffleQ").checked;
+    const sP1 = document.getElementById("optShuffleP1").checked;
+    const sP2 = document.getElementById("optShuffleP2").checked;
+    
     danhSachDeThi = [];
+    
+    // Tự động gộp các câu chùm để khi xáo trộn chúng luôn đi cùng nhau
+    const buildGroups = (arr) => {
+        let result = [];
+        let currentGroup = [];
+        for(let i=0; i<arr.length; i++) {
+            if(arr[i].isGroupChild) {
+                currentGroup.push(arr[i]);
+            } else {
+                if(currentGroup.length > 0) { result.push(currentGroup); currentGroup = []; }
+                result.push([arr[i]]);
+            }
+        }
+        if(currentGroup.length > 0) result.push(currentGroup);
+        return result;
+    };
+
     for(let i=0; i<soLuong; i++){
       let maDe = String(startCode + i * stepCode);
       let clone = JSON.parse(JSON.stringify(base));
-      let p1 = clone.filter(c=>c.Phan==="1"), p2 = clone.filter(c=>c.Phan==="2"), p3 = clone.filter(c=>c.Phan==="3");
       
-      if(sQ) shuffleArray(p1);
-      p1.forEach((c, idx) => {
+      let p1 = clone.filter(c=>c.Phan==="1");
+      let p2 = clone.filter(c=>c.Phan==="2");
+      let p3 = clone.filter(c=>c.Phan==="3");
+      
+      // XỬ LÝ PHẦN 1
+      let p1Groups = buildGroups(p1);
+      if(sQ) shuffleArray(p1Groups);
+      let p1Flat = p1Groups.flat();
+      
+      p1Flat.forEach((c, idx) => {
         c.CauSo = "P1_"+(idx+1); c.MaDe = maDe;
         if(sP1){
           let ansTxt = c.DapAnDung==="A"?c.DapAnA : c.DapAnDung==="B"?c.DapAnB : c.DapAnDung==="C"?c.DapAnC : c.DapAnD;
@@ -689,11 +809,17 @@
           c.DapAnA=opts[0].t; c.DapAnB=opts[1].t; c.DapAnC=opts[2].t; c.DapAnD=opts[3].t;
           c.DapAnDung = opts.findIndex(o=>o.t===ansTxt)===0?"A" : opts.findIndex(o=>o.t===ansTxt)===1?"B" : opts.findIndex(o=>o.t===ansTxt)===2?"C" : "D";
         }
+        // Xóa cờ GroupChild để dữ liệu đẩy lên sạch sẽ
+        delete c.isGroupChild;
         danhSachDeThi.push(c);
       });
 
-      if(sQ) shuffleArray(p2);
-      p2.forEach((c, idx) => {
+      // XỬ LÝ PHẦN 2
+      let p2Groups = buildGroups(p2);
+      if(sQ) shuffleArray(p2Groups);
+      let p2Flat = p2Groups.flat();
+
+      p2Flat.forEach((c, idx) => {
         c.CauSo = "P2_"+(idx+1); c.MaDe = maDe;
         if(sP2){
           let arrAns = (c.DapAnDung||"").replace(/-/g, '').split(""); if(arrAns.length<4) arrAns=["Đ","Đ","Đ","Đ"];
@@ -702,11 +828,20 @@
           c.DapAnA=opts[0].t; c.DapAnB=opts[1].t; c.DapAnC=opts[2].t; c.DapAnD=opts[3].t;
           c.DapAnDung = `${opts[0].a}-${opts[1].a}-${opts[2].a}-${opts[3].a}`;
         }
+        delete c.isGroupChild;
         danhSachDeThi.push(c);
       });
 
-      if(sQ) shuffleArray(p3);
-      p3.forEach((c, idx) => { c.CauSo = "P3_"+(idx+1); c.MaDe = maDe; danhSachDeThi.push(c); });
+      // XỬ LÝ PHẦN 3
+      let p3Groups = buildGroups(p3);
+      if(sQ) shuffleArray(p3Groups);
+      let p3Flat = p3Groups.flat();
+
+      p3Flat.forEach((c, idx) => { 
+          c.CauSo = "P3_"+(idx+1); c.MaDe = maDe; 
+          delete c.isGroupChild;
+          danhSachDeThi.push(c); 
+      });
     }
   }
 
