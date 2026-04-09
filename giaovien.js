@@ -8,11 +8,21 @@ let activeWorkspaceMonId = null;
 
 let danhSachDeThi = []; let duLieuBangDiem = []; let currentDashFilter = "TatCa"; let allStudents = []; let allTeachers = []; let currentStudentFilter = "TatCa"; let availableBaiHocs = []; let fullBankData = []; let allRoomsData = [];
 let autoRefreshInterval = null;
+let teacherTimerInterval = null; 
 let danhSachThuCong = [];
 let previewExamData = []; 
 let ketQuaChannel = null;
 let g_danhSachLopCache = []; 
-let g_sysMonList = []; // Biến lưu danh sách môn học toàn cục
+let g_sysMonList = []; 
+
+// BỘ CHUYỂN ĐỔI THỜI GIAN CHỐNG LỖI (Fix lỗi NaN:NaN)
+function parseTimeSafely(timeVal) {
+    if (!timeVal || timeVal === 'null') return 0;
+    if (typeof timeVal === 'number') return timeVal;
+    if (typeof timeVal === 'string' && /^\d+$/.test(timeVal)) return parseInt(timeVal, 10); // Xử lý số cũ
+    let d = new Date(timeVal).getTime(); // Xử lý ISO string mới
+    return isNaN(d) ? 0 : d;
+}
 
 async function hashPassword(message) {
     const msgBuffer = new TextEncoder().encode(message);
@@ -882,7 +892,8 @@ async function dieuKhien(trangThai) {
     document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
     
     let updateData = { trang_thai: trangThai, doi_tuong: doiTuong, ten_dot: tenDot, thoi_gian: tg };
-    if(trangThai === 'MO_PHONG') updateData.thoi_gian_mo = Date.now();
+    // LƯU Ý QUAN TRỌNG: Lưu thời gian chuẩn ISO String
+    if(trangThai === 'MO_PHONG') updateData.thoi_gian_mo = new Date().toISOString();
     
     let phong_id = await getOrCreateRoom(maPhong);
     let {error} = await sb.from('phong_thi').update(updateData).eq('id', phong_id);
@@ -892,19 +903,24 @@ async function dieuKhien(trangThai) {
 }
 
 async function dieuKhienFast(maPhong, trangThai) { 
-    let {data} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
-    if(data) { 
-        let updateData = {trang_thai: trangThai};
-        if(trangThai === 'MO_PHONG') {
-            updateData.thoi_gian_mo = Date.now();
-            let checkbox = document.querySelector(`.chk-Room[value="${data.id}"]`);
-            if(checkbox) {
-                let selDoiTuong = checkbox.closest('tr').querySelector('.fast-doituong').value;
-                updateData.doi_tuong = selDoiTuong;
+    try {
+        let {data} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
+        if(data) { 
+            let updateData = {trang_thai: trangThai};
+            if(trangThai === 'MO_PHONG') {
+                updateData.thoi_gian_mo = new Date().toISOString(); // Lưu chuẩn ISO
+                let checkbox = document.querySelector(`.chk-Room[value="${data.id}"]`);
+                if(checkbox) {
+                    let selDoiTuong = checkbox.closest('tr').querySelector('.fast-doituong').value;
+                    updateData.doi_tuong = selDoiTuong;
+                }
             }
+            await sb.from('phong_thi').update(updateData).eq('id', data.id); 
+            fetchRadar(); 
         }
-        await sb.from('phong_thi').update(updateData).eq('id', data.id); 
-        fetchRadar(); 
+    } catch(e) {
+        console.error("Lỗi điều khiển nhanh:", e);
+        alert("Lỗi khi điều khiển phòng!");
     }
 }
 
@@ -934,82 +950,193 @@ async function capNhatNhanhPhong(roomId, field, value) {
     await sb.from('phong_thi').update(updateData).eq('id', roomId);
 }
 
-async function fetchRadar() { 
-    let query = sb.from('phong_thi').select('*').eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    let {data} = await query;
-    
-    allRoomsData = (data||[]).map(d => ({ MaPhong: d.ma_phong, TenDotKiemTra: d.ten_dot, DoiTuong: d.doi_tuong, ThoiGian: d.thoi_gian, TrangThai: d.trang_thai, ThoiGianMo: d.thoi_gian_mo, id: d.id }));
-    
-    let tbody = document.getElementById('radarBody');
-    let tableElement = tbody.parentNode;
-    let containerElement = tableElement.parentNode;
-    
-    if(!document.getElementById('radarControlBar')) {
-        let ctrlBar = document.createElement('div');
-        ctrlBar.id = 'radarControlBar';
-        ctrlBar.style.marginBottom = '15px';
-        ctrlBar.style.display = 'flex';
-        ctrlBar.style.gap = '10px';
-        ctrlBar.style.alignItems = 'center';
-        ctrlBar.style.background = '#e8f5e9';
-        ctrlBar.style.padding = '10px 15px';
-        ctrlBar.style.borderRadius = '6px';
-        ctrlBar.style.border = '1px solid #c8e6c9';
-
-        ctrlBar.innerHTML = `
-            <label style="cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:5px; margin-right:15px; color:#27ae60;">
-                <input type="checkbox" id="chkAllRooms" onchange="toggleAllRooms(this.checked)" style="transform: scale(1.3);"> CHỌN TẤT CẢ
-            </label>
-            <button onclick="dieuKhienNhomPhong('MO_PHONG')" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🟢 Mở các phòng đã chọn</button>
-            <button onclick="dieuKhienNhomPhong('THU_BAI')" style="background:#c0392b; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔴 Khóa các phòng đã chọn</button>
-            <span id="batchActionLog" style="margin-left: 10px; font-style: italic; color: #d35400; font-weight: bold;"></span>
-        `;
-        containerElement.insertBefore(ctrlBar, tableElement);
+// BỔ SUNG: HÀM KHÓA PHÒNG TỰ ĐỘNG
+async function tuDongKhoaPhongKhiHetGio(roomId) {
+    try {
+        let { error } = await sb.from('phong_thi').update({ trang_thai: 'THU_BAI' }).eq('id', roomId);
+        if (error) console.error("Lỗi tự khóa phòng:", error);
+        else {
+            let r = allRoomsData.find(x => x.id === roomId);
+            if(r) r.TrangThai = 'THU_BAI';
+        }
+    } catch (e) {
+        console.error("Lỗi tự khóa phòng:", e);
     }
+}
 
-    let chkAll = document.getElementById('chkAllRooms');
-    if(chkAll) chkAll.checked = false;
+// BỔ SUNG: CỖ MÁY ĐẾM NGƯỢC THỜI GIAN
+function khoiDongDongHoGiaoVien() {
+    if (teacherTimerInterval) clearInterval(teacherTimerInterval);
 
-    let html = ''; 
-    if(allRoomsData.length === 0) { html = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>'; } 
-    else { 
-        allRoomsData.forEach(r => { 
-            let sttHtml = r.TrangThai; 
-            if(r.TrangThai === "MO_PHONG") sttHtml = "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>"; 
-            else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>"; 
-            else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bố Điểm</span>"; 
-            else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
-            
-            let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'MO_PHONG')">Mở lại</button>`; 
-            let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${r.MaPhong}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
-            let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${r.MaPhong}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`; 
-            
-            let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
+    teacherTimerInterval = setInterval(() => {
+        let now = Date.now();
+        let timers = document.querySelectorAll('.live-timer');
 
-            let displayVal = r.DoiTuong === 'TatCa' ? '🌎 Tất cả' : r.DoiTuong;
-            let doiTuongCell = `
-                <div style="display:flex; align-items:center; justify-content:center;">
-                    <div style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;" 
-                         onclick="moModalChonLop('${r.id}', '${r.DoiTuong}')" title="${r.DoiTuong} (Bấm để chỉnh sửa)">
-                        ${displayVal} ✏️
-                    </div>
-                    <input type="hidden" class="fast-doituong" value="${r.DoiTuong}">
-                </div>
-            `;
+        timers.forEach(timerEl => {
+            if(timerEl.classList.contains('locked')) return;
 
-            html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${r.ThoiGian||45}p</td><td>${sttHtml}</td><td>${btnHtml} ${btnXoaDe} ${btnXoa}</td></tr>`; 
-        }); 
-    } 
-    document.getElementById('radarBody').innerHTML = html; 
+            let roomId = timerEl.getAttribute('data-room-id');
+            let startTimeStr = timerEl.getAttribute('data-start');
+            let startTime = parseTimeSafely(startTimeStr);
+            let durationMin = parseInt(timerEl.getAttribute('data-duration')) || 45;
 
-    document.querySelectorAll('.chk-Room').forEach(cb => {
-        cb.addEventListener('change', function() {
-            let total = document.querySelectorAll('.chk-Room').length;
-            let checked = document.querySelectorAll('.chk-Room:checked').length;
-            document.getElementById('chkAllRooms').checked = (total > 0 && total === checked);
+            if (startTime === 0) {
+                timerEl.innerText = "--:--";
+                return;
+            }
+
+            let endTime = startTime + (durationMin * 60 * 1000);
+            let diff = endTime - now;
+
+            if (isNaN(diff)) {
+                timerEl.innerText = "Lỗi";
+                return;
+            }
+
+            if (diff <= 0) {
+                // Đánh dấu đã khóa cục bộ để dừng đếm ngược
+                timerEl.classList.add('locked');
+                timerEl.innerText = "00:00";
+                timerEl.style.color = "#d93025";
+
+                let parentTd = timerEl.parentElement;
+                if(parentTd) parentTd.innerHTML = `<span style="color:#d93025; font-weight:bold;">Hết giờ</span><div style="font-size: 11px; color: #7f8c8d;">/${durationMin}p</div>`;
+
+                let sttTd = document.getElementById(`td-stt-${roomId}`);
+                if(sttTd) sttTd.innerHTML = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>";
+
+                let actTd = document.getElementById(`td-act-${roomId}`);
+                if(actTd) {
+                    let r = allRoomsData.find(x => String(x.id) === String(roomId));
+                    let maPhong = r ? r.MaPhong : '';
+                    let btnHtml = `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${maPhong}', 'MO_PHONG')">Mở lại</button>`;
+                    let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${maPhong}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
+                    let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${maPhong}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
+                    actTd.innerHTML = `${btnHtml} ${btnXoaDe} ${btnXoa}`;
+                }
+
+                tuDongKhoaPhongKhiHetGio(roomId);
+            } else {
+                let m = Math.floor(diff / 60000);
+                let s = Math.floor((diff % 60000) / 1000);
+                timerEl.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+                if (diff <= 300000) { 
+                    timerEl.style.color = "#d93025";
+                }
+            }
         });
-    });
+    }, 1000);
+}
+
+async function fetchRadar() { 
+    try {
+        let query = sb.from('phong_thi').select('*').eq('truong_id', gvData.truong_id);
+        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
+        let {data, error} = await query;
+        if(error) throw error;
+        
+        let now = Date.now();
+        if (data) {
+            for (let r of data) {
+                if (r.trang_thai === 'MO_PHONG' && r.thoi_gian_mo) {
+                    let duration = r.thoi_gian || 45;
+                    let startTime = parseTimeSafely(r.thoi_gian_mo);
+                    if (startTime > 0) {
+                        let endTime = startTime + (duration * 60 * 1000);
+                        if (now >= endTime) {
+                            console.log(`Phát hiện phòng ma ${r.ma_phong}, tiến hành tự động khóa...`);
+                            r.trang_thai = 'THU_BAI'; 
+                            sb.from('phong_thi').update({ trang_thai: 'THU_BAI' }).eq('id', r.id).then(); 
+                        }
+                    }
+                }
+            }
+        }
+
+        allRoomsData = (data||[]).map(d => ({ MaPhong: d.ma_phong, TenDotKiemTra: d.ten_dot, DoiTuong: d.doi_tuong, ThoiGian: d.thoi_gian, TrangThai: d.trang_thai, ThoiGianMo: d.thoi_gian_mo, id: d.id }));
+        
+        let tbody = document.getElementById('radarBody');
+        let tableElement = tbody.parentNode;
+        let containerElement = tableElement.parentNode;
+        
+        if(!document.getElementById('radarControlBar')) {
+            let ctrlBar = document.createElement('div');
+            ctrlBar.id = 'radarControlBar';
+            ctrlBar.style.marginBottom = '15px';
+            ctrlBar.style.display = 'flex';
+            ctrlBar.style.gap = '10px';
+            ctrlBar.style.alignItems = 'center';
+            ctrlBar.style.background = '#e8f5e9';
+            ctrlBar.style.padding = '10px 15px';
+            ctrlBar.style.borderRadius = '6px';
+            ctrlBar.style.border = '1px solid #c8e6c9';
+
+            ctrlBar.innerHTML = `
+                <label style="cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:5px; margin-right:15px; color:#27ae60;">
+                    <input type="checkbox" id="chkAllRooms" onchange="toggleAllRooms(this.checked)" style="transform: scale(1.3);"> CHỌN TẤT CẢ
+                </label>
+                <button onclick="dieuKhienNhomPhong('MO_PHONG')" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🟢 Mở các phòng đã chọn</button>
+                <button onclick="dieuKhienNhomPhong('THU_BAI')" style="background:#c0392b; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔴 Khóa các phòng đã chọn</button>
+                <span id="batchActionLog" style="margin-left: 10px; font-style: italic; color: #d35400; font-weight: bold;"></span>
+            `;
+            containerElement.insertBefore(ctrlBar, tableElement);
+        }
+
+        let chkAll = document.getElementById('chkAllRooms');
+        if(chkAll) chkAll.checked = false;
+
+        let html = ''; 
+        if(allRoomsData.length === 0) { html = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>'; } 
+        else { 
+            allRoomsData.forEach(r => { 
+                let sttHtml = r.TrangThai; 
+                if(r.TrangThai === "MO_PHONG") sttHtml = "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>"; 
+                else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>"; 
+                else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bố Điểm</span>"; 
+                else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
+                
+                let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'MO_PHONG')">Mở lại</button>`; 
+                let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${r.MaPhong}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
+                let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${r.MaPhong}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`; 
+                
+                let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
+
+                let displayVal = r.DoiTuong === 'TatCa' ? '🌎 Tất cả' : r.DoiTuong;
+                let doiTuongCell = `
+                    <div style="display:flex; align-items:center; justify-content:center;">
+                        <div style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;" 
+                             onclick="moModalChonLop('${r.id}', '${r.DoiTuong}')" title="${r.DoiTuong} (Bấm để chỉnh sửa)">
+                            ${displayVal} ✏️
+                        </div>
+                        <input type="hidden" class="fast-doituong" value="${r.DoiTuong}">
+                    </div>
+                `;
+
+                let durationMin = r.ThoiGian || 45;
+                let timerHtml = `<b>${durationMin}p</b>`;
+                if (r.TrangThai === "MO_PHONG" && r.ThoiGianMo) {
+                    timerHtml = `<div class="live-timer" data-room-id="${r.id}" data-start="${r.ThoiGianMo}" data-duration="${durationMin}" style="font-weight:bold; color:#1a73e8; font-variant-numeric: tabular-nums; font-size: 15px;">--:--</div><div style="font-size: 11px; color: #7f8c8d;">/${durationMin}p</div>`;
+                }
+
+                html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${timerHtml}</td><td id="td-stt-${r.id}">${sttHtml}</td><td id="td-act-${r.id}">${btnHtml} ${btnXoaDe} ${btnXoa}</td></tr>`; 
+            }); 
+        } 
+        document.getElementById('radarBody').innerHTML = html; 
+
+        document.querySelectorAll('.chk-Room').forEach(cb => {
+            cb.addEventListener('change', function() {
+                let total = document.querySelectorAll('.chk-Room').length;
+                let checked = document.querySelectorAll('.chk-Room:checked').length;
+                document.getElementById('chkAllRooms').checked = (total > 0 && total === checked);
+            });
+        });
+
+        khoiDongDongHoGiaoVien();
+    } catch (err) {
+        console.error("Lỗi tải Radar:", err);
+        document.getElementById('radarBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; font-weight:bold;">❌ Lỗi tải dữ liệu phòng thi</td></tr>';
+    }
 }
 
 function toggleAllRooms(isChecked) {
@@ -1029,7 +1156,6 @@ async function dieuKhienNhomPhong(trangThai) {
 
     try {
         let promises = [];
-        let now = Date.now();
 
         checkedBoxes.forEach(cb => {
             let roomId = cb.value;
@@ -1038,7 +1164,7 @@ async function dieuKhienNhomPhong(trangThai) {
 
             let updateData = { trang_thai: trangThai };
             if(trangThai === 'MO_PHONG') {
-                updateData.thoi_gian_mo = now;
+                updateData.thoi_gian_mo = new Date().toISOString(); // Lưu chuẩn ISO
                 updateData.doi_tuong = selDoiTuong; 
             }
 
@@ -1055,6 +1181,55 @@ async function dieuKhienNhomPhong(trangThai) {
     } catch(e) {
         logSpan.innerText = "❌ Lỗi thực thi!";
         alert("Lỗi kết nối khi cập nhật đồng loạt: " + e.message);
+    }
+}
+
+// BỌC LẠI TRY/CATCH ĐỂ CHỐNG LỖI TẢI DANH SÁCH
+async function taiDanhSachPhong() {
+    let selectBoxTab2 = document.getElementById("ctrlMaPhong"); let selectBoxTab3 = document.getElementById("dashMaPhong");
+    if(selectBoxTab2) selectBoxTab2.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
+    if(selectBoxTab3) selectBoxTab3.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
+
+    try {
+        let query = sb.from('phong_thi').select('ma_phong').eq('truong_id', gvData.truong_id);
+        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
+        let {data, error} = await query;
+        if(error) throw error;
+        
+        let defaultOpt = '<option value="">-- Chọn Mã Phòng Thi --</option>';
+        if(selectBoxTab2) selectBoxTab2.innerHTML = defaultOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = defaultOpt;
+        
+        if(data && data.length > 0) {
+            let uniqueRooms = [...new Set(data.map(d=>d.ma_phong))];
+            uniqueRooms.forEach(phong => {
+                let optHtml = `<option value="${phong}">${phong}</option>`;
+                if(selectBoxTab2) selectBoxTab2.innerHTML += optHtml; if(selectBoxTab3) selectBoxTab3.innerHTML += optHtml;
+            });
+            let phongDaLuu = localStorage.getItem('phongDangXem');
+            if (phongDaLuu && uniqueRooms.includes(phongDaLuu)) { if(selectBoxTab3) { selectBoxTab3.value = phongDaLuu; fetchDashboard(); } }
+        } else {
+            let emptyOpt = '<option value="">⚠️ Chưa có phòng thi nào</option>';
+            if(selectBoxTab2) selectBoxTab2.innerHTML = emptyOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = emptyOpt;
+        }
+
+        if(selectBoxTab2) {
+            selectBoxTab2.onchange = function() {
+                let r = allRoomsData.find(x => x.MaPhong === this.value);
+                if(r) {
+                    document.getElementById('ctrlTenDot').value = r.TenDotKiemTra || "";
+                    document.getElementById('ctrlThoiGian').value = r.ThoiGian || 45;
+                    setTimeout(() => {
+                        let sel = document.getElementById('ctrlDoiTuong');
+                        if(sel) sel.value = r.DoiTuong || "TatCa";
+                    }, 150);
+                }
+            };
+        }
+    } catch(e) {
+        console.error("Lỗi tải DS phòng:", e);
+        let errOpt = '<option value="">❌ Lỗi tải DS phòng</option>';
+        if(selectBoxTab2) selectBoxTab2.innerHTML = errOpt;
+        if(selectBoxTab3) selectBoxTab3.innerHTML = errOpt;
     }
 }
 
@@ -1381,18 +1556,15 @@ async function fetchTeachers(forceReload = false) {
     document.getElementById('gvBody').innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Đang tải dữ liệu...</td></tr>'; 
     
     try {
-        // 1. Tải danh sách môn học
         let resMon = await sb.from('mon_hoc').select('*').order('created_at', {ascending: true});
         g_sysMonList = resMon.data || [];
 
-        // 2. Tải danh sách giáo viên (Tải độc lập, KHÔNG gộp bảng để tránh lỗi Khóa ngoại)
         let {data, error} = await sb.from('giao_vien').select('*').eq('truong_id', gvData.truong_id).order('ma_gv', {ascending: true});
         
         if (error) throw error;
 
         if(data) {
             allTeachers = data.map(d => {
-                // 3. Tự động đối chiếu ID để tìm tên môn học bằng Javascript
                 let matchedMon = g_sysMonList.find(m => m.id === d.mon_id);
                 return { 
                     MaGV: d.ma_gv, 
@@ -1727,95 +1899,6 @@ async function docFileExcelVaNap(loai) {
     
     btn.innerText = oldText; btn.disabled = false; btn.style.opacity = 1;
 }
-
-// ==========================================================
-// HÚT ĐỀ THÔNG MINH TỪ IFRAME V8 (CÂU CHÙM, HÌNH ẢNH)
-// ==========================================================
-
-async function layDeTuIframe(btnElement) {
-    if (!checkWorkspaceAction()) return;
-
-    let inputMaPhong = document.getElementById('maPhongLienKet');
-    let maPhong = inputMaPhong ? inputMaPhong.value.trim() : prompt("Vui lòng nhập MÃ PHÒNG THI đích đến:");
-    
-    if (!maPhong) return alert("⚠️ Cần phải có Mã Phòng Thi để đẩy đề lên mạng!");
-
-    try {
-        let iframeWindow = document.getElementById('frameV8').contentWindow;
-        let danhSachDeIframe = [];
-
-        danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
-        if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
-            return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
-        }
-        
-        danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
-        
-        danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
-
-        let oldText = btnElement.innerText;
-        btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
-        btnElement.disabled = true;
-
-        let result = await luuDeThiLenSupabase(danhSachDeIframe);
-        
-        btnElement.innerText = oldText;
-        btnElement.disabled = false;
-
-        if (result.status === 'success') {
-            alert(`🎉 HOÀN TẤT! Đã bóc tách thành công ${danhSachDeIframe.length} câu hỏi và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
-        } else {
-            alert("❌ Lỗi máy chủ Supabase: " + result.message);
-        }
-    } catch (e) {
-        btnElement.innerText = "🚀 Hút đề & Đẩy lên mạng";
-        btnElement.disabled = false;
-        console.error("Lỗi khi hút đề:", e);
-        alert("❌ Lỗi kết nối hoặc cấu trúc Iframe không hợp lệ. Chi tiết: " + e.message);
-    }
-}
-
-async function taiDanhSachPhong() {
-    let selectBoxTab2 = document.getElementById("ctrlMaPhong"); let selectBoxTab3 = document.getElementById("dashMaPhong");
-    if(selectBoxTab2) selectBoxTab2.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
-    if(selectBoxTab3) selectBoxTab3.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
-
-    let query = sb.from('phong_thi').select('ma_phong').eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    let {data} = await query;
-    
-    let defaultOpt = '<option value="">-- Chọn Mã Phòng Thi --</option>';
-    if(selectBoxTab2) selectBoxTab2.innerHTML = defaultOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = defaultOpt;
-    
-    if(data && data.length > 0) {
-        let uniqueRooms = [...new Set(data.map(d=>d.ma_phong))];
-        uniqueRooms.forEach(phong => {
-            let optHtml = `<option value="${phong}">${phong}</option>`;
-            if(selectBoxTab2) selectBoxTab2.innerHTML += optHtml; if(selectBoxTab3) selectBoxTab3.innerHTML += optHtml;
-        });
-        let phongDaLuu = localStorage.getItem('phongDangXem');
-        if (phongDaLuu && uniqueRooms.includes(phongDaLuu)) { if(selectBoxTab3) { selectBoxTab3.value = phongDaLuu; fetchDashboard(); } }
-    } else {
-        let emptyOpt = '<option value="">⚠️ Chưa có phòng thi nào</option>';
-        if(selectBoxTab2) selectBoxTab2.innerHTML = emptyOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = emptyOpt;
-    }
-
-    if(selectBoxTab2) {
-        selectBoxTab2.addEventListener('change', function() {
-            let r = allRoomsData.find(x => x.MaPhong === this.value);
-            if(r) {
-                document.getElementById('ctrlTenDot').value = r.TenDotKiemTra || "";
-                document.getElementById('ctrlThoiGian').value = r.ThoiGian || 45;
-                setTimeout(() => {
-                    let sel = document.getElementById('ctrlDoiTuong');
-                    if(sel) sel.value = r.DoiTuong || "TatCa";
-                }, 150);
-            }
-        });
-    }
-}
-
-function xuLyLiveSearch() { renderDashboardTable(); }
 
 // ==========================================================
 // CÁC HÀM QUẢN LÝ DỮ LIỆU HỆ THỐNG (TRƯỜNG & MÔN)
