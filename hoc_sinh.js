@@ -14,6 +14,27 @@ const MAX_CHEATS = 3;
 let isExamActive = false;
 let isSubmitting = false; 
 
+// ==========================================
+// TẠO GIAO DIỆN THÔNG BÁO LƯU NHÁP ĐỘNG
+// ==========================================
+const styleToast = document.createElement('style');
+styleToast.innerHTML = `
+    #sync-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e8e3e; color: #fff; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s; opacity: 0; pointer-events: none; z-index: 99999; display: flex; align-items: center; gap: 8px;}
+    #sync-toast.show { opacity: 1; bottom: 30px; }
+`;
+document.head.appendChild(styleToast);
+
+const toastEl = document.createElement('div');
+toastEl.id = 'sync-toast';
+toastEl.innerHTML = '<span>☁️</span> Đã tự động lưu nháp an toàn';
+document.body.appendChild(toastEl);
+
+function hienThiThongBaoLuu() {
+    let t = document.getElementById('sync-toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+}
+
 // --- BẢO MẬT: BĂM MẬT KHẨU CÓ DỰ PHÒNG LAN (HTTP) ---
 async function hashPassword(message) {
     if (window.crypto && window.crypto.subtle) {
@@ -22,7 +43,6 @@ async function hashPassword(message) {
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     } else if (window.CryptoJS) {
-        console.warn("Đang dùng CryptoJS dự phòng do chạy trên HTTP.");
         return CryptoJS.SHA256(message).toString(CryptoJS.enc.Hex);
     } else {
         alert("Lỗi nghiêm trọng: Trình duyệt không hỗ trợ mã hóa!");
@@ -71,7 +91,7 @@ async function login() {
             _supabase.from('hoc_sinh').update({ mat_khau: hashedPass }).eq('id', hsData.id).then();
         }
 
-        // Lưu Số báo danh vào state để chia đề
+        // Lưu thông tin vào state
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
         
         document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten; document.getElementById('lop_hs_hien_thi').innerText = state.lop;
@@ -84,7 +104,6 @@ async function login() {
     }
 }
 
-// CẬP NHẬT: Quét phòng thi và lọc đa lớp (Multi-class)
 async function timPhongThiTuDong() {
     const autoArea = document.getElementById('auto-room-area');
     autoArea.innerHTML = '<p style="font-weight: bold; color: #1a73e8; margin: 0;">⏳ Đang quét tìm phòng thi đang mở...</p>';
@@ -96,7 +115,6 @@ async function timPhongThiTuDong() {
 
         if (error) throw error;
 
-        // Lọc trên Javascript để phân tách chuỗi đa lớp (VD: "10A1, 10A2")
         let matchedRooms = (data || []).filter(room => {
             if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
             let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
@@ -131,7 +149,6 @@ async function joinRoom(maPhongAuto = null) {
             
         if (!phongData) throw new Error("Không tìm thấy phòng thi này!");
 
-        // CẬP NHẬT: Kiểm tra quyền vào phòng (Bảo mật lớp ghép) khi nhập mã bằng tay
         if (phongData.doi_tuong && phongData.doi_tuong !== 'TatCa') {
             let allowedClasses = phongData.doi_tuong.split(',').map(s => s.trim());
             if (!allowedClasses.includes(state.lop)) {
@@ -150,7 +167,6 @@ async function joinRoom(maPhongAuto = null) {
 
         if (phongData.trang_thai !== 'MO_PHONG') throw new Error("Phòng thi hiện đang bị khóa!");
 
-        // --- THUẬT TOÁN CHIA ĐỀ VÒNG TRÒN (ROUND-ROBIN) TỐI ƯU ---
         const { data: danhSachDe } = await _supabase.from('de_thi')
             .select('ma_de, cau_so')
             .eq('phong_id', state.phong_id);
@@ -175,13 +191,16 @@ async function joinRoom(maPhongAuto = null) {
 
         state.ma_de = deData.ma_de;
         state.cau_hỏi = typeof deData.cau_so === 'string' ? JSON.parse(deData.cau_so) : deData.cau_so;
-        // --------------------------------------------------
-
+        
         document.getElementById('ten_mon_hien_thi').innerText = safeHTML(phongData.mon_hoc?.ten_mon || "Môn Chung");
         document.getElementById('ma_de_hien_thi').innerText = state.ma_de;
         
         batDauAntiCheat();
         renderExam();
+        
+        // GỌI HÀM KHÔI PHỤC BẢN NHÁP TRƯỚC KHI BẮT ĐẦU TÍNH GIỜ
+        khoiPhucBaiLamNhap();
+
         showSection('exam-section');
         startTimer(phongData.thoi_gian, phongData.thoi_gian_mo);
 
@@ -270,13 +289,22 @@ function capNhatNutDieuHuong() {
     document.getElementById('btn-next').disabled = (currentQuestionIndex === state.cau_hỏi.length - 1);
 }
 
-function danhDauDaLam(index) { document.getElementById(`q-btn-${index}`).classList.add('answered'); }
-function kiemTraP2DaLam(index) {
-    let count = 0; ['a','b','c','d'].forEach(l => { if(document.querySelector(`input[name="q_${index}_${l}"]:checked`)) count++; });
-    if(count === 4) danhDauDaLam(index);
+// BỔ SUNG LƯU NHÁP VÀO HÀNH ĐỘNG CLICK CỦA USER
+function danhDauDaLam(index, isRestoring = false) { 
+    document.getElementById(`q-btn-${index}`).classList.add('answered'); 
+    if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
 }
-function kiemTraP3DaLam(index, val) {
-    if(val.trim() !== "") danhDauDaLam(index); else document.getElementById(`q-btn-${index}`).classList.remove('answered');
+
+function kiemTraP2DaLam(index, isRestoring = false) {
+    let count = 0; ['a','b','c','d'].forEach(l => { if(document.querySelector(`input[name="q_${index}_${l}"]:checked`)) count++; });
+    if(count === 4) document.getElementById(`q-btn-${index}`).classList.add('answered');
+    if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
+}
+
+function kiemTraP3DaLam(index, val, isRestoring = false) {
+    if(val.trim() !== "") document.getElementById(`q-btn-${index}`).classList.add('answered'); 
+    else document.getElementById(`q-btn-${index}`).classList.remove('answered');
+    if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
 }
 
 function startTimer(thoiGianPhut, thoiGianMo) {
@@ -298,7 +326,18 @@ function startTimer(thoiGianPhut, thoiGianMo) {
     }, 1000);
 }
 
-// 3. THUẬT TOÁN CHỐNG GIAN LẬN CỔ ĐIỂN
+// ==========================================
+// THUẬT TOÁN CHỐNG GIAN LẬN & ÉP CHẶN F5 TẬN GỐC
+// ==========================================
+function xacNhanThoatTrang(e) {
+    if (isExamActive && !isSubmitting) {
+        const msg = 'Bài làm của bạn chưa được nộp. Bạn có chắc chắn muốn rời đi?';
+        e.preventDefault();
+        e.returnValue = msg; 
+        return msg; // Trình duyệt cần dòng return này để show popup
+    }
+}
+
 function batDauAntiCheat() {
     isExamActive = true;
     cheatCount = 0;
@@ -308,6 +347,9 @@ function batDauAntiCheat() {
     document.addEventListener('contextmenu', chanHanhDong);
     document.addEventListener('copy', chanHanhDong);
     document.addEventListener('keydown', chanPhimTat);
+    
+    // GẮN CHẶT KHIÊN VÀO WINDOW OBJECT (Đảm bảo hoạt động)
+    window.onbeforeunload = xacNhanThoatTrang;
 
     window.addEventListener('blur', xuLyGianLan);
     document.addEventListener('visibilitychange', () => {
@@ -317,16 +359,24 @@ function batDauAntiCheat() {
 
 function tatAntiCheat() {
     isExamActive = false;
-    document.removeEventListener('contextmenu', chanHanhDong); document.removeEventListener('copy', chanHanhDong); document.removeEventListener('keydown', chanPhimTat);
-    window.removeEventListener('blur', xuLyGianLan); document.removeEventListener('visibilitychange', xuLyGianLan);
+    document.removeEventListener('contextmenu', chanHanhDong); 
+    document.removeEventListener('copy', chanHanhDong); 
+    document.removeEventListener('keydown', chanPhimTat);
+    
+    // THÁO KHIÊN KHI NỘP BÀI THÀNH CÔNG
+    window.onbeforeunload = null;
+    
+    window.removeEventListener('blur', xuLyGianLan); 
+    document.removeEventListener('visibilitychange', xuLyGianLan);
     if(examTimer) clearInterval(examTimer);
 }
 
 function chanHanhDong(e) { if(isExamActive) e.preventDefault(); }
 function chanPhimTat(e) {
     if (!isExamActive) return;
-    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'c') || (e.ctrlKey && e.key === 'v')) {
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'c') || (e.ctrlKey && e.key === 'v') || (e.key === 'F5') || (e.ctrlKey && e.key === 'r')) {
         e.preventDefault();
+        alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
     }
 }
 
@@ -391,6 +441,9 @@ async function gradeAndSubmit(autoSubmit = false) {
     });
     
     if (!error && data && data.status === 'success') { 
+        // XOÁ SẠCH BẢN NHÁP SAU KHI NỘP THÀNH CÔNG
+        localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+        
         document.getElementById('finish_name').innerText = state.ho_ten; showSection('result-section'); 
         try { document.exitFullscreen(); } catch(e){} 
     } else {
@@ -486,4 +539,83 @@ function renderReview(chiTietData) {
         html += `</div>`;
         container.innerHTML += html;
     });
+}
+
+// ==========================================================
+// CƠ CHẾ LƯU NHÁP & KHÔI PHỤC BÀI LÀM
+// ==========================================================
+function luuNhapBaiLam() {
+    let baiLamNhap = {};
+    
+    state.cau_hỏi.forEach((cau, index) => {
+        let phan = String(cau.phan || cau.Phan); 
+        let ans = "";
+        
+        if (phan === "1") {
+            ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
+        } else if (phan === "2") {
+            let userArr = ['a','b','c','d'].map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || "");
+            ans = userArr.join('-'); 
+        } else {
+            let txtEl = document.getElementById(`q_${index}_txt`);
+            ans = txtEl ? txtEl.value.trim() : "";
+        }
+        
+        if (ans && ans !== "---" && ans !== "") {
+            baiLamNhap[index] = ans;
+        }
+    });
+
+    const draftKey = `nhap_damsan_${state.phong_id}_${state.hs_id}`;
+    localStorage.setItem(draftKey, JSON.stringify(baiLamNhap));
+    console.log("Đã lưu nháp vào DB cục bộ:", draftKey);
+}
+
+function khoiPhucBaiLamNhap() {
+    const draftKey = `nhap_damsan_${state.phong_id}_${state.hs_id}`;
+    let savedData = localStorage.getItem(draftKey);
+    console.log("Tìm kiếm bản nháp với key:", draftKey);
+    
+    if (savedData) {
+        try {
+            let baiLamNhap = JSON.parse(savedData);
+            let soCauDaKhoiPhuc = 0;
+
+            Object.keys(baiLamNhap).forEach(index => {
+                let ans = baiLamNhap[index];
+                let cau = state.cau_hỏi[index];
+                if (!cau) return;
+                
+                let phan = String(cau.phan || cau.Phan);
+                
+                if (phan === "1") {
+                    let radio = document.querySelector(`input[name="q_${index}"][value="${ans}"]`);
+                    if (radio) { radio.checked = true; danhDauDaLam(index, true); soCauDaKhoiPhuc++; }
+                } 
+                else if (phan === "2") {
+                    let arrAns = ans.split('-');
+                    ['a','b','c','d'].forEach((l, i) => {
+                        let val = arrAns[i];
+                        if (val) {
+                            let radio = document.querySelector(`input[name="q_${index}_${l}"][value="${val}"]`);
+                            if (radio) radio.checked = true;
+                        }
+                    });
+                    kiemTraP2DaLam(index, true);
+                    soCauDaKhoiPhuc++;
+                } 
+                else {
+                    let txtArea = document.getElementById(`q_${index}_txt`);
+                    if (txtArea) { txtArea.value = ans; kiemTraP3DaLam(index, ans, true); soCauDaKhoiPhuc++; }
+                }
+            });
+            
+            if(soCauDaKhoiPhuc > 0) {
+                console.log(`Đã khôi phục thành công ${soCauDaKhoiPhuc} câu trả lời!`);
+                alert(`Hệ thống đã tự động khôi phục ${soCauDaKhoiPhuc} câu trả lời của bạn từ lần đăng nhập trước!`);
+            }
+        } catch(e) {
+            console.error("Lỗi khi khôi phục bản nháp:", e);
+        }
+    }
 }
