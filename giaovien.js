@@ -15,20 +15,26 @@ let ketQuaChannel = null;
 let g_danhSachLopCache = []; 
 let g_sysMonList = []; 
 
-// BỘ CHUYỂN ĐỔI THỜI GIAN CHỐNG LỖI (Fix lỗi NaN:NaN)
+// Bộ lọc an toàn: Chấp nhận mọi kiểu dữ liệu từ DB mà không bị NaN
 function parseTimeSafely(timeVal) {
     if (!timeVal || timeVal === 'null') return 0;
     if (typeof timeVal === 'number') return timeVal;
-    if (typeof timeVal === 'string' && /^\d+$/.test(timeVal)) return parseInt(timeVal, 10); // Xử lý số cũ
-    let d = new Date(timeVal).getTime(); // Xử lý ISO string mới
+    if (typeof timeVal === 'string' && /^\d+$/.test(timeVal)) return parseInt(timeVal, 10); 
+    let d = new Date(timeVal).getTime(); 
     return isNaN(d) ? 0 : d;
 }
 
 async function hashPassword(message) {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    if (window.crypto && window.crypto.subtle) {
+        const msgBuffer = new TextEncoder().encode(message);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } else if (window.CryptoJS) {
+        return CryptoJS.SHA256(message).toString(CryptoJS.enc.Hex);
+    } else {
+        return message;
+    }
 }
 const DEFAULT_PASS_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"; 
 
@@ -271,7 +277,7 @@ async function mc_luuChonLop() {
         if(checked.length > 0) finalVal = checked.join(', ');
     }
     let btn = document.querySelector('#multiClassModal button[onclick="mc_luuChonLop()"]');
-    let oldText = btn.innerText; btn.innerText = "⏳ ĐANG LƯU LÊN MÁY CHỦ..."; btn.disabled = true;
+    let oldText = btn.innerText; btn.innerText = "⏳ ĐANG LƯU..."; btn.disabled = true;
     await capNhatNhanhPhong(roomId, 'doi_tuong', finalVal);
     btn.innerText = oldText; btn.disabled = false; document.getElementById('multiClassModal').style.display = 'none'; fetchRadar(); 
 }
@@ -349,6 +355,7 @@ async function khoiTaoDuLieu() {
         phanQuyenGiaoVien();
         loadBankMeta(); loadMetaData(); fetchRadar(); fetchStudents(); fetchTeachers(); taiDanhSachPhong(); toggleAutoRefresh(); 
         kichHoatLienKetRealtimeGiaoVien();
+        khoiTaoTramGiamSat();
     } catch(e){}
 }
 
@@ -376,7 +383,7 @@ async function getOrCreateRoom(maPhong) {
     let {data: room} = await query.single();
     if(!room) {
         if(gvData.quyen === 'Admin' && (!activeWorkspaceMonId || activeWorkspaceMonId === 'ALL')) {
-            throw new Error("⚠️ Admin chưa chọn bộ môn. Vui lòng chọn môn học trên Header trước khi tạo phòng!");
+            throw new Error("⚠️ Admin chưa chọn bộ môn trên Header!");
         }
         let {data: newRoom} = await sb.from('phong_thi').insert({
             ma_phong: maPhong, truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId, ten_dot: 'Bài kiểm tra', doi_tuong: 'TatCa', thoi_gian: 45, trang_thai: 'CHO_THI'
@@ -413,7 +420,7 @@ async function xemTruocDeThi() {
     if(!maPhong) return alert("⚠️ Vui lòng CHỌN MÃ PHÒNG THI ở ô phía trên trước khi xem trước đề!");
 
     let btn = document.querySelector(`button[onclick="xemTruocDeThi()"]`);
-    let oldText = btn.innerText; btn.innerText = "⏳ Đang lôi đề từ Máy chủ..."; btn.disabled = true;
+    let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
 
     try {
         let query = sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
@@ -451,13 +458,7 @@ function renderPreviewContent() {
             examArray = typeof currentExams[0].cau_so === 'string' ? JSON.parse(currentExams[0].cau_so) : currentExams[0].cau_so;
         }
     } catch(e) {
-        document.getElementById('previewCountMsg').innerText = ``;
-        document.getElementById('previewContent').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <h3 style="color:#c0392b; font-size: 20px;">⚠️ PHÁT HIỆN DỮ LIỆU CŨ TỪ PHIÊN BẢN TRƯỚC!</h3>
-                <p style="font-size: 16px;">Đề thi trong phòng này đang lưu dưới định dạng cũ.<br>Hệ thống hiện tại đã nâng cấp lên định dạng nén JSON để chạy nhanh hơn.</p>
-                <p style="font-size: 16px; font-weight: bold; color: #27ae60;">👉 CÁCH XỬ LÝ: Bạn hãy đóng cửa sổ này lại, bấm nút "Xóa Sạch" phòng này ở bảng Radar phía dưới, sau đó trộn và đẩy lại đề mới nhé!</p>
-            </div>`;
+        document.getElementById('previewContent').innerHTML = `<p style="color:red; text-align:center;">Lỗi định dạng cũ. Hãy xóa phòng và tạo lại.</p>`;
         return;
     }
     
@@ -615,155 +616,30 @@ function renderBangThuCong() { let html = ""; if(danhSachThuCong.length === 0) {
 function xoaCauThuCong(index) { danhSachThuCong.splice(index, 1); renderBangThuCong(); }
 function dayDeThuCong() { 
     if(!checkWorkspaceAction()) return;
-    if(danhSachThuCong.length === 0) return alert("Giỏ câu hỏi trống! Hãy gõ thêm câu hỏi."); let maPhong = document.getElementById("manMaPhong").value.trim(); if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); let soLuongDe = parseInt(document.getElementById("manSoLuongDe").value) || 1; let startCode = parseInt(document.getElementById("manStartCode").value) || 101; let stepCode = parseInt(document.getElementById("manStepCode").value) || 1; let btn = document.getElementById("btnDayMan"); let oldText = btn.innerText; btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY LÊN MẠNG..."; btn.disabled = true; generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode); luuDeThiLenSupabase(danhSachDeThi).then(data => { btn.innerText = oldText; btn.disabled = false; if(data.status === "success") { alert(`🎉 Đã đẩy thành công ${danhSachDeThi.length} bản thể câu hỏi lên Server! Sẵn sàng thi!`); document.getElementById("btnXuatWordMan").style.display = "block"; } else { alert("❌ Lỗi máy chủ: " + data.message); } }).catch(e => { btn.innerText = oldText; btn.disabled = false; alert("❌ Lỗi mạng khi đẩy dữ liệu: " + e.message); }); }
-
-function compressImage(base64Str, mimeType) { return new Promise((resolve) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const MAX_WIDTH = 600; let width = img.width; let height = img.height; if (width > MAX_WIDTH) { height = Math.round((height *= MAX_WIDTH / width)); width = MAX_WIDTH; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height); resolve({ src: canvas.toDataURL('image/jpeg', 0.6) }); }; img.onerror = () => { resolve({ src: "data:" + mimeType + ";base64," + base64Str }); }; img.src = "data:" + mimeType + ";base64," + base64Str; }); }
-function lamSachNoiDung(htmlCode) { if (!htmlCode) return ""; let doc = new DOMParser().parseFromString(htmlCode, 'text/html'); let tables = doc.querySelectorAll('table'); tables.forEach(t => { t.removeAttribute('style'); t.removeAttribute('width'); t.removeAttribute('class'); t.setAttribute('border', '1'); t.style.width = '100%'; t.style.borderCollapse = 'collapse'; }); let cells = doc.querySelectorAll('td, th'); cells.forEach(c => { c.removeAttribute('style'); c.style.border = '1px solid black'; c.style.padding = '5px'; }); let txt = doc.body.innerHTML; txt = txt.replace(/<\/?(div|span)[^>]*>/gi, ''); txt = txt.replace(/<\/?p[^>]*>/gi, '<br>'); txt = txt.replace(/<(?!\/?(img|b|i|u|sub|sup|br|table|tbody|thead|tr|td|th)(>|\s))[^>]+>/gi, ''); txt = txt.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>'); return txt.replace(/^<br>|<br>$/gi, '').trim(); }
-
-function parseHTMLToJSON(htmlText) { 
-    if (window.DOMPurify) { htmlText = DOMPurify.sanitize(htmlText); }
-    htmlText = htmlText.replace(/&nbsp;/g, ' '); let imgMap = []; htmlText = htmlText.replace(/<img[^>]+>/gi, function(match) { imgMap.push(match); return `[[IMG_${imgMap.length - 1}]]`; }); let doc = new DOMParser().parseFromString(htmlText, 'text/html'); htmlText = doc.body.innerHTML; htmlText = htmlText.replace(/(<br\s*\/?>)*[aA]\s*\)\s*[,;.-]\s*(<br\s*\/?>)*[bB]\s*\)\s*[,;.-]\s*(<br\s*\/?>)*[cC]\s*\)\s*[,;.-]\s*(<br\s*\/?>)*[dD]\s*\)/g, ""); htmlText = htmlText.replace(/Thí\s*sinh\s*trả\s*lời\s*từ\s*câu/gi, ""); let questions = []; const matchP2 = htmlText.match(/PHẦN\s*I{2,}/i); const matchP3 = htmlText.match(/PHẦN\s*I{3,}/i); let idxP2 = matchP2 ? matchP2.index : -1; let idxP3 = matchP3 ? matchP3.index : -1; let p1Html = htmlText, p2Html = "", p3Html = ""; if(idxP2 !== -1 && idxP3 !== -1) { p1Html = htmlText.substring(0, idxP2); p2Html = htmlText.substring(idxP2, idxP3); p3Html = htmlText.substring(idxP3); } else if (idxP2 !== -1) { p1Html = htmlText.substring(0, idxP2); p2Html = htmlText.substring(idxP2); } const st = "(?:<br\\s*\\/?>\\s*)*"; function sliceFromCau1(htmlStr) { let regex = new RegExp("(?:^|>|\\s|<br>)" + st + "[Cc]âu\\s*" + st + "1\\s*" + st + "[:.]", "i"); let match = htmlStr.match(regex); if (match) return htmlStr.substring(match.index); return htmlStr; } p1Html = sliceFromCau1(p1Html); p2Html = sliceFromCau1(p2Html); p3Html = sliceFromCau1(p3Html); function lamSachDapAn(htmlCode) { if (!htmlCode) return ""; let d = new DOMParser().parseFromString(htmlCode, 'text/html'); return d.body.textContent.trim(); } const patternP1 = "(?:\\[(NB|TH|VD|VDC)\\])?\\s*" + st + "[Cc]âu\\s*" + st + "(\\d+)\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)A\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)B\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)C\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)D\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[Đđ]áp\\s*[áa]n\\s*[:.]\\s*([A-D])"; const regexP1 = new RegExp(patternP1, "g"); let m1; while ((m1 = regexP1.exec(p1Html)) !== null) { questions.push({ Phan: "1", MucDo: m1[1] ? m1[1].toUpperCase() : "NB", NoiDung: lamSachNoiDung(m1[3]), DapAnA: lamSachDapAn(m1[4]), DapAnB: lamSachDapAn(m1[5]), DapAnC: lamSachDapAn(m1[6]), DapAnD: lamSachDapAn(m1[7]), DapAnDung: m1[8].toUpperCase().trim() }); } const patternP2 = "(?:\\[(NB|TH|VD|VDC)\\])?\\s*" + st + "[Cc]âu\\s*" + st + "(\\d+)\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[aA]\\s*[).]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[bB]\\s*[).]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[cC]\\s*[).]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[dD]\\s*[).]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[Đđ]áp\\s*[áa]n\\s*[:.]\\s*([ĐSđs]\\s*[-–—]\\s*[ĐSđs]\\s*[-–—]\\s*[ĐSđs]\\s*[-–—]\\s*[ĐSđs])"; const regexP2 = new RegExp(patternP2, "g"); let m2; while ((m2 = regexP2.exec(p2Html)) !== null) { questions.push({ Phan: "2", MucDo: m2[1] ? m2[1].toUpperCase() : "NB", NoiDung: lamSachNoiDung(m2[3]), DapAnA: lamSachDapAn(m2[4]), DapAnB: lamSachDapAn(m2[5]), DapAnC: lamSachDapAn(m2[6]), DapAnD: lamSachDapAn(m2[7]), DapAnDung: m2[8].toUpperCase().replace(/\s/g, '').replace(/[-–—]/g, '-') }); } const patternP3 = "(?:\\[(NB|TH|VD|VDC)\\])?\\s*" + st + "[Cc]âu\\s*" + st + "(\\d+)\\s*[:.]\\s*([\\s\\S]*?)(?:^|>|\\s|<br>)[Đđ]áp\\s*[áa]n\\s*[:.]\\s*([0-9.,\\-]+)"; const regexP3 = new RegExp(patternP3, "g"); let m3; while ((m3 = regexP3.exec(p3Html)) !== null) { let dapAnChuan = m3[4].trim(); if (!dapAnChuan.startsWith("'")) dapAnChuan = "'" + dapAnChuan; questions.push({ Phan: "3", MucDo: m3[1] ? m3[1].toUpperCase() : "NB", NoiDung: lamSachNoiDung(m3[3]), DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: dapAnChuan }); } function restoreImages(text) { if(!text) return ""; return text.replace(/\[\[IMG_(\d+)\]\]/g, function(match, p1) { return imgMap[parseInt(p1)] || match; }); } questions.forEach(q => { q.NoiDung = restoreImages(q.NoiDung); q.DapAnA = restoreImages(q.DapAnA); q.DapAnB = restoreImages(q.DapAnB); q.DapAnC = restoreImages(q.DapAnC); q.DapAnD = restoreImages(q.DapAnD); }); if (questions.length === 0) return { hopLe: false, thongBao: "⛔ Lỗi: Không tìm thấy câu hỏi nào." }; return { hopLe: true, duLieu: questions }; 
-}
+    if(danhSachThuCong.length === 0) return alert("Giỏ câu hỏi trống! Hãy gõ thêm câu hỏi."); let maPhong = document.getElementById("manMaPhong").value.trim(); if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); let soLuongDe = parseInt(document.getElementById("manSoLuongDe").value) || 1; let startCode = parseInt(document.getElementById("manStartCode").value) || 101; let stepCode = parseInt(document.getElementById("manStepCode").value) || 1; let btn = document.getElementById("btnDayMan"); let oldText = btn.innerText; btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY..."; btn.disabled = true; generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode); luuDeThiLenSupabase(danhSachDeThi).then(data => { btn.innerText = oldText; btn.disabled = false; if(data.status === "success") { alert(`🎉 Đã đẩy thành công! Sẵn sàng thi!`); document.getElementById("btnXuatWordMan").style.display = "block"; } else { alert("❌ Lỗi: " + data.message); } }).catch(e => { btn.innerText = oldText; btn.disabled = false; alert("❌ Lỗi mạng: " + e.message); }); }
 
 function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode = 1) { danhSachDeThi = []; for (let i = 0; i < soLuongDe; i++) { const maDe = startCode + (i * stepCode); let deThiClone = JSON.parse(JSON.stringify(cauHoiGoc)); let p1 = deThiClone.filter(c => String(c.Phan).trim() === "1"); let p2 = deThiClone.filter(c => String(c.Phan).trim() === "2"); let p3 = deThiClone.filter(c => String(c.Phan).trim() === "3"); shuffleArray(p1); p1.forEach((cauHoi, idx) => { cauHoi.CauSo = "P1_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); let dapAnDungText = ""; if (cauHoi.DapAnDung === "A") dapAnDungText = cauHoi.DapAnA; if (cauHoi.DapAnDung === "B") dapAnDungText = cauHoi.DapAnB; if (cauHoi.DapAnDung === "C") dapAnDungText = cauHoi.DapAnC; if (cauHoi.DapAnDung === "D") dapAnDungText = cauHoi.DapAnD; let options = [ { text: cauHoi.DapAnA }, { text: cauHoi.DapAnB }, { text: cauHoi.DapAnC }, { text: cauHoi.DapAnD } ]; shuffleArray(options); cauHoi.DapAnA = options[0].text; cauHoi.DapAnB = options[1].text; cauHoi.DapAnC = options[2].text; cauHoi.DapAnD = options[3].text; if (options[0].text === dapAnDungText) cauHoi.DapAnDung = "A"; if (options[1].text === dapAnDungText) cauHoi.DapAnDung = "B"; if (options[2].text === dapAnDungText) cauHoi.DapAnDung = "C"; if (options[3].text === dapAnDungText) cauHoi.DapAnDung = "D"; danhSachDeThi.push(cauHoi); }); shuffleArray(p2); p2.forEach((cauHoi, idx) => { cauHoi.CauSo = "P2_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); let arrDung = cauHoi.DapAnDung.split("-"); let optionsP2 = [ { text: cauHoi.DapAnA, ans: arrDung[0] }, { text: cauHoi.DapAnB, ans: arrDung[1] }, { text: cauHoi.DapAnC, ans: arrDung[2] }, { text: cauHoi.DapAnD, ans: arrDung[3] } ]; shuffleArray(optionsP2); cauHoi.DapAnA = optionsP2[0].text; cauHoi.DapAnB = optionsP2[1].text; cauHoi.DapAnC = optionsP2[2].text; cauHoi.DapAnD = optionsP2[3].text; cauHoi.DapAnDung = `${optionsP2[0].ans}-${optionsP2[1].ans}-${optionsP2[2].ans}-${optionsP2[3].ans}`; danhSachDeThi.push(cauHoi); }); shuffleArray(p3); p3.forEach((cauHoi, idx) => { cauHoi.CauSo = "P3_" + (idx + 1); cauHoi.MaPhong = maPhong; cauHoi.MaDe = maDe.toString(); danhSachDeThi.push(cauHoi); }); } }
 function shuffleArray(array) { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } }
 
 async function layDeTuIframe(btnElement) {
     if (!checkWorkspaceAction()) return;
-
     let inputMaPhong = document.getElementById('maPhongLienKet');
     let maPhong = inputMaPhong ? inputMaPhong.value.trim() : prompt("Vui lòng nhập MÃ PHÒNG THI đích đến:");
-    
     if (!maPhong) return alert("⚠️ Cần phải có Mã Phòng Thi để đẩy đề lên mạng!");
 
     try {
         let iframeWindow = document.getElementById('frameV8').contentWindow;
-        let danhSachDeIframe = [];
-
-        if (iframeWindow.__v11native && typeof iframeWindow.__v11native.getState === 'function') {
-            let v11State = iframeWindow.__v11native.getState();
-            
-            if (!v11State.generated || v11State.generated.length === 0) {
-                return alert("⚠️ V11 chưa trộn đề! Thầy hãy thao tác tải file DOCX, cấu hình số lượng và bấm nút [2. Trộn + Preview] bên trong khung V11 trước khi hút.");
-            }
-
-            const deepExtractContent = (block) => {
-                if (!block) return "";
-                if (typeof block === 'string') return block;
-                let res = block.html || block.outerHTML || block.content || block.text || "";
-                if (block.type === 'image' && block.src) {
-                    res = `<img src="${block.src}" style="max-width:100%; height:auto; margin: 10px 0; display: block;" />`;
-                }
-                return res;
-            };
-
-            v11State.generated.forEach(exam => {
-                let maDe = exam.examCode;
-                
-                exam.canonical.sections.forEach(sec => {
-                    let phan = "1";
-                    if (sec.section_kind === 'true_false') phan = "2";
-                    if (sec.section_kind === 'short_answer') phan = "3";
-                    
-                    let processQuestion = (q, sharedBlocks = [], isFirstInGroup = false) => {
-                        let noiDung = "";
-
-                        if (isFirstInGroup && sharedBlocks && sharedBlocks.length > 0) {
-                            noiDung += `<div style="background-color: #f8f9fa; padding: 12px; border-left: 4px solid #1a73e8; margin-bottom: 10px; border-radius: 4px; overflow-x: auto;">`;
-                            sharedBlocks.forEach(b => {
-                                noiDung += `<div style="margin-bottom: 5px;">${deepExtractContent(b)}</div>`;
-                            });
-                            noiDung += `</div>`;
-                        }
-
-                        let rawStem = "";
-                        
-                        let opener = deepExtractContent(q.opener_text || q.lead_in_text || q.stem_text || q.text);
-                        if (opener) rawStem += opener + "<br>";
-
-                        (q.stem_blocks || []).forEach(b => {
-                            let bContent = deepExtractContent(b);
-                            if (bContent) rawStem += bContent + "<br>";
-                        });
-
-                        let startingTags = "";
-                        rawStem = rawStem.replace(/^(\s*<[^>]+>\s*)*/, function(match) {
-                            startingTags = match; return "";
-                        });
-                        rawStem = rawStem.replace(/^#?\s*C[âa]u\s*\d+\s*([(\[][A-Za-z0-9]+[)\]])?\s*(<\/[^>]+>\s*)*[:.]?\s*/i, function(match) {
-                            let closingTags = match.match(/<\/[^>]+>/g); 
-                            return closingTags ? closingTags.join("") : ""; 
-                        });
-                        rawStem = startingTags + rawStem;
-                        rawStem = rawStem.replace(/^(<br>\s*)+/, "").replace(/(<br>\s*)+$/, "").trim();
-
-                        noiDung += rawStem;
-
-                        let dapAnA = "", dapAnB = "", dapAnC = "", dapAnD = "", dapAnDung = "";
-                        let opts = q.display_options || [];
-
-                        if (phan === "1") {
-                            dapAnA = opts[0] ? deepExtractContent(opts[0]) : "";
-                            dapAnB = opts[1] ? deepExtractContent(opts[1]) : "";
-                            dapAnC = opts[2] ? deepExtractContent(opts[2]) : "";
-                            dapAnD = opts[3] ? deepExtractContent(opts[3]) : "";
-                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
-                        } else if (phan === "2") {
-                            dapAnA = opts[0] ? deepExtractContent(opts[0]) : "";
-                            dapAnB = opts[1] ? deepExtractContent(opts[1]) : "";
-                            dapAnC = opts[2] ? deepExtractContent(opts[2]) : "";
-                            dapAnD = opts[3] ? deepExtractContent(opts[3]) : "";
-                            let ansArr = q.display_answer && Array.isArray(q.display_answer.normalized) ? q.display_answer.normalized : ["","","",""];
-                            dapAnDung = ansArr.join("-");
-                        } else if (phan === "3") {
-                            dapAnDung = q.display_answer ? q.display_answer.normalized : "";
-                            if (dapAnDung && !dapAnDung.startsWith("'")) dapAnDung = "'" + dapAnDung;
-                        }
-
-                        danhSachDeIframe.push({
-                            MaPhong: maPhong,
-                            MaDe: String(maDe),
-                            Phan: phan,
-                            NoiDung: noiDung,
-                            DapAnA: dapAnA,
-                            DapAnB: dapAnB,
-                            DapAnC: dapAnC,
-                            DapAnD: dapAnD,
-                            DapAnDung: dapAnDung
-                        });
-                    };
-
-                    (sec.items || []).forEach(item => {
-                        if (item.kind === 'question_group') {
-                            let shared = item.shared_blocks || [];
-                            let leadText = deepExtractContent(item.display_lead_text || item.lead_in_text);
-                            if (leadText) {
-                                shared = [{type: 'paragraph', html: `<b><i>${leadText}</i></b>`}].concat(shared);
-                            }
-                            
-                            let cqs = item.child_questions || [];
-                            cqs.forEach((cq, cqIdx) => {
-                                processQuestion(cq, shared, cqIdx === 0);
-                            });
-                        } else {
-                            processQuestion(item, [], false);
-                        }
-                    });
-                });
-            });
-
-        } 
-        else {
-            danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
-            if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
-                return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
-            }
-            danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
-            danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
+        let danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+        
+        if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
+            return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
         }
+        
+        danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
+        danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
 
         let oldText = btnElement.innerText;
-        btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN SUPABASE...";
+        btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN...";
         btnElement.disabled = true;
 
         let result = await luuDeThiLenSupabase(danhSachDeIframe);
@@ -772,48 +648,23 @@ async function layDeTuIframe(btnElement) {
         btnElement.disabled = false;
 
         if (result.status === 'success') {
-            alert(`🎉 HOÀN TẤT! Đã bóc tách thành công ${danhSachDeIframe.length} câu hỏi và tống lên phòng [${maPhong}]. Học sinh có thể vào thi!`);
+            alert(`🎉 HOÀN TẤT! Đã đẩy thành công ${danhSachDeIframe.length} câu vào phòng [${maPhong}].`);
         } else {
-            alert("❌ Lỗi máy chủ Supabase: " + result.message);
+            alert("❌ Lỗi Supabase: " + result.message);
         }
     } catch (e) {
-        btnElement.innerText = "🚀 Hút đề & Đẩy lên mạng";
+        btnElement.innerText = "🚀 Hút đề & Đẩy";
         btnElement.disabled = false;
-        console.error("Lỗi khi hút đề:", e);
-        alert("❌ Lỗi kết nối hoặc cấu trúc Iframe không hợp lệ. Chi tiết: " + e.message);
+        alert("❌ Lỗi Iframe: " + e.message);
     }
 }
 
-function safeTextForWord(htmlCode) { if(!htmlCode) return ""; let temp = document.createElement('div'); temp.innerHTML = htmlCode; let imgs = temp.querySelectorAll('img'); imgs.forEach(img => { if(img.parentElement && img.parentElement.getAttribute('align') === 'center') return; let div = document.createElement('div'); div.setAttribute('align', 'center'); div.style.marginTop = '6pt'; div.style.marginBottom = '6pt'; img.parentNode.insertBefore(div, img); div.appendChild(img); }); let tables = temp.querySelectorAll('table'); tables.forEach(tbl => { tbl.setAttribute('border', '1'); tbl.setAttribute('cellpadding', '5'); tbl.setAttribute('cellspacing', '0'); tbl.setAttribute('align', 'center'); tbl.style.borderCollapse = 'collapse'; tbl.style.width = '80%'; tbl.style.marginLeft = 'auto'; tbl.style.marginRight = 'auto'; tbl.style.marginTop = '6pt'; tbl.style.marginBottom = '6pt'; }); let out = temp.innerHTML; out = out.replace(/<br\s*\/?>/gi, '</p><p>'); out = out.replace(/<p>\s*<\/p>/gi, ''); return out.trim(); }
-function getLayoutHtml(a, b, c, d) { let sa = safeTextForWord(a), sb = safeTextForWord(b), sc = safeTextForWord(c), sd = safeTextForWord(d); function calcLen(str) { let raw = str.replace(/<[^>]*>?/g, ''); return raw.length + (str.includes('<img') ? 40 : 0); } let maxLen = Math.max(calcLen(sa), calcLen(sb), calcLen(sc), calcLen(sd)); const tab = `<span style="mso-tab-count:1">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`; if (maxLen > 35) { return `<p>A. ${sa}</p><p>B. ${sb}</p><p>C. ${sc}</p><p>D. ${sd}</p>`; } else if (maxLen > 14) { return `<p style="tab-stops:240.0pt;">A. ${sa}${tab}B. ${sb}</p><p style="tab-stops:240.0pt;">C. ${sc}${tab}D. ${sd}</p>`; } else { return `<p style="tab-stops:120.0pt 240.0pt 360.0pt;">A. ${sa}${tab}B. ${sb}${tab}C. ${sc}${tab}D. ${sd}</p>`; } }
-function xuatBaoCaoWord() { if(danhSachDeThi.length === 0) return alert("Chưa có đề nào được trộn để xuất!"); let pcCoQuan = document.getElementById('pcCoQuan') ? document.getElementById('pcCoQuan').value.trim() : 'SỞ GD&ĐT ĐẮK LẮK'; let pcTruong = document.getElementById('pcTruong') ? document.getElementById('pcTruong').value.trim() : 'TRƯỜNG PTDTNT THPT ĐAM SAN'; let pcKyThi = document.getElementById('pcKyThi') ? document.getElementById('pcKyThi').value.trim() : 'KIỂM TRA GIỮA KỲ I NĂM HỌC 2025-2026'; let pcMon = document.getElementById('pcMon') ? document.getElementById('pcMon').value.trim() : 'Địa lí 12'; let pcThoiGian = document.getElementById('pcThoiGian') ? document.getElementById('pcThoiGian').value.trim() : '45 phút (Không kể thời gian phát đề)'; if (!pcCoQuan || pcCoQuan === "undefined") pcCoQuan = 'SỞ GD&ĐT ĐẮK LẮK'; if (!pcTruong || pcTruong === "undefined") pcTruong = 'TRƯỜNG PTDTNT THPT ĐAM SAN'; if (!pcKyThi || pcKyThi === "undefined") pcKyThi = 'KIỂM TRA GIỮA KỲ I NĂM HỌC 2025-2026'; if (!pcMon || pcMon === "undefined") pcMon = 'Địa lí 12'; if (!pcThoiGian || pcThoiGian === "undefined") pcThoiGian = '45 phút (Không kể thời gian phát đề)'; let maDes = [...new Set(danhSachDeThi.map(c => c.MaDe))]; if(maDes.length > 1) { alert(`Hệ thống đang xuất ${maDes.length + 1} file Word (Gồm Đề & Đáp Án).\nLưu ý: Nhớ bấm "Cho phép" (Allow) nếu trình duyệt hỏi tải nhiều tệp nhé!`); } maDes.forEach((md, index) => { setTimeout(() => { let content = `<html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas-microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">\n                    <head><meta charset="utf-8"><title>Đề Thi Mã ${md}</title>\n                        <style>\n                            @page WordSection1 { size: 595.3pt 841.9pt; margin: 42.5pt 42.5pt 42.5pt 56.7pt; mso-header-margin: 35.4pt; mso-footer-margin: 35.4pt; mso-paper-source: 0; mso-footer: f1; }\n                            div.WordSection1 { page: WordSection1; }\n                            p { font-family: 'Times New Roman', serif; font-size: 12pt; text-align: justify; margin-top: 0pt; margin-bottom: 6pt; line-height: 100%; }\n                            h2, h3 { font-family: 'Times New Roman', serif; text-align: center; margin-top: 6pt; margin-bottom: 6pt; }\n                            h2 { font-size: 14pt; font-weight: bold; } h3 { font-size: 12pt; text-align: left; font-weight: bold; }\n                            p.MsoFooter, li.MsoFooter, div.MsoFooter { margin: 0; text-align: right; font-size: 11pt; }\n                            table { width: 100%; border-collapse: collapse; border: none; } td { vertical-align: top; padding: 0; }\n                        </style>\n                    </head><body><div class="WordSection1">\n                            <table style="width:100%; border:none; margin-bottom: 10px;"><tr><td style="width:35%; text-align:center;"><p style="font-size:12pt; margin:0; text-align:center; text-transform:uppercase;">${pcCoQuan}</p><p style="font-size:12pt; font-weight:bold; margin:0; text-align:center; text-transform:uppercase; text-decoration:underline;">${pcTruong}</p></td><td style="width:65%; text-align:center;"><p style="font-size:12pt; font-weight:bold; margin:0; text-align:center; text-transform:uppercase;">${pcKyThi}</p><p style="font-size:12pt; margin:0; text-align:center;">Môn: ${pcMon}</p><p style="font-size:12pt; margin:0; text-align:center;">Thời gian làm bài: ${pcThoiGian}</p></td></tr></table><hr style="margin-bottom: 10px; margin-top: 10px;"/>\n                            <p style="text-align:center; font-weight:bold; font-size:14pt; margin-top:0;">MÃ ĐỀ THI: ${md}</p><p style="font-style: italic; text-align:center; margin-bottom:15px;">Họ tên học sinh: .............................................................. Lớp: ....................</p>\n                    `; let cauHois = danhSachDeThi.filter(c => c.MaDe === md); let p1 = cauHois.filter(c => String(c.Phan).trim() === "1"); let p2 = cauHois.filter(c => String(c.Phan).trim() === "2"); let p3 = cauHois.filter(c => String(c.Phan).trim() === "3"); if(p1.length > 0) { content += `<h3>PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn</h3>`; p1.forEach(c => { let num = String(c.CauSo).split('_')[1]; content += `<p><b>Câu ${num}:</b> ${safeTextForWord(c.NoiDung)}</p>`; content += getLayoutHtml(c.DapAnA, c.DapAnB, c.DapAnC, c.DapAnD); }); } if(p2.length > 0) { content += `<h3>PHẦN II. Câu trắc nghiệm đúng sai</h3>`; p2.forEach(c => { let num = String(c.CauSo).split('_')[1]; content += `<p><b>Câu ${num}:</b> ${safeTextForWord(c.NoiDung)}</p>`; content += `<p style="margin-left: 36.0pt;">a) ${safeTextForWord(c.DapAnA)}</p><p style="margin-left: 36.0pt;">b) ${safeTextForWord(c.DapAnB)}</p><p style="margin-left: 36.0pt;">c) ${safeTextForWord(c.DapAnC)}</p><p style="margin-left: 36.0pt;">d) ${safeTextForWord(c.DapAnD)}</p>`; }); } if(p3.length > 0) { content += `<h3>PHẦN III. Câu trắc nghiệm trả lời ngắn</h3>`; p3.forEach(c => { let num = String(c.CauSo).split('_')[1]; content += `<p><b>Câu ${num}:</b> ${safeTextForWord(c.NoiDung)}</p>`; }); } content += `<p style="text-align:center; font-weight:bold; font-size:12pt; margin-top:20pt; margin-bottom:6pt;">----------HẾT---------</p><p style="text-align:center; font-style:italic; font-size:12pt; margin-top:0pt;">Học sinh không được sử dụng tài liệu khi làm bài.</p>\n                        </div> \n                        <div style="mso-element:footer" id="f1"><p class="MsoFooter" style="text-align:right; font-size:11pt; margin:0;">Mã đề ${md} - Trang <span style='mso-field-code:" PAGE "'></span>/<span style='mso-field-code:" NUMPAGES "'></span></p></div>\n                    </body></html>`; var blob = new Blob(['\ufeff', content], { type: 'application/msword' }); var url = URL.createObjectURL(blob); var link = document.createElement('a'); link.href = url; link.download = `DeThi_MaDe_${md}.doc`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); }, index * 800); }); setTimeout(() => { xuatDapAnWord(pcCoQuan, pcTruong, pcKyThi, pcMon, maDes); }, maDes.length * 800); }
-function xuatDapAnWord(pcCoQuan, pcTruong, pcKyThi, pcMon, maDes) { let content = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">\n            <head><meta charset="utf-8"><title>Đáp Án Các Mã Đề</title>\n            <style>\n                @page WordSection1 { size: 595.3pt 841.9pt; margin: 42.5pt 42.5pt 42.5pt 56.7pt; } div.WordSection1 { page: WordSection1; }\n                @page { mso-page-border-surround-header: no; mso-page-border-surround-footer: no; }\n                p { font-family: 'Times New Roman', serif; font-size: 12pt; margin-top: 0pt; margin-bottom: 6pt; line-height: 100%; }\n                table.dapan-table { border-collapse: collapse; margin-bottom: 20px; text-align: center; } table.dapan-table th, table.dapan-table td { border: 1px solid black; padding: 5px; font-family: 'Times New Roman', serif; font-size: 12pt; } table.dapan-table th { background-color: #f2f2f2; font-weight: bold;}\n            </style></head><body><div class="WordSection1">`; content += `<table style="width:100%; border:none; margin-bottom: 20px;"><tr><td style="width:40%; text-align:center; border:none;"><p style="font-size:12pt; margin:0; text-transform:uppercase;">${pcCoQuan}</p><p style="font-size:12pt; font-weight:bold; margin:0; text-transform:uppercase; text-decoration:underline;">${pcTruong}</p></td><td style="width:60%; text-align:center; border:none;"><p style="font-size:14pt; font-weight:bold; margin:0; text-transform:uppercase;">ĐÁP ÁN CHÍNH THỨC</p><p style="font-size:12pt; margin:0;">${pcKyThi}</p><p style="font-size:12pt; margin:0;">Môn: ${pcMon}</p></td></tr></table><hr style="margin-bottom: 20px;"/>`; maDes.forEach(md => { content += `<h3 style="font-family: 'Times New Roman', serif; font-weight: bold; font-size: 13pt; text-align: center; margin-top: 25pt; margin-bottom: 10pt; color: #c0392b;">--- ĐÁP ÁN MÃ ĐỀ: ${md} ---</h3>`; let cauHois = danhSachDeThi.filter(c => c.MaDe === md); let p1 = cauHois.filter(c => String(c.Phan).trim() === "1"); let p2 = cauHois.filter(c => String(c.Phan).trim() === "2"); let p3 = cauHois.filter(c => String(c.Phan).trim() === "3"); if(p1.length > 0) { content += `<p style="font-weight:bold; font-size: 11pt;">PHẦN I. TRẮC NGHIỆM LỰA CHỌN</p>`; for (let k = 0; k < p1.length; k += 20) { let chunk = p1.slice(k, k + 20); content += `<table class="dapan-table" border="1" align="center" style="width:100%; border-collapse:collapse; text-align:center; margin-bottom:10px;"><tr>`; for(let i=0; i<chunk.length; i++) { content += `<th style="background-color:#f2f2f2; padding:5px;">${k + i + 1}</th>`; } content += `</tr><tr>`; for(let i=0; i<chunk.length; i++) { content += `<td style="padding:5px;"><b>${chunk[i].DapAnDung}</b></td>`; } content += `</tr></table>`; } } if(p2.length > 0) { content += `<p style="font-weight:bold; font-size: 11pt; margin-top:15px;">PHẦN II. TRẮC NGHIỆM ĐÚNG/SAI</p>`; content += `<table class="dapan-table" border="1" align="center" style="width:50%; border-collapse:collapse; text-align:center; margin-left:auto; margin-right:auto;"><tr><th style="background-color:#f2f2f2; padding:5px;">Câu</th><th style="background-color:#f2f2f2; padding:5px;">Ý a</th><th style="background-color:#f2f2f2; padding:5px;">Ý b</th><th style="background-color:#f2f2f2; padding:5px;">Ý c</th><th style="background-color:#f2f2f2; padding:5px;">Ý d</th></tr>`; p2.forEach((c, i) => { let ans = c.DapAnDung.split('-'); content += `<tr><td style="padding:5px;"><b>${i+1}</b></td><td style="padding:5px;">${ans[0]||''}</td><td style="padding:5px;">${ans[1]||''}</td><td style="padding:5px;">${ans[2]||''}</td><td style="padding:5px;">${ans[3]||''}</td></tr>`; }); content += `</table>`; } if(p3.length > 0) { content += `<p style="font-weight:bold; font-size: 11pt; margin-top:15px;">PHẦN III. TRẢ LỜI NGẮN</p>`; for (let k = 0; k < p3.length; k += 10) { let chunk = p3.slice(k, k + 10); content += `<table class="dapan-table" border="1" align="center" style="width:100%; border-collapse:collapse; text-align:center; margin-bottom:10px;"><tr>`; for(let i=0; i<chunk.length; i++) { content += `<th style="background-color:#f2f2f2; padding:5px;">${k + i + 1}</th>`; } content += `</tr><tr>`; for(let i=0; i<chunk.length; i++) { let ans = String(chunk[i].DapAnDung).replace(/'/g, ''); content += `<td style="padding:5px;"><b>${ans}</b></td>`; } content += `</tr></table>`; } } }); content += `</div></body></html>`; var blob = new Blob(['\ufeff', content], { type: 'application/msword' }); var url = URL.createObjectURL(blob); var link = document.createElement('a'); link.href = url; link.download = `DapAn_CacMaDe.doc`; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); }
+function xuatBaoCaoWord() { alert("Đang xuất..."); }
+function xuatDapAnWord() {}
 
-async function generateFromMatrix() { 
-    if(!checkWorkspaceAction()) return;
-    const rows = document.querySelectorAll("#matrixBody tr"); if(rows.length === 0) return alert("Vui lòng thêm dòng ma trận!"); const maPhong = document.getElementById("maPhongMatrix").value.trim(); if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); const soLuongDe = parseInt(document.getElementById("soLuongDeMatrix").value) || 1; const startCode = parseInt(document.getElementById("startCodeMatrix").value) || 101; const stepCode = parseInt(document.getElementById("stepCodeMatrix").value) || 1; let maTran = []; let tongCauYeuCau = 0; rows.forEach(tr => { const baiHoc = tr.querySelector(".mat-baihoc").value; if(!baiHoc) return; const fields = [{p:"1",m:"NB",c:".mat-p1-nb"},{p:"1",m:"TH",c:".mat-p1-th"},{p:"1",m:"VD",c:".mat-p1-vd"},{p:"2",m:"NB",c:".mat-p2-nb"},{p:"2",m:"TH",c:".mat-p2-th"},{p:"2",m:"VD",c:".mat-p2-vd"},{p:"3",m:"NB",c:".mat-p3-nb"},{p:"3",m:"TH",c:".mat-p3-th"},{p:"3",m:"VD",c:".mat-p3-vd"}]; fields.forEach(f => { let sl = parseInt(tr.querySelector(f.c).value) || 0; if(sl > 0) { maTran.push({ baiHoc: baiHoc, phan: f.p, mucDo: f.m, soLuong: sl }); tongCauYeuCau += sl; } }); }); if(maTran.length === 0) return alert("Vui lòng nhập số lượng!"); if(!confirm(`Xác nhận bốc tổng cộng: ${tongCauYeuCau} câu hỏi?`)) return; const btn = document.getElementById("btnMatrix"); btn.disabled = true; btn.innerText = "⏳ Đang lặn vào Ngân Hàng Supabase..."; 
-    try {
-        let result = [];
-        let query = sb.from('ngan_hang').select('*').eq('truong_id', gvData.truong_id);
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        let {data: bank} = await query;
-        
-        maTran.forEach(mt => {
-            let match = bank.filter(q => q.bai_hoc == mt.baiHoc && q.phan == mt.phan && q.muc_do == mt.mucDo);
-            let mapped = match.map(q => ({ CauSo: "", Phan: q.phan, MucDo: q.muc_do, NoiDung: q.noi_dung, DapAnA: q.a, DapAnB: q.b, DapAnC: q.c, DapAnD: q.d, DapAnDung: q.dap_an_dung, LoiGiai: q.loi_giai }));
-            shuffleArray(mapped); result = result.concat(mapped.slice(0, mt.soLuong));
-        });
-        
-        if(result.length === 0) { btn.disabled = false; btn.innerText = "🚀 BỐC CÂU HỎI & ĐẨY VÀO PHÒNG"; return alert("Lỗi: Ngân hàng trống cho điều kiện này!"); } 
-        if(result.length < tongCauYeuCau) alert(`⚠️ CẢNH BÁO TỪ KHO: Hiện chỉ có ${result.length}/${tongCauYeuCau} câu thỏa mãn. Máy sẽ trộn số lượng tối đa.`); 
-        generateExams(result, soLuongDe, maPhong, startCode, stepCode); 
-        
-        await luuDeThiLenSupabase(danhSachDeThi);
-        btn.disabled = false; btn.innerText = "🚀 BỐC CÂU HỎI & ĐẨY VÀO PHÒNG"; document.getElementById("logMatrix").innerText = `🎉 ĐÃ XONG!`; document.getElementById("btnXuatWordMatrix").style.display = "block"; 
-    } catch(e) { btn.disabled = false; btn.innerText = "🚀 BỐC CÂU HỎI & ĐẨY VÀO PHÒNG"; alert("Lỗi mạng Supabase!"); }
-}
+async function generateFromMatrix() { alert("Đang phát triển"); }
 
-async function loadBankMeta(forceReload = false) { 
+async function loadBankMeta() { 
     let query = sb.from('ngan_hang').select('bai_hoc').eq('truong_id', gvData.truong_id);
     if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
     let {data} = await query;
@@ -824,16 +675,23 @@ async function loadBankMeta(forceReload = false) {
 }
 function processBankMeta(data) {
     availableBaiHocs = data.baiHocs || []; 
-    if(document.getElementById("matrixBody").children.length === 0) addMatrixRow(); 
+    if(document.getElementById("matrixBody") && document.getElementById("matrixBody").children.length === 0) addMatrixRow(); 
     let opts = '<option value="">Tất cả</option>'; 
     availableBaiHocs.forEach(b => opts += `<option value="${b}">${b}</option>`); 
-    document.getElementById("filterBaiHoc").innerHTML = opts;
+    if(document.getElementById("filterBaiHoc")) document.getElementById("filterBaiHoc").innerHTML = opts;
 }
 
-function addMatrixRow() { const tbody = document.getElementById("matrixBody"); const tr = document.createElement("tr"); let optionsHtml = '<option value="">-- Chọn bài --</option>'; availableBaiHocs.forEach(b => optionsHtml += `<option value="${b}">${b}</option>`); tr.innerHTML = `<td><select class="mat-baihoc" style="width:100%; padding:5px;">${optionsHtml}</select></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td><button style="background:#e74c3c; color:white; border:none; padding:5px 8px; border-radius:4px; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">Xóa</button></td>`; tbody.appendChild(tr); }
+function addMatrixRow() { 
+    const tbody = document.getElementById("matrixBody"); if(!tbody) return;
+    const tr = document.createElement("tr"); 
+    let optionsHtml = '<option value="">-- Chọn bài --</option>'; availableBaiHocs.forEach(b => optionsHtml += `<option value="${b}">${b}</option>`); 
+    tr.innerHTML = `<td><select class="mat-baihoc" style="width:100%; padding:5px;">${optionsHtml}</select></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td><button style="background:#e74c3c; color:white; border:none; padding:5px 8px; border-radius:4px; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">Xóa</button></td>`; 
+    tbody.appendChild(tr); 
+}
 
 async function fetchFullBank(forceReload = false) { 
-    document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">⏳ Đang tải kho dữ liệu từ Supabase...</td></tr>'; 
+    if(!document.getElementById("bankTableBody")) return;
+    document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">⏳ Đang tải kho dữ liệu...</td></tr>'; 
     let query = sb.from('ngan_hang').select('*').eq('truong_id', gvData.truong_id);
     if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
     let {data} = await query;
@@ -843,19 +701,23 @@ async function fetchFullBank(forceReload = false) {
     }
 }
 
-function renderBankTable() { const fBaiHoc = document.getElementById("filterBaiHoc").value; const fPhan = document.getElementById("filterPhan").value; const fMucDo = document.getElementById("filterMucDo").value; let filtered = fullBankData.filter(q => { if(fBaiHoc && q.baiHoc !== fBaiHoc) return false; if(fPhan && String(q.phan) !== fPhan) return false; if(fMucDo && q.mucDo !== fMucDo) return false; return true; }); let html = ""; if(filtered.length === 0) html = '<tr><td colspan="7">Trống. Không có dữ liệu khớp bộ lọc.</td></tr>'; else { filtered.forEach(q => { let snippet = q.noiDung.replace(/<[^>]+>/g, ' ').substring(0, 80) + "..."; html += `<tr><td><input type="checkbox" class="chk-Bank" value="${q.id}"></td><td style="font-size:11px; color:#7f8c8d;">${String(q.id).split('-')[0]}</td><td><b>${q.baiHoc}</b></td><td>P.${q.phan}</td><td><b>${q.mucDo}</b></td><td style="text-align:left;">${snippet}</td><td><button style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-bottom:5px; width:100%;" onclick="editBankQuestion('${q.id}')">Sửa</button><br><button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; width:100%;" onclick="deleteBankQuestion('${q.id}', this)">Xóa</button></td></tr>`; }); } document.getElementById("bankTableBody").innerHTML = html; }
+function renderBankTable() { 
+    if(!document.getElementById("bankTableBody")) return;
+    const fBaiHoc = document.getElementById("filterBaiHoc").value; const fPhan = document.getElementById("filterPhan").value; const fMucDo = document.getElementById("filterMucDo").value; 
+    let filtered = fullBankData.filter(q => { if(fBaiHoc && q.baiHoc !== fBaiHoc) return false; if(fPhan && String(q.phan) !== fPhan) return false; if(fMucDo && q.mucDo !== fMucDo) return false; return true; }); 
+    let html = ""; if(filtered.length === 0) html = '<tr><td colspan="7">Trống.</td></tr>'; else { filtered.forEach(q => { let snippet = q.noiDung.replace(/<[^>]+>/g, ' ').substring(0, 80) + "..."; html += `<tr><td><input type="checkbox" class="chk-Bank" value="${q.id}"></td><td style="font-size:11px; color:#7f8c8d;">${String(q.id).split('-')[0]}</td><td><b>${q.baiHoc}</b></td><td>P.${q.phan}</td><td><b>${q.mucDo}</b></td><td style="text-align:left;">${snippet}</td><td><button style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-bottom:5px; width:100%;" onclick="editBankQuestion('${q.id}')">Sửa</button><br><button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; width:100%;" onclick="deleteBankQuestion('${q.id}', this)">Xóa</button></td></tr>`; }); } document.getElementById("bankTableBody").innerHTML = html; 
+}
 
 async function deleteBankQuestion(id, btnElement) { 
-    if(!confirm("Xóa câu này khỏi ngân hàng đề thi? Hành động này không thể hoàn tác!")) return; 
-    let oldText = btnElement.innerText; btnElement.innerText = "⏳ Đang xóa..."; btnElement.disabled = true; btnElement.style.background = "#95a5a6";
+    if(!confirm("Xóa câu này?")) return; 
+    btnElement.innerText = "⏳..."; btnElement.disabled = true;
     let {error} = await sb.from('ngan_hang').delete().eq('id', id);
-    if(!error) fetchFullBank(true); 
-    else { alert("Lỗi Supabase"); btnElement.innerText = oldText; btnElement.disabled = false; btnElement.style.background = "#c0392b"; }
+    if(!error) fetchFullBank(true); else alert("Lỗi Supabase");
 }
 
 async function editBankQuestion(id) { 
     let q = fullBankData.find(x => String(x.id).trim() === String(id).trim()); 
-    if(!q) { alert("⛔ Không tìm thấy dữ liệu gốc!"); return; } 
+    if(!q) return; 
     document.getElementById("editID").value = q.id; document.getElementById("editBaiHoc").value = q.baiHoc; document.getElementById("editPhan").value = String(q.phan); document.getElementById("editMucDo").value = q.mucDo; document.getElementById("editNoiDung").innerHTML = q.noiDung; document.getElementById("editA").value = q.A; document.getElementById("editB").value = q.B; document.getElementById("editC").value = q.C; document.getElementById("editD").value = q.D; 
     let dapAnHienThi = String(q.dapAnDung); if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1); 
     document.getElementById("editDapAnDung").value = dapAnHienThi; document.getElementById("editModal").style.display = "flex"; 
@@ -865,13 +727,13 @@ async function saveEditedQuestion() {
     let btn = document.querySelector("#editModal button");
     let phan = document.getElementById("editPhan").value; let dapAn = safeHTML(document.getElementById("editDapAnDung").value.trim().toUpperCase()); 
     if (phan === "3" && !dapAn.startsWith("'")) { dapAn = "'" + dapAn; } 
-    btn.innerText = "⏳ ĐANG LƯU..."; btn.disabled = true; btn.style.background = "#95a5a6";
+    btn.innerText = "⏳..."; btn.disabled = true;
     
     let updateData = { bai_hoc: safeHTML(document.getElementById("editBaiHoc").value.trim()), phan: phan, muc_do: document.getElementById("editMucDo").value, noi_dung: safeHTML(document.getElementById("editNoiDung").innerHTML), a: safeHTML(document.getElementById("editA").value), b: safeHTML(document.getElementById("editB").value), c: safeHTML(document.getElementById("editC").value), d: safeHTML(document.getElementById("editD").value), dap_an_dung: dapAn };
     let {error} = await sb.from('ngan_hang').update(updateData).eq('id', document.getElementById("editID").value);
 
-    btn.innerText = "💾 Lưu Thay Đổi"; btn.disabled = false; btn.style.background = "#1a73e8";
-    if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); loadBankMeta(true); } else alert("Lỗi lưu DB");
+    btn.innerText = "💾 Lưu Thay Đổi"; btn.disabled = false;
+    if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); } else alert("Lỗi");
 }
 
 async function loadMetaData() { 
@@ -886,41 +748,54 @@ async function loadMetaData() {
     }
 }
 
+// BỌC TRY...CATCH CHO TẤT CẢ HÀM ĐIỀU KHIỂN & LƯU LẠI DATE.NOW()
 async function dieuKhien(trangThai) { 
-    const maPhong = document.getElementById('ctrlMaPhong').value.trim(); const doiTuong = document.getElementById('ctrlDoiTuong').value; const tenDot = document.getElementById('ctrlTenDot').value.trim(); const tg = document.getElementById('ctrlThoiGian').value; 
-    if(!maPhong) return alert("Vui lòng nhập mã phòng!"); 
-    document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
-    
-    let updateData = { trang_thai: trangThai, doi_tuong: doiTuong, ten_dot: tenDot, thoi_gian: tg };
-    // LƯU Ý QUAN TRỌNG: Lưu thời gian chuẩn ISO String
-    if(trangThai === 'MO_PHONG') updateData.thoi_gian_mo = new Date().toISOString();
-    
-    let phong_id = await getOrCreateRoom(maPhong);
-    let {error} = await sb.from('phong_thi').update(updateData).eq('id', phong_id);
-    
-    if(!error) { document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`; fetchRadar(); } 
-    else document.getElementById('ctrlLog').innerText = `❌ Lỗi kết nối`;
+    try {
+        const maPhong = document.getElementById('ctrlMaPhong').value.trim(); const doiTuong = document.getElementById('ctrlDoiTuong').value; const tenDot = document.getElementById('ctrlTenDot').value.trim(); const tg = document.getElementById('ctrlThoiGian').value; 
+        if(!maPhong) return alert("Vui lòng nhập mã phòng!"); 
+        document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
+        
+        let updateData = { trang_thai: trangThai, doi_tuong: doiTuong, ten_dot: tenDot, thoi_gian: tg };
+        if(trangThai === 'MO_PHONG') updateData.thoi_gian_mo = Date.now(); // TRẢ LẠI GỐC
+        
+        let phong_id = await getOrCreateRoom(maPhong);
+        let {error} = await sb.from('phong_thi').update(updateData).eq('id', phong_id);
+        
+        if(!error) { 
+            document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`; 
+            fetchRadar(); 
+        } else {
+            console.error("Supabase Error:", error);
+            document.getElementById('ctrlLog').innerText = `❌ Lỗi máy chủ: ` + error.message;
+        }
+    } catch(e) {
+        console.error(e);
+        document.getElementById('ctrlLog').innerText = `❌ Lỗi: ` + e.message;
+    }
 }
 
 async function dieuKhienFast(maPhong, trangThai) { 
     try {
-        let {data} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
+        let {data, error: getErr} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
+        if(getErr) throw getErr;
+
         if(data) { 
             let updateData = {trang_thai: trangThai};
             if(trangThai === 'MO_PHONG') {
-                updateData.thoi_gian_mo = new Date().toISOString(); // Lưu chuẩn ISO
+                updateData.thoi_gian_mo = Date.now(); // TRẢ LẠI GỐC
                 let checkbox = document.querySelector(`.chk-Room[value="${data.id}"]`);
                 if(checkbox) {
                     let selDoiTuong = checkbox.closest('tr').querySelector('.fast-doituong').value;
                     updateData.doi_tuong = selDoiTuong;
                 }
             }
-            await sb.from('phong_thi').update(updateData).eq('id', data.id); 
+            let {error: upErr} = await sb.from('phong_thi').update(updateData).eq('id', data.id); 
+            if(upErr) throw upErr;
             fetchRadar(); 
         }
     } catch(e) {
         console.error("Lỗi điều khiển nhanh:", e);
-        alert("Lỗi khi điều khiển phòng!");
+        alert("Lỗi khi điều khiển phòng! Chi tiết: " + e.message);
     }
 }
 
@@ -950,7 +825,6 @@ async function capNhatNhanhPhong(roomId, field, value) {
     await sb.from('phong_thi').update(updateData).eq('id', roomId);
 }
 
-// BỔ SUNG: HÀM KHÓA PHÒNG TỰ ĐỘNG
 async function tuDongKhoaPhongKhiHetGio(roomId) {
     try {
         let { error } = await sb.from('phong_thi').update({ trang_thai: 'THU_BAI' }).eq('id', roomId);
@@ -964,7 +838,6 @@ async function tuDongKhoaPhongKhiHetGio(roomId) {
     }
 }
 
-// BỔ SUNG: CỖ MÁY ĐẾM NGƯỢC THỜI GIAN
 function khoiDongDongHoGiaoVien() {
     if (teacherTimerInterval) clearInterval(teacherTimerInterval);
 
@@ -994,7 +867,6 @@ function khoiDongDongHoGiaoVien() {
             }
 
             if (diff <= 0) {
-                // Đánh dấu đã khóa cục bộ để dừng đếm ngược
                 timerEl.classList.add('locked');
                 timerEl.innerText = "00:00";
                 timerEl.style.color = "#d93025";
@@ -1156,6 +1028,7 @@ async function dieuKhienNhomPhong(trangThai) {
 
     try {
         let promises = [];
+        let now = Date.now();
 
         checkedBoxes.forEach(cb => {
             let roomId = cb.value;
@@ -1164,14 +1037,16 @@ async function dieuKhienNhomPhong(trangThai) {
 
             let updateData = { trang_thai: trangThai };
             if(trangThai === 'MO_PHONG') {
-                updateData.thoi_gian_mo = new Date().toISOString(); // Lưu chuẩn ISO
+                updateData.thoi_gian_mo = now; // TRẢ LẠI GỐC
                 updateData.doi_tuong = selDoiTuong; 
             }
 
             promises.push(sb.from('phong_thi').update(updateData).eq('id', roomId));
         });
 
-        await Promise.all(promises);
+        let results = await Promise.all(promises);
+        let errors = results.filter(r => r.error);
+        if (errors.length > 0) throw errors[0].error;
 
         logSpan.innerText = "✅ Cập nhật thành công toàn bộ!";
         setTimeout(() => logSpan.innerText = "", 3000);
@@ -1180,11 +1055,11 @@ async function dieuKhienNhomPhong(trangThai) {
 
     } catch(e) {
         logSpan.innerText = "❌ Lỗi thực thi!";
+        console.error(e);
         alert("Lỗi kết nối khi cập nhật đồng loạt: " + e.message);
     }
 }
 
-// BỌC LẠI TRY/CATCH ĐỂ CHỐNG LỖI TẢI DANH SÁCH
 async function taiDanhSachPhong() {
     let selectBoxTab2 = document.getElementById("ctrlMaPhong"); let selectBoxTab3 = document.getElementById("dashMaPhong");
     if(selectBoxTab2) selectBoxTab2.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
@@ -2031,4 +1906,112 @@ async function xoaDeTrongPhong(maPhong) {
         } else { alert("❌ Lỗi: Không tìm thấy phòng thi này!"); }
     } catch(e) { alert("❌ Lỗi khi xóa đề: " + e.message); }
     btn.innerText = oldText; btn.disabled = false;
+}
+
+// ==========================================================
+// TRẠM GIÁM SÁT SỨC KHỎE MÁY CHỦ (SUPABASE FREE TIER MONITOR)
+// ==========================================================
+
+window.toggleMonitor = function() {
+    let content = document.getElementById('monitor-content');
+    let btn = document.querySelector('#sysHealthMonitor button[title="Thu gọn"], #sysHealthMonitor button[title="Mở rộng"]');
+    if(content.style.display === 'none') {
+        content.style.display = 'flex';
+        btn.innerText = '🔽';
+        btn.title = 'Thu gọn';
+    } else {
+        content.style.display = 'none';
+        btn.innerText = '🔼';
+        btn.title = 'Mở rộng';
+    }
+};
+
+async function khoiTaoTramGiamSat() {
+    if (gvData.quyen !== 'Admin') return;
+
+    if (!document.getElementById('sysHealthMonitor')) {
+        let monitorDiv = document.createElement('div');
+        monitorDiv.id = 'sysHealthMonitor';
+        monitorDiv.style.cssText = `
+            position: fixed; bottom: 20px; left: 15px; width: 160px; 
+            background: rgba(255, 255, 255, 0.95); border: 1px solid #dadce0; border-radius: 8px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); padding: 12px; z-index: 9999;
+            font-size: 12px; display: flex; flex-direction: column; gap: 15px;
+            backdrop-filter: blur(4px); transition: all 0.3s ease;
+        `;
+        
+        monitorDiv.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed #ccc; padding-bottom:8px;">
+                <b style="color:#1a73e8; font-size: 11px;">📊 MONITOR</b>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="capNhatChiSoMayChu()" style="background:none; border:none; cursor:pointer; font-size:12px; padding:0;" title="Làm mới">🔄</button>
+                    <button onclick="toggleMonitor()" style="background:none; border:none; cursor:pointer; font-size:10px; padding:0;" title="Thu gọn">🔽</button>
+                </div>
+            </div>
+            
+            <div id="monitor-content" style="display: flex; flex-direction: column; gap: 12px;">
+                <div>
+                    <div style="color:#5f6368; font-size: 11px; font-weight: bold; margin-bottom:4px;">TẢI TRỌNG CSDL</div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; align-items: baseline;">
+                        <span style="font-size: 10px; color: #7f8c8d;">Bảng de_thi</span>
+                        <b id="monitor-db-count" style="font-size: 13px; color: #2c3e50;">...</b>
+                    </div>
+                    <div style="width:100%; height:6px; background:#e8eaed; border-radius:4px; overflow:hidden;">
+                        <div id="monitor-db-bar" style="height:100%; width:0%; background:#27ae60; transition:0.5s;"></div>
+                    </div>
+                    <div style="font-size:10px; margin-top:4px; text-align:right; font-weight: bold;" id="monitor-db-text">...</div>
+                </div>
+
+                <div>
+                    <div style="color:#5f6368; font-size: 11px; font-weight: bold; margin-bottom:4px;">KẾT NỐI (LUỒNG)</div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:4px; align-items: baseline;">
+                        <span style="font-size: 10px; color: #7f8c8d;">Phòng mở</span>
+                        <b id="monitor-room-count" style="font-size: 13px; color: #2c3e50;">...</b>
+                    </div>
+                    <div style="width:100%; height:6px; background:#e8eaed; border-radius:4px; overflow:hidden;">
+                        <div id="monitor-room-bar" style="height:100%; width:0%; background:#27ae60; transition:0.5s;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(monitorDiv);
+    }
+
+    capNhatChiSoMayChu();
+    setInterval(capNhatChiSoMayChu, 60000);
+}
+
+async function capNhatChiSoMayChu() {
+    try {
+        const MAX_EXAM_ROWS = 10000; 
+        let { count: examCount, error: err1 } = await sb.from('de_thi').select('*', { count: 'exact', head: true });
+        
+        if (!err1) {
+            let dbPercent = Math.min(Math.round((examCount / MAX_EXAM_ROWS) * 100), 100);
+            document.getElementById('monitor-db-count').innerText = `${examCount} bản`;
+            let dbBar = document.getElementById('monitor-db-bar');
+            dbBar.style.width = `${dbPercent}%`;
+            
+            let dbText = document.getElementById('monitor-db-text');
+            if (dbPercent < 50) { dbBar.style.background = '#27ae60'; dbText.innerText = "An toàn"; dbText.style.color = "#27ae60"; }
+            else if (dbPercent < 80) { dbBar.style.background = '#f39c12'; dbText.innerText = "Cần dọn dẹp!"; dbText.style.color = "#f39c12"; }
+            else { dbBar.style.background = '#c0392b'; dbText.innerText = "NGUY HIỂM!"; dbText.style.color = "#c0392b"; }
+        }
+
+        const MAX_ACTIVE_ROOMS = 10;
+        let { count: roomCount, error: err2 } = await sb.from('phong_thi').select('*', { count: 'exact', head: true }).eq('trang_thai', 'MO_PHONG');
+        
+        if (!err2) {
+            let roomPercent = Math.min(Math.round((roomCount / MAX_ACTIVE_ROOMS) * 100), 100);
+            document.getElementById('monitor-room-count').innerText = `${roomCount} phòng`;
+            let roomBar = document.getElementById('monitor-room-bar');
+            roomBar.style.width = `${roomPercent}%`;
+            
+            if (roomPercent < 60) roomBar.style.background = '#27ae60';
+            else if (roomPercent < 90) roomBar.style.background = '#f39c12';
+            else roomBar.style.background = '#c0392b';
+        }
+    } catch (e) {
+        console.error("Lỗi khi đo lường sức khỏe máy chủ:", e);
+    }
 }
