@@ -2,32 +2,70 @@ const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo'; 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Cập nhật state để lưu trữ ma_hs (Số báo danh)
-let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: [], user_result: null };
+// Cập nhật state
+let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
 let examTimer = null;
 
 let currentQuestionIndex = 0;
-
 let cheatCount = 0;
 const MAX_CHEATS = 3;
 let isExamActive = false;
 let isSubmitting = false; 
 
+// Biến lưu độ lệch thời gian chống hack
+let serverTimeOffset = 0; 
+
 // ==========================================
-// TẠO GIAO DIỆN THÔNG BÁO LƯU NHÁP ĐỘNG
+// TẠO GIAO DIỆN THÔNG BÁO VÀ CẢNH BÁO MẠNG
 // ==========================================
-const styleToast = document.createElement('style');
-styleToast.innerHTML = `
+const styleCustom = document.createElement('style');
+styleCustom.innerHTML = `
     #sync-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e8e3e; color: #fff; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s; opacity: 0; pointer-events: none; z-index: 99999; display: flex; align-items: center; gap: 8px;}
     #sync-toast.show { opacity: 1; bottom: 30px; }
+    
+    .flag-btn { background: #f8f9fa; border: 1px solid #dadce0; color: #5f6368; padding: 5px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s; font-weight: 500;}
+    .flag-btn.active { background: #fff4e5; border-color: #f39c12; color: #d35400; box-shadow: 0 2px 5px rgba(243, 156, 18, 0.2); }
+    .flag-btn:hover { background: #e8eaed; }
+    
+    .q-btn.is-flagged::after { content: "🚩"; position: absolute; top: -8px; right: -8px; font-size: 12px; }
+    .q-btn.is-flagged { border: 2px solid #f39c12 !important; background-color: #fffcf5 !important; }
+
+    #network-banner { position: fixed; top: 0; left: 0; width: 100%; padding: 12px; text-align: center; font-weight: bold; color: white; z-index: 100000; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform: translateY(-100%); display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
+    #network-banner.offline { background-color: #ea4335; transform: translateY(0); }
+    #network-banner.online { background-color: #34a853; transform: translateY(0); }
 `;
-document.head.appendChild(styleToast);
+document.head.appendChild(styleCustom);
 
 const toastEl = document.createElement('div');
 toastEl.id = 'sync-toast';
-toastEl.innerHTML = '<span>☁️</span> Đã tự động lưu nháp an toàn';
+toastEl.innerHTML = '<span>☁️</span> Đã tự động lưu nháp';
 document.body.appendChild(toastEl);
+
+const networkBanner = document.createElement('div');
+networkBanner.id = 'network-banner';
+document.body.appendChild(networkBanner);
+
+// LẮNG NGHE SỰ KIỆN MẠNG
+window.addEventListener('offline', () => {
+    state.isOffline = true;
+    let banner = document.getElementById('network-banner');
+    banner.className = 'offline';
+    banner.innerHTML = '<span>⚠️</span> MẤT KẾT NỐI MẠNG! Đừng F5 trang. Hãy cứ tiếp tục làm bài, hệ thống đang lưu nháp cục bộ.';
+    let btnSubmit = document.getElementById('btn-submit-exam');
+    if(btnSubmit) { btnSubmit.style.opacity = '0.5'; btnSubmit.style.cursor = 'not-allowed'; }
+});
+
+window.addEventListener('online', () => {
+    state.isOffline = false;
+    let banner = document.getElementById('network-banner');
+    banner.className = 'online';
+    banner.innerHTML = '<span>✅</span> ĐÃ KHÔI PHỤC KẾT NỐI! Bạn có thể nộp bài bình thường.';
+    let btnSubmit = document.getElementById('btn-submit-exam');
+    if(btnSubmit) { btnSubmit.style.opacity = '1'; btnSubmit.style.cursor = 'pointer'; }
+    
+    setTimeout(() => { if(!state.isOffline && banner.className === 'online') { banner.className = ''; } }, 4000);
+});
 
 function hienThiThongBaoLuu() {
     let t = document.getElementById('sync-toast');
@@ -35,7 +73,33 @@ function hienThiThongBaoLuu() {
     setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// --- BẢO MẬT: BĂM MẬT KHẨU CÓ DỰ PHÒNG LAN (HTTP) ---
+// ==========================================
+// CƠ CHẾ ĐỒNG BỘ THỜI GIAN MÁY CHỦ (CHỐNG HACK)
+// ==========================================
+async function dongBoGiamSatThoiGian() {
+    try {
+        let t1 = Date.now();
+        let res = await fetch(`${SUPABASE_URL}/rest/v1/`, { method: 'HEAD', headers: { 'apikey': SUPABASE_ANON_KEY } });
+        let serverDate = res.headers.get('Date');
+        if (serverDate) {
+            let t2 = Date.now();
+            // Lấy giờ server + bù trừ độ trễ đường truyền (ping/2)
+            let serverTime = new Date(serverDate).getTime() + ((t2 - t1) / 2);
+            serverTimeOffset = serverTime - t2;
+            console.log("Đã đồng bộ giờ chuẩn Server. Độ lệch so với máy tính:", serverTimeOffset, "ms");
+        }
+    } catch(e) {
+        console.warn("Không thể đồng bộ thời gian máy chủ, chuyển về giờ cục bộ.");
+    }
+}
+
+function layThoiGianChuan() {
+    return Date.now() + serverTimeOffset;
+}
+
+// ==========================================
+// CÁC HÀM XỬ LÝ CHÍNH
+// ==========================================
 async function hashPassword(message) {
     if (window.crypto && window.crypto.subtle) {
         const msgBuffer = new TextEncoder().encode(message);
@@ -65,6 +129,8 @@ function showSection(sectionId) {
 
 // 1. ĐĂNG NHẬP & VÀO PHÒNG
 async function login() {
+    if(state.isOffline) return alert("Hệ thống phát hiện thiết bị đang không có mạng. Vui lòng kiểm tra lại kết nối Internet!");
+
     const maTruong = document.getElementById('ma_truong').value.trim();
     const maHs = document.getElementById('ma_hs').value.trim().toUpperCase(); 
     const matKhau = document.getElementById('mat_khau').value.trim();
@@ -91,7 +157,6 @@ async function login() {
             _supabase.from('hoc_sinh').update({ mat_khau: hashedPass }).eq('id', hsData.id).then();
         }
 
-        // Lưu thông tin vào state
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
         
         document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten; document.getElementById('lop_hs_hien_thi').innerText = state.lop;
@@ -115,7 +180,7 @@ async function timPhongThiTuDong() {
 
         if (error) throw error;
 
-        let matchedRooms = (data || []).filter(room => {
+        let matchedRooms = (data || new Array()).filter(room => {
             if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
             let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
             return allowedClasses.includes(state.lop);
@@ -138,6 +203,8 @@ async function timPhongThiTuDong() {
 }
 
 async function joinRoom(maPhongAuto = null) {
+    if(state.isOffline) return alert("Không thể tải đề thi khi mất mạng!");
+    
     const maPhong = maPhongAuto || document.getElementById('ma_phong').value.trim();
     if (!maPhong) return alert("Vui lòng nhập mã phòng thi!");
     state.ma_phong_text = maPhong;
@@ -167,40 +234,24 @@ async function joinRoom(maPhongAuto = null) {
 
         if (phongData.trang_thai !== 'MO_PHONG') throw new Error("Phòng thi hiện đang bị khóa!");
 
-        const { data: danhSachDe } = await _supabase.from('de_thi')
-            .select('ma_de, cau_so')
-            .eq('phong_id', state.phong_id);
-            
-        if (!danhSachDe || danhSachDe.length === 0) throw new Error("Phòng thi này chưa có đề thi!");
+        // ĐỒNG BỘ THỜI GIAN TRƯỚC KHI VÀO LÀM BÀI
+        await dongBoGiamSatThoiGian();
 
-        let viTriDe = 0;
-        let sbdString = String(state.ma_hs).trim(); 
+        const { data: safeExamData, error: examErr } = await _supabase.rpc('lay_de_thi_an_toan', { p_phong_id: state.phong_id, p_ma_hs: state.ma_hs });
+        if (examErr) throw new Error("Lỗi tải đề thi từ máy chủ: " + examErr.message);
+        if (safeExamData && safeExamData.error) throw new Error(safeExamData.error);
+        if (!safeExamData || !safeExamData.cau_so) throw new Error("Không thể lấy dữ liệu đề thi!");
 
-        if (/^\d+$/.test(sbdString)) {
-            let numSBD = parseInt(sbdString, 10);
-            viTriDe = numSBD % danhSachDe.length;
-        } else {
-            let hash = 0;
-            for(let i = 0; i < sbdString.length; i++) {
-                hash = (hash * 31 + sbdString.charCodeAt(i)) >>> 0;
-            }
-            viTriDe = hash % danhSachDe.length;
-        }
-
-        const deData = danhSachDe[viTriDe];
-
-        state.ma_de = deData.ma_de;
-        state.cau_hỏi = typeof deData.cau_so === 'string' ? JSON.parse(deData.cau_so) : deData.cau_so;
+        state.ma_de = safeExamData.ma_de;
+        state.cau_hỏi = typeof safeExamData.cau_so === 'string' ? JSON.parse(safeExamData.cau_so) : safeExamData.cau_so;
         
         document.getElementById('ten_mon_hien_thi').innerText = safeHTML(phongData.mon_hoc?.ten_mon || "Môn Chung");
         document.getElementById('ma_de_hien_thi').innerText = state.ma_de;
         
         batDauAntiCheat();
         renderExam();
-        
-        // GỌI HÀM KHÔI PHỤC BẢN NHÁP TRƯỚC KHI BẮT ĐẦU TÍNH GIỜ
         khoiPhucBaiLamNhap();
-
+        
         showSection('exam-section');
         startTimer(phongData.thoi_gian, phongData.thoi_gian_mo);
 
@@ -222,7 +273,7 @@ function kichHoatLienKetRealtime() {
         }).subscribe();
 }
 
-// 2. RENDER GIAO DIỆN
+// 2. RENDER GIAO DIỆN CÂU HỎI
 function renderExam() {
     const container = document.getElementById('exam-content');
     const gridContainer = document.getElementById('question-grid');
@@ -234,23 +285,29 @@ function renderExam() {
         let html = `<div class="question-block ${activeClassBlock}" id="q-block-${index}">`;
 
         let phanLabel = "";
-        if (cau.phan === "1" || cau.Phan === "1") phanLabel = "Trắc nghiệm nhiều lựa chọn";
-        else if (cau.phan === "2" || cau.Phan === "2") phanLabel = "Trắc nghiệm Đúng/Sai";
+        let phanVal = String(cau.phan || cau.Phan);
+        if (phanVal === "1") phanLabel = "Trắc nghiệm nhiều lựa chọn";
+        else if (phanVal === "2") phanLabel = "Trắc nghiệm Đúng/Sai";
         else phanLabel = "Trả lời ngắn";
 
-        html += `<div style="font-size: 13px; color: #1a73e8; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;">PHẦN ${cau.phan || cau.Phan}: ${phanLabel}</div>`;
+        html += `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div style="font-size: 13px; color: #1a73e8; font-weight: bold; text-transform: uppercase;">PHẦN ${phanVal}: ${phanLabel}</div>
+                    <button class="flag-btn" id="flag-btn-${index}" onclick="toggleFlag(${index})">🚩 Đánh dấu</button>
+                 </div>`;
+        
         html += `<div class="q-text"><b>Câu ${index + 1}:</b> ${safeHTML(cau.noi_dung || cau.NoiDung)}</div>`;
         
-        if (cau.phan === "1" || cau.Phan === "1") {
+        if (phanVal === "1") {
             html += `<div class="options-list">
                 <label class="option-lbl"><input type="radio" name="q_${index}" value="A" onchange="danhDauDaLam(${index})"> <span class="option-text"><b>A.</b> ${safeHTML(cau.A || cau.DapAnA)}</span></label>
                 <label class="option-lbl"><input type="radio" name="q_${index}" value="B" onchange="danhDauDaLam(${index})"> <span class="option-text"><b>B.</b> ${safeHTML(cau.B || cau.DapAnB)}</span></label>
                 <label class="option-lbl"><input type="radio" name="q_${index}" value="C" onchange="danhDauDaLam(${index})"> <span class="option-text"><b>C.</b> ${safeHTML(cau.C || cau.DapAnC)}</span></label>
                 <label class="option-lbl"><input type="radio" name="q_${index}" value="D" onchange="danhDauDaLam(${index})"> <span class="option-text"><b>D.</b> ${safeHTML(cau.D || cau.DapAnD)}</span></label>
             </div>`;
-        } else if (cau.phan === "2" || cau.Phan === "2") {
+        } else if (phanVal === "2") {
+            let letters = new Array('a','b','c','d');
             html += `<table class="tf-table"><tr><th style="width: 60%;">Phát biểu</th><th>Đúng</th><th>Sai</th></tr>
-                ${['a','b','c','d'].map(letter => `
+                ${letters.map(letter => `
                 <tr>
                     <td><b>${letter}.</b> ${safeHTML(cau[letter.toUpperCase()] || cau['DapAn'+letter.toUpperCase()])}</td>
                     <td><input type="radio" name="q_${index}_${letter}" value="Đ" onchange="kiemTraP2DaLam(${index})"></td>
@@ -268,6 +325,27 @@ function renderExam() {
     });
 
     currentQuestionIndex = 0; capNhatNutDieuHuong();
+}
+
+function toggleFlag(index) {
+    let flagBtn = document.getElementById(`flag-btn-${index}`);
+    let gridBtn = document.getElementById(`q-btn-${index}`);
+    
+    let currentFlagged = Array.from(state.flagged);
+    let pos = currentFlagged.indexOf(index);
+    
+    if (pos > -1) {
+        currentFlagged.splice(pos, 1);
+        if(flagBtn) flagBtn.classList.remove('active');
+        if(gridBtn) gridBtn.classList.remove('is-flagged');
+    } else {
+        currentFlagged.push(index);
+        if(flagBtn) flagBtn.classList.add('active');
+        if(gridBtn) gridBtn.classList.add('is-flagged');
+    }
+    
+    state.flagged = currentFlagged;
+    luuNhapBaiLam();
 }
 
 function chuyenCauHoi(index) {
@@ -289,34 +367,53 @@ function capNhatNutDieuHuong() {
     document.getElementById('btn-next').disabled = (currentQuestionIndex === state.cau_hỏi.length - 1);
 }
 
-// BỔ SUNG LƯU NHÁP VÀO HÀNH ĐỘNG CLICK CỦA USER
 function danhDauDaLam(index, isRestoring = false) { 
     document.getElementById(`q-btn-${index}`).classList.add('answered'); 
     if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
 }
 
 function kiemTraP2DaLam(index, isRestoring = false) {
-    let count = 0; ['a','b','c','d'].forEach(l => { if(document.querySelector(`input[name="q_${index}_${l}"]:checked`)) count++; });
+    let count = 0; 
+    let letters = new Array('a','b','c','d');
+    letters.forEach(l => { if(document.querySelector(`input[name="q_${index}_${l}"]:checked`)) count++; });
     if(count === 4) document.getElementById(`q-btn-${index}`).classList.add('answered');
     if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
 }
 
 function kiemTraP3DaLam(index, val, isRestoring = false) {
-    if(val.trim() !== "") document.getElementById(`q-btn-${index}`).classList.add('answered'); 
-    else document.getElementById(`q-btn-${index}`).classList.remove('answered');
+    let btn = document.getElementById(`q-btn-${index}`);
+    if(val.trim() !== "") { if(btn) btn.classList.add('answered'); }
+    else { if(btn) btn.classList.remove('answered'); }
     if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
 }
 
+// ==========================================
+// THAY ĐỔI: DÙNG GIỜ CHUẨN MÁY CHỦ ĐỂ ĐẾM NGƯỢC
+// ==========================================
 function startTimer(thoiGianPhut, thoiGianMo) {
     if(!thoiGianPhut) thoiGianPhut = 45;
-    let startTime = thoiGianMo ? new Date(thoiGianMo).getTime() : Date.now();
+    
+    // So sánh thời gian mở phòng với Giờ Chuẩn thay vì Giờ Máy Tính
+    let startTime = thoiGianMo ? new Date(thoiGianMo).getTime() : layThoiGianChuan();
     let endTime = startTime + (thoiGianPhut * 60 * 1000);
 
     examTimer = setInterval(() => {
-        let now = Date.now(); let diff = endTime - now;
+        let now = layThoiGianChuan(); // Luôn lấy giờ chuẩn
+        let diff = endTime - now;
+        
         if (diff <= 0) {
             clearInterval(examTimer); document.getElementById('display-timer').innerText = "00:00";
-            if (isExamActive) { alert("⏳ ĐÃ HẾT THỜI GIAN LÀM BÀI! Hệ thống tự động thu bài."); gradeAndSubmit(true); }
+            if (isExamActive) { 
+                alert("⏳ ĐÃ HẾT THỜI GIAN LÀM BÀI! Hệ thống tự động thu bài."); 
+                if(!state.isOffline) gradeAndSubmit(true);
+                else {
+                    tatAntiCheat();
+                    document.getElementById('exam-main-area').innerHTML = '<h3 style="color:red; text-align:center;">HẾT GIỜ. ĐANG CHỜ KHÔI PHỤC KẾT NỐI MẠNG ĐỂ NỘP BÀI...</h3>';
+                    let waitNet = setInterval(() => {
+                        if(!state.isOffline) { clearInterval(waitNet); gradeAndSubmit(true); }
+                    }, 2000);
+                }
+            }
         } else {
             let m = Math.floor(diff / 60000); let s = Math.floor((diff % 60000) / 1000);
             let display = document.getElementById('display-timer');
@@ -326,35 +423,23 @@ function startTimer(thoiGianPhut, thoiGianMo) {
     }, 1000);
 }
 
-// ==========================================
-// THUẬT TOÁN CHỐNG GIAN LẬN & ÉP CHẶN F5 TẬN GỐC
-// ==========================================
+// --- CHỐNG GIAN LẬN ---
 function xacNhanThoatTrang(e) {
     if (isExamActive && !isSubmitting) {
         const msg = 'Bài làm của bạn chưa được nộp. Bạn có chắc chắn muốn rời đi?';
-        e.preventDefault();
-        e.returnValue = msg; 
-        return msg; // Trình duyệt cần dòng return này để show popup
+        e.preventDefault(); e.returnValue = msg; return msg; 
     }
 }
 
 function batDauAntiCheat() {
-    isExamActive = true;
-    cheatCount = 0;
-    
+    isExamActive = true; cheatCount = 0;
     try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); } catch(e) {}
-
     document.addEventListener('contextmenu', chanHanhDong);
     document.addEventListener('copy', chanHanhDong);
     document.addEventListener('keydown', chanPhimTat);
-    
-    // GẮN CHẶT KHIÊN VÀO WINDOW OBJECT (Đảm bảo hoạt động)
     window.onbeforeunload = xacNhanThoatTrang;
-
     window.addEventListener('blur', xuLyGianLan);
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') xuLyGianLan();
-    });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') xuLyGianLan(); });
 }
 
 function tatAntiCheat() {
@@ -362,12 +447,8 @@ function tatAntiCheat() {
     document.removeEventListener('contextmenu', chanHanhDong); 
     document.removeEventListener('copy', chanHanhDong); 
     document.removeEventListener('keydown', chanPhimTat);
-    
-    // THÁO KHIÊN KHI NỘP BÀI THÀNH CÔNG
     window.onbeforeunload = null;
-    
     window.removeEventListener('blur', xuLyGianLan); 
-    document.removeEventListener('visibilitychange', xuLyGianLan);
     if(examTimer) clearInterval(examTimer);
 }
 
@@ -375,19 +456,16 @@ function chanHanhDong(e) { if(isExamActive) e.preventDefault(); }
 function chanPhimTat(e) {
     if (!isExamActive) return;
     if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'c') || (e.ctrlKey && e.key === 'v') || (e.key === 'F5') || (e.ctrlKey && e.key === 'r')) {
-        e.preventDefault();
-        alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
+        e.preventDefault(); alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
     }
 }
 
 function xuLyGianLan() {
     if (!isExamActive) return;
     if (document.getElementById('cheat-warning').style.display === 'block') return; 
-    
     cheatCount++;
     document.getElementById('cheat-count').innerText = cheatCount;
     document.getElementById('cheat-warning').style.display = 'block';
-
     if (cheatCount >= MAX_CHEATS) {
         document.querySelector('.btn-warning').style.display = 'none';
         alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI QUÁ SỐ LẦN CHO PHÉP!\nHệ thống tự động đình chỉ và thu bài.");
@@ -402,32 +480,36 @@ function closeCheatWarning() {
 
 // 4. NỘP BÀI VÀ CHẤM ĐIỂM
 function xacNhanNopBai() {
+    if(state.isOffline) {
+        alert("⚠️ BẠN ĐANG BỊ MẤT KẾT NỐI MẠNG!\nVui lòng giữ nguyên trang, không được F5. Hãy chờ đến khi thông báo màu xanh xuất hiện mới được nộp bài.");
+        return;
+    }
+
     let chuaLam = 0;
     document.querySelectorAll('.q-btn').forEach(btn => { if(!btn.classList.contains('answered')) chuaLam++; });
-
     let msg = chuaLam > 0 
         ? `⚠️ CẢNH BÁO: Bạn còn ${chuaLam} câu chưa hoàn thành!\nBạn có CHẮC CHẮN muốn nộp bài lúc này không?`
         : `Bạn đã hoàn thành 100% câu hỏi.\nXác nhận NỘP BÀI lên máy chủ?`;
-
     if(confirm(msg)) gradeAndSubmit(false);
 }
 
 async function gradeAndSubmit(autoSubmit = false) {
     if (isSubmitting) return; 
+    if(state.isOffline) return;
+
     isSubmitting = true;
-    
     let btn = document.getElementById('btn-submit-exam');
     if(btn) { btn.innerText = "⏳ ĐANG GỬI DỮ LIỆU..."; btn.disabled = true; }
-    
     tatAntiCheat();
-    let baiLam = [];
     
+    let baiLam = new Array();
     state.cau_hỏi.forEach((cau, index) => {
         let phan = String(cau.phan || cau.Phan); 
         let ans = "";
         if (phan === "1") ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
         else if (phan === "2") {
-            let userArr = ['a','b','c','d'].map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || "");
+            let letters = new Array('a','b','c','d');
+            let userArr = letters.map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || "");
             ans = userArr.join('-'); 
         } else {
             let txtEl = document.getElementById(`q_${index}_txt`);
@@ -436,17 +518,19 @@ async function gradeAndSubmit(autoSubmit = false) {
         baiLam.push({ chon: ans });
     });
 
-    const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', { 
-        p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam 
-    });
-    
-    if (!error && data && data.status === 'success') { 
-        // XOÁ SẠCH BẢN NHÁP SAU KHI NỘP THÀNH CÔNG
-        localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+    try {
+        const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', { 
+            p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam 
+        });
         
-        document.getElementById('finish_name').innerText = state.ho_ten; showSection('result-section'); 
-        try { document.exitFullscreen(); } catch(e){} 
-    } else {
+        if (!error && data && data.status === 'success') { 
+            localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+            document.getElementById('finish_name').innerText = state.ho_ten; showSection('result-section'); 
+            try { document.exitFullscreen(); } catch(e){} 
+        } else {
+            throw new Error(error ? error.message : "Lỗi không xác định từ Server");
+        }
+    } catch(err) {
         alert("❌ Có lỗi mạng khi nộp bài. Vui lòng không đóng trình duyệt và báo ngay cho Giám thị!");
         if(btn) { btn.innerText = "NỘP LẠI BÀI THI"; btn.disabled = false; }
         isSubmitting = false; 
@@ -455,6 +539,8 @@ async function gradeAndSubmit(autoSubmit = false) {
 
 // 5. ĐÁP ÁN CHI TIẾT
 async function checkTeacherCommand(isAuto = false) {
+    if(state.isOffline) return alert("Không thể tải kết quả vì bạn đang mất mạng!");
+
     try {
         const { data: phong } = await _supabase.from('phong_thi').select('trang_thai').eq('id', state.phong_id).single();
         const { data: kq } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
@@ -468,12 +554,12 @@ async function checkTeacherCommand(isAuto = false) {
 
         if (phong.trang_thai === 'XEM_DAP_AN') {
             let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : kq.chi_tiet;
-            if (!chiTiet[0].A && kq.ma_de) {
+            if (chiTiet.length > 0 && !chiTiet.at(0).A && kq.ma_de) {
                 const { data: deData } = await _supabase.from('de_thi').select('cau_so').eq('phong_id', state.phong_id).eq('ma_de', kq.ma_de).single();
                 if (deData) {
                     let cauHois = typeof deData.cau_so === 'string' ? JSON.parse(deData.cau_so) : deData.cau_so;
                     chiTiet = chiTiet.map((ct, idx) => {
-                        let cauGoc = cauHois[idx] || {};
+                        let cauGoc = cauHois.at(idx) || {};
                         return {...ct, A: cauGoc.A || cauGoc.DapAnA, B: cauGoc.B || cauGoc.DapAnB, C: cauGoc.C || cauGoc.DapAnC, D: cauGoc.D || cauGoc.DapAnD};
                     });
                 }
@@ -491,16 +577,13 @@ function renderReview(chiTietData) {
     items.forEach((item, index) => {
         let isRight = false; let phan = String(item.phan || item.Phan || "1");
         let userAns = item.chon || item.Chon || ""; let correctAns = item.dung || item.Dung || "";
-
         if (phan === "1" || phan === "2") isRight = (userAns === correctAns);
         else {
-            let aClean = String(userAns).replace(/,/g,'.').replace(/\s/g,'').toLowerCase();
-            let dClean = String(correctAns).replace(/'/g,'').replace(/,/g,'.').replace(/\s/g,'').toLowerCase();
+            let aClean = String(userAns).replace(new RegExp(",", "g"),'.').replace(new RegExp("\\s", "g"),'').toLowerCase();
+            let dClean = String(correctAns).replace(new RegExp("'", "g"),'').replace(new RegExp(",", "g"),'.').replace(new RegExp("\\s", "g"),'').toLowerCase();
             isRight = (aClean !== "" && aClean === dClean);
         }
-
         let qNum = item.q || item.cauSo || (index + 1); let textContent = item.noiDung || item.noiDungCau || "(Không trích xuất được nội dung câu hỏi)";
-
         let html = `<div style="margin-bottom: 20px; padding: 20px; border-radius: 8px; background: #f8f9fa; border: 1px solid ${isRight ? '#34a853' : '#ea4335'};">
             <span style="font-weight: 600; font-size: 16px; margin-bottom: 15px; display: block; color: #202124;">Câu ${qNum}: ${safeHTML(textContent)} 
             <span style="background: ${isRight ? '#34a853' : '#ea4335'}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; margin-left: 10px;">${isRight ? 'ĐÚNG' : 'SAI'}</span></span>`;
@@ -508,94 +591,97 @@ function renderReview(chiTietData) {
         if (phan === "1") {
             let userText = userAns ? `<span style="color:${isRight ? '#1e8e3e' : '#d93025'}; font-weight:bold;">${safeHTML(userAns)}</span>` : `<span style="color:#d93025; font-weight:bold;">(Bỏ trống)</span>`;
             html += `<div style="margin-bottom: 15px; font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; border: 1px dashed #dadce0;">Bạn chọn: ${userText}</div>`;
-
-            ['A', 'B', 'C', 'D'].forEach(opt => {
+            let ABCD = new Array('A', 'B', 'C', 'D');
+            ABCD.forEach(opt => {
                 let optText = item[opt] || item[`DapAn${opt}`] || "";
                 if (!optText) return; 
                 let isChosen = (userAns === opt); let isCorrect = (correctAns === opt);
                 let style = "padding: 10px 15px; margin: 6px 0; border-radius: 6px; background: #fff; border: 1px solid #e8eaed;";
                 let icon = "&nbsp;&nbsp;&nbsp;&nbsp;";
-                
                 if (isCorrect) { style = "padding: 10px 15px; margin: 6px 0; border-radius: 6px; background: #e8f5e9; border: 2px solid #34a853; color: #1e8e3e; font-weight: bold;"; icon = "✅"; } 
                 else if (isChosen && !isCorrect) { style = "padding: 10px 15px; margin: 6px 0; border-radius: 6px; background: #fce8e6; border: 2px solid #ea4335; color: #d93025; font-weight: bold;"; icon = "❌"; }
-
                 html += `<div style="${style}">${icon} <b>${opt}.</b> ${safeHTML(optText)}</div>`;
             });
         } else if (phan === "2") {
             html += `<table class="tf-table" style="margin-top: 10px;"><tr><th>Ý</th><th>Nội dung</th><th>Bạn chọn</th><th>Đáp án chuẩn</th></tr>`;
             let userArr = userAns.split('-'); let correctArr = correctAns.split('-');
-            ['a', 'b', 'c', 'd'].forEach((letter, i) => {
-                let uA = userArr[i] || ""; let cA = correctArr[i] || ""; let optText = item[letter.toUpperCase()] || item[`DapAn${letter.toUpperCase()}`] || "";
+            let abcd = new Array('a', 'b', 'c', 'd');
+            abcd.forEach((letter, i) => {
+                let uA = userArr.at(i) || ""; let cA = correctArr.at(i) || ""; let optText = item[letter.toUpperCase()] || item[`DapAn${letter.toUpperCase()}`] || "";
                 html += `<tr><td style="font-weight:bold;">${letter}</td><td style="text-align:left;">${safeHTML(optText)}</td><td style="color: ${uA === cA ? '#1e8e3e' : '#d93025'}; font-weight:bold;">${safeHTML(uA || '-')}</td><td style="color: #1e8e3e; font-weight:bold;">${safeHTML(cA)}</td></tr>`;
             });
             html += `</table>`;
         } else {
             html += `<div style="margin-top: 10px; padding: 15px; background: #fff; border-radius: 6px; border: 1px solid #dadce0;">
                 <p style="margin: 0 0 8px 0;"><b>Bạn chọn:</b> <span style="color:${isRight ? '#1e8e3e' : '#d93025'}; font-weight:bold; font-size: 16px;">${safeHTML(userAns || '(Bỏ trống)')}</span></p>
-                <p style="margin: 0; color:#1e8e3e;"><b>Đáp án chuẩn:</b> <span style="font-size: 16px; font-weight:bold;">${safeHTML(String(correctAns).replace(/'/g,''))}</span></p>
+                <p style="margin: 0; color:#1e8e3e;"><b>Đáp án chuẩn:</b> <span style="font-size: 16px; font-weight:bold;">${safeHTML(String(correctAns).replace(new RegExp("'", "g"),''))}</span></p>
             </div>`;
         }
-
         html += `</div>`;
         container.innerHTML += html;
     });
 }
 
-// ==========================================================
-// CƠ CHẾ LƯU NHÁP & KHÔI PHỤC BÀI LÀM
-// ==========================================================
+// ==========================================
+// CƠ CHẾ LƯU NHÁP & KHÔI PHỤC (LOCAL STORAGE)
+// ==========================================
 function luuNhapBaiLam() {
     let baiLamNhap = {};
-    
     state.cau_hỏi.forEach((cau, index) => {
         let phan = String(cau.phan || cau.Phan); 
         let ans = "";
-        
-        if (phan === "1") {
-            ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
-        } else if (phan === "2") {
-            let userArr = ['a','b','c','d'].map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || "");
+        if (phan === "1") ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
+        else if (phan === "2") {
+            let abcd = new Array('a','b','c','d');
+            let userArr = abcd.map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || "");
             ans = userArr.join('-'); 
         } else {
             let txtEl = document.getElementById(`q_${index}_txt`);
             ans = txtEl ? txtEl.value.trim() : "";
         }
-        
-        if (ans && ans !== "---" && ans !== "") {
-            baiLamNhap[index] = ans;
-        }
+        if (ans && ans !== "---" && ans !== "") { Reflect.set(baiLamNhap, index, ans); }
     });
 
     const draftKey = `nhap_damsan_${state.phong_id}_${state.hs_id}`;
-    localStorage.setItem(draftKey, JSON.stringify(baiLamNhap));
-    console.log("Đã lưu nháp vào DB cục bộ:", draftKey);
+    let payload = {
+        answers: baiLamNhap,
+        flagged: state.flagged
+    };
+    localStorage.setItem(draftKey, JSON.stringify(payload));
 }
 
 function khoiPhucBaiLamNhap() {
     const draftKey = `nhap_damsan_${state.phong_id}_${state.hs_id}`;
     let savedData = localStorage.getItem(draftKey);
-    console.log("Tìm kiếm bản nháp với key:", draftKey);
-    
     if (savedData) {
         try {
-            let baiLamNhap = JSON.parse(savedData);
-            let soCauDaKhoiPhuc = 0;
+            let payload = JSON.parse(savedData);
+            let baiLamNhap = payload.answers || new Array();
+            let flaggedList = payload.flagged || new Array();
+            
+            state.flagged = flaggedList;
+            state.flagged.forEach(idx => {
+                let fBtn = document.getElementById(`flag-btn-${idx}`);
+                let gBtn = document.getElementById(`q-btn-${idx}`);
+                if(fBtn) fBtn.classList.add('active');
+                if(gBtn) gBtn.classList.add('is-flagged');
+            });
 
+            let soCauDaKhoiPhuc = 0;
             Object.keys(baiLamNhap).forEach(index => {
-                let ans = baiLamNhap[index];
-                let cau = state.cau_hỏi[index];
+                let ans = Reflect.get(baiLamNhap, index);
+                let cau = state.cau_hỏi.at(index);
                 if (!cau) return;
-                
                 let phan = String(cau.phan || cau.Phan);
-                
                 if (phan === "1") {
                     let radio = document.querySelector(`input[name="q_${index}"][value="${ans}"]`);
                     if (radio) { radio.checked = true; danhDauDaLam(index, true); soCauDaKhoiPhuc++; }
                 } 
                 else if (phan === "2") {
                     let arrAns = ans.split('-');
-                    ['a','b','c','d'].forEach((l, i) => {
-                        let val = arrAns[i];
+                    let abcd = new Array('a','b','c','d');
+                    abcd.forEach((l, i) => {
+                        let val = arrAns.at(i);
                         if (val) {
                             let radio = document.querySelector(`input[name="q_${index}_${l}"][value="${val}"]`);
                             if (radio) radio.checked = true;
@@ -609,13 +695,7 @@ function khoiPhucBaiLamNhap() {
                     if (txtArea) { txtArea.value = ans; kiemTraP3DaLam(index, ans, true); soCauDaKhoiPhuc++; }
                 }
             });
-            
-            if(soCauDaKhoiPhuc > 0) {
-                console.log(`Đã khôi phục thành công ${soCauDaKhoiPhuc} câu trả lời!`);
-                alert(`Hệ thống đã tự động khôi phục ${soCauDaKhoiPhuc} câu trả lời của bạn từ lần đăng nhập trước!`);
-            }
-        } catch(e) {
-            console.error("Lỗi khi khôi phục bản nháp:", e);
-        }
+            if(soCauDaKhoiPhuc > 0) { alert(`Hệ thống đã tự động khôi phục ${soCauDaKhoiPhuc} câu trả lời và các dấu cờ của bạn!`); }
+        } catch(e) { console.error("Lỗi khi khôi phục bản nháp:", e); }
     }
 }

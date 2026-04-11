@@ -64,7 +64,6 @@
         
         #exam-content { flex: 1; position: relative; }
         
-        /* KHÓA CỨNG HIỂN THỊ CÂU HỎI */
         .question-block { display: none; padding-bottom: 25px; animation: fadeIn 0.3s; }
         .question-block.active-q { display: block; }
         
@@ -85,6 +84,26 @@
         .tf-table th { background: #f1f3f4; color: #5f6368; font-weight: bold; font-size: 16px;}
         .tf-table td:first-child { text-align: left; font-size: 17px; }
         .tf-table input[type="radio"] { transform: scale(1.4); cursor: pointer; }
+
+        /* --- BỔ SUNG: HIỂN THỊ VIỀN BẢNG BIỂU TỪ WORD (ĐỊA LÝ, TOÁN, LÝ...) --- */
+        .q-text table, .review-box table:not(.tf-table) {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background: #fff;
+        }
+        .q-text table th, .q-text table td, 
+        .review-box table:not(.tf-table) th, .review-box table:not(.tf-table) td {
+            border: 1px solid #5f6368;
+            padding: 10px;
+            text-align: center; /* Canh giữa nội dung ô */
+            vertical-align: middle;
+            font-size: 16px;
+        }
+        .q-text table th, .review-box table:not(.tf-table) th {
+            background-color: #f1f3f4;
+            font-weight: bold;
+        }
 
         .short-answer-input { width: 100%; max-width: 400px; padding: 15px; border: 2px solid #1a73e8; border-radius: 8px; font-size: 18px; font-weight: bold; text-align: center; color: #d93025; outline: none; }
 
