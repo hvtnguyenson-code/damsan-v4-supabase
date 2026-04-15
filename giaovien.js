@@ -2667,6 +2667,82 @@ async function deleteBankBatch(deleteAll, btnElement) {
     } 
 }
 
+/* =======================================================
+   QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
+======================================================= */
+async function loadSysData() {
+    // Tải danh sách trường
+    let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
+    let htmlTruong = '';
+    if (truongs && truongs.length > 0) {
+        truongs.forEach((t, i) => {
+            htmlTruong += `<tr>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align:center;">${i + 1}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight:bold;">${t.ma_truong}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">${t.ten_truong}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align:center;">
+                    <button onclick="xoaTruong('${t.id}')" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Xóa</button>
+                </td>
+            </tr>`;
+        });
+    } else {
+        htmlTruong = '<tr><td colspan="4" style="padding: 10px; text-align: center;">Chưa có dữ liệu trường học.</td></tr>';
+    }
+    if(document.getElementById('sysTruongBody')) document.getElementById('sysTruongBody').innerHTML = htmlTruong;
+
+    // Tải danh sách môn
+    let { data: mons, error: errMon } = await sb.from('mon_hoc').select('*').order('created_at', { ascending: true });
+    let htmlMon = '';
+    if (mons && mons.length > 0) {
+        mons.forEach((m, i) => {
+            htmlMon += `<tr>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align:center;">${i + 1}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight:bold; color:#8e44ad;">${m.ten_mon}</td>
+                <td style="padding: 10px; border: 1px solid #ddd; text-align:center;">
+                    <button onclick="xoaMon('${m.id}')" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;">Xóa</button>
+                </td>
+            </tr>`;
+        });
+    } else {
+        htmlMon = '<tr><td colspan="3" style="padding: 10px; text-align: center;">Chưa có dữ liệu môn học.</td></tr>';
+    }
+    if(document.getElementById('sysMonBody')) document.getElementById('sysMonBody').innerHTML = htmlMon;
+}
+
+async function themTruongMoi() {
+    let ma = document.getElementById('newMaTruong').value.trim().toUpperCase();
+    let ten = document.getElementById('newTenTruong').value.trim();
+    if(!ma || !ten) return alert("Vui lòng nhập đủ Mã và Tên trường!");
+    let btn = document.getElementById('btnThemTruong');
+    btn.innerText = "..."; btn.disabled = true;
+    let { error } = await sb.from('truong_hoc').insert([{ ma_truong: ma, ten_truong: ten }]);
+    btn.innerText = "Thêm"; btn.disabled = false;
+    if(error) alert("Lỗi: " + error.message);
+    else { document.getElementById('newMaTruong').value = ''; document.getElementById('newTenTruong').value = ''; loadSysData(); }
+}
+
+async function xoaTruong(id) {
+    if(!confirm("Xóa trường này?")) return;
+    let { error } = await sb.from('truong_hoc').delete().eq('id', id);
+    if(error) alert("Lỗi: " + error.message); else loadSysData();
+}
+
+async function themMonMoi() {
+    let ten = document.getElementById('newTenMon').value.trim();
+    if(!ten) return alert("Vui lòng nhập tên môn!");
+    let btn = document.getElementById('btnThemMon');
+    btn.innerText = "..."; btn.disabled = true;
+    let { error } = await sb.from('mon_hoc').insert([{ ten_mon: ten }]);
+    btn.innerText = "Thêm"; btn.disabled = false;
+    if(error) alert("Lỗi: " + error.message);
+    else { document.getElementById('newTenMon').value = ''; loadSysData(); }
+}
+
+async function xoaMon(id) {
+    if(!confirm("Xóa môn này?")) return;
+    let { error } = await sb.from('mon_hoc').delete().eq('id', id);
+    if(error) alert("Lỗi: " + error.message); else loadSysData();
+}
 async function resetPass(ma, uid, loai) { 
     if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
     const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
