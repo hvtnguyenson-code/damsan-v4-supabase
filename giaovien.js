@@ -2298,7 +2298,7 @@ async function xuatExcel() {
     let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true}; 
     worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]); 
     
-    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : "TuyChon";
+    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
     let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
