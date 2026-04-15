@@ -2,7 +2,6 @@ const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo'; 
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Cập nhật state
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
 let examTimer = null;
@@ -13,8 +12,35 @@ const MAX_CHEATS = 3;
 let isExamActive = false;
 let isSubmitting = false; 
 
-// Biến lưu độ lệch thời gian chống hack
 let serverTimeOffset = 0; 
+let cheatTimeout = null; // Biến lưu bộ đếm trễ chống nhiễu trên Mobile
+
+// ==========================================
+// AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    let session = sessionStorage.getItem('damSan_HSSession');
+    if(session) {
+        let s = JSON.parse(session);
+        state.truong_id = s.truong_id; state.hs_id = s.hs_id; state.ma_hs = s.ma_hs; state.ho_ten = s.ho_ten; state.lop = s.lop;
+        
+        document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten; 
+        document.getElementById('lop_hs_hien_thi').innerText = state.lop;
+        document.getElementById('panel_ten_hs').innerText = state.ho_ten; 
+        document.getElementById('panel_ma_hs').innerText = state.ma_hs; 
+        document.getElementById('panel_lop_hs').innerText = state.lop;
+        
+        showSection('room-section');
+        timPhongThiTuDong();
+    }
+});
+
+function dangXuatHS() {
+    if(confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
+        sessionStorage.removeItem('damSan_HSSession');
+        location.reload();
+    }
+}
 
 // ==========================================
 // TẠO GIAO DIỆN THÔNG BÁO VÀ CẢNH BÁO MẠNG
@@ -46,7 +72,6 @@ const networkBanner = document.createElement('div');
 networkBanner.id = 'network-banner';
 document.body.appendChild(networkBanner);
 
-// LẮNG NGHE SỰ KIỆN MẠNG
 window.addEventListener('offline', () => {
     state.isOffline = true;
     let banner = document.getElementById('network-banner');
@@ -63,7 +88,6 @@ window.addEventListener('online', () => {
     banner.innerHTML = '<span>✅</span> ĐÃ KHÔI PHỤC KẾT NỐI! Bạn có thể nộp bài bình thường.';
     let btnSubmit = document.getElementById('btn-submit-exam');
     if(btnSubmit) { btnSubmit.style.opacity = '1'; btnSubmit.style.cursor = 'pointer'; }
-    
     setTimeout(() => { if(!state.isOffline && banner.className === 'online') { banner.className = ''; } }, 4000);
 });
 
@@ -73,9 +97,6 @@ function hienThiThongBaoLuu() {
     setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ==========================================
-// CƠ CHẾ ĐỒNG BỘ THỜI GIAN MÁY CHỦ (CHỐNG HACK)
-// ==========================================
 async function dongBoGiamSatThoiGian() {
     try {
         let t1 = Date.now();
@@ -83,35 +104,32 @@ async function dongBoGiamSatThoiGian() {
         let serverDate = res.headers.get('Date');
         if (serverDate) {
             let t2 = Date.now();
-            // Lấy giờ server + bù trừ độ trễ đường truyền (ping/2)
             let serverTime = new Date(serverDate).getTime() + ((t2 - t1) / 2);
             serverTimeOffset = serverTime - t2;
-            console.log("Đã đồng bộ giờ chuẩn Server. Độ lệch so với máy tính:", serverTimeOffset, "ms");
         }
     } catch(e) {
-        console.warn("Không thể đồng bộ thời gian máy chủ, chuyển về giờ cục bộ.");
+        console.warn("Không thể đồng bộ thời gian, chuyển về giờ cục bộ.");
     }
 }
 
-function layThoiGianChuan() {
-    return Date.now() + serverTimeOffset;
-}
+function layThoiGianChuan() { return Date.now() + serverTimeOffset; }
 
 // ==========================================
 // CÁC HÀM XỬ LÝ CHÍNH
 // ==========================================
 async function hashPassword(message) {
     if (window.crypto && window.crypto.subtle) {
-        const msgBuffer = new TextEncoder().encode(message);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    } else if (window.CryptoJS) {
-        return CryptoJS.SHA256(message).toString(CryptoJS.enc.Hex);
-    } else {
-        alert("Lỗi nghiêm trọng: Trình duyệt không hỗ trợ mã hóa!");
-        return message;
-    }
+        try {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) {}
+    } 
+    if (window.CryptoJS) {
+        return window.CryptoJS.SHA256(message).toString(window.CryptoJS.enc.Hex);
+    } 
+    return message;
 }
 const DEFAULT_PASS_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
 
@@ -127,11 +145,10 @@ function showSection(sectionId) {
     document.getElementById(sectionId).classList.add('active');
 }
 
-// 1. ĐĂNG NHẬP & VÀO PHÒNG
 async function login() {
     if(state.isOffline) return alert("Hệ thống phát hiện thiết bị đang không có mạng. Vui lòng kiểm tra lại kết nối Internet!");
 
-    const maTruong = document.getElementById('ma_truong').value.trim();
+    const maTruong = document.getElementById('ma_truong').value.trim().toUpperCase();
     const maHs = document.getElementById('ma_hs').value.trim().toUpperCase(); 
     const matKhau = document.getElementById('mat_khau').value.trim();
     const btn = document.getElementById('btn-login');
@@ -159,8 +176,15 @@ async function login() {
 
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
         
-        document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten; document.getElementById('lop_hs_hien_thi').innerText = state.lop;
-        document.getElementById('panel_ten_hs').innerText = state.ho_ten; document.getElementById('panel_ma_hs').innerText = state.ma_hs; document.getElementById('panel_lop_hs').innerText = state.lop;
+        sessionStorage.setItem('damSan_HSSession', JSON.stringify({
+            truong_id: state.truong_id, hs_id: state.hs_id, ma_hs: state.ma_hs, ho_ten: state.ho_ten, lop: state.lop
+        }));
+
+        document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten; 
+        document.getElementById('lop_hs_hien_thi').innerText = state.lop;
+        document.getElementById('panel_ten_hs').innerText = state.ho_ten; 
+        document.getElementById('panel_ma_hs').innerText = state.ma_hs; 
+        document.getElementById('panel_lop_hs').innerText = state.lop;
         
         showSection('room-section');
         timPhongThiTuDong();
@@ -171,39 +195,74 @@ async function login() {
 
 async function timPhongThiTuDong() {
     const autoArea = document.getElementById('auto-room-area');
-    autoArea.innerHTML = '<p style="font-weight: bold; color: #1a73e8; margin: 0;">⏳ Đang quét tìm phòng thi đang mở...</p>';
+    autoArea.innerHTML = '<p style="font-weight: bold; color: #1a73e8; margin: 0;">⏳ Đang đồng bộ danh sách phòng thi...</p>';
     try {
-        const { data, error } = await _supabase.from('phong_thi')
-            .select('id, ma_phong, ten_dot, doi_tuong')
+        const { data: rooms, error } = await _supabase.from('phong_thi')
+            .select('id, ma_phong, ten_dot, doi_tuong, trang_thai')
             .eq('truong_id', state.truong_id)
-            .eq('trang_thai', 'MO_PHONG');
+            .neq('trang_thai', 'CHO_THI')
+            .order('created_at', { ascending: false });
 
         if (error) throw error;
 
-        let matchedRooms = (data || new Array()).filter(room => {
+        const { data: kqData } = await _supabase.from('ket_qua')
+            .select('phong_id, diem')
+            .eq('hs_id', state.hs_id);
+
+        let submittedRoomIds = (kqData || []).filter(k => k.diem !== null && k.diem !== undefined).map(k => k.phong_id);
+
+        let matchedRooms = (rooms || new Array()).filter(room => {
             if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
             let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
             return allowedClasses.includes(state.lop);
         });
 
         if (matchedRooms.length > 0) {
-            let html = '<h3 style="color: #1e8e3e; margin: 0 0 15px 0;">🎉 Đã tìm thấy phòng thi cho lớp của bạn!</h3>';
+            let html = '<h3 style="color: #1e8e3e; margin: 0 0 15px 0;">📋 Các phòng thi của bạn:</h3>';
             matchedRooms.forEach(room => {
-                html += `<div style="background: #fff; border: 2px solid #34a853; border-radius: 8px; padding: 20px; margin-top: 10px; text-align: left;">
-                    <h4 style="margin: 0 0 15px 0; color: #202124; font-size:18px;">${safeHTML(room.ten_dot) || 'Bài kiểm tra'}</h4>
-                    <p style="margin: 0 0 15px 0; font-size: 14px; color: #5f6368;">Mã phòng: <b>${room.ma_phong}</b></p>
-                    <button onclick="joinRoom('${room.ma_phong}')" style="background-color: #34a853; color: white; width: 100%; border: none; padding: 14px; border-radius: 8px; font-size:16px; font-weight: bold; cursor: pointer;">🚀 BẮT ĐẦU LÀM BÀI</button>
+                let isSubmitted = submittedRoomIds.includes(room.id);
+                let btnHtml = '';
+                let statusText = '';
+                
+                if (isSubmitted) {
+                    statusText = '<span style="color: #1e8e3e; font-weight: bold;">✅ Đã nộp bài</span>';
+                    btnHtml = `<button onclick="joinRoom('${room.ma_phong}')" style="background-color: #f39c12; color: white; width: 100%; border: none; padding: 10px; border-radius: 8px; font-size:14px; font-weight: bold; cursor: pointer; margin-top: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">👁️ VÀO XEM KẾT QUẢ / ĐÁP ÁN</button>`;
+                } else {
+                    if (room.trang_thai === 'MO_PHONG') {
+                        statusText = '<span style="color: #1a73e8; font-weight: bold;">🟢 Đang mở (Vào thi ngay)</span>';
+                        btnHtml = `<button onclick="joinRoom('${room.ma_phong}')" style="background-color: #34a853; color: white; width: 100%; border: none; padding: 10px; border-radius: 8px; font-size:14px; font-weight: bold; cursor: pointer; margin-top: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🚀 BẮT ĐẦU LÀM BÀI</button>`;
+                    } else {
+                        statusText = '<span style="color: #d93025; font-weight: bold;">🔴 Đã khóa / Hết hạn</span>';
+                        btnHtml = `<button disabled style="background-color: #e8eaed; color: #9aa0a6; width: 100%; border: none; padding: 10px; border-radius: 8px; font-size:14px; font-weight: bold; cursor: not-allowed; margin-top: 10px;">⛔ KHÔNG THỂ THAM GIA</button>`;
+                    }
+                }
+
+                html += `<div style="background: #fff; border: 2px solid ${isSubmitted ? '#fbbc04' : (room.trang_thai === 'MO_PHONG' ? '#34a853' : '#dadce0')}; border-radius: 8px; padding: 15px; margin-top: 10px; text-align: left; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <h4 style="margin: 0 0 8px 0; color: #202124; font-size:16px;">${safeHTML(room.ten_dot) || 'Bài kiểm tra'}</h4>
+                    <p style="margin: 0 0 5px 0; font-size: 13px; color: #5f6368;">Mã phòng: <b>${room.ma_phong}</b></p>
+                    <p style="margin: 0; font-size: 13px;">Trạng thái: ${statusText}</p>
+                    ${btnHtml}
                 </div>`;
             });
             autoArea.innerHTML = html;
         } else {
-            autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">❌ Hiện tại chưa có phòng thi nào được mở cho lớp của bạn.</p>';
+            autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">❌ Hiện tại chưa có phòng thi nào được phân công cho lớp của bạn.</p>';
         }
-    } catch (e) { autoArea.innerHTML = '<p style="color: #d93025; margin: 0;">Lỗi kết nối máy chủ khi quét phòng thi.</p>'; }
+
+        if(!document.getElementById('btn-refresh-rooms')) {
+            autoArea.insertAdjacentHTML('afterend', `<button id="btn-refresh-rooms" onclick="timPhongThiTuDong()" style="margin-top: 15px; background: #e8f0fe; color: #1a73e8; border: 1px solid #8ab4f8; padding: 10px; width: 100%; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; transition: 0.2s;">🔄 Làm mới danh sách phòng</button>`);
+        }
+
+        let statusBox = document.querySelector('.status-box');
+        if(statusBox && !document.getElementById('btn-logout-hs')) {
+            statusBox.innerHTML += `<button id="btn-logout-hs" onclick="dangXuatHS()" style="margin-top: 10px; background: #fce8e6; color: #d93025; border: 1px solid #fadbd8; padding: 6px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s;">Đăng xuất tài khoản</button>`;
+        }
+
+    } catch (e) { autoArea.innerHTML = '<p style="color: #d93025; margin: 0;">Lỗi kết nối máy chủ khi tải danh sách phòng.</p>'; }
 }
 
 async function joinRoom(maPhongAuto = null) {
-    if(state.isOffline) return alert("Không thể tải đề thi khi mất mạng!");
+    if(state.isOffline) return alert("Không thể thao tác khi mất mạng!");
     
     const maPhong = maPhongAuto || document.getElementById('ma_phong').value.trim();
     if (!maPhong) return alert("Vui lòng nhập mã phòng thi!");
@@ -227,14 +286,16 @@ async function joinRoom(maPhongAuto = null) {
         kichHoatLienKetRealtime();
 
         const { data: res } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
-        if (res) {
-            state.user_result = res; document.getElementById('finish_name').innerText = state.ho_ten;
-            showSection('result-section'); checkTeacherCommand(true); return;
+        if (res && res.diem !== null && res.diem !== undefined) {
+            state.user_result = res; 
+            document.getElementById('finish_name').innerText = state.ho_ten;
+            showSection('result-section'); 
+            checkTeacherCommand(true); 
+            return;
         }
 
         if (phongData.trang_thai !== 'MO_PHONG') throw new Error("Phòng thi hiện đang bị khóa!");
 
-        // ĐỒNG BỘ THỜI GIAN TRƯỚC KHI VÀO LÀM BÀI
         await dongBoGiamSatThoiGian();
 
         const { data: safeExamData, error: examErr } = await _supabase.rpc('lay_de_thi_an_toan', { p_phong_id: state.phong_id, p_ma_hs: state.ma_hs });
@@ -267,13 +328,12 @@ function kichHoatLienKetRealtime() {
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
                 gradeAndSubmit(true); 
             } 
-            else if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN') && document.getElementById('result-section').classList.contains('active')) {
+            else if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN' || newStatus === 'THU_BAI') && document.getElementById('result-section').classList.contains('active')) {
                 checkTeacherCommand(true);
             }
         }).subscribe();
 }
 
-// 2. RENDER GIAO DIỆN CÂU HỎI
 function renderExam() {
     const container = document.getElementById('exam-content');
     const gridContainer = document.getElementById('question-grid');
@@ -387,18 +447,14 @@ function kiemTraP3DaLam(index, val, isRestoring = false) {
     if(!isRestoring) { luuNhapBaiLam(); hienThiThongBaoLuu(); }
 }
 
-// ==========================================
-// THAY ĐỔI: DÙNG GIỜ CHUẨN MÁY CHỦ ĐỂ ĐẾM NGƯỢC
-// ==========================================
 function startTimer(thoiGianPhut, thoiGianMo) {
     if(!thoiGianPhut) thoiGianPhut = 45;
     
-    // So sánh thời gian mở phòng với Giờ Chuẩn thay vì Giờ Máy Tính
     let startTime = thoiGianMo ? new Date(thoiGianMo).getTime() : layThoiGianChuan();
     let endTime = startTime + (thoiGianPhut * 60 * 1000);
 
     examTimer = setInterval(() => {
-        let now = layThoiGianChuan(); // Luôn lấy giờ chuẩn
+        let now = layThoiGianChuan(); 
         let diff = endTime - now;
         
         if (diff <= 0) {
@@ -423,7 +479,6 @@ function startTimer(thoiGianPhut, thoiGianMo) {
     }, 1000);
 }
 
-// --- CHỐNG GIAN LẬN ---
 function xacNhanThoatTrang(e) {
     if (isExamActive && !isSubmitting) {
         const msg = 'Bài làm của bạn chưa được nộp. Bạn có chắc chắn muốn rời đi?';
@@ -431,24 +486,77 @@ function xacNhanThoatTrang(e) {
     }
 }
 
+// THUẬT TOÁN CHỐNG GIAN LẬN: DUAL-FOCUS TRACKING (KHÔNG KHOAN NHƯỢNG)
 function batDauAntiCheat() {
-    isExamActive = true; cheatCount = 0;
-    try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); } catch(e) {}
+    isExamActive = true; 
+    cheatCount = 0;
+    
+    try { 
+        if (document.documentElement.requestFullscreen) {
+            let promise = document.documentElement.requestFullscreen();
+            if(promise) promise.catch(e => {}); 
+        } 
+    } catch(e) {}
+    
     document.addEventListener('contextmenu', chanHanhDong);
     document.addEventListener('copy', chanHanhDong);
     document.addEventListener('keydown', chanPhimTat);
     window.onbeforeunload = xacNhanThoatTrang;
-    window.addEventListener('blur', xuLyGianLan);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') xuLyGianLan(); });
+
+    // ĐỘ TRỄ 2 GIÂY: Chờ các hiệu ứng chuyển trang, full screen, thu phóng ổn định
+    setTimeout(() => {
+        if(!isExamActive) return; 
+        
+        // 1. Ăng-ten VisibilityChange: Bắt chắc chắn 100% khi web bị ẩn (thu nhỏ, mở app khác che kín màn hình)
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // 2. Ăng-ten Blur: Bắt khi mất tiêu điểm (mở app thả nổi, kéo rèm thông báo)
+        window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
+        
+    }, 2000);
+}
+
+function handleVisibilityChange() {
+    if (document.visibilityState === 'hidden' && isExamActive) {
+        xuLyGianLan();
+    }
+}
+
+function handleBlur() {
+    if (!isExamActive) return;
+    
+    // Đặt bộ đếm trễ 500ms để phân biệt giữa:
+    // - Vuốt thông báo ngang rồi mất (Focus trả về true ngay)
+    // - Bật bàn phím ảo (Focus không bị mất)
+    // - Chạm vào cửa sổ Gemini thả nổi / App khác (Focus biến thành false)
+    cheatTimeout = setTimeout(() => {
+        if (!document.hasFocus()) {
+            xuLyGianLan();
+        }
+    }, 500);
+}
+
+function handleFocus() {
+    // Nếu học sinh quay lại kịp thời trước 500ms (vuốt tắt tin nhắn), hủy lệnh phạt
+    if (cheatTimeout) {
+        clearTimeout(cheatTimeout);
+        cheatTimeout = null;
+    }
 }
 
 function tatAntiCheat() {
     isExamActive = false;
+    if(cheatTimeout) clearTimeout(cheatTimeout);
     document.removeEventListener('contextmenu', chanHanhDong); 
     document.removeEventListener('copy', chanHanhDong); 
     document.removeEventListener('keydown', chanPhimTat);
     window.onbeforeunload = null;
-    window.removeEventListener('blur', xuLyGianLan); 
+    
+    window.removeEventListener('blur', handleBlur); 
+    window.removeEventListener('focus', handleFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    
     if(examTimer) clearInterval(examTimer);
 }
 
@@ -478,7 +586,6 @@ function closeCheatWarning() {
     try { document.documentElement.requestFullscreen(); } catch(e){}
 }
 
-// 4. NỘP BÀI VÀ CHẤM ĐIỂM
 function xacNhanNopBai() {
     if(state.isOffline) {
         alert("⚠️ BẠN ĐANG BỊ MẤT KẾT NỐI MẠNG!\nVui lòng giữ nguyên trang, không được F5. Hãy chờ đến khi thông báo màu xanh xuất hiện mới được nộp bài.");
@@ -525,8 +632,12 @@ async function gradeAndSubmit(autoSubmit = false) {
         
         if (!error && data && data.status === 'success') { 
             localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
-            document.getElementById('finish_name').innerText = state.ho_ten; showSection('result-section'); 
+            document.getElementById('finish_name').innerText = state.ho_ten; 
+            showSection('result-section'); 
             try { document.exitFullscreen(); } catch(e){} 
+
+            checkTeacherCommand(true);
+
         } else {
             throw new Error(error ? error.message : "Lỗi không xác định từ Server");
         }
@@ -537,7 +648,6 @@ async function gradeAndSubmit(autoSubmit = false) {
     }
 }
 
-// 5. ĐÁP ÁN CHI TIẾT
 async function checkTeacherCommand(isAuto = false) {
     if(state.isOffline) return alert("Không thể tải kết quả vì bạn đang mất mạng!");
 
@@ -547,31 +657,42 @@ async function checkTeacherCommand(isAuto = false) {
         state.user_result = kq;
 
         if (phong.trang_thai === 'CONG_BO_DIEM' || phong.trang_thai === 'XEM_DAP_AN') {
-            document.getElementById('score-display-area').style.display = 'block'; document.getElementById('final_score_val').innerText = kq.diem.toFixed(2);
+            document.getElementById('score-display-area').style.display = 'block'; 
+            document.getElementById('final_score_val').innerText = kq.diem.toFixed(2);
         } else {
-            if (!isAuto) alert("Giáo viên chưa công bố điểm. Vui lòng đợi!"); return;
+            document.getElementById('score-display-area').style.display = 'none';
+            document.getElementById('review-content').innerHTML = `
+                <div style="text-align:center; margin-top:30px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dadce0;">
+                    <p style="color:#5f6368; font-size: 16px; margin-bottom: 15px;">Giám thị chưa công bố kết quả phòng thi này.</p>
+                    <button onclick="checkTeacherCommand(false)" style="padding:10px 20px; background:#1a73e8; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; transition: 0.2s;">🔄 Tải lại kết quả thủ công</button>
+                </div>
+            `; 
+            if (!isAuto) alert("Giám thị chưa công bố điểm. Vui lòng đợi thêm hoặc thử lại sau!"); 
+            return;
         }
 
         if (phong.trang_thai === 'XEM_DAP_AN') {
             let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : kq.chi_tiet;
-            if (chiTiet.length > 0 && !chiTiet.at(0).A && kq.ma_de) {
+            if (chiTiet.length > 0 && !chiTiet[0].A && kq.ma_de) {
                 const { data: deData } = await _supabase.from('de_thi').select('cau_so').eq('phong_id', state.phong_id).eq('ma_de', kq.ma_de).single();
                 if (deData) {
                     let cauHois = typeof deData.cau_so === 'string' ? JSON.parse(deData.cau_so) : deData.cau_so;
                     chiTiet = chiTiet.map((ct, idx) => {
-                        let cauGoc = cauHois.at(idx) || {};
+                        let cauGoc = cauHois[idx] || {}; 
                         return {...ct, A: cauGoc.A || cauGoc.DapAnA, B: cauGoc.B || cauGoc.DapAnB, C: cauGoc.C || cauGoc.DapAnC, D: cauGoc.D || cauGoc.DapAnD};
                     });
                 }
             }
             renderReview(chiTiet);
+        } else {
+            document.getElementById('review-content').innerHTML = ''; 
         }
     } catch (e) { console.error(e); }
 }
 
 function renderReview(chiTietData) {
     const container = document.getElementById('review-content');
-    container.innerHTML = `<h3 style="color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; margin-top: 30px;">CHI TIẾT BÀI LÀM & ĐÁP ÁN</h3>`;
+    let fullReviewHtml = `<h3 style="color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; margin-top: 30px;">CHI TIẾT BÀI LÀM & ĐÁP ÁN</h3>`;
     let items = Array.isArray(chiTietData) ? chiTietData : Object.values(chiTietData);
 
     items.forEach((item, index) => {
@@ -584,6 +705,7 @@ function renderReview(chiTietData) {
             isRight = (aClean !== "" && aClean === dClean);
         }
         let qNum = item.q || item.cauSo || (index + 1); let textContent = item.noiDung || item.noiDungCau || "(Không trích xuất được nội dung câu hỏi)";
+        
         let html = `<div style="margin-bottom: 20px; padding: 20px; border-radius: 8px; background: #f8f9fa; border: 1px solid ${isRight ? '#34a853' : '#ea4335'};">
             <span style="font-weight: 600; font-size: 16px; margin-bottom: 15px; display: block; color: #202124;">Câu ${qNum}: ${safeHTML(textContent)} 
             <span style="background: ${isRight ? '#34a853' : '#ea4335'}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; margin-left: 10px;">${isRight ? 'ĐÚNG' : 'SAI'}</span></span>`;
@@ -607,7 +729,7 @@ function renderReview(chiTietData) {
             let userArr = userAns.split('-'); let correctArr = correctAns.split('-');
             let abcd = new Array('a', 'b', 'c', 'd');
             abcd.forEach((letter, i) => {
-                let uA = userArr.at(i) || ""; let cA = correctArr.at(i) || ""; let optText = item[letter.toUpperCase()] || item[`DapAn${letter.toUpperCase()}`] || "";
+                let uA = userArr[i] || ""; let cA = correctArr[i] || ""; let optText = item[letter.toUpperCase()] || item[`DapAn${letter.toUpperCase()}`] || "";
                 html += `<tr><td style="font-weight:bold;">${letter}</td><td style="text-align:left;">${safeHTML(optText)}</td><td style="color: ${uA === cA ? '#1e8e3e' : '#d93025'}; font-weight:bold;">${safeHTML(uA || '-')}</td><td style="color: #1e8e3e; font-weight:bold;">${safeHTML(cA)}</td></tr>`;
             });
             html += `</table>`;
@@ -618,13 +740,13 @@ function renderReview(chiTietData) {
             </div>`;
         }
         html += `</div>`;
-        container.innerHTML += html;
+        
+        fullReviewHtml += html;
     });
+    
+    container.innerHTML = fullReviewHtml;
 }
 
-// ==========================================
-// CƠ CHẾ LƯU NHÁP & KHÔI PHỤC (LOCAL STORAGE)
-// ==========================================
 function luuNhapBaiLam() {
     let baiLamNhap = {};
     state.cau_hỏi.forEach((cau, index) => {
@@ -670,7 +792,7 @@ function khoiPhucBaiLamNhap() {
             let soCauDaKhoiPhuc = 0;
             Object.keys(baiLamNhap).forEach(index => {
                 let ans = Reflect.get(baiLamNhap, index);
-                let cau = state.cau_hỏi.at(index);
+                let cau = state.cau_hỏi[index]; 
                 if (!cau) return;
                 let phan = String(cau.phan || cau.Phan);
                 if (phan === "1") {
@@ -681,7 +803,7 @@ function khoiPhucBaiLamNhap() {
                     let arrAns = ans.split('-');
                     let abcd = new Array('a','b','c','d');
                     abcd.forEach((l, i) => {
-                        let val = arrAns.at(i);
+                        let val = arrAns[i]; 
                         if (val) {
                             let radio = document.querySelector(`input[name="q_${index}_${l}"][value="${val}"]`);
                             if (radio) radio.checked = true;
@@ -695,7 +817,9 @@ function khoiPhucBaiLamNhap() {
                     if (txtArea) { txtArea.value = ans; kiemTraP3DaLam(index, ans, true); soCauDaKhoiPhuc++; }
                 }
             });
-            if(soCauDaKhoiPhuc > 0) { alert(`Hệ thống đã tự động khôi phục ${soCauDaKhoiPhuc} câu trả lời và các dấu cờ của bạn!`); }
+            if(soCauDaKhoiPhuc > 0) { 
+                alert(`Hệ thống đã tự động khôi phục ${soCauDaKhoiPhuc} câu trả lời và các dấu cờ của bạn!`); 
+            }
         } catch(e) { console.error("Lỗi khi khôi phục bản nháp:", e); }
     }
 }
