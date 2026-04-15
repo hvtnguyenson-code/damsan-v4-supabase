@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phòng Thi Trực Tuyến - Hệ Thống Đam San V4</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     
     <style>
         /* --- CSS RESET & CƠ BẢN --- */
@@ -114,6 +117,24 @@
         .result-container { max-width: 800px; margin: 40px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); height: 90vh; overflow-y: auto;}
         .score-circle { width: 150px; height: 150px; border-radius: 50%; border: 8px solid #1a73e8; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; font-size: 48px; font-weight: 900; color: #1a73e8; }
         .review-box { margin-top: 30px; text-align: left; }
+
+        /* --- ĐẶC TRỊ LỖI TRÀN ẢNH VÀ BẢNG TRÊN ĐIỆN THOẠI (XEM ĐÁP ÁN) --- */
+        .review-box {
+            overflow-x: hidden;
+            width: 100%;
+        }
+        .review-box img {
+            max-width: 100% !important;
+            height: auto !important;
+            object-fit: contain;
+        }
+        .review-box table:not(.tf-table) {
+            display: block !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            white-space: normal !important;
+        }
 
         /* SCROLLBAR CUSTOM */
         ::-webkit-scrollbar { width: 8px; }
@@ -243,9 +264,6 @@
         <button class="btn-warning" onclick="closeCheatWarning()">TÔI ĐÃ HIỂU VÀ SẼ KHÔNG TÁI PHẠM</button>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="hoc_sinh.js?v=3.0"></script>
 </body>
 </html>
