@@ -2300,6 +2300,25 @@ async function xuatExcel() {
     
     let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
     let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
+// --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
+    worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+            let currentFont = cell.font || {};
+            
+            // Bật in đậm nếu đang ở cột số 6 (Tổng Điểm) và không phải dòng tiêu đề
+            let inDam = currentFont.bold;
+            if (colNumber === 6 && rowNumber > 1) {
+                inDam = true;
+            }
+
+            cell.font = Object.assign({}, currentFont, { 
+                name: 'Times New Roman', 
+                size: 12, 
+                bold: inDam 
+            });
+        });
+    });
+    // --------------------------------------
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
