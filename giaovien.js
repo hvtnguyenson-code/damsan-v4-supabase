@@ -320,8 +320,8 @@ function initQuarantineUI() {
                             <div style="flex:1"><label>B:</label><textarea id="qrt-b1" rows="2" style="width:100%; padding:5px;"></textarea></div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:10px;">
-                            <div style="flex:1"><label>C:</label><textarea id="qrt-a1" rows="2" style="width:100%; padding:5px;"></textarea></div>
-                            <div style="flex:1"><label>D:</label><textarea id="qrt-b1" rows="2" style="width:100%; padding:5px;"></textarea></div>
+                            <div style="flex:1"><label>C:</label><textarea id="qrt-c1" rows="2" style="width:100%; padding:5px;"></textarea></div>
+                            <div style="flex:1"><label>D:</label><textarea id="qrt-d1" rows="2" style="width:100%; padding:5px;"></textarea></div>
                         </div>
                         <div><label>Đáp án Đúng (A/B/C/D):</label><select id="qrt-dapan1" style="width:100%; padding:6px; font-weight:bold; color:green;"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
                     </div>
@@ -1524,7 +1524,7 @@ async function generateFromMatrix() {
         logEl.innerText = "Đang đồng bộ dữ liệu với máy chủ...";
         let pushRes = await luuDeThiLenSupabase(danhSachDeThi);
         if (pushRes.status === 'success') {
-            logEl.innerText = `✅ HOÀN TATT! Hệ thống đã bốc ngẫu nhiên ${selectedQuestions.length} câu, trộn thành ${soLuongDe} mã đề và đẩy an toàn vào phòng [${maPhong}].`;
+            logEl.innerText = `✅ HOÀN TẤT! Hệ thống đã bốc ngẫu nhiên ${selectedQuestions.length} câu, trộn thành ${soLuongDe} mã đề và đẩy an toàn vào phòng [${maPhong}].`;
         } else {
             throw new Error(pushRes.message);
         }
@@ -1625,12 +1625,28 @@ async function loadMetaData() {
 
 async function dieuKhien(trangThai) { 
     try {
-        const maPhong = document.getElementById('ctrlMaPhong').value.trim(); const doiTuong = document.getElementById('ctrlDoiTuong').value; const tenDot = document.getElementById('ctrlTenDot').value.trim(); const tg = document.getElementById('ctrlThoiGian').value; 
+        const maPhong = document.getElementById('ctrlMaPhong').value.trim(); 
         if(!maPhong) return alert("Vui lòng nhập mã phòng!"); 
         document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
         
-        let updateData = { trang_thai: trangThai, doi_tuong: doiTuong, ten_dot: tenDot, thoi_gian: tg };
-        if(trangThai === 'MO_PHONG') updateData.thoi_gian_mo = Date.now(); 
+        let updateData = { trang_thai: trangThai };
+        
+        if (trangThai === 'MO_PHONG') {
+            const tenDot = document.getElementById('ctrlTenDot').value.trim(); 
+            const tg = document.getElementById('ctrlThoiGian').value; 
+            const doiTuongSelect = document.getElementById('ctrlDoiTuong').value; 
+            
+            updateData.thoi_gian_mo = Date.now(); 
+            updateData.ten_dot = tenDot;
+            updateData.thoi_gian = tg;
+            
+            let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
+            if (currentRoom && currentRoom.DoiTuong && currentRoom.DoiTuong.includes(',') && doiTuongSelect === "TatCa") {
+                // Bỏ qua update doi_tuong để giữ nguyên danh sách lớp đã gán
+            } else {
+                updateData.doi_tuong = doiTuongSelect;
+            }
+        }
         
         let phong_id = await getOrCreateRoom(maPhong);
         let {error} = await sb.from('phong_thi').update(updateData).eq('id', phong_id);
@@ -2299,31 +2315,20 @@ async function xuatExcel() {
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
-    worksheet.eachRow((row, rowNumber) => { 
-        if(rowNumber > 1) { 
-            row.eachCell((cell, colNumber) => { 
-                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; 
-                if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
-            }); 
-            let totalCell = row.getCell(6); 
-            if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { 
-                row.eachCell(cell => { 
-                    cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; 
-                    cell.font = { color: { argb: 'FFC0392B' } }; 
-                }); 
-            } 
-        } 
-    }); 
+    worksheet.eachRow((row, rowNumber) => { if(rowNumber > 1) { row.eachCell((cell, colNumber) => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; }); let totalCell = row.getCell(6); if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { row.eachCell(cell => { cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; cell.font = { color: { argb: 'FFC0392B' } }; }); } } }); 
     
     let rowCount = exportData.filter(d => d.Diem !== "-").length; worksheet.addRow(new Array()); 
     let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true}; 
     worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]); 
     
-    // --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
+    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
+    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
+// --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
     worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
             let currentFont = cell.font || {};
             
+            // Bật in đậm nếu đang ở cột số 6 (Tổng Điểm) và không phải dòng tiêu đề
             let inDam = currentFont.bold;
             if (colNumber === 6 && rowNumber > 1) {
                 inDam = true;
@@ -2337,16 +2342,13 @@ async function xuatExcel() {
         });
     });
     // --------------------------------------
-
-    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
-    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
 // ==========================================================
-// TÍNH NĂNG IMPORT EXCEL
+// TÍNH NĂNG IMPORT EXCEL BỊ THIẾU TỪ HTML ĐÃ ĐƯỢC KHÔI PHỤC
 // ==========================================================
 
 async function taiFileMau(loai) {
@@ -2371,6 +2373,7 @@ async function taiFileMau(loai) {
         worksheet.addRow({ ma_gv: 'GV002', ho_ten: 'Lê Thị D', quyen: 'GV' });
     }
     
+    // Format Header
     worksheet.getRow(1).eachCell((cell) => { 
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
         cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1A73E8'} }; 
@@ -2434,6 +2437,7 @@ async function docFileExcelVaNap(loai) {
         btn.innerText = oldText; btn.disabled = false;
     }
 }
+
 
 // ==========================================================
 // QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
@@ -2658,17 +2662,11 @@ async function deleteBankBatch(deleteAll, btnElement) {
     } 
 }
 
-async function resetPass(ma, uid, loai) { 
-    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).eq('id', uid);
-    if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
-}
-
 /* =======================================================
    QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
 ======================================================= */
 async function loadSysData() {
+    // Tải danh sách trường
     let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
     let htmlTruong = '';
     if (truongs && truongs.length > 0) {
@@ -2687,6 +2685,7 @@ async function loadSysData() {
     }
     if(document.getElementById('sysTruongBody')) document.getElementById('sysTruongBody').innerHTML = htmlTruong;
 
+    // Tải danh sách môn
     let { data: mons, error: errMon } = await sb.from('mon_hoc').select('*').order('created_at', { ascending: true });
     let htmlMon = '';
     if (mons && mons.length > 0) {
@@ -2738,4 +2737,10 @@ async function xoaMon(id) {
     if(!confirm("Xóa môn này?")) return;
     let { error } = await sb.from('mon_hoc').delete().eq('id', id);
     if(error) alert("Lỗi: " + error.message); else loadSysData();
+}
+async function resetPass(ma, uid, loai) { 
+    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
+    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
+    await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).eq('id', uid);
+    if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
