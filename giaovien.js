@@ -279,74 +279,6 @@ function checkWorkspaceAction() {
 }
 
 function khoiTaoGiaoDienHeThong() {
-    let btnSubHs = document.getElementById('btnSubHs');
-    let btnContainer = btnSubHs ? btnSubHs.parentNode : null;
-
-    if(btnContainer && !document.getElementById('btnSubSys')) {
-        let btn = document.createElement('button');
-        btn.id = 'btnSubSys';
-        btn.className = btnSubHs.className || ''; 
-        btn.classList.remove('active');
-        btn.style.marginLeft = '10px';
-        btn.innerHTML = '<b>⚙️ Trường & Môn</b>';
-        btn.onclick = () => {
-            document.getElementById('sysModal').style.display = 'flex';
-            loadSysData();
-        };
-        btnContainer.appendChild(btn);
-    }
-
-    if(!document.getElementById('sysModal')) {
-        let modal = document.createElement('div');
-        modal.id = 'sysModal';
-        modal.className = 'modal-overlay';
-        modal.style.display = 'none'; 
-        modal.innerHTML = `
-            <div class="modal-content" style="max-width: 900px; width: 90%;">
-                <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; margin-bottom: 20px;">
-                    <span style="font-size: 20px; font-weight: bold; color: #1a73e8;">⚙️ QUẢN LÝ DỮ LIỆU TRƯỜNG & MÔN HỌC</span>
-                    <span style="cursor: pointer; color: #e74c3c; font-size: 24px; font-weight: bold; padding: 0 10px;" onclick="document.getElementById('sysModal').style.display='none'">✖</span>
-                </div>
-                
-                <div style="display: flex; flex-wrap: wrap; gap: 20px;">
-                    <div style="flex: 1; min-width: 300px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #dadce0;">
-                        <h3 style="color: #1a73e8; margin-top: 0; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">🏫 Danh sách Trường học</h3>
-                        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
-                            <input type="text" id="newMaTruong" placeholder="Mã (VD: DAMSAN)" style="width: 30%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; text-transform: uppercase; font-weight: bold; outline: none;">
-                            <input type="text" id="newTenTruong" placeholder="Tên trường đầy đủ" style="width: 45%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; outline: none;">
-                            <button id="btnThemTruong" onclick="themTruongMoi()" style="width: 25%; background: #1a73e8; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">Thêm</button>
-                        </div>
-                        <div style="max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
-                                <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
-                                    <tr><th style="padding: 10px; border: 1px solid #ddd; width: 50px;">STT</th><th style="padding: 10px; border: 1px solid #ddd;">Mã</th><th style="padding: 10px; border: 1px solid #ddd;">Tên Trường</th><th style="padding: 10px; border: 1px solid #ddd; width: 60px; text-align: center;">Xóa</th></tr>
-                                </thead>
-                                <tbody id="sysTruongBody"><tr><td colspan="4" style="padding: 10px; text-align: center;">Đang tải...</td></tr></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div style="flex: 1; min-width: 300px; background: #fff; padding: 15px; border-radius: 8px; border: 1px solid #dadce0;">
-                        <h3 style="color: #8e44ad; margin-top: 0; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">📚 Danh sách Môn học</h3>
-                        <div style="display: flex; gap: 5px; margin-bottom: 15px;">
-                            <input type="text" id="newTenMon" placeholder="Tên môn học (VD: Lịch sử)" style="width: 75%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; outline: none;">
-                            <button id="btnThemMon" onclick="themMonMoi()" style="width: 25%; background: #8e44ad; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">Thêm</button>
-                        </div>
-                        <div style="max-height: 350px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
-                                <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 1;">
-                                    <tr><th style="padding: 10px; border: 1px solid #ddd; width: 50px;">STT</th><th style="padding: 10px; border: 1px solid #ddd;">Tên Môn</th><th style="padding: 10px; border: 1px solid #ddd; width: 60px; text-align: center;">Xóa</th></tr>
-                                </thead>
-                                <tbody id="sysMonBody"><tr><td colspan="3" style="padding: 10px; text-align: center;">Đang tải...</td></tr></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-    
     initQuarantineUI(); 
     initMultiClassModal(); 
 }
@@ -388,8 +320,8 @@ function initQuarantineUI() {
                             <div style="flex:1"><label>B:</label><textarea id="qrt-b1" rows="2" style="width:100%; padding:5px;"></textarea></div>
                         </div>
                         <div style="display:flex; gap:10px; margin-bottom:10px;">
-                            <div style="flex:1"><label>C:</label><textarea id="qrt-c1" rows="2" style="width:100%; padding:5px;"></textarea></div>
-                            <div style="flex:1"><label>D:</label><textarea id="qrt-d1" rows="2" style="width:100%; padding:5px;"></textarea></div>
+                            <div style="flex:1"><label>C:</label><textarea id="qrt-a1" rows="2" style="width:100%; padding:5px;"></textarea></div>
+                            <div style="flex:1"><label>D:</label><textarea id="qrt-b1" rows="2" style="width:100%; padding:5px;"></textarea></div>
                         </div>
                         <div><label>Đáp án Đúng (A/B/C/D):</label><select id="qrt-dapan1" style="width:100%; padding:6px; font-weight:bold; color:green;"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
                     </div>
@@ -518,7 +450,7 @@ function phanQuyenGiaoVien() {
         roleDisplay.innerText = "Quản trị viên"; roleDisplay.style.color = "#e74c3c"; roleDisplay.style.background = "#fadbd8";
         if(btnQuanLyTK) btnQuanLyTK.style.display = 'flex';
         if(document.getElementById('btnXoaSachKho')) document.getElementById('btnXoaSachKho').style.display = 'block';
-        if(document.getElementById('btnSubSys')) document.getElementById('btnSubSys').style.display = 'inline-block';
+        if(document.getElementById('btnSubSys')) document.getElementById('btnSubSys').style.display = 'flex';
     }
 }
 
@@ -1135,12 +1067,22 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
 /* =======================================================
    TRỘN ĐỀ VÀ TIỆN ÍCH
 ======================================================= */
-function changePhanThuCong() { let phan = document.getElementById("manPhan").value; document.getElementById("manAreaP1").style.display = (phan === "1") ? "block" : "none"; document.getElementById("manAreaP2").style.display = (phan === "2") ? "block" : "none"; document.getElementById("manAreaP3").style.display = (phan === "3") ? "block" : "none"; }
+function changePhanThuCong() { 
+    let phan = document.getElementById("manPhan").value; 
+    document.getElementById("manAreaP1").style.display = (phan === "1") ? "block" : "none"; 
+    document.getElementById("manAreaP2").style.display = (phan === "2") ? "block" : "none"; 
+    document.getElementById("manAreaP3").style.display = (phan === "3") ? "block" : "none"; 
+}
+
 function themCauHoiThuCong() { 
-    let phan = document.getElementById("manPhan").value; let mucDo = document.getElementById("manMucDo").value; 
+    let phan = document.getElementById("manPhan").value; 
+    let mucDo = document.getElementById("manMucDo").value; 
     let noiDung = safeHTML(document.getElementById("manNoiDung").innerHTML.trim()); 
+    
     if(noiDung === "" || noiDung === "<br>") return alert("Vui lòng nhập nội dung câu hỏi!"); 
+    
     let cauHoi = { Phan: phan, MucDo: mucDo, NoiDung: noiDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: "" }; 
+    
     if(phan === "1") { 
         cauHoi.DapAnA = safeHTML(document.getElementById("manA1").value.trim()); 
         cauHoi.DapAnB = safeHTML(document.getElementById("manB1").value.trim()); 
@@ -1154,20 +1096,85 @@ function themCauHoiThuCong() {
         cauHoi.DapAnC = safeHTML(document.getElementById("manC2").value.trim()); 
         cauHoi.DapAnD = safeHTML(document.getElementById("manD2").value.trim()); 
         let dapAnStr = document.getElementById("manDapAn2").value.trim().toUpperCase().replace(/\s/g, '').replace(new RegExp("[-–—]", "g"), '-'); 
-        let validFormat = new RegExp("^[ĐS]-[ĐS]-[ĐS]-[ĐS]$"); if(!validFormat.test(dapAnStr)) return alert("Chuỗi đáp án không đúng định dạng. Ví dụ chuẩn: Đ-S-Đ-S"); 
+        let validFormat = new RegExp("^[ĐS]-[ĐS]-[ĐS]-[ĐS]$"); 
+        if(!validFormat.test(dapAnStr)) return alert("Chuỗi đáp án không đúng định dạng. Ví dụ chuẩn: Đ-S-Đ-S"); 
         cauHoi.DapAnDung = dapAnStr; 
     } else if(phan === "3") { 
         let dapAn = safeHTML(document.getElementById("manDapAn3").value.trim()); 
-        if(dapAn === "") return alert("Vui lòng nhập đáp án!"); if (!dapAn.startsWith("'")) dapAn = "'" + dapAn; 
+        if(dapAn === "") return alert("Vui lòng nhập đáp án!"); 
+        if (!dapAn.startsWith("'")) dapAn = "'" + dapAn; 
         cauHoi.DapAnDung = dapAn; 
     } 
-    danhSachThuCong.push(cauHoi); document.getElementById("manNoiDung").innerHTML = ""; document.getElementById("manA1").value = ""; document.getElementById("manB1").value = ""; document.getElementById("manC1").value = ""; document.getElementById("manD1").value = ""; document.getElementById("manA2").value = ""; document.getElementById("manB2").value = ""; document.getElementById("manC2").value = ""; document.getElementById("manD2").value = ""; document.getElementById("manDapAn2").value = ""; document.getElementById("manDapAn3").value = ""; renderBangThuCong(); 
+    
+    danhSachThuCong.push(cauHoi); 
+    document.getElementById("manNoiDung").innerHTML = ""; 
+    document.getElementById("manA1").value = ""; 
+    document.getElementById("manB1").value = ""; 
+    document.getElementById("manC1").value = ""; 
+    document.getElementById("manD1").value = ""; 
+    document.getElementById("manA2").value = ""; 
+    document.getElementById("manB2").value = ""; 
+    document.getElementById("manC2").value = ""; 
+    document.getElementById("manD2").value = ""; 
+    document.getElementById("manDapAn2").value = ""; 
+    document.getElementById("manDapAn3").value = ""; 
+    renderBangThuCong(); 
 }
-function renderBangThuCong() { let html = ""; if(danhSachThuCong.length === 0) { html = '<tr><td colspan="5">Chưa có câu hỏi nào được gõ...</td></tr>'; } else { danhSachThuCong.forEach((q, i) => { let snippet = q.NoiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 60) + "..."; let dapAnHienThi = String(q.DapAnDung); if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1); html += `<tr><td>${i+1}</td><td>P.${q.Phan}</td><td style="text-align:left;">${snippet}</td><td><b>${dapAnHienThi}</b></td><td><button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="xoaCauThuCong(${i})">Xóa</button></td></tr>`; }); } document.getElementById("manBody").innerHTML = html; document.getElementById("manCount").innerText = danhSachThuCong.length; }
-function xoaCauThuCong(index) { danhSachThuCong.splice(index, 1); renderBangThuCong(); }
+
+function renderBangThuCong() { 
+    let html = ""; 
+    if(danhSachThuCong.length === 0) { 
+        html = '<tr><td colspan="5">Chưa có câu hỏi nào được gõ...</td></tr>'; 
+    } else { 
+        danhSachThuCong.forEach((q, i) => { 
+            let snippet = q.NoiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 60) + "..."; 
+            let dapAnHienThi = String(q.DapAnDung); 
+            if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1); 
+            html += `<tr><td>${i+1}</td><td>P.${q.Phan}</td><td style="text-align:left;">${snippet}</td><td><b>${dapAnHienThi}</b></td><td><button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="xoaCauThuCong(${i})">Xóa</button></td></tr>`; 
+        }); 
+    } 
+    document.getElementById("manBody").innerHTML = html; 
+    document.getElementById("manCount").innerText = danhSachThuCong.length; 
+}
+
+function xoaCauThuCong(index) { 
+    danhSachThuCong.splice(index, 1); 
+    renderBangThuCong(); 
+}
+
 function dayDeThuCong() { 
     if(!checkWorkspaceAction()) return;
-    if(danhSachThuCong.length === 0) return alert("Giỏ câu hỏi trống! Hãy gõ thêm câu hỏi."); let maPhong = document.getElementById("manMaPhong").value.trim(); if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); let soLuongDe = parseInt(document.getElementById("manSoLuongDe").value) || 1; let startCode = parseInt(document.getElementById("manStartCode").value) || 101; let stepCode = parseInt(document.getElementById("manStepCode").value) || 1; let btn = document.getElementById("btnDayMan"); let oldText = btn.innerText; btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY..."; btn.disabled = true; generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode); luuDeThiLenSupabase(danhSachDeThi).then(data => { btn.innerText = oldText; btn.disabled = false; if(data.status === "success") { alert(`🎉 Đã đẩy thành công! Sẵn sàng thi!`); document.getElementById("btnXuatWordMan").style.display = "block"; } else { alert("❌ Lỗi: " + data.message); } }).catch(e => { btn.innerText = oldText; btn.disabled = false; alert("❌ Lỗi mạng: " + e.message); }); }
+    
+    if(danhSachThuCong.length === 0) return alert("Giỏ câu hỏi trống! Hãy gõ thêm câu hỏi."); 
+    
+    let maPhong = document.getElementById("manMaPhong").value.trim(); 
+    if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); 
+    
+    let soLuongDe = parseInt(document.getElementById("manSoLuongDe").value) || 1; 
+    let startCode = parseInt(document.getElementById("manStartCode").value) || 101; 
+    let stepCode = parseInt(document.getElementById("manStepCode").value) || 1; 
+    
+    let btn = document.getElementById("btnDayMan"); 
+    let oldText = btn.innerText; 
+    btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY..."; 
+    btn.disabled = true; 
+    
+    generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode); 
+    
+    luuDeThiLenSupabase(danhSachDeThi).then(data => { 
+        btn.innerText = oldText; 
+        btn.disabled = false; 
+        if(data.status === "success") { 
+            alert(`🎉 Đã đẩy thành công! Sẵn sàng thi!`); 
+        } else { 
+            alert("❌ Lỗi: " + data.message); 
+        } 
+    }).catch(e => { 
+        btn.innerText = oldText; 
+        btn.disabled = false; 
+        alert("❌ Lỗi mạng: " + e.message); 
+    }); 
+}
 
 function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode = 1) { 
     danhSachDeThi = new Array(); 
@@ -1517,7 +1524,7 @@ async function generateFromMatrix() {
         logEl.innerText = "Đang đồng bộ dữ liệu với máy chủ...";
         let pushRes = await luuDeThiLenSupabase(danhSachDeThi);
         if (pushRes.status === 'success') {
-            logEl.innerText = `✅ HOÀN TẤT! Hệ thống đã bốc ngẫu nhiên ${selectedQuestions.length} câu, trộn thành ${soLuongDe} mã đề và đẩy an toàn vào phòng [${maPhong}].`;
+            logEl.innerText = `✅ HOÀN TATT! Hệ thống đã bốc ngẫu nhiên ${selectedQuestions.length} câu, trộn thành ${soLuongDe} mã đề và đẩy an toàn vào phòng [${maPhong}].`;
         } else {
             throw new Error(pushRes.message);
         }
@@ -2292,20 +2299,31 @@ async function xuatExcel() {
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
-    worksheet.eachRow((row, rowNumber) => { if(rowNumber > 1) { row.eachCell((cell, colNumber) => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; }); let totalCell = row.getCell(6); if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { row.eachCell(cell => { cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; cell.font = { color: { argb: 'FFC0392B' } }; }); } } }); 
+    worksheet.eachRow((row, rowNumber) => { 
+        if(rowNumber > 1) { 
+            row.eachCell((cell, colNumber) => { 
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; 
+                if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
+            }); 
+            let totalCell = row.getCell(6); 
+            if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { 
+                row.eachCell(cell => { 
+                    cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; 
+                    cell.font = { color: { argb: 'FFC0392B' } }; 
+                }); 
+            } 
+        } 
+    }); 
     
     let rowCount = exportData.filter(d => d.Diem !== "-").length; worksheet.addRow(new Array()); 
     let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true}; 
     worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]); 
     
-    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
-    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
-// --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
+    // --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
     worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
             let currentFont = cell.font || {};
             
-            // Bật in đậm nếu đang ở cột số 6 (Tổng Điểm) và không phải dòng tiêu đề
             let inDam = currentFont.bold;
             if (colNumber === 6 && rowNumber > 1) {
                 inDam = true;
@@ -2319,13 +2337,16 @@ async function xuatExcel() {
         });
     });
     // --------------------------------------
+
+    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
+    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
 // ==========================================================
-// TÍNH NĂNG IMPORT EXCEL BỊ THIẾU TỪ HTML ĐÃ ĐƯỢC KHÔI PHỤC
+// TÍNH NĂNG IMPORT EXCEL
 // ==========================================================
 
 async function taiFileMau(loai) {
@@ -2350,7 +2371,6 @@ async function taiFileMau(loai) {
         worksheet.addRow({ ma_gv: 'GV002', ho_ten: 'Lê Thị D', quyen: 'GV' });
     }
     
-    // Format Header
     worksheet.getRow(1).eachCell((cell) => { 
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
         cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1A73E8'} }; 
@@ -2414,7 +2434,6 @@ async function docFileExcelVaNap(loai) {
         btn.innerText = oldText; btn.disabled = false;
     }
 }
-
 
 // ==========================================================
 // QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
@@ -2543,28 +2562,16 @@ async function resetSelectedPass(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`Khôi phục mật khẩu mặc định cho ${checkedBoxes.length} tài khoản đã chọn?`)) return;
 
-    let pass = prompt("Hành động nhạy cảm! Vui lòng nhập mật khẩu Admin của bạn để xác nhận:");
-    if(!pass) return;
-
-    let hashedPass = await hashPassword(pass);
     let idsToUpdate = Array.from(checkedBoxes).map(cb => cb.value);
-    
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xử lý..."; btn.disabled = true;
 
-    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: idsToUpdate,
-        p_default_hash: DEFAULT_PASS_HASH
-    });
+    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
+    let {error} = await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).in('id', idsToUpdate);
     
     btn.innerText = oldText; btn.disabled = false;
     
     if(error) return alert("❌ Lỗi máy chủ: " + error.message);
-    if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã khôi phục mật khẩu thành công!`);
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
@@ -2576,27 +2583,16 @@ async function deleteSelectedAccounts(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`XÓA VĨNH VIỄN ${checkedBoxes.length} tài khoản đã chọn khỏi hệ thống?`)) return;
 
-    let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
-    if(!pass) return;
-
-    let hashedPass = await hashPassword(pass);
     let idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
-    
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xóa..."; btn.disabled = true;
 
-    let {data, error} = await sb.rpc('rpc_admin_xoa_tk', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: idsToDelete
-    });
+    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
+    let {error} = await sb.from(table).delete().in('id', idsToDelete);
     
     btn.innerText = oldText; btn.disabled = false;
     
     if(error) return alert("❌ Lỗi máy chủ: " + error.message);
-    if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã xóa tài khoản thành công!`);
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
@@ -2623,25 +2619,20 @@ async function deleteBankBatch(deleteAll, btnElement) {
     if(deleteAll) { 
         if(!confirm("🚨 BẠN ĐANG CHỌN XÓA SẠCH TOÀN BỘ KHO ĐỀ CỦA TRƯỜNG?\nBạn chắc chắn chứ?")) return; 
         
-        let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
-        if(!pass) return;
-
-        let hashedPass = await hashPassword(pass);
         let oldText = btnElement.innerText; 
         btnElement.innerText = "⏳ Đang càn quét..."; btnElement.disabled = true; btnElement.style.background = "#7f8c8d";
         
-        let {data, error} = await sb.rpc('rpc_admin_xoa_kho', {
-            p_ma_gv: gvData.ma_gv,
-            p_mat_khau: hashedPass,
-            p_truong_id: gvData.truong_id
-        });
+        let query = sb.from('ngan_hang').delete().eq('truong_id', gvData.truong_id);
+        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") {
+            query = query.eq('mon_id', activeWorkspaceMonId);
+        }
+        let { error } = await query;
 
         btnElement.innerText = oldText; btnElement.disabled = false; btnElement.style.background = "#c0392b";
         
         if(error) return alert("❌ Lỗi máy chủ: " + error.message);
-        if(data && data.status === 'error') return alert(data.message);
         
-        alert("✅ " + data.message);
+        alert("✅ Đã xóa sạch kho đề thành công!");
         fetchFullBank(true); loadBankMeta(true);
         return;
     } 
@@ -2667,11 +2658,17 @@ async function deleteBankBatch(deleteAll, btnElement) {
     } 
 }
 
+async function resetPass(ma, uid, loai) { 
+    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
+    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
+    await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).eq('id', uid);
+    if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
+}
+
 /* =======================================================
    QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
 ======================================================= */
 async function loadSysData() {
-    // Tải danh sách trường
     let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
     let htmlTruong = '';
     if (truongs && truongs.length > 0) {
@@ -2690,7 +2687,6 @@ async function loadSysData() {
     }
     if(document.getElementById('sysTruongBody')) document.getElementById('sysTruongBody').innerHTML = htmlTruong;
 
-    // Tải danh sách môn
     let { data: mons, error: errMon } = await sb.from('mon_hoc').select('*').order('created_at', { ascending: true });
     let htmlMon = '';
     if (mons && mons.length > 0) {
@@ -2742,10 +2738,4 @@ async function xoaMon(id) {
     if(!confirm("Xóa môn này?")) return;
     let { error } = await sb.from('mon_hoc').delete().eq('id', id);
     if(error) alert("Lỗi: " + error.message); else loadSysData();
-}
-async function resetPass(ma, uid, loai) { 
-    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).eq('id', uid);
-    if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
