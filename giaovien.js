@@ -373,6 +373,12 @@ function initMultiClassModal() {
 
             <div id="mc_classList" style="display:flex; flex-wrap:wrap; gap:10px; max-height: 250px; overflow-y:auto; border:1px solid #eee; padding:15px; border-radius:6px; margin-bottom:15px; background:#fafafa;">
             </div>
+            
+            <div style="margin-bottom:15px; background: #fff3cd; padding: 15px; border-radius: 6px; border: 1px solid #ffe69c;">
+                <label style="font-weight:bold; color:#d35400; font-size:14px; display:block; margin-bottom: 5px;">🎯 Chỉ định đích danh:</label>
+                <input type="text" id="mc_sbd_thibu" placeholder="Nhập Mã HS (VD: HS015, HS092)..." style="width:100%; padding:10px; border:1px solid #f39c12; border-radius:4px; font-weight:bold; box-sizing: border-box; text-transform: uppercase;">
+                <div style="font-size:12px; color:#856404; margin-top:5px; font-style: italic;">* Nhập các mã HS cách nhau bằng dấu phẩy. Các HS này sẽ được ưu tiên vào thi cùng với các lớp đã chọn.</div>
+            </div>
 
             <button onclick="mc_luuChonLop()" style="width:100%; background:#27ae60; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold; cursor:pointer; font-size:16px;">💾 XÁC NHẬN CHỌN</button>
         </div>
@@ -384,17 +390,17 @@ function moModalChonLop(roomId, currentVal) {
     document.getElementById('mc_roomId').value = roomId;
     let container = document.getElementById('mc_classList');
     let quickBtnContainer = document.getElementById('mc_quick_btns');
+    let sbdInput = document.getElementById('mc_sbd_thibu');
     container.innerHTML = '';
     quickBtnContainer.innerHTML = ''; 
+    if(sbdInput) sbdInput.value = '';
 
     if(!g_danhSachLopCache || g_danhSachLopCache.length === 0) {
         container.innerHTML = '<span style="color:#d93025; font-weight:bold;">Chưa có dữ liệu lớp. Hãy Import danh sách Học sinh vào hệ thống trước!</span>';
     } else {
-        // 1. SINH NÚT CHỌN NHANH DỰA TRÊN TIỀN TỐ (DYNAMNIC PREFIX)
         let prefixes = new Set();
         g_danhSachLopCache.forEach(l => {
             if(!l) return;
-            // Thuật toán: Lấy phần số ở đầu (như 10, 11) HOẶC phần chữ ở đầu (như TN, TC)
             let match = String(l).trim().match(/^(\d+|[A-Za-z]+)/);
             if(match) prefixes.add(match[1]);
         });
@@ -407,9 +413,13 @@ function moModalChonLop(roomId, currentVal) {
         qBtnsHtml += `<button onclick="mc_chonNhanh('Clear')" style="padding:6px 12px; background:#fce8e6; border:1px solid #ea4335; color:#ea4335; font-weight:bold; border-radius:4px; cursor:pointer;">Bỏ chọn hết</button>`;
         quickBtnContainer.innerHTML = qBtnsHtml;
 
-        // 2. SINH DANH SÁCH Ô TÍCH LỚP CỤ THỂ
         let selectedArr = currentVal === 'TatCa' ? new Array() : currentVal.split(',').map(s=>s.trim());
         let isTatCa = currentVal === 'TatCa';
+        
+        let sbdArr = selectedArr.filter(item => !g_danhSachLopCache.includes(item));
+        let lopArr = selectedArr.filter(item => g_danhSachLopCache.includes(item));
+        
+        if (sbdInput && sbdArr.length > 0 && !isTatCa) sbdInput.value = sbdArr.join(', ');
 
         let html = `
             <label style="width:100%; display:block; padding:8px 10px; background:#f1f3f4; border-radius:4px; font-weight:bold; border:1px solid #ccc; cursor:pointer;">
@@ -420,7 +430,7 @@ function moModalChonLop(roomId, currentVal) {
 
         g_danhSachLopCache.forEach(l => {
             if(!l) return;
-            let checked = (!isTatCa && selectedArr.includes(l)) ? 'checked' : '';
+            let checked = (!isTatCa && lopArr.includes(l)) ? 'checked' : '';
             html += `
                 <label style="padding:6px 12px; border:1px solid #bdc3c7; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:5px; background:#fff; font-weight:bold; color:#2c3e50;">
                     <input type="checkbox" class="mc_class_item" value="${l}" ${checked} onchange="mc_uncheckTatCa()" style="transform: scale(1.2);"> ${l}
@@ -439,14 +449,27 @@ function mc_chonNhanh(khoi) {
     else if(khoi === 'Clear') { document.getElementById('mc_chk_tatca').checked = false; document.querySelectorAll('.mc_class_item').forEach(cb => cb.checked = false); } 
     else { mc_uncheckTatCa(); document.querySelectorAll('.mc_class_item').forEach(cb => { if(String(cb.value).trim().startsWith(khoi)) cb.checked = true; }); }
 }
+
 async function mc_luuChonLop() {
     let roomId = document.getElementById('mc_roomId').value;
     let isTatCa = document.getElementById('mc_chk_tatca').checked;
     let finalVal = "TatCa";
-    if(!isTatCa) {
-        let checked = new Array(); document.querySelectorAll('.mc_class_item:checked').forEach(cb => checked.push(cb.value));
-        if(checked.length > 0) finalVal = checked.join(', ');
+    
+    let sbdInput = document.getElementById('mc_sbd_thibu');
+    let sbdVal = sbdInput ? sbdInput.value.trim().toUpperCase() : "";
+    let sbdArr = sbdVal ? sbdVal.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+    if (!isTatCa) {
+        let checkedClasses = new Array(); 
+        document.querySelectorAll('.mc_class_item:checked').forEach(cb => checkedClasses.push(cb.value));
+        
+        let combined = checkedClasses.concat(sbdArr);
+        if(combined.length > 0) finalVal = combined.join(', ');
+        else finalVal = ""; 
     }
+    
+    if (!isTatCa && finalVal === "") return alert("Vui lòng chọn ít nhất 1 lớp hoặc nhập mã HS để giao đề!");
+
     let btn = document.querySelector('#multiClassModal button[onclick="mc_luuChonLop()"]');
     let oldText = btn.innerText; btn.innerText = "⏳ ĐANG LƯU..."; btn.disabled = true;
     await capNhatNhanhPhong(roomId, 'doi_tuong', finalVal);
