@@ -368,13 +368,8 @@ function initMultiClassModal() {
             </div>
             <input type="hidden" id="mc_roomId">
             
-            <div style="margin-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
-                <button onclick="mc_chonNhanh('TatCa')" style="padding:6px 12px; background:#f1f3f4; border:1px solid #ccc; border-radius:4px; font-weight:bold; cursor:pointer;">🌎 Tất cả trường</button>
-                <button onclick="mc_chonNhanh('10')" style="padding:6px 12px; background:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; font-weight:bold; border-radius:4px; cursor:pointer;">+ Khối 10</button>
-                <button onclick="mc_chonNhanh('11')" style="padding:6px 12px; background:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; font-weight:bold; border-radius:4px; cursor:pointer;">+ Khối 11</button>
-                <button onclick="mc_chonNhanh('12')" style="padding:6px 12px; background:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; font-weight:bold; border-radius:4px; cursor:pointer;">+ Khối 12</button>
-                <button onclick="mc_chonNhanh('Clear')" style="padding:6px 12px; background:#fce8e6; border:1px solid #ea4335; color:#ea4335; font-weight:bold; border-radius:4px; cursor:pointer;">Bỏ chọn hết</button>
-            </div>
+            <div id="mc_quick_btns" style="margin-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
+                </div>
 
             <div id="mc_classList" style="display:flex; flex-wrap:wrap; gap:10px; max-height: 250px; overflow-y:auto; border:1px solid #eee; padding:15px; border-radius:6px; margin-bottom:15px; background:#fafafa;">
             </div>
@@ -388,11 +383,31 @@ function initMultiClassModal() {
 function moModalChonLop(roomId, currentVal) {
     document.getElementById('mc_roomId').value = roomId;
     let container = document.getElementById('mc_classList');
+    let quickBtnContainer = document.getElementById('mc_quick_btns');
     container.innerHTML = '';
-    
+    quickBtnContainer.innerHTML = ''; 
+
     if(!g_danhSachLopCache || g_danhSachLopCache.length === 0) {
         container.innerHTML = '<span style="color:#d93025; font-weight:bold;">Chưa có dữ liệu lớp. Hãy Import danh sách Học sinh vào hệ thống trước!</span>';
     } else {
+        // 1. SINH NÚT CHỌN NHANH DỰA TRÊN TIỀN TỐ (DYNAMNIC PREFIX)
+        let prefixes = new Set();
+        g_danhSachLopCache.forEach(l => {
+            if(!l) return;
+            // Thuật toán: Lấy phần số ở đầu (như 10, 11) HOẶC phần chữ ở đầu (như TN, TC)
+            let match = String(l).trim().match(/^(\d+|[A-Za-z]+)/);
+            if(match) prefixes.add(match[1]);
+        });
+
+        let qBtnsHtml = `<button onclick="mc_chonNhanh('TatCa')" style="padding:6px 12px; background:#f1f3f4; border:1px solid #ccc; border-radius:4px; font-weight:bold; cursor:pointer;">🌎 Tất cả trường</button>`;
+        Array.from(prefixes).sort().forEach(p => {
+            let tenNhan = /^\d+$/.test(p) ? "Khối" : "Nhóm";
+            qBtnsHtml += `<button onclick="mc_chonNhanh('${p}')" style="padding:6px 12px; background:#e8f0fe; border:1px solid #1a73e8; color:#1a73e8; font-weight:bold; border-radius:4px; cursor:pointer;">${tenNhan} ${p}</button>`;
+        });
+        qBtnsHtml += `<button onclick="mc_chonNhanh('Clear')" style="padding:6px 12px; background:#fce8e6; border:1px solid #ea4335; color:#ea4335; font-weight:bold; border-radius:4px; cursor:pointer;">Bỏ chọn hết</button>`;
+        quickBtnContainer.innerHTML = qBtnsHtml;
+
+        // 2. SINH DANH SÁCH Ô TÍCH LỚP CỤ THỂ
         let selectedArr = currentVal === 'TatCa' ? new Array() : currentVal.split(',').map(s=>s.trim());
         let isTatCa = currentVal === 'TatCa';
 
@@ -416,6 +431,7 @@ function moModalChonLop(roomId, currentVal) {
     }
     document.getElementById('multiClassModal').style.display = 'flex';
 }
+
 function mc_toggleTatCa(isChecked) { if(isChecked) { document.querySelectorAll('.mc_class_item').forEach(cb => cb.checked = false); } }
 function mc_uncheckTatCa() { document.getElementById('mc_chk_tatca').checked = false; }
 function mc_chonNhanh(khoi) {
@@ -1642,7 +1658,7 @@ async function dieuKhien(trangThai) {
             
             let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
             if (currentRoom && currentRoom.DoiTuong && currentRoom.DoiTuong.includes(',') && doiTuongSelect === "TatCa") {
-                // Bỏ qua update doi_tuong để giữ nguyên danh sách lớp đã gán
+                // Bỏ qua update để giữ nguyên danh sách lớp ghép
             } else {
                 updateData.doi_tuong = doiTuongSelect;
             }
@@ -1854,7 +1870,7 @@ async function fetchRadar() {
                 let sttHtml = r.TrangThai; 
                 if(r.TrangThai === "MO_PHONG") sttHtml = "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>"; 
                 else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>"; 
-                else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bố Điểm</span>"; 
+                else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bế Điểm</span>"; 
                 else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
                 
                 let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'MO_PHONG')">Mở lại</button>`; 
@@ -2315,20 +2331,31 @@ async function xuatExcel() {
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
-    worksheet.eachRow((row, rowNumber) => { if(rowNumber > 1) { row.eachCell((cell, colNumber) => { cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; }); let totalCell = row.getCell(6); if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { row.eachCell(cell => { cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; cell.font = { color: { argb: 'FFC0392B' } }; }); } } }); 
+    worksheet.eachRow((row, rowNumber) => { 
+        if(rowNumber > 1) { 
+            row.eachCell((cell, colNumber) => { 
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; 
+                if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
+            }); 
+            let totalCell = row.getCell(6); 
+            if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { 
+                row.eachCell(cell => { 
+                    cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; 
+                    cell.font = { color: { argb: 'FFC0392B' } }; 
+                }); 
+            } 
+        } 
+    }); 
     
     let rowCount = exportData.filter(d => d.Diem !== "-").length; worksheet.addRow(new Array()); 
     let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true}; 
     worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]); 
     
-    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
-    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
-// --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
+    // --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
     worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
             let currentFont = cell.font || {};
             
-            // Bật in đậm nếu đang ở cột số 6 (Tổng Điểm) và không phải dòng tiêu đề
             let inDam = currentFont.bold;
             if (colNumber === 6 && rowNumber > 1) {
                 inDam = true;
@@ -2342,13 +2369,16 @@ async function xuatExcel() {
         });
     });
     // --------------------------------------
+
+    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
+    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
 // ==========================================================
-// TÍNH NĂNG IMPORT EXCEL BỊ THIẾU TỪ HTML ĐÃ ĐƯỢC KHÔI PHỤC
+// TÍNH NĂNG IMPORT EXCEL
 // ==========================================================
 
 async function taiFileMau(loai) {
@@ -2373,7 +2403,6 @@ async function taiFileMau(loai) {
         worksheet.addRow({ ma_gv: 'GV002', ho_ten: 'Lê Thị D', quyen: 'GV' });
     }
     
-    // Format Header
     worksheet.getRow(1).eachCell((cell) => { 
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
         cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1A73E8'} }; 
@@ -2437,7 +2466,6 @@ async function docFileExcelVaNap(loai) {
         btn.innerText = oldText; btn.disabled = false;
     }
 }
-
 
 // ==========================================================
 // QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
@@ -2566,16 +2594,28 @@ async function resetSelectedPass(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`Khôi phục mật khẩu mặc định cho ${checkedBoxes.length} tài khoản đã chọn?`)) return;
 
+    let pass = prompt("Hành động nhạy cảm! Vui lòng nhập mật khẩu Admin của bạn để xác nhận:");
+    if(!pass) return;
+
+    let hashedPass = await hashPassword(pass);
     let idsToUpdate = Array.from(checkedBoxes).map(cb => cb.value);
+    
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xử lý..."; btn.disabled = true;
 
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    let {error} = await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).in('id', idsToUpdate);
+    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
+        p_ma_gv: gvData.ma_gv,
+        p_mat_khau: hashedPass,
+        p_truong_id: gvData.truong_id,
+        p_loai: loai,
+        p_ids: idsToUpdate,
+        p_default_hash: DEFAULT_PASS_HASH
+    });
     
     btn.innerText = oldText; btn.disabled = false;
     
     if(error) return alert("❌ Lỗi máy chủ: " + error.message);
+    if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã khôi phục mật khẩu thành công!`);
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
@@ -2587,16 +2627,27 @@ async function deleteSelectedAccounts(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`XÓA VĨNH VIỄN ${checkedBoxes.length} tài khoản đã chọn khỏi hệ thống?`)) return;
 
+    let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
+    if(!pass) return;
+
+    let hashedPass = await hashPassword(pass);
     let idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
+    
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xóa..."; btn.disabled = true;
 
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    let {error} = await sb.from(table).delete().in('id', idsToDelete);
+    let {data, error} = await sb.rpc('rpc_admin_xoa_tk', {
+        p_ma_gv: gvData.ma_gv,
+        p_mat_khau: hashedPass,
+        p_truong_id: gvData.truong_id,
+        p_loai: loai,
+        p_ids: idsToDelete
+    });
     
     btn.innerText = oldText; btn.disabled = false;
     
     if(error) return alert("❌ Lỗi máy chủ: " + error.message);
+    if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã xóa tài khoản thành công!`);
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
@@ -2623,20 +2674,25 @@ async function deleteBankBatch(deleteAll, btnElement) {
     if(deleteAll) { 
         if(!confirm("🚨 BẠN ĐANG CHỌN XÓA SẠCH TOÀN BỘ KHO ĐỀ CỦA TRƯỜNG?\nBạn chắc chắn chứ?")) return; 
         
+        let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
+        if(!pass) return;
+
+        let hashedPass = await hashPassword(pass);
         let oldText = btnElement.innerText; 
         btnElement.innerText = "⏳ Đang càn quét..."; btnElement.disabled = true; btnElement.style.background = "#7f8c8d";
         
-        let query = sb.from('ngan_hang').delete().eq('truong_id', gvData.truong_id);
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") {
-            query = query.eq('mon_id', activeWorkspaceMonId);
-        }
-        let { error } = await query;
+        let {data, error} = await sb.rpc('rpc_admin_xoa_kho', {
+            p_ma_gv: gvData.ma_gv,
+            p_mat_khau: hashedPass,
+            p_truong_id: gvData.truong_id
+        });
 
         btnElement.innerText = oldText; btnElement.disabled = false; btnElement.style.background = "#c0392b";
         
         if(error) return alert("❌ Lỗi máy chủ: " + error.message);
+        if(data && data.status === 'error') return alert(data.message);
         
-        alert("✅ Đã xóa sạch kho đề thành công!");
+        alert("✅ " + data.message);
         fetchFullBank(true); loadBankMeta(true);
         return;
     } 
@@ -2666,7 +2722,6 @@ async function deleteBankBatch(deleteAll, btnElement) {
    QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
 ======================================================= */
 async function loadSysData() {
-    // Tải danh sách trường
     let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
     let htmlTruong = '';
     if (truongs && truongs.length > 0) {
@@ -2685,7 +2740,6 @@ async function loadSysData() {
     }
     if(document.getElementById('sysTruongBody')) document.getElementById('sysTruongBody').innerHTML = htmlTruong;
 
-    // Tải danh sách môn
     let { data: mons, error: errMon } = await sb.from('mon_hoc').select('*').order('created_at', { ascending: true });
     let htmlMon = '';
     if (mons && mons.length > 0) {
@@ -2738,6 +2792,7 @@ async function xoaMon(id) {
     let { error } = await sb.from('mon_hoc').delete().eq('id', id);
     if(error) alert("Lỗi: " + error.message); else loadSysData();
 }
+
 async function resetPass(ma, uid, loai) { 
     if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
     const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
