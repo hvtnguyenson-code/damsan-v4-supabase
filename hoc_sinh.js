@@ -13,7 +13,7 @@ let isExamActive = false;
 let isSubmitting = false; 
 
 let serverTimeOffset = 0; 
-let cheatTimeout = null; // Biến lưu bộ đếm trễ chống nhiễu trên Mobile
+let cheatTimeout = null; 
 
 // ==========================================
 // AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
@@ -47,6 +47,16 @@ function dangXuatHS() {
 // ==========================================
 const styleCustom = document.createElement('style');
 styleCustom.innerHTML = `
+    /* CHỐNG QUÉT VĂN BẢN (CHỐNG AI) */
+    .question-block, .q-text, .options-list, .tf-table {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -khtml-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+
     #sync-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e8e3e; color: #fff; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s; opacity: 0; pointer-events: none; z-index: 99999; display: flex; align-items: center; gap: 8px;}
     #sync-toast.show { opacity: 1; bottom: 30px; }
     
@@ -214,7 +224,8 @@ async function timPhongThiTuDong() {
         let matchedRooms = (rooms || new Array()).filter(room => {
             if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
             let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
-            return allowedClasses.includes(state.lop);
+            // CHÍNH XÁC: Nhận diện cả Lớp và Mã Học Sinh
+            return allowedClasses.includes(state.lop) || allowedClasses.includes(state.ma_hs);
         });
 
         if (matchedRooms.length > 0) {
@@ -277,7 +288,8 @@ async function joinRoom(maPhongAuto = null) {
 
         if (phongData.doi_tuong && phongData.doi_tuong !== 'TatCa') {
             let allowedClasses = phongData.doi_tuong.split(',').map(s => s.trim());
-            if (!allowedClasses.includes(state.lop)) {
+            // CHÍNH XÁC: Kiểm tra quyền vào phòng dựa trên cả Lớp và Mã Học Sinh
+            if (!allowedClasses.includes(state.lop) && !allowedClasses.includes(state.ma_hs)) {
                 throw new Error("Bạn không có quyền tham gia phòng thi này do không thuộc đối tượng được giao bài!");
             }
         }
@@ -503,14 +515,10 @@ function batDauAntiCheat() {
     document.addEventListener('keydown', chanPhimTat);
     window.onbeforeunload = xacNhanThoatTrang;
 
-    // ĐỘ TRỄ 2 GIÂY: Chờ các hiệu ứng chuyển trang, full screen, thu phóng ổn định
     setTimeout(() => {
         if(!isExamActive) return; 
         
-        // 1. Ăng-ten VisibilityChange: Bắt chắc chắn 100% khi web bị ẩn (thu nhỏ, mở app khác che kín màn hình)
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
-        // 2. Ăng-ten Blur: Bắt khi mất tiêu điểm (mở app thả nổi, kéo rèm thông báo)
         window.addEventListener('blur', handleBlur);
         window.addEventListener('focus', handleFocus);
         
@@ -526,10 +534,6 @@ function handleVisibilityChange() {
 function handleBlur() {
     if (!isExamActive) return;
     
-    // Đặt bộ đếm trễ 500ms để phân biệt giữa:
-    // - Vuốt thông báo ngang rồi mất (Focus trả về true ngay)
-    // - Bật bàn phím ảo (Focus không bị mất)
-    // - Chạm vào cửa sổ Gemini thả nổi / App khác (Focus biến thành false)
     cheatTimeout = setTimeout(() => {
         if (!document.hasFocus()) {
             xuLyGianLan();
@@ -538,7 +542,6 @@ function handleBlur() {
 }
 
 function handleFocus() {
-    // Nếu học sinh quay lại kịp thời trước 500ms (vuốt tắt tin nhắn), hủy lệnh phạt
     if (cheatTimeout) {
         clearTimeout(cheatTimeout);
         cheatTimeout = null;
@@ -631,6 +634,11 @@ async function gradeAndSubmit(autoSubmit = false) {
         });
         
         if (!error && data && data.status === 'success') { 
+            // BẮN SỐ LẦN VI PHẠM LÊN MÁY CHỦ
+            if (cheatCount > 0) {
+                await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
+            }
+
             localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
             document.getElementById('finish_name').innerText = state.ho_ten; 
             showSection('result-section'); 

@@ -542,8 +542,168 @@ function toggleAutoRefresh() {
 }
 
 // Hàm Live Search bị thiếu đã được khôi phục
-function xuLyLiveSearch() {
-    renderDashboardTable();
+function renderDashboardTable() { 
+    let statBox = document.getElementById("analyticDashboard"); 
+    const maPhong = document.getElementById('dashMaPhong').value.trim(); 
+    let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong); 
+    
+    if(duLieuBangDiem.length === 0) { 
+        if(statBox) statBox.style.display = "none"; 
+        document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>'; 
+        return; 
+    } 
+
+    let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; let displayList = new Array(); let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop; 
+    
+    if (targetLop && targetLop !== "TatCa") { 
+        let allowedClasses = targetLop.split(',').map(s => s.trim());
+        let classStudents = allStudents.filter(s => allowedClasses.includes(String(s.Lop).trim())); 
+        classStudents.forEach(stu => { 
+            let result = duLieuBangDiem.find(r => String(r.MaHS).trim() === String(stu.MaHS).trim()); 
+            if (result) displayList.push({...result, MaHS: stu.MaHS, id: stu.id}); 
+            else displayList.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, id: stu.id, ViPham: 0 }); 
+        }); 
+        duLieuBangDiem.forEach(r => { if(!displayList.find(d => String(d.MaHS).trim() === String(r.MaHS).trim())) { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null}); } }); 
+    } else { 
+        duLieuBangDiem.forEach(r => { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null}); }); 
+    } 
+    if(currentDashFilter !== 'TatCa') { 
+        let allowedClasses = currentDashFilter.split(',').map(s => s.trim());
+        displayList = displayList.filter(d => allowedClasses.includes(String(d.Lop).trim())); 
+    } 
+    
+    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu.</td></tr>'; return; } 
+    
+    if(statBox) statBox.style.display = "block"; 
+    let sum = 0, passed = 0, submittedCount = 0; 
+    let failCount = {}; let html = ""; 
+    
+    let countGioi = 0, countKha = 0, countTB = 0, countYeu = 0;
+
+    displayList.sort((a, b) => (String(a.MaHS) || '').localeCompare(String(b.MaHS) || '')); 
+
+    const sInput = document.getElementById("liveSearchInput");
+    const filter = sInput ? sInput.value.toUpperCase() : "";
+
+    displayList.forEach(hs => { 
+        hs.p1Score = 0; hs.p2Score = 0; hs.p3Score = 0; 
+        
+        let isSubmitted = (hs.Diem !== null && hs.Diem !== undefined && hs.Diem !== "-");
+
+        if(hs.ChiTiet && isSubmitted) { 
+            try { 
+                let ct = JSON.parse(hs.ChiTiet); 
+                Object.keys(ct).forEach(k => { 
+                    let item = Reflect.get(ct, k); let isDung = false; 
+                    if(item.phan==="1") { 
+                        let cVal = String(item.chon||"").toUpperCase().trim();
+                        let dVal = String(item.dung||"").toUpperCase().trim();
+                        isDung = (cVal === dVal); 
+                        if(isDung) hs.p1Score += 0.25; 
+                    } 
+                    else if(item.phan==="2") { 
+                        let cArr = String(item.chon||"").split('-'); 
+                        let dStr = String(item.dung||"").toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
+                        let dArr = dStr.match(new RegExp("Đ|S", "g"));
+                        if (!dArr) dArr = new Array();
+                        let match = 0; 
+                        for(let i=0; i<4; i++) { 
+                            let cValRaw = cArr[i] || "";
+                            let cVal = String(cValRaw).toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
+                            let cleanCVal = "";
+                            if (cVal.includes("Đ")) cleanCVal = "Đ";
+                            if (cVal.includes("S")) cleanCVal = "S";
+                            let dVal = dArr[i] || "";
+                            if(cleanCVal !== "" && cleanCVal === dVal) match++; 
+                        } 
+                        if(match===1) hs.p2Score += 0.1; else if(match===2) hs.p2Score += 0.25; else if(match===3) hs.p2Score += 0.5; else if(match===4) hs.p2Score += 1.0; 
+                        isDung = (match === 4); 
+                    } 
+                    else if(item.phan==="3") { 
+                        let aClean = String(item.chon).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+                        let dClean = String(item.dung).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+                        isDung = (aClean !== "" && aClean === dClean);
+                        if(isDung) hs.p3Score += 0.25; 
+                    } 
+                    if(!isDung) { 
+                        let fCount = Reflect.get(failCount, k) || 0;
+                        Reflect.set(failCount, k, fCount + 1); 
+                        Reflect.set(failCount, k+"_txt", item.noiDungCau); 
+                    } 
+                }); 
+            } catch(e){} 
+        } 
+
+        hs.p1Score = parseFloat(hs.p1Score).toFixed(2);
+        hs.p2Score = parseFloat(hs.p2Score).toFixed(2);
+        hs.p3Score = parseFloat(hs.p3Score).toFixed(2);
+
+        if (isSubmitted) { 
+            submittedCount++; 
+            let diemFloat = parseFloat(hs.Diem) || 0;
+            sum += diemFloat; 
+            if(diemFloat >= 5.0) passed++; 
+
+            if (diemFloat >= 8.0) countGioi++;
+            else if (diemFloat >= 6.5) countKha++;
+            else if (diemFloat >= 5.0) countTB++;
+            else countYeu++;
+        } 
+        
+        let total = isSubmitted ? parseFloat(hs.Diem).toFixed(2) : "-"; 
+        
+        let badgeClass = '';
+        if(isSubmitted) {
+            let score = parseFloat(total);
+            if(score >= 8.0) badgeClass = 'bg-gioi';
+            else if(score >= 6.5) badgeClass = 'bg-kha';
+            else if(score >= 5.0) badgeClass = 'bg-tb';
+            else badgeClass = 'bg-yeu';
+        }
+        
+        let scoreHtml = isSubmitted ? `<span class="badge-score ${badgeClass}">${total}</span>` : `<span style="color:#95a5a6; font-weight:bold;">${total}</span>`;
+        let trStyle = isSubmitted && parseFloat(total) < 5.0 ? 'background-color: #fdf2e9;' : ''; 
+        
+        // ĐÃ BỔ SUNG HIỂN THỊ CỜ ĐỎ NẾU CÓ VI PHẠM
+        let sttHtml = isSubmitted ? '<span style="color:#27ae60;font-weight:bold;">✅ Đã nộp</span>' : '<span style="color:#95a5a6;">Chưa nộp</span>';
+        if (hs.ViPham > 0) {
+            sttHtml += `<br><span style="color:#e74c3c; font-size:12px; font-weight:bold;">🚩 Vi phạm: ${hs.ViPham} lần</span>`;
+        }
+
+        const txtSBD = (hs.MaHS || "").toString().toUpperCase();
+        const txtTen = (hs.HoTen || "").toString().toUpperCase();
+
+        if (filter === "" || txtSBD.indexOf(filter) > -1 || txtTen.indexOf(filter) > -1) {
+            html += `<tr style="${trStyle}"><td><b>${hs.MaHS || '-'}</b></td><td style="text-align:left;"><b>${hs.HoTen}</b></td><td>${hs.Lop}</td><td id="live-status-${hs.id}">${sttHtml}</td><td>${hs.MaDe || '-'}</td><td>${scoreHtml}</td><td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td></tr>`; 
+        }
+    }); 
+    
+    if(document.getElementById("statSiSo")) document.getElementById("statSiSo").innerText = `${submittedCount} / ${displayList.length}`; 
+    if(document.getElementById("statAvg")) document.getElementById("statAvg").innerText = submittedCount > 0 ? (sum/submittedCount).toFixed(2) : "0.0"; 
+    if(document.getElementById("statPass")) document.getElementById("statPass").innerText = submittedCount > 0 ? Math.round((passed/submittedCount)*100) + "%" : "0%"; 
+    if(document.getElementById("statPassDetail")) document.getElementById("statPassDetail").innerText = `${passed} học sinh đạt từ 5.0 trở lên`; 
+
+    if(document.getElementById("distGioi")) document.getElementById("distGioi").innerText = countGioi;
+    if(document.getElementById("distKha")) document.getElementById("distKha").innerText = countKha;
+    if(document.getElementById("distTB")) document.getElementById("distTB").innerText = countTB;
+    if(document.getElementById("distYeu")) document.getElementById("distYeu").innerText = countYeu;
+    
+    let maxFail = 0; let killerQ = "Chưa có dữ liệu"; 
+    Object.keys(failCount).forEach(k => { 
+        if(!k.includes("_txt")) {
+            let val = Reflect.get(failCount, k);
+            if (val > maxFail) {
+                maxFail = val; 
+                killerQ = Reflect.get(failCount, k+"_txt");
+            }
+        } 
+    }); 
+    if(document.getElementById("statKiller")) {
+        if(maxFail > 0) document.getElementById("statKiller").innerHTML = `Có <b>${maxFail} học sinh</b> làm sai câu hỏi sau:<br/> <span style="font-style:italic; font-weight:normal; color:#555;">"${(killerQ || "").substring(0, 90)}..."</span>`; 
+        else document.getElementById("statKiller").innerHTML = `Đang thu thập dữ liệu...`;
+    }
+    
+    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="9">Không tìm thấy kết quả phù hợp bộ lọc tìm kiếm.</td></tr>'; 
 }
 
 // BỘ BẮT SÓNG REALTIME DỰ PHÒNG
@@ -2051,7 +2211,6 @@ async function fetchDashboard(isAuto = false) {
 
         let pArr = new Array();
         
-        // CACHE BUSTER MẠNH NHẤT: Trình duyệt không thể "lừa" hệ thống bằng cache cũ
         let dummyCacheBuster = new Date().getTime().toString();
         pArr.push(sb.from('ket_qua').select('*, hoc_sinh(ma_hs, ho_ten, lop)').eq('phong_id', currentRoom.id).neq('chi_tiet', dummyCacheBuster));
         
@@ -2059,7 +2218,6 @@ async function fetchDashboard(isAuto = false) {
              pArr.push(sb.from('hoc_sinh').select('*').eq('truong_id', gvData.truong_id));
         }
         
-        // Khóa ghi đè để chống Race Condition (Cho Auto 5s)
         let myFetchId = ++globalFetchDashId;
         let results = await Promise.all(pArr);
         if (myFetchId !== globalFetchDashId) return; 
@@ -2080,7 +2238,8 @@ async function fetchDashboard(isAuto = false) {
             MaDe: r.ma_de, 
             Diem: r.diem, 
             ChiTiet: typeof r.chi_tiet === 'string' ? r.chi_tiet : JSON.stringify(r.chi_tiet), 
-            ThoiGian: r.created_at 
+            ThoiGian: r.created_at,
+            ViPham: r.so_lan_vi_pham || 0  // ĐÃ BỔ SUNG NHẬN DỮ LIỆU VI PHẠM
         }));
 
         renderDashboardSubTabs(); 
@@ -2295,7 +2454,7 @@ async function xuatExcel() {
         classStudents.forEach(stu => { 
             let result = duLieuBangDiem.find(r => String(r.MaHS).trim() === String(stu.MaHS).trim()); 
             if (result) exportData.push({...result, MaHS: stu.MaHS}); 
-            else exportData.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null }); 
+            else exportData.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, ViPham: 0 }); 
         }); 
         duLieuBangDiem.forEach(r => { if(!exportData.find(d => String(d.MaHS).trim() === String(r.MaHS).trim())) { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); exportData.push({...r, MaHS: stu ? stu.MaHS : r.MaHS}); } }); 
     } else { 
@@ -2308,7 +2467,8 @@ async function xuatExcel() {
     if(exportData.length === 0) return alert("Không có dữ liệu cho lớp này.");
 
     const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('BangDiem'); 
-    worksheet.columns = [ { header: 'STT', key: 'stt', width: 6 }, { header: 'SBD', key: 'sbd', width: 12 }, { header: 'Họ và Tên', key: 'name', width: 30 }, { header: 'Lớp', key: 'lop', width: 10 }, { header: 'Mã Đề', key: 'made', width: 10 }, { header: 'Tổng Điểm', key: 'total', width: 12 }, { header: 'Điểm P. I', key: 'p1', width: 12 }, { header: 'Điểm P. II', key: 'p2', width: 12 }, { header: 'Điểm P. III', key: 'p3', width: 12 }, { header: 'Thời gian nộp', key: 'time', width: 22 } ]; 
+    // ĐÃ BỔ SUNG CỘT VI PHẠM VÀO EXCEL
+    worksheet.columns = [ { header: 'STT', key: 'stt', width: 6 }, { header: 'SBD', key: 'sbd', width: 12 }, { header: 'Họ và Tên', key: 'name', width: 30 }, { header: 'Lớp', key: 'lop', width: 10 }, { header: 'Mã Đề', key: 'made', width: 10 }, { header: 'Tổng Điểm', key: 'total', width: 12 }, { header: 'Điểm P. I', key: 'p1', width: 12 }, { header: 'Điểm P. II', key: 'p2', width: 12 }, { header: 'Điểm P. III', key: 'p3', width: 12 }, { header: 'Vi Phạm', key: 'vipham', width: 10 }, { header: 'Thời gian nộp', key: 'time', width: 22 } ]; 
     
     let belowAvg = 0; let maxScore = -1; let minScore = 11; 
     exportData.sort((a,b) => (String(a.MaHS)||'').localeCompare(String(b.MaHS)||'')); 
@@ -2350,7 +2510,7 @@ async function xuatExcel() {
         if(total !== "-") {
             if(total < 5.0) belowAvg++; if(total > maxScore) maxScore = total; if(total < minScore) minScore = total; 
         }
-        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: total, p1: hs.Diem!=="-" ? parseFloat(p1.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
+        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: total, p1: hs.Diem!=="-" ? parseFloat(p1.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
@@ -2374,24 +2534,14 @@ async function xuatExcel() {
     let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true}; 
     worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]); 
     
-    // --- CHUẨN HÓA FONT TIMES NEW ROMAN & IN ĐẬM TỔNG ĐIỂM ---
     worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
             let currentFont = cell.font || {};
-            
             let inDam = currentFont.bold;
-            if (colNumber === 6 && rowNumber > 1) {
-                inDam = true;
-            }
-
-            cell.font = Object.assign({}, currentFont, { 
-                name: 'Times New Roman', 
-                size: 12, 
-                bold: inDam 
-            });
+            if (colNumber === 6 && rowNumber > 1) inDam = true;
+            cell.font = Object.assign({}, currentFont, { name: 'Times New Roman', size: 12, bold: inDam });
         });
     });
-    // --------------------------------------
 
     let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
     let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
