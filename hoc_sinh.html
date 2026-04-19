@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phòng Thi Trực Tuyến - Hệ Thống Đam San V4</title>
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Đam San Exam">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -149,6 +154,26 @@
         .btn-warning { background: white; color: #d93025; padding: 15px 40px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: 0.2s;}
         .btn-warning:hover { transform: scale(1.05); }
 
+        /* --- BỔ SUNG CSS NÚT MỞ TRONG ỨNG DỤNG PWA --- */
+        #pwa-install-banner {
+            display: none; 
+            background: #e8f0fe; 
+            color: #1a73e8; 
+            padding: 10px 20px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            font-size: 14px; 
+            cursor: pointer; 
+            margin-bottom: 25px; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 8px; 
+            border: 1px solid #8ab4f8;
+            transition: 0.2s;
+        }
+        #pwa-install-banner:hover { background: #d2e3fc; }
+        /* KẾT THÚC BỔ SUNG */
+
         @media (max-width: 768px) {
             .exam-layout { flex-direction: column; }
             .exam-sidebar { width: 100%; height: auto; border-right: none; border-bottom: 2px solid #dadce0; flex-direction: row; flex-wrap: wrap; justify-content: space-between; padding: 10px; }
@@ -168,6 +193,10 @@
             <h2 class="auth-title">CỔNG THÍ SINH</h2>
             <p style="color: #5f6368; margin-bottom: 25px; font-size: 14px;">Hệ thống Kiểm tra Đánh giá Đam San V4</p>
             
+            <div id="pwa-install-banner" onclick="installPWA()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                Mở trong ứng dụng (Khuyến nghị)
+            </div>
             <div class="input-group">
                 <label>Mã Trường học</label>
                 <input type="text" id="ma_truong" value="DAMSAN" readonly style="background-color: #f1f3f4; color: #1a73e8; font-weight: bold; cursor: not-allowed; text-align: center; letter-spacing: 2px;">
@@ -264,6 +293,39 @@
         <button class="btn-warning" onclick="closeCheatWarning()">TÔI ĐÃ HIỂU VÀ SẼ KHÔNG TÁI PHẠM</button>
     </div>
 
+    <script>
+        let deferredPrompt;
+        
+        // Trình duyệt sẽ tự động gọi event này nếu nhận diện đủ điều kiện (có file manifest)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Ngăn trình duyệt tự động hiện banner mặc định (để mình dùng banner tự làm cho đẹp)
+            e.preventDefault();
+            deferredPrompt = e;
+            // Hiển thị nút "Mở trong ứng dụng"
+            const installBtn = document.getElementById('pwa-install-banner');
+            if(installBtn) installBtn.style.display = 'flex';
+        });
+
+        // Hàm gọi khi học sinh bấm vào nút
+        function installPWA() {
+            const installBtn = document.getElementById('pwa-install-banner');
+            if(installBtn) installBtn.style.display = 'none'; // Ẩn nút đi
+            
+            if (deferredPrompt) {
+                deferredPrompt.prompt(); // Hiện hộp thoại xác nhận cài đặt của hệ điều hành
+                // Đợi học sinh xác nhận
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    deferredPrompt = null;
+                });
+            }
+        }
+
+        // Ẩn nút nếu học sinh đã cài đặt thành công từ trước
+        window.addEventListener('appinstalled', (evt) => {
+            const installBtn = document.getElementById('pwa-install-banner');
+            if(installBtn) installBtn.style.display = 'none';
+        });
+    </script>
     <script src="hoc_sinh.js?v=3.0"></script>
 </body>
 </html>

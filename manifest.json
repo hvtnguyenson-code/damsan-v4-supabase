@@ -1,0 +1,15 @@
+{
+  "name": "Thi Trực Tuyến Đam San",
+  "short_name": "Đam San Exam",
+  "start_url": "./hoc_sinh.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3413/3413535.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
