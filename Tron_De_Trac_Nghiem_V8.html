@@ -266,6 +266,25 @@
   let lastMaDes = [];
   let lastCounts = {p1:0, p2:0, p3:0, total:0};
 
+  // ==========================================
+  // BRIDGE (P0): expose exams to parent via postMessage
+  // - Avoids eval() in embedding contexts
+  // ==========================================
+  window.addEventListener('message', (ev) => {
+    const data = ev.data || {};
+    if (!data || data.type !== 'DAMSAN_GET_EXAMS') return;
+    const requestId = data.requestId;
+    const targetOrigin = (ev.origin && ev.origin !== "null") ? ev.origin : "*";
+    try {
+      ev.source?.postMessage(
+        { type: 'DAMSAN_EXAMS', requestId, payload: danhSachDeThi || [] },
+        targetOrigin
+      );
+    } catch (e) {
+      // Best-effort: if postMessage fails, do nothing.
+    }
+  });
+
   let fpConfig = {
     coquan:   { font: "Times New Roman", size: 12, bold: false, italic: false, underline: false, upper: true, align: "center", line: 1.15, before: 0, after: 0 },
     truong:   { font: "Times New Roman", size: 12, bold: true, italic: false, underline: true, upper: true, align: "center", line: 1.15, before: 0, after: 0 },

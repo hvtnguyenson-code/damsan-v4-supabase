@@ -592,8 +592,8 @@
                         </div>
                         <div class="table-responsive">
                             <table id="bangDiem">
-                                <thead><tr><th style="width:80px;">SBD</th><th>Họ và Tên</th><th>Lớp</th><th>Trạng thái</th><th>Mã đề</th><th style="background:#d4edda; width: 100px;">Tổng Điểm</th><th style="background:#e2eef9;">P. I</th><th style="background:#e2eef9;">P. II</th><th style="background:#e2eef9;">P. III</th></tr></thead>
-                                <tbody id="dashBody"><tr><td colspan="9">Chưa có dữ liệu...</td></tr></tbody>
+                                <thead><tr><th style="width:80px;">SBD</th><th>Họ và Tên</th><th>Lớp</th><th>Trạng thái</th><th>Mã đề</th><th style="background:#d4edda; width: 100px;">Tổng Điểm</th><th style="background:#e2eef9;">P. I</th><th style="background:#e2eef9;">P. II</th><th style="background:#e2eef9;">P. III</th><th>Vi phạm</th></tr></thead>
+                                <tbody id="dashBody"><tr><td colspan="10">Chưa có dữ liệu...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -604,6 +604,7 @@
                                 <button style="background: #1a73e8;" onclick="fetchStudents(true)">🔄 Tải Danh sách HS</button>
                                 <button style="background: #f39c12;" onclick="resetSelectedPass('HS')">🔑 Khôi phục MK Đã chọn</button>
                                 <button style="background: #e74c3c;" onclick="deleteSelectedAccounts('HS')">🗑️ Xóa TK Đã chọn</button>
+                                <button style="background: #5f6368;" onclick="migrateLegacyPasswords('HS', this)">🛡️ Chuẩn hóa MK Legacy (HS)</button>
                             </div>
                             <div id="subTabsHS" class="sub-tabs"></div>
                             <div class="table-responsive">
@@ -624,6 +625,7 @@
                                 <button style="background: #8e44ad;" onclick="fetchTeachers(true)">🔄 Tải Danh sách GV</button>
                                 <button style="background: #f39c12;" onclick="resetSelectedPass('GV')">🔑 Khôi phục MK Đã chọn</button>
                                 <button style="background: #e74c3c;" onclick="deleteSelectedAccounts('GV')">🗑️ Xóa TK Đã chọn</button>
+                                <button style="background: #5f6368;" onclick="migrateLegacyPasswords('GV', this)">🛡️ Chuẩn hóa MK Legacy (GV)</button>
                             </div>
                             <div class="table-responsive">
                                 <table id="bangGV">

@@ -50,6 +50,62 @@ function safeHTML(str) {
     return doc.body.innerHTML; 
 }
 
+/* =======================================================
+   DEMO / BOOTSTRAP (LOCAL-ONLY)
+   - Provides ready credentials for local audit/testing without backend
+   - Hard-disabled in non-local contexts
+======================================================= */
+const DEMO_LOCAL_FLAG_KEY = "DAMSAN_DEMO_LOCAL_ENABLED";
+const DEMO_GV = {
+    user: "GV_DEMO",
+    pass: "Demo@123456",
+    profile: {
+        ma_gv: "GV_DEMO",
+        ho_ten: "Giáo viên Demo (Local)",
+        quyen: "Admin",
+        truong_id: "LOCAL_DEMO",
+        truong_ten: "TRƯỜNG DEMO (LOCAL)",
+        mon_id: null,
+        id: "LOCAL_GV_DEMO"
+    }
+};
+
+function isLocalRuntime() {
+    const h = (location && location.hostname) ? location.hostname : "";
+    const p = (location && location.protocol) ? location.protocol : "";
+    // file:// has empty hostname; localhost/127.0.0.1 are considered local
+    return p === "file:" || h === "localhost" || h === "127.0.0.1";
+}
+
+function isDemoLocalEnabled() {
+    if (!isLocalRuntime()) return false;
+    try { return localStorage.getItem(DEMO_LOCAL_FLAG_KEY) === "1"; } catch (e) { return false; }
+}
+
+function enableDemoLocal() {
+    if (!isLocalRuntime()) return alert("Chế độ DEMO chỉ bật khi chạy local (file:// hoặc localhost).");
+    if (!confirm("Bật chế độ DEMO local? (Chỉ dùng để test/audit, không dùng khi triển khai thật)")) return;
+    try { localStorage.setItem(DEMO_LOCAL_FLAG_KEY, "1"); } catch (e) {}
+    try {
+        let u = document.getElementById("gvUser");
+        let p = document.getElementById("gvPass");
+        if (u) u.value = DEMO_GV.user;
+        if (p) p.value = DEMO_GV.pass;
+    } catch (e) {}
+    alert("✅ DEMO local đã bật. Tài khoản đã được điền sẵn.");
+}
+
+function isSha256Hex(v) {
+    return typeof v === "string" && new RegExp("^[a-fA-F0-9]{64}$").test(v);
+}
+
+function isLegacyPlainPassword(v) {
+    if (typeof v !== "string") return false;
+    let s = v.trim();
+    if (!s) return false;
+    return !isSha256Hex(s);
+}
+
 window.onload = function() { 
     let script = document.createElement('script');
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js";
@@ -85,7 +141,12 @@ async function thucHienDangNhapGV() {
     try {
         let hashedPass = await hashPassword(pass);
         
-        const { data, error } = await sb.from('giao_vien').select('*, truong_hoc(ten_truong)').eq('ma_gv', user).or(`mat_khau.eq.${hashedPass},mat_khau.eq.${pass}`).single();
+        const { data, error } = await sb
+            .from('giao_vien')
+            .select('*, truong_hoc(ten_truong)')
+            .eq('ma_gv', user)
+            .eq('mat_khau', hashedPass)
+            .single();
         
         if (error || !data) {
             msg.innerText = "❌ Sai Tài khoản hoặc Mật khẩu!";
@@ -97,9 +158,6 @@ async function thucHienDangNhapGV() {
                 document.getElementById('forceChangePassOverlay').style.display = 'flex';
                 btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false; 
             } else {
-                if (data.mat_khau === pass && pass !== DEFAULT_PASS_HASH) {
-                    sb.from('giao_vien').update({ mat_khau: hashedPass }).eq('id', data.id).then();
-                }
                 hoanTatDangNhap(data);
             }
         }
@@ -183,7 +241,12 @@ async function thucHienDoiMatKhau() {
         let hashedOld = await hashPassword(oldPass);
         let hashedNew = await hashPassword(newPass);
 
-        let { data, error: errCheck } = await sb.from('giao_vien').select('id').eq('id', gvData.id).or(`mat_khau.eq.${hashedOld},mat_khau.eq.${oldPass}`).single();
+        let { data, error: errCheck } = await sb
+            .from('giao_vien')
+            .select('id')
+            .eq('id', gvData.id)
+            .eq('mat_khau', hashedOld)
+            .single();
         
         if (errCheck || !data) {
             throw new Error("Mật khẩu hiện tại không đúng!");
@@ -261,7 +324,7 @@ function changeWorkspace(monId) {
     danhSachDeThi = new Array(); danhSachThuCong = new Array();
     if(document.getElementById('matrixBody')) document.getElementById('matrixBody').innerHTML = '';
     if(document.getElementById('manBody')) { document.getElementById('manBody').innerHTML = '<tr><td colspan="5">Chưa có câu hỏi nào được gõ...</td></tr>'; document.getElementById('manCount').innerText = '0'; }
-    if(document.getElementById('dashBody')) document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu...</td></tr>';
+    if(document.getElementById('dashBody')) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu...</td></tr>';
     if(document.getElementById('analyticDashboard')) document.getElementById('analyticDashboard').style.display = 'none';
 
     loadBankMeta(true);
@@ -549,7 +612,7 @@ function renderDashboardTable() {
     
     if(duLieuBangDiem.length === 0) { 
         if(statBox) statBox.style.display = "none"; 
-        document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>'; 
+        document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>'; 
         return; 
     } 
 
@@ -572,7 +635,7 @@ function renderDashboardTable() {
         displayList = displayList.filter(d => allowedClasses.includes(String(d.Lop).trim())); 
     } 
     
-    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu.</td></tr>'; return; } 
+    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu.</td></tr>'; return; } 
     
     if(statBox) statBox.style.display = "block"; 
     let sum = 0, passed = 0, submittedCount = 0; 
@@ -674,7 +737,7 @@ function renderDashboardTable() {
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
 
         if (filter === "" || txtSBD.indexOf(filter) > -1 || txtTen.indexOf(filter) > -1) {
-            html += `<tr style="${trStyle}"><td><b>${hs.MaHS || '-'}</b></td><td style="text-align:left;"><b>${hs.HoTen}</b></td><td>${hs.Lop}</td><td id="live-status-${hs.id}">${sttHtml}</td><td>${hs.MaDe || '-'}</td><td>${scoreHtml}</td><td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td></tr>`; 
+            html += `<tr style="${trStyle}"><td><b>${hs.MaHS || '-'}</b></td><td style="text-align:left;"><b>${hs.HoTen}</b></td><td>${hs.Lop}</td><td id="live-status-${hs.id}">${sttHtml}</td><td>${hs.MaDe || '-'}</td><td>${scoreHtml}</td><td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td><td>${hs.ViPham || 0}</td></tr>`; 
         }
     }); 
     
@@ -703,7 +766,7 @@ function renderDashboardTable() {
         else document.getElementById("statKiller").innerHTML = `Đang thu thập dữ liệu...`;
     }
     
-    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="9">Không tìm thấy kết quả phù hợp bộ lọc tìm kiếm.</td></tr>'; 
+    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="10">Không tìm thấy kết quả phù hợp bộ lọc tìm kiếm.</td></tr>'; 
 }
 
 // BỘ BẮT SÓNG REALTIME DỰ PHÒNG
@@ -1635,8 +1698,36 @@ async function layDeTuIframe(btnElement) {
     if (!maPhong) return alert("⚠️ Cần phải có Mã Phòng Thi để đẩy đề lên mạng!");
 
     try {
-        let iframeWindow = document.getElementById('frameV8').contentWindow;
-        let danhSachDeIframe = iframeWindow.eval("typeof danhSachDeThi !== 'undefined' ? danhSachDeThi : []");
+        let iframeEl = document.getElementById('frameV8');
+        if (!iframeEl || !iframeEl.contentWindow) throw new Error("Iframe chưa sẵn sàng!");
+
+        let iframeWindow = iframeEl.contentWindow;
+        let iframeOrigin = "*";
+        try {
+            let parsed = new URL(iframeEl.src, window.location.href);
+            iframeOrigin = parsed.origin && parsed.origin !== "null" ? parsed.origin : "*";
+        } catch (e) {}
+        let requestId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+        let danhSachDeIframe = await new Promise((resolve, reject) => {
+            let timeout = setTimeout(() => {
+                window.removeEventListener('message', onMsg);
+                reject(new Error("Không nhận được dữ liệu từ tool trộn đề (timeout). Hãy bấm 'Quét & Trộn' trong iframe trước."));
+            }, 2500);
+
+            function onMsg(ev) {
+                if (ev.source !== iframeWindow) return;
+                if (iframeOrigin !== "*" && ev.origin !== iframeOrigin) return;
+                let data = ev.data || {};
+                if (!data || data.type !== 'DAMSAN_EXAMS' || data.requestId !== requestId) return;
+                clearTimeout(timeout);
+                window.removeEventListener('message', onMsg);
+                resolve(data.payload || new Array());
+            }
+
+            window.addEventListener('message', onMsg);
+            iframeWindow.postMessage({ type: 'DAMSAN_GET_EXAMS', requestId }, iframeOrigin);
+        });
         
         if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
             return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
@@ -2204,7 +2295,7 @@ async function fetchDashboard(isAuto = false) {
 
         const maPhong = document.getElementById('dashMaPhong').value;
         if(!maPhong) return;
-        if(!isAuto) document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">⏳ Đang tải dữ liệu...</td></tr>';
+        if(!isAuto) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">⏳ Đang tải dữ liệu...</td></tr>';
         
         let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === String(maPhong).trim());
         if(!currentRoom) return;
@@ -2246,7 +2337,7 @@ async function fetchDashboard(isAuto = false) {
         renderDashboardTable(); 
     } catch(e) {
         console.error("Lỗi fetchDashboard:", e);
-        if (!isAuto) document.getElementById('dashBody').innerHTML = `<tr><td colspan="9" style="color:red; font-weight:bold;">❌ Lỗi kết nối tải bảng điểm: ${e.message}</td></tr>`;
+        if (!isAuto) document.getElementById('dashBody').innerHTML = `<tr><td colspan="10" style="color:red; font-weight:bold;">❌ Lỗi kết nối tải bảng điểm: ${e.message}</td></tr>`;
     }
 }
 
@@ -2260,7 +2351,7 @@ function renderDashboardTable() {
     
     if(duLieuBangDiem.length === 0) { 
         if(statBox) statBox.style.display = "none"; 
-        document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>'; 
+        document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>'; 
         return; 
     } 
 
@@ -2283,7 +2374,7 @@ function renderDashboardTable() {
         displayList = displayList.filter(d => allowedClasses.includes(String(d.Lop).trim())); 
     } 
     
-    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="9">Chưa có dữ liệu.</td></tr>'; return; } 
+    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu.</td></tr>'; return; } 
     
     if(statBox) statBox.style.display = "block"; 
     let sum = 0, passed = 0, submittedCount = 0; 
@@ -2381,7 +2472,7 @@ function renderDashboardTable() {
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
 
         if (filter === "" || txtSBD.indexOf(filter) > -1 || txtTen.indexOf(filter) > -1) {
-            html += `<tr style="${trStyle}"><td><b>${hs.MaHS || '-'}</b></td><td style="text-align:left;"><b>${hs.HoTen}</b></td><td>${hs.Lop}</td><td id="live-status-${hs.id}">${sttHtml}</td><td>${hs.MaDe || '-'}</td><td>${scoreHtml}</td><td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td></tr>`; 
+            html += `<tr style="${trStyle}"><td><b>${hs.MaHS || '-'}</b></td><td style="text-align:left;"><b>${hs.HoTen}</b></td><td>${hs.Lop}</td><td id="live-status-${hs.id}">${sttHtml}</td><td>${hs.MaDe || '-'}</td><td>${scoreHtml}</td><td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td><td>${hs.ViPham || 0}</td></tr>`; 
         }
     }); 
     
@@ -2410,7 +2501,7 @@ function renderDashboardTable() {
         else document.getElementById("statKiller").innerHTML = `Đang thu thập dữ liệu...`;
     }
     
-    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="9">Không tìm thấy kết quả phù hợp bộ lọc tìm kiếm.</td></tr>'; 
+    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="10">Không tìm thấy kết quả phù hợp bộ lọc tìm kiếm.</td></tr>'; 
 }
 
 async function xoaDiemPhong() { 
@@ -2971,4 +3062,46 @@ async function resetPass(ma, uid, loai) {
     const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
     await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).eq('id', uid);
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
+}
+
+async function migrateLegacyPasswords(loai, btnElement) {
+    if (gvData.quyen !== 'Admin') return alert("Chỉ Admin mới có quyền thực hiện chuẩn hóa hàng loạt.");
+    if (!confirm(`Chuẩn hóa mật khẩu legacy cho toàn bộ tài khoản ${loai} trong trường hiện tại?\n\nHệ thống sẽ băm SHA-256 các mật khẩu còn dạng plain text.`)) return;
+
+    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
+    const codeField = loai === 'HS' ? 'ma_hs' : 'ma_gv';
+    const oldText = btnElement ? btnElement.innerText : "";
+    if (btnElement) { btnElement.innerText = "⏳ Đang chuẩn hóa..."; btnElement.disabled = true; }
+
+    try {
+        const { data, error } = await sb.from(table).select(`id, ${codeField}, mat_khau`).eq('truong_id', gvData.truong_id);
+        if (error) throw error;
+
+        const all = data || new Array();
+        const legacy = all.filter((x) => isLegacyPlainPassword(x.mat_khau));
+        if (legacy.length === 0) {
+            alert(`✅ Không phát hiện tài khoản ${loai} nào còn mật khẩu plain text.`);
+            return;
+        }
+
+        let success = 0;
+        let failed = new Array();
+        for (const acc of legacy) {
+            const hashed = await hashPassword(acc.mat_khau);
+            const { error: upErr } = await sb.from(table).update({ mat_khau: hashed }).eq('id', acc.id);
+            if (upErr) failed.push(acc[codeField] || acc.id);
+            else success++;
+        }
+
+        let msg = `✅ Đã chuẩn hóa ${success}/${legacy.length} tài khoản ${loai}.`;
+        if (failed.length > 0) {
+            msg += `\n⚠️ Thất bại: ${failed.length} tài khoản (${failed.slice(0, 10).join(", ")}${failed.length > 10 ? ", ..." : ""}).`;
+        }
+        alert(msg);
+        if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
+    } catch (e) {
+        alert("❌ Lỗi khi chuẩn hóa mật khẩu legacy: " + e.message);
+    } finally {
+        if (btnElement) { btnElement.innerText = oldText; btnElement.disabled = false; }
+    }
 }
