@@ -14,79 +14,6 @@ let isSubmitting = false;
 
 let serverTimeOffset = 0; 
 let cheatTimeout = null; 
-let antiCheatIntervals = new Array();
-let antiCheatMutationObserver = null;
-let antiCheatLastViolationTs = 0;
-
-const antiCheatIntegrity = {
-    fetchRef: window.fetch,
-    xhrOpenRef: window.XMLHttpRequest ? window.XMLHttpRequest.prototype.open : null,
-    xhrSendRef: window.XMLHttpRequest ? window.XMLHttpRequest.prototype.send : null,
-    wsRef: window.WebSocket || null,
-    sendBeaconRef: navigator.sendBeacon ? navigator.sendBeacon.bind(navigator) : null,
-    consoleClearRef: console.clear
-};
-
-const antiCheatRuntime = {
-    tamperDetected: false,
-    overlayDetectedCount: 0,
-    devtoolsDetectedCount: 0,
-    heartbeatMissCount: 0,
-    lastBeatTs: Date.now(),
-    reasons: new Array(),
-    reasonStats: {
-        tab_focus: 0,
-        fullscreen_exit: 0,
-        suspicious_overlay: 0,
-        network_tamper: 0,
-        devtools: 0,
-        monitor_interrupt: 0,
-        other: 0
-    }
-};
-
-// ==========================================
-// DEMO / BOOTSTRAP (LOCAL-ONLY)
-// - Provides ready credentials for local audit/testing without backend
-// - Hard-disabled in non-local contexts
-// ==========================================
-const DEMO_LOCAL_FLAG_KEY = "DAMSAN_DEMO_LOCAL_ENABLED";
-const DEMO_HS = {
-    ma_truong: "DAMSAN",
-    ma_hs: "HS_DEMO",
-    pass: "Demo@123456",
-    profile: {
-        truong_id: "LOCAL_DEMO",
-        hs_id: "LOCAL_HS_DEMO",
-        ma_hs: "HS_DEMO",
-        ho_ten: "Học sinh Demo (Local)",
-        lop: "12A1"
-    }
-};
-
-function isLocalRuntime() {
-    const h = (location && location.hostname) ? location.hostname : "";
-    const p = (location && location.protocol) ? location.protocol : "";
-    return p === "file:" || h === "localhost" || h === "127.0.0.1";
-}
-
-function isDemoLocalEnabled() {
-    if (!isLocalRuntime()) return false;
-    try { return localStorage.getItem(DEMO_LOCAL_FLAG_KEY) === "1"; } catch (e) { return false; }
-}
-
-function enableDemoLocalHS() {
-    if (!isLocalRuntime()) return alert("Chế độ DEMO chỉ bật khi chạy local (file:// hoặc localhost).");
-    if (!confirm("Bật chế độ DEMO local cho học sinh? (Chỉ dùng để test/audit, không dùng khi triển khai thật)")) return;
-    try { localStorage.setItem(DEMO_LOCAL_FLAG_KEY, "1"); } catch (e) {}
-    try {
-        let u = document.getElementById("ma_hs");
-        let p = document.getElementById("mat_khau");
-        if (u) u.value = DEMO_HS.ma_hs;
-        if (p) p.value = DEMO_HS.pass;
-    } catch (e) {}
-    alert("✅ DEMO local đã bật. Tài khoản đã được điền sẵn.");
-}
 
 // ==========================================
 // AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
@@ -204,296 +131,6 @@ async function dongBoGiamSatThoiGian() {
 
 function layThoiGianChuan() { return Date.now() + serverTimeOffset; }
 
-function ghiNhanNghiVan(reason) {
-    let category = "other";
-    const r = String(reason || "").toLowerCase();
-    if (r.includes('tab') || r.includes('focus')) category = "tab_focus";
-    else if (r.includes('toàn màn hình') || r.includes('fullscreen')) category = "fullscreen_exit";
-    else if (r.includes('lớp phủ') || r.includes('overlay')) category = "suspicious_overlay";
-    else if (r.includes('api nền') || r.includes('tamper')) category = "network_tamper";
-    else if (r.includes('devtools')) category = "devtools";
-    else if (r.includes('gián đoạn') || r.includes('heartbeat')) category = "monitor_interrupt";
-
-    antiCheatRuntime.reasons.push({ t: Date.now(), reason, category });
-    antiCheatRuntime.reasonStats[category] = (antiCheatRuntime.reasonStats[category] || 0) + 1;
-    if (antiCheatRuntime.reasons.length > 50) antiCheatRuntime.reasons.shift();
-}
-
-function dinhDangThoiDiem(ts) {
-    try {
-        return new Date(ts).toLocaleTimeString('vi-VN', { hour12: false });
-    } catch (e) {
-        return "--:--:--";
-    }
-}
-
-function taoDuLieuForensic() {
-    return {
-        generated_at: new Date().toISOString(),
-        student: {
-            hs_id: state.hs_id,
-            ma_hs: state.ma_hs,
-            ho_ten: state.ho_ten,
-            lop: state.lop
-        },
-        exam: {
-            truong_id: state.truong_id,
-            phong_id: state.phong_id,
-            ma_phong_text: state.ma_phong_text,
-            ma_de: state.ma_de
-        },
-        anti_cheat: {
-            cheat_count: cheatCount,
-            stats: antiCheatRuntime.reasonStats,
-            events: antiCheatRuntime.reasons.map((x) => ({
-                ts: x.t,
-                time: dinhDangThoiDiem(x.t),
-                category: x.category || "other",
-                reason: x.reason
-            }))
-        }
-    };
-}
-
-function taiFileNoiDung(filename, content, mimeType = "text/plain;charset=utf-8") {
-    const blob = new Blob([content], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-function exportForensicJSON() {
-    const payload = taoDuLieuForensic();
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const name = `forensic_${state.ma_hs || "unknown"}_${stamp}.json`;
-    taiFileNoiDung(name, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
-}
-
-function exportForensicTXT() {
-    const p = taoDuLieuForensic();
-    const s = p.anti_cheat.stats || {};
-    const lines = new Array();
-    lines.push("=== BIEN BAN FORENSIC ANTI-CHEAT ===");
-    lines.push(`Generated at: ${p.generated_at}`);
-    lines.push("");
-    lines.push("[STUDENT]");
-    lines.push(`HS_ID: ${p.student.hs_id || ""}`);
-    lines.push(`MA_HS: ${p.student.ma_hs || ""}`);
-    lines.push(`HO_TEN: ${p.student.ho_ten || ""}`);
-    lines.push(`LOP: ${p.student.lop || ""}`);
-    lines.push("");
-    lines.push("[EXAM]");
-    lines.push(`TRUONG_ID: ${p.exam.truong_id || ""}`);
-    lines.push(`PHONG_ID: ${p.exam.phong_id || ""}`);
-    lines.push(`MA_PHONG_TEXT: ${p.exam.ma_phong_text || ""}`);
-    lines.push(`MA_DE: ${p.exam.ma_de || ""}`);
-    lines.push("");
-    lines.push("[SUMMARY]");
-    lines.push(`CHEAT_COUNT: ${p.anti_cheat.cheat_count}`);
-    lines.push(`TAB_FOCUS: ${s.tab_focus || 0}`);
-    lines.push(`FULLSCREEN_EXIT: ${s.fullscreen_exit || 0}`);
-    lines.push(`SUSPICIOUS_OVERLAY: ${s.suspicious_overlay || 0}`);
-    lines.push(`NETWORK_TAMPER: ${s.network_tamper || 0}`);
-    lines.push(`DEVTOOLS: ${s.devtools || 0}`);
-    lines.push(`MONITOR_INTERRUPT: ${s.monitor_interrupt || 0}`);
-    lines.push(`OTHER: ${s.other || 0}`);
-    lines.push("");
-    lines.push("[TIMELINE]");
-    p.anti_cheat.events.forEach((e, i) => {
-        lines.push(`${i + 1}. [${e.time}] (${e.category}) ${e.reason}`);
-    });
-    if (p.anti_cheat.events.length === 0) lines.push("No suspicious events recorded.");
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const name = `forensic_${state.ma_hs || "unknown"}_${stamp}.txt`;
-    taiFileNoiDung(name, lines.join("\n"), "text/plain;charset=utf-8");
-}
-
-function renderForensicPanel() {
-    const panel = document.getElementById('forensic-panel');
-    if (!panel) return;
-
-    const total = antiCheatRuntime.reasons.length;
-    const s = antiCheatRuntime.reasonStats;
-    if (total === 0) {
-        panel.style.display = 'block';
-        panel.style.background = '#e8f5e9';
-        panel.style.borderColor = '#34a853';
-        panel.innerHTML = `
-            <h3 style="margin:0 0 8px 0; color:#1e8e3e;">BÁO CÁO FORENSIC ANTI-CHEAT</h3>
-            <p style="margin:0; color:#1e8e3e; font-weight:bold;">Không ghi nhận dấu hiệu vi phạm trong phiên thi.</p>
-            <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                <button onclick="exportForensicJSON()" style="background:#1a73e8; color:#fff; border:none; border-radius:6px; padding:8px 12px; cursor:pointer; font-weight:bold;">Xuất JSON</button>
-                <button onclick="exportForensicTXT()" style="background:#5f6368; color:#fff; border:none; border-radius:6px; padding:8px 12px; cursor:pointer; font-weight:bold;">Xuất TXT</button>
-            </div>
-        `;
-        return;
-    }
-
-    const timeline = antiCheatRuntime.reasons
-        .slice(-12)
-        .map(x => `<li style="margin:4px 0;"><b>${dinhDangThoiDiem(x.t)}</b> - ${safeHTML(x.reason)}</li>`)
-        .join('');
-
-    panel.style.display = 'block';
-    panel.style.background = '#fff8e1';
-    panel.style.borderColor = '#fbbc04';
-    panel.innerHTML = `
-        <h3 style="margin:0 0 10px 0; color:#b06000;">BÁO CÁO FORENSIC ANTI-CHEAT</h3>
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap:8px; margin-bottom:12px;">
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>Tổng nghi vấn:</b> ${total}</div>
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>Tab/Focus:</b> ${s.tab_focus}</div>
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>Thoát fullscreen:</b> ${s.fullscreen_exit}</div>
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>Overlay nghi vấn:</b> ${s.suspicious_overlay}</div>
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>Tamper API nền:</b> ${s.network_tamper}</div>
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>DevTools:</b> ${s.devtools}</div>
-            <div style="background:#fff; border:1px solid #eee; border-radius:8px; padding:8px;"><b>Gián đoạn monitor:</b> ${s.monitor_interrupt}</div>
-        </div>
-        <div style="background:#fff; border:1px dashed #fbbc04; border-radius:8px; padding:10px;">
-            <b>Dòng thời gian sự kiện gần nhất:</b>
-            <ul style="margin:8px 0 0 16px; padding:0;">${timeline}</ul>
-        </div>
-        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-            <button onclick="exportForensicJSON()" style="background:#1a73e8; color:#fff; border:none; border-radius:6px; padding:8px 12px; cursor:pointer; font-weight:bold;">Xuất JSON</button>
-            <button onclick="exportForensicTXT()" style="background:#5f6368; color:#fff; border:none; border-radius:6px; padding:8px 12px; cursor:pointer; font-weight:bold;">Xuất TXT</button>
-        </div>
-    `;
-}
-
-function detectConsoleOpen() {
-    try {
-        let opened = false;
-        const element = new Image();
-        Object.defineProperty(element, 'id', {
-            get() {
-                opened = true;
-                return 'devtools-detect';
-            }
-        });
-        const start = Date.now();
-        console.log(element);
-        return opened || (Date.now() - start) > 120;
-    } catch (e) {
-        return false;
-    }
-}
-
-function phatHienDevTools() {
-    const wDiff = Math.abs(window.outerWidth - window.innerWidth);
-    const hDiff = Math.abs(window.outerHeight - window.innerHeight);
-    const sizeDetected = (wDiff > 170 || hDiff > 170);
-    const consoleDetected = detectConsoleOpen();
-    return sizeDetected || consoleDetected;
-}
-
-function phatHienOverlayNghiVan() {
-    if (!isExamActive) return false;
-    const whiteList = new Set(['sync-toast', 'network-banner', 'cheat-warning', 'exam-section', 'exam-main-area', 'question-grid', 'display-timer']);
-    const nodes = document.querySelectorAll('body *');
-    const vpW = window.innerWidth || 1;
-    const vpH = window.innerHeight || 1;
-    const vpArea = vpW * vpH;
-
-    for (const el of nodes) {
-        if (!el || !el.id || whiteList.has(el.id)) continue;
-        if (el.closest('#cheat-warning') || el.closest('#network-banner') || el.closest('.sync-toast')) continue;
-
-        const st = window.getComputedStyle(el);
-        if (st.display === 'none' || st.visibility === 'hidden' || st.pointerEvents === 'none') continue;
-        if (st.position !== 'fixed' && st.position !== 'sticky' && st.position !== 'absolute') continue;
-
-        const z = parseInt(st.zIndex || '0', 10);
-        if (isNaN(z) || z < 500) continue;
-
-        const rect = el.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) continue;
-
-        const area = rect.width * rect.height;
-        const coversScreen = area >= vpArea * 0.12;
-        const hasOverlayAppearance = st.backgroundColor.includes('rgba') || st.backdropFilter !== 'none' || st.filter !== 'none';
-        const text = (el.innerText || '').toLowerCase();
-
-        if (coversScreen && hasOverlayAppearance) {
-            return true;
-        }
-
-        if (area >= vpArea * 0.05) {
-            if (
-                text.includes('chatgpt') || text.includes('gemini') || text.includes('copilot') ||
-                text.includes('assistant') || text.includes('ai') || text.includes('gợi ý') ||
-                text.includes('hint') || text.includes('gợi') || text.includes('trợ giúp')
-            ) {
-                return true;
-            }
-            if (st.backgroundColor.startsWith('rgba(0, 0, 0') || st.backgroundColor.startsWith('rgba(255, 255, 255') || st.backdropFilter.includes('blur')) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-function kiemTraHookNenTrinhDuyet() {
-    if (!isExamActive) return [];
-    const hooks = [];
-    if (window.fetch !== antiCheatIntegrity.fetchRef) hooks.push('fetch');
-    if (window.XMLHttpRequest && window.XMLHttpRequest.prototype.open !== antiCheatIntegrity.xhrOpenRef) hooks.push('xhr_open');
-    if (window.XMLHttpRequest && window.XMLHttpRequest.prototype.send !== antiCheatIntegrity.xhrSendRef) hooks.push('xhr_send');
-    if (window.WebSocket !== antiCheatIntegrity.wsRef) hooks.push('websocket');
-    if (navigator.sendBeacon && antiCheatIntegrity.sendBeaconRef && navigator.sendBeacon !== antiCheatIntegrity.sendBeaconRef) hooks.push('sendBeacon');
-    return hooks;
-}
-
-function batDauGiamSatNangCao() {
-    antiCheatRuntime.lastBeatTs = Date.now();
-    antiCheatRuntime.overlayDetectedCount = 0;
-    antiCheatRuntime.devtoolsDetectedCount = 0;
-    antiCheatRuntime.heartbeatMissCount = 0;
-    antiCheatRuntime.tamperDetected = false;
-    antiCheatRuntime.tamperDetectedCount = 0;
-    antiCheatRuntime.reasons = new Array();
-    antiCheatRuntime.reasonStats = {
-        tab_focus: 0,
-        fullscreen_exit: 0,
-        suspicious_overlay: 0,
-        network_tamper: 0,
-        devtools: 0,
-        monitor_interrupt: 0,
-        other: 0
-    };
-
-    // Chỉ giữ lại phát hiện overlay nghi vấn (bong bóng nổi)
-    antiCheatIntervals.push(setInterval(() => {
-        if (!isExamActive) return;
-        if (phatHienOverlayNghiVan()) {
-            antiCheatRuntime.overlayDetectedCount++;
-            ghiNhanNghiVan('suspicious_overlay');
-            if (antiCheatRuntime.overlayDetectedCount >= 2) {
-                xuLyGianLan('Phát hiện lớp phủ nổi nghi vấn trợ giúp AI');
-            }
-        }
-    }, 2500));
-
-    // Mutation observer cho overlay
-    try {
-        antiCheatMutationObserver = new MutationObserver(() => {
-            if (!isExamActive) return;
-            if (phatHienOverlayNghiVan()) {
-                antiCheatRuntime.overlayDetectedCount++;
-                ghiNhanNghiVan('overlay_mutation');
-                if (antiCheatRuntime.overlayDetectedCount >= 2) {
-                    xuLyGianLan('Phát hiện lớp phủ nổi xuất hiện bất thường');
-                }
-            }
-        });
-        antiCheatMutationObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
-    } catch (e) {}
-}
-
 // ==========================================
 // CÁC HÀM XỬ LÝ CHÍNH
 // ==========================================
@@ -546,10 +183,13 @@ async function login() {
             .select('id, ho_ten, lop, mat_khau')
             .eq('truong_id', truongData.id)
             .eq('ma_hs', maHs)
-            .eq('mat_khau', hashedPass)
+            .or(`mat_khau.eq.${hashedPass},mat_khau.eq.${matKhau}`)
             .single();
             
         if (!hsData) throw new Error("Thông tin tài khoản không chính xác!");
+        if (hsData.mat_khau === matKhau && matKhau !== DEFAULT_PASS_HASH) {
+            _supabase.from('hoc_sinh').update({ mat_khau: hashedPass }).eq('id', hsData.id).then();
+        }
 
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
         
@@ -880,15 +520,8 @@ function batDauAntiCheat() {
     
     document.addEventListener('contextmenu', chanHanhDong);
     document.addEventListener('copy', chanHanhDong);
-    document.addEventListener('selectstart', chanHanhDong);
     document.addEventListener('keydown', chanPhimTat);
     window.onbeforeunload = xacNhanThoatTrang;
-    document.addEventListener('fullscreenchange', handleFullScreenChange);
-    document.addEventListener('pagehide', handlePageHide);
-    window.addEventListener('resize', handleResize);
-    document.addEventListener('focusin', handleFocusIn);
-
-    batDauGiamSatNangCao();
 
     setTimeout(() => {
         if(!isExamActive) return; 
@@ -902,45 +535,8 @@ function batDauAntiCheat() {
 
 function handleVisibilityChange() {
     if (document.visibilityState === 'hidden' && isExamActive) {
-        xuLyGianLan('Rời khỏi tab thi');
+        xuLyGianLan();
     }
-}
-
-function handlePageHide() {
-    if (isExamActive) {
-        xuLyGianLan('Rời trang thi / pagehide');
-    }
-}
-
-function handleFocusIn(e) {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
-        lastInputFocusTime = Date.now();
-    }
-}
-
-let lastInputFocusTime = 0;
-let lastWindowSize = { width: window.innerWidth, height: window.innerHeight };
-
-function handleResize() {
-    if (!isExamActive) return;
-    const currentWidth = window.innerWidth;
-    const currentHeight = window.innerHeight;
-    const wDiff = Math.abs(window.outerWidth - currentWidth);
-    const hDiff = Math.abs(window.outerHeight - currentHeight);
-    const sizeChanged = Math.abs(currentWidth - lastWindowSize.width) > 50 || Math.abs(currentHeight - lastWindowSize.height) > 50;
-
-    // Phát hiện bàn phím ảo: nếu chỉ height giảm đáng kể (>200px) và width không đổi nhiều, và gần đây có focus input
-    const isMobile = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
-    const heightOnlyShrink = currentHeight < lastWindowSize.height - 200 && Math.abs(currentWidth - lastWindowSize.width) < 50;
-    const recentInputFocus = Date.now() - lastInputFocusTime < 3000; // 3 giây gần đây
-
-    if (sizeChanged && !(isMobile && heightOnlyShrink && recentInputFocus)) {
-        if (wDiff > 200 || hDiff > 200) {
-            xuLyGianLan('Kích thước cửa sổ thay đổi nghi vấn');
-        }
-    }
-
-    lastWindowSize = { width: currentWidth, height: currentHeight };
 }
 
 function handleBlur() {
@@ -948,16 +544,9 @@ function handleBlur() {
     
     cheatTimeout = setTimeout(() => {
         if (!document.hasFocus()) {
-            xuLyGianLan('Mất focus cửa sổ thi');
+            xuLyGianLan();
         }
     }, 500);
-}
-
-function handleFullScreenChange() {
-    if (!isExamActive) return;
-    if (!document.fullscreenElement) {
-        xuLyGianLan('Thoát khỏi chế độ toàn màn hình');
-    }
 }
 
 function handleFocus() {
@@ -972,24 +561,12 @@ function tatAntiCheat() {
     if(cheatTimeout) clearTimeout(cheatTimeout);
     document.removeEventListener('contextmenu', chanHanhDong); 
     document.removeEventListener('copy', chanHanhDong); 
-    document.removeEventListener('selectstart', chanHanhDong);
     document.removeEventListener('keydown', chanPhimTat);
     window.onbeforeunload = null;
-    document.removeEventListener('pagehide', handlePageHide);
-    window.removeEventListener('resize', handleResize);
-    document.removeEventListener('focusin', handleFocusIn);
     
     window.removeEventListener('blur', handleBlur); 
     window.removeEventListener('focus', handleFocus);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
-    document.removeEventListener('fullscreenchange', handleFullScreenChange);
-
-    antiCheatIntervals.forEach(t => clearInterval(t));
-    antiCheatIntervals = new Array();
-    if (antiCheatMutationObserver) {
-        try { antiCheatMutationObserver.disconnect(); } catch (e) {}
-        antiCheatMutationObserver = null;
-    }
     
     if(examTimer) clearInterval(examTimer);
 }
@@ -997,31 +574,16 @@ function tatAntiCheat() {
 function chanHanhDong(e) { if(isExamActive) e.preventDefault(); }
 function chanPhimTat(e) {
     if (!isExamActive) return;
-    const forbidden = [
-        e.key === 'PrintScreen',
-        (e.ctrlKey && e.key.toUpperCase() === 'P') // Ctrl+P để in, có thể liên quan
-    ];
-    if (forbidden.some(Boolean)) {
-        e.preventDefault();
-        xuLyGianLan('Phát hiện phím tắt bị vô hiệu hóa');
-        alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
+    if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'c') || (e.ctrlKey && e.key === 'v') || (e.key === 'F5') || (e.ctrlKey && e.key === 'r')) {
+        e.preventDefault(); alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
     }
 }
 
-function xuLyGianLan(reason = 'Hành vi nghi vấn') {
+function xuLyGianLan() {
     if (!isExamActive) return;
-    const now = Date.now();
-    if (now - antiCheatLastViolationTs < 1200) return; // debounce to avoid duplicate bursts
-    antiCheatLastViolationTs = now;
-    if (document.getElementById('cheat-warning').style.display === 'block') return;
-    ghiNhanNghiVan(reason);
+    if (document.getElementById('cheat-warning').style.display === 'block') return; 
     cheatCount++;
     document.getElementById('cheat-count').innerText = cheatCount;
-    const warningEl = document.getElementById('cheat-warning');
-    const msgEl = warningEl ? warningEl.querySelector('p') : null;
-    if (msgEl) {
-        msgEl.innerText = `Hệ thống phát hiện vi phạm: ${reason}. Nếu tiếp tục, bài thi sẽ bị thu tự động.`;
-    }
     document.getElementById('cheat-warning').style.display = 'block';
     if (cheatCount >= MAX_CHEATS) {
         document.querySelector('.btn-warning').style.display = 'none';
@@ -1033,7 +595,6 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
 function closeCheatWarning() {
     document.getElementById('cheat-warning').style.display = 'none';
     try { document.documentElement.requestFullscreen(); } catch(e){}
-    renderForensicPanel();
 }
 
 function xacNhanNopBai() {
@@ -1084,15 +645,11 @@ async function gradeAndSubmit(autoSubmit = false) {
             if (cheatCount > 0) {
                 await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
             }
-            if (antiCheatRuntime.reasons.length > 0) {
-                console.warn("Anti-cheat evidence trail:", antiCheatRuntime.reasons);
-            }
 
             localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
             document.getElementById('finish_name').innerText = state.ho_ten; 
             showSection('result-section'); 
             try { document.exitFullscreen(); } catch(e){} 
-            renderForensicPanel();
 
             checkTeacherCommand(true);
 
@@ -1113,7 +670,6 @@ async function checkTeacherCommand(isAuto = false) {
         const { data: phong } = await _supabase.from('phong_thi').select('trang_thai').eq('id', state.phong_id).single();
         const { data: kq } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
         state.user_result = kq;
-        renderForensicPanel();
 
         if (phong.trang_thai === 'CONG_BO_DIEM' || phong.trang_thai === 'XEM_DAP_AN') {
             document.getElementById('score-display-area').style.display = 'block'; 
