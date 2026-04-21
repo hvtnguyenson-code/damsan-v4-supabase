@@ -38,12 +38,12 @@
         .user-profile-info .role { font-size: 11px; opacity: 0.9; text-transform: uppercase; font-weight: 600;}
 
         /* --- PHẦN THÂN: SIDEBAR 1/5 & WORKSPACE 4/5 --- */
-        .main-body { display: flex; flex: 1; overflow: hidden; position: relative; }
+        .main-body { display: flex; flex: 1; overflow: hidden; position: relative; min-height: 0; }
         
         .sidebar { 
-            width: 20%; 
-            min-width: 250px; 
-            max-width: 300px; 
+            width: 300px; 
+            min-width: 300px; 
+            max-width: 320px; 
             background: #fff; 
             border-right: 1px solid #e0e0e0; 
             display: flex; 
@@ -57,7 +57,8 @@
         
         .sidebar-backdrop { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 15; }
 
-        .workspace { width: 80%; flex: 1; background: #f4f6f8; overflow-y: auto; padding: 25px; position: relative;}
+        .workspace { flex: 1; width: auto; min-width: 0; background: #f4f6f8; overflow: hidden; scrollbar-gutter: stable; padding: 25px; position: relative; display: flex; flex-direction: column; }
+        .workspace > .tab-content { flex: 1; overflow: auto; }
 
         .logout-btn { margin: auto 20px 20px 20px; background: #fff; color: #e74c3c; border: 1px solid #fadbd8; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; flex-shrink: 0;}
         .logout-btn:hover { background: #e74c3c; color: white; }
@@ -75,9 +76,9 @@
         .nav-menu::-webkit-scrollbar { width: 5px; }
         .nav-menu::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 5px; }
 
-        .nav-btn { display: flex; align-items: center; justify-content: space-between; padding: 14px 15px; background: transparent; border: none; font-size: 15px; font-weight: bold; color: #5f6368; border-radius: 8px; cursor: pointer; transition: 0.2s; width: 100%;}
-        .nav-btn .tab-title { display: flex; align-items: center; gap: 12px; }
-        .nav-btn .tab-title i { width: 24px; text-align: center; font-size: 18px; }
+        .nav-btn { display: flex; align-items: center; justify-content: space-between; padding: 14px 15px; background: transparent; border: none; font-size: 15px; font-weight: bold; color: #5f6368; border-radius: 8px; cursor: pointer; transition: 0.2s; width: 100%; min-height: 52px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nav-btn .tab-title { display: flex; align-items: center; gap: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nav-btn .tab-title i { width: 24px; text-align: center; font-size: 18px; flex-shrink: 0; }
         .nav-btn:hover { background: #f1f3f4; color: #1a73e8; }
         .nav-btn.active { background: #1a73e8; color: white; box-shadow: 0 4px 6px rgba(26,115,232,0.2); }
         
@@ -96,11 +97,10 @@
         .sub-tabs button:hover { background: #e8f0fe; color: #1a73e8; }
         .sub-tabs button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
         
-        .tab-content { display: none; animation: fadeIn 0.3s; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); border: 1px solid #e0e0e0;}
+        .tab-content { display: none; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); border: 1px solid #e0e0e0; min-height: calc(100vh - 170px); box-sizing: border-box; }
         .tab-content.active { display: block; }
-        .sub-tab-content { display: none; animation: fadeIn 0.3s; }
+        .sub-tab-content { display: none; }
         .sub-tab-content.active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: translateY(0);} }
         
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
@@ -592,8 +592,8 @@
                         </div>
                         <div class="table-responsive">
                             <table id="bangDiem">
-                                <thead><tr><th style="width:80px;">SBD</th><th>Họ và Tên</th><th>Lớp</th><th>Trạng thái</th><th>Mã đề</th><th style="background:#d4edda; width: 100px;">Tổng Điểm</th><th style="background:#e2eef9;">P. I</th><th style="background:#e2eef9;">P. II</th><th style="background:#e2eef9;">P. III</th></tr></thead>
-                                <tbody id="dashBody"><tr><td colspan="9">Chưa có dữ liệu...</td></tr></tbody>
+                                <thead><tr><th style="width:80px;">SBD</th><th>Họ và Tên</th><th>Lớp</th><th>Trạng thái</th><th>Mã đề</th><th style="background:#d4edda; width: 100px;">Tổng Điểm</th><th style="background:#e2eef9;">P. I</th><th style="background:#e2eef9;">P. II</th><th style="background:#e2eef9;">P. III</th><th>Vi phạm</th></tr></thead>
+                                <tbody id="dashBody"><tr><td colspan="10">Chưa có dữ liệu...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -604,6 +604,7 @@
                                 <button style="background: #1a73e8;" onclick="fetchStudents(true)">🔄 Tải Danh sách HS</button>
                                 <button style="background: #f39c12;" onclick="resetSelectedPass('HS')">🔑 Khôi phục MK Đã chọn</button>
                                 <button style="background: #e74c3c;" onclick="deleteSelectedAccounts('HS')">🗑️ Xóa TK Đã chọn</button>
+                                <button style="background: #5f6368;" onclick="migrateLegacyPasswords('HS', this)">🛡️ Chuẩn hóa MK Legacy (HS)</button>
                             </div>
                             <div id="subTabsHS" class="sub-tabs"></div>
                             <div class="table-responsive">
@@ -624,6 +625,7 @@
                                 <button style="background: #8e44ad;" onclick="fetchTeachers(true)">🔄 Tải Danh sách GV</button>
                                 <button style="background: #f39c12;" onclick="resetSelectedPass('GV')">🔑 Khôi phục MK Đã chọn</button>
                                 <button style="background: #e74c3c;" onclick="deleteSelectedAccounts('GV')">🗑️ Xóa TK Đã chọn</button>
+                                <button style="background: #5f6368;" onclick="migrateLegacyPasswords('GV', this)">🛡️ Chuẩn hóa MK Legacy (GV)</button>
                             </div>
                             <div class="table-responsive">
                                 <table id="bangGV">

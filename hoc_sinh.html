@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phòng Thi Trực Tuyến - Hệ Thống Đam San V4</title>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -251,6 +252,7 @@
             </div>
 
             <button onclick="checkTeacherCommand()" style="background: #f39c12; color: white; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; margin-bottom: 10px;">🔄 TẢI LẠI TRẠNG THÁI</button>
+            <div id="forensic-panel" class="review-box" style="display:none; margin-top: 20px; background: #fff8e1; border: 1px solid #fbbc04; border-radius: 10px; padding: 15px; text-align: left;"></div>
             <div id="review-content" class="review-box"></div>
             <button onclick="location.reload()" style="background: #5f6368; color: white; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 30px;">🏠 QUAY VỀ TRANG CHỦ</button>
         </div>
