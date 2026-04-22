@@ -2750,7 +2750,9 @@ async function docFileExcelVaNap(loai) {
         if (rowsToInsert.length === 0) throw new Error("Không tìm thấy dữ liệu hợp lệ!");
 
         let tableName = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-        let { error } = await sb.from(tableName).insert(rowsToInsert);
+        // Nâng cấp: Dùng upsert thay cho insert để ghi đè nếu trùng mã
+let conflictCols = loai === 'HS' ? 'truong_id, ma_hs' : 'truong_id, ma_gv';
+let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conflictCols });
         if (error) throw error;
 
         // Báo cáo đối chiếu số lượng quét được với số STT trong danh sách
