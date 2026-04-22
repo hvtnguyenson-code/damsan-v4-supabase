@@ -2634,8 +2634,28 @@ async function xuatExcel() {
         });
     });
 
-    let tenLopStr = currentDashFilter === "TatCa" ? "TatCa" : currentDashFilter;
-    let tenFile = `BangDiem_${maPhong}_${tenLopStr}.xlsx`;
+    // --- BẮT ĐẦU ĐOẠN ĐƯỢC CẬP NHẬT TÊN FILE ---
+    let tenMonStr = "Tổng Hợp"; 
+    if (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") {
+        let matchedMon = g_sysMonList.find(m => String(m.id) === String(activeWorkspaceMonId));
+        if (matchedMon) {
+            tenMonStr = matchedMon.ten_mon;
+        } else {
+            // Dự phòng trường hợp Admin lấy từ thẻ select hoặc GV lấy từ text hiển thị
+            let sel = document.getElementById('workspaceSelector');
+            if (sel) {
+                tenMonStr = sel.options[sel.selectedIndex].text.replace('📚 Môn: ', '').trim();
+            } else {
+                let monSpan = document.querySelector('#workspaceContainer span:last-child');
+                if (monSpan) tenMonStr = monSpan.innerText.trim();
+            }
+        }
+    }
+
+    let tenLopStr = currentDashFilter === "TatCa" ? "Tất cả các lớp" : currentDashFilter;
+    // Format theo đúng chuẩn: Bảng điểm [Tên môn]_[Mã phòng]_[Tên lớp]
+    let tenFile = `Bảng điểm ${tenMonStr}_${maPhong}_${tenLopStr}.xlsx`;
+    // --- KẾT THÚC ĐOẠN CẬP NHẬT ---
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
@@ -2651,20 +2671,20 @@ async function taiFileMau(loai) {
     
     if (loai === 'HS') {
         worksheet.columns = [
+            { header: 'STT', key: 'stt', width: 8 },
             { header: 'Mã HS', key: 'ma_hs', width: 15 },
             { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
             { header: 'Lớp', key: 'lop', width: 15 }
         ];
-        worksheet.addRow({ ma_hs: 'HS001', ho_ten: 'Nguyễn Văn A', lop: '10A1' });
-        worksheet.addRow({ ma_hs: 'HS002', ho_ten: 'Trần Thị B', lop: '10A1' });
+        worksheet.addRow({ stt: 1, ma_hs: 'HS001', ho_ten: 'Nguyễn Văn A', lop: '10A1' });
     } else {
         worksheet.columns = [
+            { header: 'STT', key: 'stt', width: 8 },
             { header: 'Mã GV', key: 'ma_gv', width: 15 },
             { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
             { header: 'Quyền (Admin/GV)', key: 'quyen', width: 20 }
         ];
-        worksheet.addRow({ ma_gv: 'GV001', ho_ten: 'Phạm Văn C', quyen: 'Admin' });
-        worksheet.addRow({ ma_gv: 'GV002', ho_ten: 'Lê Thị D', quyen: 'GV' });
+        worksheet.addRow({ stt: 1, ma_gv: 'GV001', ho_ten: 'Phạm Văn C', quyen: 'Admin' });
     }
     
     worksheet.getRow(1).eachCell((cell) => { 
@@ -2684,31 +2704,42 @@ async function docFileExcelVaNap(loai) {
     let fileInput = document.getElementById(`fileExcel${loai}`);
     if(!fileInput.files || fileInput.files.length === 0) return alert("Vui lòng chọn file Excel!");
     let btn = document.getElementById(`btnNap${loai}`);
-    let oldText = btn.innerText; btn.innerText = "⏳ Đang đọc và nạp lên máy chủ..."; btn.disabled = true;
+    let oldText = btn.innerText; btn.innerText = "⏳ Đang đọc và nạp..."; btn.disabled = true;
     
     try {
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileInput.files[0]);
         const worksheet = workbook.worksheets[0];
         let rowsToInsert = new Array();
-        
         let defaultPass = await hashPassword('123456');
 
+        // Biến theo dõi Số thứ tự lớn nhất trong danh sách
+        let maxStt = 0; 
+
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) { 
+            if (rowNumber > 1) { // Bỏ qua dòng tiêu đề
+                
+                // Đọc cột 1 để lấy STT
+                let sttRaw = row.getCell(1).value;
+                let stt = sttRaw ? parseInt(sttRaw.toString().trim()) : 0;
+                if (!isNaN(stt) && stt > maxStt) {
+                    maxStt = stt;
+                }
+
                 if (loai === 'HS') {
-                    // Đã sửa lại đúng Mapping theo mẫu tải về: 1=Mã HS, 2=Họ và Tên, 3=Lớp
-                    let ma_hs = row.getCell(1).value ? row.getCell(1).value.toString().trim() : '';
-                    let ho_ten = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
-                    let lop = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
+                    // Lấy dữ liệu các cột còn lại
+                    let ma_hs = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
+                    let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
+                    let lop = row.getCell(4).value ? row.getCell(4).value.toString().trim() : '';
+                    
                     if (ma_hs && ho_ten) {
                         rowsToInsert.push({ ma_hs: ma_hs, ho_ten: ho_ten, lop: lop, mat_khau: defaultPass, truong_id: gvData.truong_id });
                     }
                 } else {
-                    // Đã sửa lại đúng Mapping theo mẫu GV tải về: 1=Mã GV, 2=Họ và Tên, 3=Quyền/Môn
-                    let ma_gv = row.getCell(1).value ? row.getCell(1).value.toString().trim() : '';
-                    let ho_ten = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
-                    let quyen = row.getCell(3).value ? row.getCell(3).value.toString().trim() : 'GV';
+                    let ma_gv = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
+                    let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
+                    let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
+                    
                     if (ma_gv && ho_ten) {
                         rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: gvData.truong_id });
                     }
@@ -2716,15 +2747,16 @@ async function docFileExcelVaNap(loai) {
             }
         });
 
-        if (rowsToInsert.length === 0) throw new Error("Không tìm thấy dữ liệu hợp lệ trong file Excel!");
+        if (rowsToInsert.length === 0) throw new Error("Không tìm thấy dữ liệu hợp lệ!");
 
         let tableName = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
         let { error } = await sb.from(tableName).insert(rowsToInsert);
         if (error) throw error;
 
-        alert(`✅ Đã nạp thành công ${rowsToInsert.length} tài khoản mới! Mật khẩu mặc định là 123456.`);
-        if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
+        // Báo cáo đối chiếu số lượng quét được với số STT trong danh sách
+        alert(`✅ Nạp thành công: ${rowsToInsert.length} tài khoản.\n📊 Kiểm tra chéo: Số thứ tự (STT) lớn nhất ghi nhận trong file Excel là ${maxStt}.`);
         
+        if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
         fileInput.value = ""; 
     } catch(e) {
         alert("❌ Lỗi: " + e.message);
