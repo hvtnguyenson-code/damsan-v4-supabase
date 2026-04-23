@@ -11,6 +11,7 @@ let teacherTimerInterval = null;
 let danhSachThuCong = new Array();
 let previewExamData = new Array(); 
 let ketQuaChannel = null;
+const chiTietCache = new Map(); // TỐI ƯU: Cache kết quả parse JSON ChiTiet
 let g_danhSachLopCache = new Array(); 
 let g_sysMonList = new Array(); 
 
@@ -48,51 +49,6 @@ function safeHTML(str) {
     if (window.DOMPurify) { return DOMPurify.sanitize(str); }
     let doc = new DOMParser().parseFromString(str, 'text/html'); 
     return doc.body.innerHTML; 
-}
-
-/* =======================================================
-   DEMO / BOOTSTRAP (LOCAL-ONLY)
-   - Provides ready credentials for local audit/testing without backend
-   - Hard-disabled in non-local contexts
-======================================================= */
-const DEMO_LOCAL_FLAG_KEY = "DAMSAN_DEMO_LOCAL_ENABLED";
-const DEMO_GV = {
-    user: "GV_DEMO",
-    pass: "Demo@123456",
-    profile: {
-        ma_gv: "GV_DEMO",
-        ho_ten: "Giáo viên Demo (Local)",
-        quyen: "Admin",
-        truong_id: "LOCAL_DEMO",
-        truong_ten: "TRƯỜNG DEMO (LOCAL)",
-        mon_id: null,
-        id: "LOCAL_GV_DEMO"
-    }
-};
-
-function isLocalRuntime() {
-    const h = (location && location.hostname) ? location.hostname : "";
-    const p = (location && location.protocol) ? location.protocol : "";
-    // file:// has empty hostname; localhost/127.0.0.1 are considered local
-    return p === "file:" || h === "localhost" || h === "127.0.0.1";
-}
-
-function isDemoLocalEnabled() {
-    if (!isLocalRuntime()) return false;
-    try { return localStorage.getItem(DEMO_LOCAL_FLAG_KEY) === "1"; } catch (e) { return false; }
-}
-
-function enableDemoLocal() {
-    if (!isLocalRuntime()) return alert("Chế độ DEMO chỉ bật khi chạy local (file:// hoặc localhost).");
-    if (!confirm("Bật chế độ DEMO local? (Chỉ dùng để test/audit, không dùng khi triển khai thật)")) return;
-    try { localStorage.setItem(DEMO_LOCAL_FLAG_KEY, "1"); } catch (e) {}
-    try {
-        let u = document.getElementById("gvUser");
-        let p = document.getElementById("gvPass");
-        if (u) u.value = DEMO_GV.user;
-        if (p) p.value = DEMO_GV.pass;
-    } catch (e) {}
-    alert("✅ DEMO local đã bật. Tài khoản đã được điền sẵn.");
 }
 
 function isSha256Hex(v) {
@@ -618,17 +574,35 @@ function renderDashboardTable() {
 
     let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; let displayList = new Array(); let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop; 
     
+    // TỐI ƯU: Sử dụng Map để tìm kiếm kết quả bài làm nhanh hơn (O(N) thay vì O(N*M))
+    const ketQuaMap = new Map();
+    duLieuBangDiem.forEach(r => ketQuaMap.set(String(r.MaHS).trim(), r));
+
     if (targetLop && targetLop !== "TatCa") { 
         let allowedClasses = targetLop.split(',').map(s => s.trim());
         let classStudents = allStudents.filter(s => allowedClasses.includes(String(s.Lop).trim())); 
+        
         classStudents.forEach(stu => { 
-            let result = duLieuBangDiem.find(r => String(r.MaHS).trim() === String(stu.MaHS).trim()); 
-            if (result) displayList.push({...result, MaHS: stu.MaHS, id: stu.id}); 
-            else displayList.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, id: stu.id, ViPham: 0 }); 
+            let key = String(stu.MaHS).trim();
+            let result = ketQuaMap.get(key);
+            if (result) {
+                displayList.push({...result, MaHS: stu.MaHS, id: stu.id}); 
+                ketQuaMap.delete(key); // Đã xử lý xong
+            } else {
+                displayList.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, id: stu.id, ViPham: 0 }); 
+            }
         }); 
-        duLieuBangDiem.forEach(r => { if(!displayList.find(d => String(d.MaHS).trim() === String(r.MaHS).trim())) { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null}); } }); 
+
+        // Thêm những học sinh có bài làm nhưng không nằm trong danh sách lớp đã lọc (trường hợp vãng lai)
+        ketQuaMap.forEach((r, key) => {
+            let stu = allStudents.find(s => String(s.MaHS).trim() === key);
+            displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null});
+        });
     } else { 
-        duLieuBangDiem.forEach(r => { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null}); }); 
+        duLieuBangDiem.forEach(r => { 
+            let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); 
+            displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null}); 
+        }); 
     } 
     if(currentDashFilter !== 'TatCa') { 
         let allowedClasses = currentDashFilter.split(',').map(s => s.trim());
@@ -655,9 +629,17 @@ function renderDashboardTable() {
 
         if(hs.ChiTiet && isSubmitted) { 
             try { 
-                let ct = JSON.parse(hs.ChiTiet); 
-                Object.keys(ct).forEach(k => { 
-                    let item = Reflect.get(ct, k); let isDung = false; 
+                // TỐI ƯU: Chỉ parse JSON nếu nội dung thay đổi (so sánh với cache)
+                let ct;
+                if (chiTietCache.has(hs.ChiTiet)) {
+                    ct = chiTietCache.get(hs.ChiTiet);
+                } else {
+                    ct = JSON.parse(hs.ChiTiet);
+                    chiTietCache.set(hs.ChiTiet, ct);
+                }
+
+                for (let k in ct) { 
+                    let item = ct[k]; let isDung = false; 
                     if(item.phan==="1") { 
                         let cVal = String(item.chon||"").toUpperCase().trim();
                         let dVal = String(item.dung||"").toUpperCase().trim();
@@ -666,13 +648,13 @@ function renderDashboardTable() {
                     } 
                     else if(item.phan==="2") { 
                         let cArr = String(item.chon||"").split('-'); 
-                        let dStr = String(item.dung||"").toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
-                        let dArr = dStr.match(new RegExp("Đ|S", "g"));
-                        if (!dArr) dArr = new Array();
+                        let dStr = String(item.dung||"").toUpperCase().replace(/[ÐD]/g, 'Đ');
+                        let dArr = dStr.match(/[ĐS]/g);
+                        if (!dArr) dArr = [];
                         let match = 0; 
                         for(let i=0; i<4; i++) { 
                             let cValRaw = cArr[i] || "";
-                            let cVal = String(cValRaw).toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
+                            let cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
                             let cleanCVal = "";
                             if (cVal.includes("Đ")) cleanCVal = "Đ";
                             if (cVal.includes("S")) cleanCVal = "S";
@@ -689,11 +671,10 @@ function renderDashboardTable() {
                         if(isDung) hs.p3Score += 0.25; 
                     } 
                     if(!isDung) { 
-                        let fCount = Reflect.get(failCount, k) || 0;
-                        Reflect.set(failCount, k, fCount + 1); 
-                        Reflect.set(failCount, k+"_txt", item.noiDungCau); 
+                        failCount[k] = (failCount[k] || 0) + 1; 
+                        failCount[k+"_txt"] = item.noiDungCau; 
                     } 
-                }); 
+                }
             } catch(e){} 
         } 
 
@@ -727,11 +708,7 @@ function renderDashboardTable() {
         let scoreHtml = isSubmitted ? `<span class="badge-score ${badgeClass}">${total}</span>` : `<span style="color:#95a5a6; font-weight:bold;">${total}</span>`;
         let trStyle = isSubmitted && parseFloat(total) < 5.0 ? 'background-color: #fdf2e9;' : ''; 
         
-        // ĐÃ BỔ SUNG HIỂN THỊ CỜ ĐỎ NẾU CÓ VI PHẠM
         let sttHtml = isSubmitted ? '<span style="color:#27ae60;font-weight:bold;">✅ Đã nộp</span>' : '<span style="color:#95a5a6;">Chưa nộp</span>';
-        if (hs.ViPham > 0) {
-            sttHtml += `<br><span style="color:#e74c3c; font-size:12px; font-weight:bold;">🚩 Vi phạm: ${hs.ViPham} lần</span>`;
-        }
 
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
