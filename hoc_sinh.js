@@ -1028,30 +1028,49 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     const now = Date.now();
     if (now - antiCheatLastViolationTs < 2000) return; 
     antiCheatLastViolationTs = now;
+
+    // TỐI ƯU: Xác định phần thi hiện tại một cách tuyệt đối chính xác (Kết hợp biến state và thực tế DOM)
+    let isPhan2 = false;
+    let currentQ = state.cau_hỏi[currentQuestionIndex];
+    
+    // Kiểm tra chéo với DOM để tránh race condition
+    let activeBlock = document.querySelector('.question-block.active-q');
+    let qFromDOM = null;
+    if (activeBlock) {
+        let qIdx = parseInt(activeBlock.id.replace('q-block-', ''));
+        qFromDOM = state.cau_hỏi[qIdx];
+    }
+
+    let finalQ = qFromDOM || currentQ;
+    if (finalQ) {
+        let p = String(finalQ.phan || finalQ.Phan);
+        if (p === "2") isPhan2 = true;
+    }
+
+    // LỖ HỔNG ĐÃ BỊT: Nếu là Phần II, ép thu bài ngay lập tức, bất kể đang có cảnh báo hay không
+    if (isPhan2) {
+        ghiNhanNghiVan(reason + " (VI PHẠM ĐẶC BIỆT TẠI PHẦN II)");
+        cheatCount++;
+        // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
+        _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id)
+            .then(() => { console.log("Đã chốt vi phạm Phần II"); });
+
+        document.querySelector('.btn-warning').style.display = 'none';
+        alert("🚨 CẢNH BÁO TỐI CAO: BẠN ĐÃ VI PHẠM QUY CHẾ THI TRONG PHẦN II (PHẦN THI CẤM TUYỆT ĐỐI RỜI MÀN HÌNH/SỬ DỤNG AI)!\nHệ thống đình chỉ và thu bài của bạn ngay lập tức.");
+        gradeAndSubmit(true);
+        return;
+    }
+
+    // Nếu không phải phần 2, mới kiểm tra việc hiển thị cảnh báo cũ
     if (document.getElementById('cheat-warning').style.display === 'block') return;
 
     ghiNhanNghiVan(reason);
     cheatCount++;
     document.getElementById('cheat-count').innerText = cheatCount;
 
-    // ĐỒNG BỘ REALTIME: Gửi số lần vi phạm lên server ngay lập tức để giáo viên thấy đúng số
+    // ĐỒNG BỘ REALTIME cho các phần khác
     _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id)
         .then(({error}) => { if(error) console.error("Lỗi đồng bộ vi phạm:", error); });
-
-    // KIỂM TRA PHẦN II: Ép thu bài ngay lập tức nếu đang ở phần II
-    let isPhan2 = false;
-    let currentQ = state.cau_hỏi[currentQuestionIndex];
-    if (currentQ) {
-        let p = String(currentQ.phan || currentQ.Phan);
-        if (p === "2") isPhan2 = true;
-    }
-
-    if (isPhan2) {
-        document.querySelector('.btn-warning').style.display = 'none';
-        alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI LỖI ĐẶC BIỆT NGHIÊM TRỌNG (CÓ HÀNH VI NGHI VẤN GIAN LẬN TRONG PHẦN II)!\nHệ thống tự động đình chỉ và thu bài ngay lập tức.");
-        gradeAndSubmit(true);
-        return;
-    }
 
     const warningEl = document.getElementById('cheat-warning');
     const msgEl = warningEl ? warningEl.querySelector('p') : null;
