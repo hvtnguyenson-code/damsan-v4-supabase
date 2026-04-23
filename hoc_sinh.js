@@ -474,52 +474,23 @@ function batDauGiamSatNangCao() {
         other: 0
     };
 
-    // Chỉ giữ lại phát hiện overlay nghi vấn (bong bóng nổi)
+    // 1. Phát hiện overlay nghi vấn (bong bóng nổi) qua Interval
     antiCheatIntervals.push(setInterval(() => {
         if (!isExamActive) return;
         if (phatHienOverlayNghiVan()) {
-            antiCheatRuntime.overlayDetectedCount++;
             ghiNhanNghiVan('suspicious_overlay');
-
-            let isPhan2 = false;
-            let currentQ = state.cau_hỏi[currentQuestionIndex];
-            if (currentQ) {
-                let p = String(currentQ.phan || currentQ.Phan);
-                if (p === "2") isPhan2 = true;
-            }
-
-            if (isPhan2) {
-                document.querySelector('.btn-warning')?.style.setProperty('display', 'none');
-                alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI LỖI ĐẶC BIỆT NGHIÊM TRỌNG (SỬ DỤNG AI DẠNG BONG BÓNG NỔI HỖ TRỢ TRONG PHẦN II)!\nHệ thống tự động đình chỉ và thu bài ngay lập tức.");
-                gradeAndSubmit(true);
-            } else if (antiCheatRuntime.overlayDetectedCount >= 2) {
-                xuLyGianLan('Phát hiện lớp phủ nổi nghi vấn trợ giúp AI');
-            }
+            // Đồng bộ: Sử dụng xuLyGianLan để thống nhất bộ đếm và xử lý Phần II (ép thu bài)
+            xuLyGianLan('Sử dụng AI dạng bong bóng nổi trợ giúp');
         }
     }, 2500));
 
-    // Mutation observer cho overlay
+    // 2. Phát hiện overlay qua MutationObserver (thay đổi DOM thời gian thực)
     try {
         antiCheatMutationObserver = new MutationObserver(() => {
             if (!isExamActive) return;
             if (phatHienOverlayNghiVan()) {
-                antiCheatRuntime.overlayDetectedCount++;
                 ghiNhanNghiVan('overlay_mutation');
-
-                let isPhan2 = false;
-                let currentQ = state.cau_hỏi[currentQuestionIndex];
-                if (currentQ) {
-                    let p = String(currentQ.phan || currentQ.Phan);
-                    if (p === "2") isPhan2 = true;
-                }
-
-                if (isPhan2) {
-                    document.querySelector('.btn-warning')?.style.setProperty('display', 'none');
-                    alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI LỖI ĐẶC BIỆT NGHIÊM TRỌNG (SỬ DỤNG AI DẠNG BONG BÓNG NỔI HỖ TRỢ TRONG PHẦN II)!\nHệ thống tự động đình chỉ và thu bài ngay lập tức.");
-                    gradeAndSubmit(true);
-                } else if (antiCheatRuntime.overlayDetectedCount >= 2) {
-                    xuLyGianLan('Phát hiện lớp phủ nổi xuất hiện bất thường');
-                }
+                xuLyGianLan('Phát hiện thay đổi DOM nghi vấn AI');
             }
         });
         antiCheatMutationObserver.observe(document.body, {
@@ -1055,18 +1026,40 @@ function chanPhimTat(e) {
 function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     if (!isExamActive) return;
     const now = Date.now();
-    if (now - antiCheatLastViolationTs < 2000) return; // cooldown 2 giây để tránh kích hoạt đúp (VD: Alt+Tab gây ra blur và visibilitychange cùng lúc)
+    if (now - antiCheatLastViolationTs < 2000) return; 
     antiCheatLastViolationTs = now;
     if (document.getElementById('cheat-warning').style.display === 'block') return;
+
     ghiNhanNghiVan(reason);
     cheatCount++;
     document.getElementById('cheat-count').innerText = cheatCount;
+
+    // ĐỒNG BỘ REALTIME: Gửi số lần vi phạm lên server ngay lập tức để giáo viên thấy đúng số
+    _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id)
+        .then(({error}) => { if(error) console.error("Lỗi đồng bộ vi phạm:", error); });
+
+    // KIỂM TRA PHẦN II: Ép thu bài ngay lập tức nếu đang ở phần II
+    let isPhan2 = false;
+    let currentQ = state.cau_hỏi[currentQuestionIndex];
+    if (currentQ) {
+        let p = String(currentQ.phan || currentQ.Phan);
+        if (p === "2") isPhan2 = true;
+    }
+
+    if (isPhan2) {
+        document.querySelector('.btn-warning').style.display = 'none';
+        alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI LỖI ĐẶC BIỆT NGHIÊM TRỌNG (CÓ HÀNH VI NGHI VẤN GIAN LẬN TRONG PHẦN II)!\nHệ thống tự động đình chỉ và thu bài ngay lập tức.");
+        gradeAndSubmit(true);
+        return;
+    }
+
     const warningEl = document.getElementById('cheat-warning');
     const msgEl = warningEl ? warningEl.querySelector('p') : null;
     if (msgEl) {
         msgEl.innerText = `Hệ thống phát hiện vi phạm: ${reason}. Nếu tiếp tục, bài thi sẽ bị thu tự động.`;
     }
     document.getElementById('cheat-warning').style.display = 'block';
+    
     if (cheatCount >= MAX_CHEATS) {
         document.querySelector('.btn-warning').style.display = 'none';
         alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI QUÁ SỐ LẦN CHO PHÉP!\nHệ thống tự động đình chỉ và thu bài.");
@@ -1120,14 +1113,16 @@ async function gradeAndSubmit(autoSubmit = false) {
     });
 
     try {
+        // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu trước khi gọi RPC tính điểm
+        if (cheatCount > 0) {
+            await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
+        }
+
         const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', {
             p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam
         });
 
         if (!error && data && data.status === 'success') {
-            if (cheatCount > 0) {
-                await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
-            }
             if (antiCheatRuntime.reasons.length > 0) {
                 console.warn("Anti-cheat evidence trail:", antiCheatRuntime.reasons);
             }
