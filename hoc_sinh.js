@@ -1129,6 +1129,11 @@ async function gradeAndSubmit(autoSubmit = false) {
         baiLam.push({ chon: ans });
     });
 
+    // TÍCH HỢP ĐÁNH DẤU VI PHẠM PHẦN II (Dành cho Giáo viên)
+    if (antiCheatRuntime.reasons.some(r => r.includes("PHẦN II"))) {
+        baiLam.push({ phan: "SPECIAL_MARKER", type: "PART_II_VIOLATION" });
+    }
+
     try {
         // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu trước khi gọi RPC tính điểm
         if (cheatCount > 0) {

@@ -713,8 +713,29 @@ function renderDashboardTable() {
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
 
+        // KIỂM TRA VI PHẠM PHẦN II TỪ DỮ LIỆU CHI TIẾT
+        let coHieuP2 = "";
+        if (hs.ChiTiet) {
+            if (hs.ChiTiet.includes("PART_II_VIOLATION")) {
+                coHieuP2 = ' <span title="Vi phạm đặc biệt nghiêm trọng tại Phần II" style="cursor:help;">🚩</span>';
+            }
+        }
+
         if (filter === "" || txtSBD.indexOf(filter) > -1 || txtTen.indexOf(filter) > -1) {
-            html += `<tr style="${trStyle}"><td><b>${hs.MaHS || '-'}</b></td><td style="text-align:left;"><b>${hs.HoTen}</b></td><td>${hs.Lop}</td><td id="live-status-${hs.id}">${sttHtml}</td><td>${hs.MaDe || '-'}</td><td>${scoreHtml}</td><td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td><td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td><td>${hs.ViPham || 0}</td></tr>`; 
+            let viPhamDisplay = hs.ViPham > 0 ? `<b style="color: #d93025; font-size: 16px;">${hs.ViPham}</b>` : "";
+            
+            html += `<tr style="${trStyle}">
+                <td><b>${hs.MaHS || '-'}</b></td>
+                <td style="text-align:left;"><b>${hs.HoTen}</b>${coHieuP2}</td>
+                <td>${hs.Lop}</td>
+                <td id="live-status-${hs.id}">${sttHtml}</td>
+                <td>${hs.MaDe || '-'}</td>
+                <td>${scoreHtml}</td>
+                <td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td>
+                <td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td>
+                <td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td>
+                <td>${viPhamDisplay}</td>
+            </tr>`; 
         }
     }); 
     
