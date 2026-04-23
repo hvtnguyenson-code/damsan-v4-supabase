@@ -1029,22 +1029,20 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     if (now - antiCheatLastViolationTs < 2000) return; 
     antiCheatLastViolationTs = now;
 
-    // TỐI ƯU: Xác định phần thi hiện tại một cách tuyệt đối chính xác (Kết hợp biến state và thực tế DOM)
+    // TỐI ƯU: Xác định Phần II bằng cách kiểm tra trực tiếp khối câu hỏi đang hiển thị trên màn hình
     let isPhan2 = false;
-    let currentQ = state.cau_hỏi[currentQuestionIndex];
+    const activeBlock = document.querySelector('.question-block.active-q');
     
-    // Kiểm tra chéo với DOM để tránh race condition
-    let activeBlock = document.querySelector('.question-block.active-q');
-    let qFromDOM = null;
-    if (activeBlock) {
-        let qIdx = parseInt(activeBlock.id.replace('q-block-', ''));
-        qFromDOM = state.cau_hỏi[qIdx];
-    }
-
-    let finalQ = qFromDOM || currentQ;
-    if (finalQ) {
-        let p = String(finalQ.phan || finalQ.Phan);
-        if (p === "2") isPhan2 = true;
+    // Nếu khối câu hỏi đang hiện có chứa bảng Đúng/Sai (tf-table), chắc chắn là Phần II
+    if (activeBlock && activeBlock.querySelector('.tf-table')) {
+        isPhan2 = true;
+    } 
+    // Dự phòng: Kiểm tra qua chỉ số câu hỏi nếu DOM chưa kịp cập nhật
+    else {
+        let currentQ = state.cau_hỏi[currentQuestionIndex];
+        if (currentQ && String(currentQ.phan || currentQ.Phan) === "2") {
+            isPhan2 = true;
+        }
     }
 
     // LỖ HỔNG ĐÃ BỊT: Nếu là Phần II, ép thu bài ngay lập tức, bất kể đang có cảnh báo hay không
