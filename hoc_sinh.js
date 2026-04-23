@@ -699,6 +699,18 @@ async function joinRoom(maPhongAuto = null) {
         renderExam();
         khoiPhucBaiLamNhap();
 
+        // CHỐNG LÁCH LUẬT F5: Nếu học sinh đã vi phạm quá số lần hoặc vi phạm Phần II trước đó
+        let isFatal = localStorage.getItem('fatal_violation_' + state.ma_hs);
+        if ((res && res.so_lan_vi_pham >= MAX_CHEATS) || isFatal) {
+            const warningEl = document.getElementById('cheat-warning');
+            if(warningEl) {
+                warningEl.innerHTML = `<h1>🚨 BÀI THI BỊ KHÓA!</h1><p style="font-size: 20px; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.5;">Bạn đã vi phạm quy chế nghiêm trọng trước đó.<br>Hệ thống đang tự động nộp các câu bạn đã làm nháp.</p>`;
+                warningEl.style.display = 'block';
+            }
+            gradeAndSubmit(true);
+            return;
+        }
+
         showSection('exam-section');
         startTimer(phongData.thoi_gian, phongData.thoi_gian_mo);
 
@@ -1053,8 +1065,13 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id)
             .then(() => { console.log("Đã chốt vi phạm Phần II"); });
 
-        document.querySelector('.btn-warning').style.display = 'none';
-        alert("🚨 CẢNH BÁO TỐI CAO: BẠN ĐÃ VI PHẠM QUY CHẾ THI TRONG PHẦN II (PHẦN THI CẤM TUYỆT ĐỐI RỜI MÀN HÌNH/SỬ DỤNG AI)!\nHệ thống đình chỉ và thu bài của bạn ngay lập tức.");
+        localStorage.setItem('fatal_violation_' + state.ma_hs, 'true');
+
+        const warningEl = document.getElementById('cheat-warning');
+        if (warningEl) {
+            warningEl.innerHTML = `<h1>🚨 ĐÌNH CHỈ THI!</h1><p style="font-size: 20px; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.5;">BẠN ĐÃ VI PHẠM QUY CHẾ NGHIÊM TRỌNG TẠI PHẦN II (CẤM TUYỆT ĐỐI RỜI MÀN HÌNH/DÙNG AI)!<br>Hệ thống đang thu bài của bạn ngay lập tức.</p>`;
+            warningEl.style.display = 'block';
+        }
         gradeAndSubmit(true);
         return;
     }
@@ -1078,8 +1095,12 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     document.getElementById('cheat-warning').style.display = 'block';
     
     if (cheatCount >= MAX_CHEATS) {
-        document.querySelector('.btn-warning').style.display = 'none';
-        alert("🚨 BẠN ĐÃ VI PHẠM QUY CHẾ THI QUÁ SỐ LẦN CHO PHÉP!\nHệ thống tự động đình chỉ và thu bài.");
+        localStorage.setItem('fatal_violation_' + state.ma_hs, 'true');
+        const warningEl = document.getElementById('cheat-warning');
+        if (warningEl) {
+            warningEl.innerHTML = `<h1>🚨 ĐÌNH CHỈ THI!</h1><p style="font-size: 20px; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.5;">BẠN ĐÃ VI PHẠM QUY CHẾ THI QUÁ SỐ LẦN CHO PHÉP!<br>Hệ thống tự động đình chỉ và đang thu bài.</p>`;
+            warningEl.style.display = 'block';
+        }
         gradeAndSubmit(true);
     }
 }
