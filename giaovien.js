@@ -2636,8 +2636,11 @@ function renderStudentTable() {
     if(filtered.length === 0) html = '<tr><td colspan="6">Không có dữ liệu.</td></tr>'; 
     else { 
         filtered.forEach(hs => { 
-            let statusHTML = hs.TrangThai === "DaDoi" ? `<span style="color:green;font-weight:bold;">Đã đổi</span>` : `<span style="color:red;">Mặc định</span>`; 
-            html += `<tr><td><input type="checkbox" class="chk-HS" value="${hs.id}"></td><td><b>${hs.MaHS}</b></td><td>${hs.HoTen}</td><td>${hs.Lop}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer;" onclick="resetPass('${hs.MaHS}', '${hs.id}', 'HS')">Khôi phục</button></td></tr>`; 
+            let statusHTML = hs.TrangThai === "DaDoi" 
+                ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
+                : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
+            
+            html += `<tr><td><input type="checkbox" class="chk-HS" value="${hs.id}"></td><td><b>${hs.MaHS}</b></td><td style="text-align:left;">${hs.HoTen}</td><td>${hs.Lop}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${hs.MaHS}', '${hs.id}', 'HS')">Khôi phục</button></td></tr>`; 
         }); 
     } 
     document.getElementById('hsBody').innerHTML = html; 
@@ -2687,7 +2690,9 @@ function renderTeacherTable() {
     if(allTeachers.length === 0) html = '<tr><td colspan="6" style="text-align:center;">Không có dữ liệu.</td></tr>'; 
     else { 
         allTeachers.forEach(gv => { 
-            let statusHTML = gv.TrangThai === "DaDoi" ? `<span style="color:green;font-weight:bold;">Đã đổi</span>` : `<span style="color:red;">Mặc định</span>`; 
+            let statusHTML = gv.TrangThai === "DaDoi" 
+                ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
+                : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
             
             let selHtml = `<select onchange="capNhatMonGiaoVien('${gv.id}', this.value)" style="padding:6px; border-radius:4px; border:1px solid #ccc; font-weight:bold; color:#1a73e8; cursor:pointer; width:100%; outline:none; background:#f8faff;">`;
             selHtml += `<option value="">-- Chưa phân công --</option>`;
