@@ -52,6 +52,13 @@ const antiCheatRuntime = {
 // AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+    // 0. ĐĂNG KÝ SERVICE WORKER ĐỂ KÍCH HOẠT PWA
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Failed', err));
+    }
+
     // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
     
