@@ -695,7 +695,7 @@ async function joinRoom(maPhongAuto = null) {
         document.getElementById('ten_mon_hien_thi').innerText = safeHTML(phongData.mon_hoc?.ten_mon || "Môn Chung");
         document.getElementById('ma_de_hien_thi').innerText = state.ma_de;
 
-        batDauAntiCheat();
+        batDauAntiCheat(res ? (res.so_lan_vi_pham || 0) : 0);
         renderExam();
         khoiPhucBaiLamNhap();
 
@@ -887,9 +887,9 @@ function xacNhanThoatTrang(e) {
 }
 
 // THUẬT TOÁN CHỐNG GIAN LẬN: DUAL-FOCUS TRACKING (KHÔNG KHOAN NHƯỢNG)
-function batDauAntiCheat() {
+function batDauAntiCheat(initialCheatCount = 0) {
     isExamActive = true;
-    cheatCount = 0;
+    cheatCount = initialCheatCount;
 
     try {
         if (document.documentElement.requestFullscreen) {
@@ -1062,8 +1062,13 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         ghiNhanNghiVan(reason + " (VI PHẠM ĐẶC BIỆT TẠI PHẦN II)");
         cheatCount++;
         // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
-        _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id)
-            .then(() => { console.log("Đã chốt vi phạm Phần II"); });
+        _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
+            if (data) {
+                _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then(() => console.log("Đã chốt vi phạm Phần II"));
+            } else {
+                _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount }).then(() => console.log("Đã chốt vi phạm Phần II"));
+            }
+        });
 
         localStorage.setItem('fatal_violation_' + state.ma_hs, 'true');
 
@@ -1084,8 +1089,13 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     document.getElementById('cheat-count').innerText = cheatCount;
 
     // ĐỒNG BỘ REALTIME cho các phần khác
-    _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id)
-        .then(({error}) => { if(error) console.error("Lỗi đồng bộ vi phạm:", error); });
+    _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
+        if (data) {
+            _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then();
+        } else {
+            _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount }).then();
+        }
+    });
 
     const warningEl = document.getElementById('cheat-warning');
     const msgEl = warningEl ? warningEl.querySelector('p') : null;
@@ -1151,16 +1161,11 @@ async function gradeAndSubmit(autoSubmit = false) {
     });
 
     // TÍCH HỢP ĐÁNH DẤU VI PHẠM PHẦN II (Dành cho Giáo viên)
-    if (antiCheatRuntime.reasons.some(r => r.includes("PHẦN II"))) {
+    if (antiCheatRuntime.reasons.some(r => r.reason && r.reason.includes("PHẦN II"))) {
         baiLam.push({ phan: "SPECIAL_MARKER", type: "PART_II_VIOLATION" });
     }
 
     try {
-        // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu trước khi gọi RPC tính điểm
-        if (cheatCount > 0) {
-            await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
-        }
-
         const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', {
             p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam
         });
@@ -1171,6 +1176,12 @@ async function gradeAndSubmit(autoSubmit = false) {
             }
 
             localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+            
+            // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu sau khi RPC đã chạy xong
+            if (cheatCount > 0) {
+                await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
+            }
+
             document.getElementById('finish_name').innerText = state.ho_ten;
             showSection('result-section');
             try { document.exitFullscreen(); } catch (e) { }
