@@ -51,6 +51,19 @@ const antiCheatRuntime = {
 // ==========================================
 // AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
 // ==========================================
+function voHieuHoaCongCuDev() {
+    // 1. Chống chuột phải
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // 2. Chống các tổ hợp phím nóng (F12, Ctrl+Shift+I, Ctrl+U...)
+    document.addEventListener('keydown', (e) => {
+        if (e.keyCode === 123) { e.preventDefault(); return false; } // F12
+        if (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) { e.preventDefault(); return false; } // Inspect
+        if (e.ctrlKey && e.keyCode === 85) { e.preventDefault(); return false; } // View Source
+        if (e.ctrlKey && e.keyCode === 83) { e.preventDefault(); return false; } // Save
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // 0. ĐĂNG KÝ SERVICE WORKER ĐỂ KÍCH HOẠT PWA
     if ('serviceWorker' in navigator) {
@@ -58,6 +71,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(reg => console.log('SW Registered', reg))
             .catch(err => console.log('SW Failed', err));
     }
+
+    // 0.1. KHÓA CHUỘT PHẢI VÀ PHÍM NÓNG (CHỐNG SOI CODE)
+    voHieuHoaCongCuDev();
 
     // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
