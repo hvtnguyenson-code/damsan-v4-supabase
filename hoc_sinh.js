@@ -76,6 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return; 
     }
 
+    // 2. KHÔI PHỤC DANH SÁCH TÀI KHOẢN ĐÃ LƯU (NẾU CÓ)
+    renderSavedAccounts();
+
     let session = sessionStorage.getItem('damSan_HSSession');
     if (session) {
         let s = JSON.parse(session);
@@ -119,6 +122,78 @@ async function kichHoatCaiDatPWA() {
     }
     deferredPrompt = null;
     document.getElementById('btn-auto-install').style.display = 'none';
+}
+
+// ==========================================
+// QUẢN LÝ ĐA TÀI KHOẢN ĐÃ LƯU
+// ==========================================
+function getSavedAccounts() {
+    try {
+        return JSON.parse(localStorage.getItem('damsan_saved_accounts') || '[]');
+    } catch (e) { return []; }
+}
+
+function renderSavedAccounts() {
+    const accounts = getSavedAccounts();
+    const container = document.getElementById('saved-accounts-container');
+    const list = document.getElementById('saved-accounts-list');
+    
+    if (!container || !list) return;
+
+    if (accounts.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    list.innerHTML = accounts.map(acc => `
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid #eee;">
+            <div onclick="chonTaiKhoan('${acc.ma_hs}')" style="flex: 1; cursor: pointer;">
+                <div style="font-weight: bold; font-size: 14px; color: #1a73e8;">${safeHTML(acc.ho_ten)}</div>
+                <div style="font-size: 11px; color: #5f6368;">Mã HS: ${acc.ma_hs} | Lớp: ${acc.lop}</div>
+            </div>
+            <button onclick="xoaTaiKhoan('${acc.ma_hs}')" style="background: none; border: none; color: #d93025; font-size: 18px; cursor: pointer; padding: 0 5px;">&times;</button>
+        </div>
+    `).join('');
+}
+
+function chonTaiKhoan(maHs) {
+    const accounts = getSavedAccounts();
+    const acc = accounts.find(a => a.ma_hs === maHs);
+    if (acc) {
+        document.getElementById('ma_hs').value = acc.ma_hs;
+        document.getElementById('mat_khau').value = acc.pass;
+        document.getElementById('ghi_nho_dn').checked = true;
+        // Tự động nhấn đăng nhập sau 300ms để trải nghiệm mượt hơn
+        setTimeout(() => login(), 300);
+    }
+}
+
+function xoaTaiKhoan(maHs) {
+    if (confirm(`Bạn có chắc muốn xóa thông tin tài khoản ${maHs} khỏi máy này?`)) {
+        let accounts = getSavedAccounts();
+        accounts = accounts.filter(a => a.ma_hs !== maHs);
+        localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
+        renderSavedAccounts();
+    }
+}
+
+function luuTaiKhoan(maHs, pass, hoTen, lop) {
+    let accounts = getSavedAccounts();
+    const index = accounts.findIndex(a => a.ma_hs === maHs);
+    const newAcc = { ma_hs: maHs, pass, ho_ten: hoTen, lop };
+    
+    if (index > -1) {
+        accounts[index] = newAcc;
+    } else {
+        accounts.push(newAcc);
+    }
+    
+    // Giới hạn lưu tối đa 5 tài khoản để tránh rác
+    if (accounts.length > 5) accounts.shift();
+    
+    localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
+    renderSavedAccounts();
 }
 
 function dangXuatHS() {
@@ -612,6 +687,11 @@ async function login() {
 
         if (!hsData) throw new Error("Thông tin tài khoản không chính xác!");
 
+        // XỬ LÝ GHI NHỚ MẬT KHẨU (ĐA TÀI KHOẢN)
+        if (document.getElementById('ghi_nho_dn').checked) {
+            luuTaiKhoan(maHs, matKhau, hsData.ho_ten, hsData.lop);
+        }
+
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
 
         // KIỂM TRA MẬT KHẨU MẶC ĐỊNH
@@ -654,6 +734,15 @@ async function capNhatMatKhau() {
             .eq('id', state.hs_id);
 
         if (error) throw error;
+
+        // Cập nhật lại mật khẩu trong danh sách tài khoản đã lưu
+        let accounts = getSavedAccounts();
+        const idx = accounts.findIndex(a => a.ma_hs === state.ma_hs);
+        if (idx > -1) {
+            accounts[idx].pass = newPass;
+            localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
+            renderSavedAccounts();
+        }
 
         // Sau khi đổi xong thì lưu session và vào phòng thi
         sessionStorage.setItem('damSan_HSSession', JSON.stringify({

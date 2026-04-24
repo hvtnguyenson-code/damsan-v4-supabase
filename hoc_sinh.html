@@ -256,6 +256,17 @@
                 <label>Mật khẩu</label>
                 <input type="password" id="mat_khau" placeholder="Nhập mật khẩu của bạn">
             </div>
+            
+            <!-- DANH SÁCH TÀI KHOẢN ĐÃ LƯU -->
+            <div id="saved-accounts-container" style="display: none; margin-bottom: 20px; text-align: left; background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 8px; padding: 12px;">
+                <p style="font-size: 12px; font-weight: bold; color: #5f6368; margin: 0 0 10px 0; text-transform: uppercase;">Tài khoản đã lưu:</p>
+                <div id="saved-accounts-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+
+            <div class="input-group" style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; margin-bottom: 25px;">
+                <input type="checkbox" id="ghi_nho_dn" style="width: 18px; height: 18px; margin: 0; cursor: pointer;">
+                <label for="ghi_nho_dn" style="margin: 0; font-weight: normal; font-size: 14px; cursor: pointer; color: #5f6368;">Ghi nhớ mật khẩu trên ứng dụng</label>
+            </div>
             <button onclick="login()" class="btn-primary" id="btn-login">ĐĂNG NHẬP VÀO HỆ THỐNG</button>
         </div>
     </div>
