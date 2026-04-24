@@ -2617,7 +2617,7 @@ async function fetchStudents(forceReload = false) {
         allStudents = JSON.parse(cached); renderSubTabsHS(); renderStudentTable(); 
         if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); return;
     }
-    let {data} = await sb.from('hoc_sinh').select('*').eq('truong_id', gvData.truong_id);
+    let {data} = await sb.from('hoc_sinh').select('*').eq('truong_id', gvData.truong_id).order('ma_hs', { ascending: true });
     if(data) {
         allStudents = data.map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', Quyen: d.quyen, id: d.id }));
         sessionStorage.setItem('cache_students', JSON.stringify(allStudents));
