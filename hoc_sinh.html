@@ -150,6 +150,15 @@
         .btn-warning { background: white; color: #d93025; padding: 15px 40px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; text-transform: uppercase; box-shadow: 0 5px 15px rgba(0,0,0,0.2); transition: 0.2s;}
         .btn-warning:hover { transform: scale(1.05); }
 
+        /* --- PWA INSTALL & CHANGE PASSWORD --- */
+        .pwa-container { max-width: 600px; margin: 40px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; }
+        .install-step { text-align: left; background: #f8f9fa; border: 1px solid #e8eaed; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+        .install-step h4 { margin-top: 0; color: #1a73e8; font-size: 15px; line-height: 1.4; }
+        .platform-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+        .badge-android { background: #3ddc84; color: #000; }
+        .badge-ios { background: #000; color: #fff; }
+        .badge-desktop { background: #1a73e8; color: #fff; }
+
         @media (max-width: 768px) {
             .exam-layout { flex-direction: column; }
             .exam-sidebar { width: 100%; height: auto; border-right: none; border-bottom: 2px solid #dadce0; flex-direction: row; flex-wrap: wrap; justify-content: space-between; padding: 10px; }
@@ -160,9 +169,74 @@
             .btn-submit { width: 100%; }
             .nav-buttons { position: sticky; bottom: 0; background: #fff; padding-bottom: 10px;}
         }
+
+        /* Animation cho nút Install */
+        .btn-install-pwa { 
+            background: linear-gradient(135deg, #1a73e8, #1557b0); 
+            color: white; 
+            padding: 18px 35px; 
+            font-size: 18px; 
+            font-weight: 900; 
+            border: none; 
+            border-radius: 50px; 
+            cursor: pointer; 
+            box-shadow: 0 10px 20px rgba(26,115,232,0.3);
+            transition: 0.3s;
+            animation: pulse-blue 2s infinite;
+            display: none; /* Ẩn mặc định, chỉ hiện khi sẵn sàng */
+            margin: 20px auto;
+        }
+        @keyframes pulse-blue {
+            0% { transform: scale(1); box-shadow: 0 10px 20px rgba(26,115,232,0.3); }
+            50% { transform: scale(1.05); box-shadow: 0 15px 30px rgba(26,115,232,0.5); }
+            100% { transform: scale(1); box-shadow: 0 10px 20px rgba(26,115,232,0.3); }
+        }
+        .ios-manual-box { display: none; margin-top: 20px; }
     </style>
 </head>
 <body>
+
+    <div id="pwa-install-section" class="section">
+        <div class="pwa-container">
+            <div style="background: #e8f0fe; width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;">
+                <img src="https://cdn-icons-png.flaticon.com/512/3413/3413535.png" width="60" alt="App Icon">
+            </div>
+            <h2 class="auth-title">KÍCH HOẠT ỨNG DỤNG THI</h2>
+            <p style="color: #5f6368; font-size: 16px; margin-bottom: 30px; line-height: 1.6;">Để đảm bảo tính công bằng và ổn định tuyệt đối, bài thi yêu cầu bạn tham gia thông qua <b>Ứng dụng Đam San</b> đã được cài đặt trên thiết bị.</p>
+            
+            <!-- Nút cài đặt tự động (Hiện trên Android/Chrome/Windows) -->
+            <button id="btn-auto-install" onclick="kichHoatCaiDatPWA()" class="btn-install-pwa">✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨</button>
+
+            <!-- Hướng dẫn thủ công cho iOS (Hiện trên iPhone/iPad) -->
+            <div id="ios-instructions" class="ios-manual-box">
+                <div class="install-step" style="border-left: 5px solid #000;">
+                    <span class="platform-badge badge-ios">Dành cho iPhone / iPad (Safari)</span>
+                    <h4 style="color: #000;">1. Nhấn nút <b>Chia sẻ (Share)</b> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Ios-share-icon.svg/1024px-Ios-share-icon.svg.png" width="20"> ở cuối màn hình.</h4>
+                    <h4 style="color: #000;">2. Chọn <b>"Thêm vào màn hình chính" (Add to Home Screen)</b>.</h4>
+                    <h4 style="color: #000;">3. Mở ứng dụng từ màn hình chính để vào thi.</h4>
+                </div>
+            </div>
+
+            <p style="font-size: 13px; color: #9aa0a6; margin-top: 40px;">Sau khi cài đặt, vui lòng mở ứng dụng từ màn hình chính.<br>Nếu đã cài đặt nhưng vẫn thấy trang này, hãy nhấn <a href="javascript:location.reload()" style="color: #1a73e8; font-weight: bold;">Tải lại trang</a>.</p>
+        </div>
+    </div>
+
+    <div id="change-password-section" class="section">
+        <div class="auth-container">
+            <h2 class="auth-title">ĐỔI MẬT KHẨU LẦN ĐẦU</h2>
+            <p style="color: #d93025; font-weight: bold; margin-bottom: 25px;">Vì lý do an toàn, bạn phải thay đổi mật khẩu mặc định trước khi tham gia thi.</p>
+            
+            <div class="input-group">
+                <label>Mật khẩu mới</label>
+                <input type="password" id="new_password" placeholder="Nhập mật khẩu mới">
+            </div>
+            <div class="input-group">
+                <label>Xác nhận mật khẩu mới</label>
+                <input type="password" id="confirm_password" placeholder="Nhập lại mật khẩu mới">
+            </div>
+            <button onclick="capNhatMatKhau()" class="btn-primary" id="btn-change-pass">CẬP NHẬT MẬT KHẨU</button>
+        </div>
+    </div>
 
     <div id="login-section" class="section active">
         <div class="auth-container">

@@ -52,6 +52,23 @@ const antiCheatRuntime = {
 // AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+    // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
+    
+    if (!isStandalone && !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1')) {
+        showSection('pwa-install-section');
+        
+        // KIỂM TRA NỀN TẢNG ĐỂ HIỂN THỊ UI PHÙ HỢP
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS) {
+            document.getElementById('ios-instructions').style.display = 'block';
+        } else {
+            // Chrome/Android/Desktop: Chờ deferredPrompt để hiện nút
+            checkAndShowInstallButton();
+        }
+        return; 
+    }
+
     let session = sessionStorage.getItem('damSan_HSSession');
     if (session) {
         let s = JSON.parse(session);
@@ -67,6 +84,35 @@ document.addEventListener('DOMContentLoaded', () => {
         timPhongThiTuDong();
     }
 });
+
+// Hỗ trợ sự kiện cài đặt PWA (cho Chrome/Android/Desktop)
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    checkAndShowInstallButton();
+});
+
+function checkAndShowInstallButton() {
+    const btn = document.getElementById('btn-auto-install');
+    if (btn && deferredPrompt) {
+        btn.style.display = 'block';
+    } else if (btn) {
+        // Nếu không có deferredPrompt (có thể đã cài rồi hoặc trình duyệt ko hỗ trợ auto)
+        // Ta có thể hiện một thông báo nhỏ hoặc giữ nút ẩn
+    }
+}
+
+async function kichHoatCaiDatPWA() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+    }
+    deferredPrompt = null;
+    document.getElementById('btn-auto-install').style.display = 'none';
+}
 
 function dangXuatHS() {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
@@ -561,6 +607,12 @@ async function login() {
 
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
 
+        // KIỂM TRA MẬT KHẨU MẶC ĐỊNH
+        if (hashedPass === DEFAULT_PASS_HASH) {
+            showSection('change-password-section');
+            return;
+        }
+
         sessionStorage.setItem('damSan_HSSession', JSON.stringify({
             truong_id: state.truong_id, hs_id: state.hs_id, ma_hs: state.ma_hs, ho_ten: state.ho_ten, lop: state.lop
         }));
@@ -575,6 +627,45 @@ async function login() {
         timPhongThiTuDong();
     } catch (error) { alert(error.message); } finally {
         btn.innerText = "ĐĂNG NHẬP VÀO HỆ THỐNG"; btn.disabled = false;
+    }
+}
+
+async function capNhatMatKhau() {
+    const newPass = document.getElementById('new_password').value.trim();
+    const confirmPass = document.getElementById('confirm_password').value.trim();
+    const btn = document.getElementById('btn-change-pass');
+
+    if (!newPass || newPass.length < 6) return alert("Mật khẩu mới phải có ít nhất 6 ký tự!");
+    if (newPass !== confirmPass) return alert("Xác nhận mật khẩu không khớp!");
+
+    btn.innerText = "⏳ ĐANG CẬP NHẬT..."; btn.disabled = true;
+
+    try {
+        const hashedNewPass = await hashPassword(newPass);
+        const { error } = await _supabase.from('hoc_sinh')
+            .update({ mat_khau: hashedNewPass })
+            .eq('id', state.hs_id);
+
+        if (error) throw error;
+
+        // Sau khi đổi xong thì lưu session và vào phòng thi
+        sessionStorage.setItem('damSan_HSSession', JSON.stringify({
+            truong_id: state.truong_id, hs_id: state.hs_id, ma_hs: state.ma_hs, ho_ten: state.ho_ten, lop: state.lop
+        }));
+
+        document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten;
+        document.getElementById('lop_hs_hien_thi').innerText = state.lop;
+        document.getElementById('panel_ten_hs').innerText = state.ho_ten;
+        document.getElementById('panel_ma_hs').innerText = state.ma_hs;
+        document.getElementById('panel_lop_hs').innerText = state.lop;
+
+        alert("Cập nhật mật khẩu thành công! Bây giờ bạn có thể tham gia phòng thi.");
+        showSection('room-section');
+        timPhongThiTuDong();
+    } catch (error) {
+        alert("Lỗi cập nhật mật khẩu: " + error.message);
+    } finally {
+        btn.innerText = "CẬP NHẬT MẬT KHẨU"; btn.disabled = false;
     }
 }
 
