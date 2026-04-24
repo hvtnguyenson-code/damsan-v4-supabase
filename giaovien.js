@@ -619,9 +619,6 @@ function renderDashboardTable() {
 
     displayList.sort((a, b) => (String(a.MaHS) || '').localeCompare(String(b.MaHS) || '')); 
 
-    const sInput = document.getElementById("liveSearchInput");
-    const filter = sInput ? sInput.value.toUpperCase() : "";
-
     displayList.forEach(hs => { 
         hs.p1Score = 0; hs.p2Score = 0; hs.p3Score = 0; 
         
@@ -721,22 +718,20 @@ function renderDashboardTable() {
             }
         }
 
-        if (filter === "" || txtSBD.indexOf(filter) > -1 || txtTen.indexOf(filter) > -1) {
-            let viPhamDisplay = hs.ViPham > 0 ? `<b style="color: #d93025; font-size: 16px;">${hs.ViPham}</b>` : "";
-            
-            html += `<tr style="${trStyle}">
-                <td><b>${hs.MaHS || '-'}</b></td>
-                <td style="text-align:left;"><b>${hs.HoTen}</b>${coHieuP2}</td>
-                <td>${hs.Lop}</td>
-                <td id="live-status-${hs.id}">${sttHtml}</td>
-                <td>${hs.MaDe || '-'}</td>
-                <td>${scoreHtml}</td>
-                <td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td>
-                <td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td>
-                <td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td>
-                <td>${viPhamDisplay}</td>
-            </tr>`; 
-        }
+        let viPhamDisplay = hs.ViPham > 0 ? `<b style="color: #d93025; font-size: 16px;">${hs.ViPham}</b>` : "";
+        
+        html += `<tr style="${trStyle}">
+            <td><b>${hs.MaHS || '-'}</b></td>
+            <td style="text-align:left;"><b>${hs.HoTen}</b>${coHieuP2}</td>
+            <td>${hs.Lop}</td>
+            <td id="live-status-${hs.id}">${sttHtml}</td>
+            <td>${hs.MaDe || '-'}</td>
+            <td>${scoreHtml}</td>
+            <td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td>
+            <td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td>
+            <td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td>
+            <td>${viPhamDisplay}</td>
+        </tr>`; 
     }); 
     
     if(document.getElementById("statSiSo")) document.getElementById("statSiSo").innerText = `${submittedCount} / ${displayList.length}`; 
@@ -745,6 +740,11 @@ function renderDashboardTable() {
     if(document.getElementById("statPassDetail")) document.getElementById("statPassDetail").innerText = `${passed} học sinh đạt từ 5.0 trở lên`; 
 
     if(document.getElementById("distGioi")) document.getElementById("distGioi").innerText = countGioi;
+    document.getElementById('dashBody').innerHTML = html; 
+    
+    // Áp dụng bộ lọc tìm kiếm ngay sau khi render xong
+    xuLyLiveSearch();
+
     if(document.getElementById("distKha")) document.getElementById("distKha").innerText = countKha;
     if(document.getElementById("distTB")) document.getElementById("distTB").innerText = countTB;
     if(document.getElementById("distYeu")) document.getElementById("distYeu").innerText = countYeu;
@@ -764,7 +764,6 @@ function renderDashboardTable() {
         else document.getElementById("statKiller").innerHTML = `Đang thu thập dữ liệu...`;
     }
     
-    document.getElementById('dashBody').innerHTML = html || '<tr><td colspan="10">Không tìm thấy kết quả phù hợp bộ lọc tìm kiếm.</td></tr>'; 
 }
 
 // BỘ BẮT SÓNG REALTIME DỰ PHÒNG
@@ -2979,5 +2978,86 @@ async function migrateLegacyPasswords(loai, btnElement) {
         alert("❌ Lỗi khi chuẩn hóa mật khẩu legacy: " + e.message);
     } finally {
         if (btnElement) { btnElement.innerText = oldText; btnElement.disabled = false; }
+    }
+}
+
+// ==========================================================
+// TÍNH NĂNG TÌM KIẾM THEO THỜI GIAN THỰC (LIVE SEARCH)
+// ==========================================================
+
+function removeVietnameseTones(str) {
+    if (!str) return "";
+    str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+    str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+    str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+    str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+    str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+    str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+    str = str.replace(/đ/g, "d");
+    str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+    str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+    str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+    str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+    str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+    str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+    str = str.replace(/Đ/g, "D");
+    return str;
+}
+
+function xuLyLiveSearch() {
+    const sInput = document.getElementById("liveSearchInput");
+    if (!sInput) return;
+    
+    // Chuẩn hóa input: Chuyển hoa và chuẩn hóa cả 2 phiên bản (có dấu & không dấu)
+    const filterRaw = sInput.value.toUpperCase().trim();
+    const filterNoTone = removeVietnameseTones(filterRaw);
+    
+    const rows = document.querySelectorAll("#dashBody tr");
+    let matchCount = 0;
+    
+    rows.forEach(row => {
+        // Bỏ qua dòng thông báo lỗi hoặc rỗng
+        if (row.cells.length < 2) return;
+        
+        const sbd = (row.cells[0].textContent || "").toUpperCase();
+        const name = (row.cells[1].textContent || "").toUpperCase();
+        
+        const sbdNoTone = removeVietnameseTones(sbd);
+        const nameNoTone = removeVietnameseTones(name);
+        
+        // Thuật toán so khớp thông minh:
+        // 1. Nếu người dùng nhập có dấu (raw != noTone), ưu tiên so khớp chính xác từng chữ cái có dấu
+        // 2. Nếu người dùng nhập không dấu, so khớp linh hoạt với cả bản gốc và bản bỏ dấu
+        let isMatch = false;
+        if (filterRaw === "") {
+            isMatch = true;
+        } else {
+            // Kiểm tra khớp SBD hoặc Tên (cả 2 phương thức: chính xác và bỏ dấu)
+            isMatch = sbd.includes(filterRaw) || 
+                      name.includes(filterRaw) || 
+                      sbdNoTone.includes(filterNoTone) || 
+                      nameNoTone.includes(filterNoTone);
+        }
+        
+        if (isMatch) {
+            row.style.display = "";
+            matchCount++;
+        } else {
+            row.style.display = "none";
+        }
+    });
+
+    // Hiển thị dòng thông báo nếu không tìm thấy gì
+    let noResultRow = document.getElementById("no-search-result-row");
+    if (matchCount === 0 && filterRaw !== "") {
+        if (!noResultRow) {
+            const tbody = document.getElementById("dashBody");
+            const tr = document.createElement("tr");
+            tr.id = "no-search-result-row";
+            tr.innerHTML = `<td colspan="10" style="padding: 20px; color: #e74c3c; font-weight: bold;">❌ Không tìm thấy học sinh nào khớp với từ khóa "${sInput.value}"</td>`;
+            tbody.appendChild(tr);
+        }
+    } else {
+        if (noResultRow) noResultRow.remove();
     }
 }
