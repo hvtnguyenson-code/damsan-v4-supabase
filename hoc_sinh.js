@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260425-2212'; 
+const VERSION = '20260425-2218'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -69,12 +69,23 @@ function voHieuHoaCongCuDev() {
 document.addEventListener('DOMContentLoaded', () => {
     // 0. ĐĂNG KÝ SERVICE WORKER ĐỂ KÍCH HOẠT PWA
     if ('serviceWorker' in navigator) {
-        // Thêm tham số query version để buộc trình duyệt kiểm tra SW mới nếu có thay đổi code
-        navigator.serviceWorker.register('./sw.js?v=' + VERSION)
+        // Sử dụng updateViaCache: 'none' để buộc trình duyệt kiểm tra SW mới từ server, bỏ qua HTTP Cache
+        navigator.serviceWorker.register('./sw.js?v=' + VERSION, { updateViaCache: 'none' })
             .then(reg => {
                 console.log('SW Registered', reg);
                 
-                // Kiểm tra cập nhật định kỳ mỗi khi vào app
+                // Lắng nghe sự kiện tìm thấy bản cập nhật mới
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.onstatechange = () => {
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log('Đã tìm thấy bản cập nhật mới, đang kích hoạt...');
+                            installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                    };
+                };
+
+                // Kiểm tra cập nhật ngay lập tức
                 reg.update();
 
                 if (reg.waiting) {
@@ -83,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(err => console.log('SW Failed', err));
 
-        // Tự động load lại trang khi có SW mới chiếm quyền để đảm bảo dùng code mới nhất
+        // Tự động load lại trang khi có SW mới chiếm quyền
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (refreshing) return;
@@ -91,6 +102,18 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.reload();
         });
     }
+
+    // Cơ chế dọn dẹp cache thủ công nếu VERSION thay đổi (phòng hờ SW kẹt)
+    const lastVersion = localStorage.getItem('damsan_app_version');
+    if (lastVersion && lastVersion !== VERSION) {
+        console.log('Phát hiện phiên bản mới:', VERSION, '. Đang dọn dẹp cache cũ...');
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                for (let name of names) caches.delete(name);
+            });
+        }
+    }
+    localStorage.setItem('damsan_app_version', VERSION);
 
     // 0.1. KHÓA CHUỘT PHẢI VÀ PHÍM NÓNG (CHỐNG SOI CODE)
     voHieuHoaCongCuDev();

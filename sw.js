@@ -1,4 +1,4 @@
-const VERSION = '20260425-2212';
+const VERSION = '20260425-2218';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
