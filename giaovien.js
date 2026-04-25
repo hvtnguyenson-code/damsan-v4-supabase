@@ -715,19 +715,26 @@ function renderDashboardTable() {
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
 
-        // KIỂM TRA VI PHẠM PHẦN II TỪ DỮ LIỆU CHI TIẾT
-        let coHieuP2 = "";
-        if (hs.ChiTiet) {
-            if (hs.ChiTiet.includes("PART_II_VIOLATION")) {
-                coHieuP2 = ' <span title="Vi phạm đặc biệt nghiêm trọng tại Phần II" style="cursor:help;">🚩</span>';
-            }
+        // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO
+        let flagHtml = "";
+        let violationColor = "#d93025"; // Mặc định là đỏ cho số lần vi phạm
+        let isFatalP2 = hs.ChiTiet && hs.ChiTiet.includes("PART_II_VIOLATION");
+        
+        if (isFatalP2) {
+            // Trường hợp 1: Vi phạm nghiêm trọng Phần II (Ép thu bài ngay lập tức)
+            violationColor = "#d93025"; // Đỏ đậm
+            flagHtml = '<span title="VI PHẠM NGHIÊM TRỌNG (PHẦN II) - HỆ THỐNG ĐÃ ÉP THU BÀI" style="color:#d93025; cursor:help; font-size:18px; margin-left:5px;">🚩</span>';
+        } else if (hs.ViPham >= 3) {
+            // Trường hợp 2: Vi phạm đủ 3 lần (Ép thu bài do quá số lần)
+            violationColor = "#f39c12"; // Màu cam
+            flagHtml = '<span title="VI PHẠM ĐỦ 3 LẦN - HỆ THỐNG ĐÃ ÉP THU BÀI" style="color:#f39c12; cursor:help; font-size:18px; margin-left:5px;">🚩</span>';
         }
 
-        let viPhamDisplay = hs.ViPham > 0 ? `<b style="color: #d93025; font-size: 16px;">${hs.ViPham}</b>` : "";
+        let viPhamDisplay = (hs.ViPham > 0 ? `<b style="color: ${violationColor}; font-size: 16px;">${hs.ViPham}</b>` : "") + flagHtml;
         
         html += `<tr style="${trStyle}">
             <td><b>${hs.MaHS || '-'}</b></td>
-            <td style="text-align:left;"><b>${hs.HoTen}</b>${coHieuP2}</td>
+            <td style="text-align:left;"><b>${hs.HoTen}</b></td>
             <td>${hs.Lop}</td>
             <td id="live-status-${hs.id}">${sttHtml}</td>
             <td>${hs.MaDe || '-'}</td>
