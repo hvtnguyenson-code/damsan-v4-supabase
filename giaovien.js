@@ -2758,8 +2758,12 @@ async function fetchTeachers(forceReload = false) {
     try {
         let pArr = new Array();
         pArr.push(sb.from('mon_hoc').select('*').order('created_at', {ascending: true}));
-        let resMonArr = await Promise.all(pArr);
-        g_sysMonList = resMonArr[0].data || new Array();
+        if (gvData.quyen === 'Admin') {
+            pArr.push(sb.from('truong_hoc').select('*').order('ten_truong', {ascending: true}));
+        }
+        let resArr = await Promise.all(pArr);
+        g_sysMonList = resArr[0].data || new Array();
+        if (resArr.length > 1) g_sysTruongList = resArr[1].data || new Array();
 
         let query = sb.from('giao_vien').select('*, truong_hoc(ten_truong)').order('ma_gv', {ascending: true});
         if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
@@ -2775,6 +2779,7 @@ async function fetchTeachers(forceReload = false) {
                     MaGV: d.ma_gv, 
                     HoTen: d.ho_ten, 
                     MonId: d.mon_id,
+                    TruongId: d.truong_id,
                     TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
                     TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
                     TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
@@ -2815,20 +2820,44 @@ function renderTeacherTable() {
             });
             selHtml += `</select>`;
 
+            let selTruongHtml = `<select onchange="capNhatTruongGiaoVien('${gv.id}', this.value)" style="padding:6px; border-radius:4px; border:1px solid #ccc; font-weight:bold; color:#27ae60; cursor:pointer; width:100%; outline:none; background:#f1f8e9; font-size:11px;">`;
+            if (window.g_sysTruongList) {
+                g_sysTruongList.forEach(t => {
+                    let sel = (gv.TruongId === t.id) ? 'selected' : '';
+                    selTruongHtml += `<option value="${t.id}" ${sel}>${t.ten_truong}</option>`;
+                });
+            } else {
+                selTruongHtml += `<option value="${gv.TruongId}">${gv.TenTruong}</option>`;
+            }
+            selTruongHtml += `</select>`;
+
             let chucVuHtml = gv.Quyen === 'Admin' ? `<span style="background:#fadbd8; color:#e74c3c; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:12px; display:inline-block; margin-top:4px;">Admin Toàn quyền</span>` : selHtml;
+            let truongDisplay = gvData.quyen === 'Admin' ? selTruongHtml : `<span style="font-size:11px; color:#5f6368;">${gv.TenTruong}</span>`;
 
             html += `<tr>
                 <td style="text-align:center;"><input type="checkbox" class="chk-GV" value="${gv.id}" style="transform: scale(1.2);"></td>
                 <td><b>${gv.MaGV}</b></td>
                 <td>${gv.HoTen}</td>
                 <td style="min-width: 150px;">${chucVuHtml}</td>
-                <td style="font-size:11px; color:#5f6368;">${gv.TenTruong}</td>
+                <td style="min-width: 150px;">${truongDisplay}</td>
                 <td>${statusHTML}</td>
                 <td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${gv.MaGV}', '${gv.id}', 'GV')">Khôi phục MK</button></td>
             </tr>`; 
         }); 
     } 
     document.getElementById('gvBody').innerHTML = html; 
+}
+
+async function capNhatTruongGiaoVien(gvId, truongId) {
+    if(!confirm("Xác nhận chuyển giáo viên này sang trường mới?")) return fetchTeachers();
+    let {error} = await sb.from('giao_vien').update({truong_id: truongId}).eq('id', gvId);
+    if(error) {
+        alert("❌ Lỗi cập nhật trường học: " + error.message);
+        fetchTeachers(); 
+    } else {
+        alert("✅ Đã chuyển trường thành công!");
+        fetchTeachers();
+    }
 }
 
 async function capNhatMonGiaoVien(gvId, monId) {
