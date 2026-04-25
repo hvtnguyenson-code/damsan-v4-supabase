@@ -9,9 +9,10 @@ let examTimer = null;
 
 let currentQuestionIndex = 0;
 let cheatCount = 0;
-const MAX_CHEATS = 3; // Giữ nguyên 3 lần cảnh báo mang tính giáo dục
+const MAX_CHEATS = 3; 
 let isExamActive = false;
 let isSubmitting = false;
+let isInternalAction = false; // Cờ đánh dấu đang thực hiện hành động hệ thống (hiện confirm/alert)
 
 // Foreensic report should stay hidden in student UI; enable only for authorized review.
 const SHOW_FORENSIC_REPORT = false;
@@ -1192,6 +1193,7 @@ function batDauAntiCheat(initialCheatCount = 0) {
 }
 
 function handleVisibilityChange() {
+    if (isInternalAction) return;
     if (document.visibilityState === 'hidden' && isExamActive) {
         xuLyGianLan('Rời khỏi tab thi');
     }
@@ -1235,17 +1237,17 @@ function handleResize() {
 }
 
 function handleBlur() {
-    if (!isExamActive) return;
+    if (!isExamActive || isInternalAction) return;
 
     cheatTimeout = setTimeout(() => {
-        if (!document.hasFocus()) {
+        if (!document.hasFocus() && !isInternalAction) {
             xuLyGianLan('Mất focus cửa sổ thi');
         }
     }, 500);
 }
 
 function handleFullScreenChange() {
-    if (!isExamActive) return;
+    if (!isExamActive || isInternalAction) return;
     if (!document.fullscreenElement) {
         xuLyGianLan('Thoát khỏi chế độ toàn màn hình');
     }
@@ -1295,12 +1297,15 @@ function chanPhimTat(e) {
     if (forbidden.some(Boolean)) {
         e.preventDefault();
         xuLyGianLan('Phát hiện phím tắt bị vô hiệu hóa');
+        
+        isInternalAction = true;
         alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
+        setTimeout(() => { isInternalAction = false; }, 2000);
     }
 }
 
 function xuLyGianLan(reason = 'Hành vi nghi vấn') {
-    if (!isExamActive) return;
+    if (!isExamActive || isInternalAction) return;
     const now = Date.now();
     if (now - antiCheatLastViolationTs < 2000) return; 
     antiCheatLastViolationTs = now;
@@ -1323,7 +1328,7 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
 
     // LỖ HỔNG ĐÃ BỊT: Nếu là Phần II, ép thu bài ngay lập tức, bất kể đang có cảnh báo hay không
     if (isPhan2) {
-        ghiNhanNghiVan(reason + " (VI PHẠM ĐẶC BIỆT TẠI PHẦN II)");
+        ghiNhanNghiVan(reason + " (VI PHẠM ĐẶC BIỆT TẠI PHẦN II) [PART_II_VIOLATION]");
         cheatCount++;
         // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
         _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
@@ -1396,7 +1401,13 @@ function xacNhanNopBai() {
     let msg = chuaLam > 0
         ? `⚠️ CẢNH BÁO: Bạn còn ${chuaLam} câu chưa hoàn thành!\nBạn có CHẮC CHẮN muốn nộp bài lúc này không?`
         : `Bạn đã hoàn thành 100% câu hỏi.\nXác nhận NỘP BÀI lên máy chủ?`;
-    if (confirm(msg)) gradeAndSubmit(false);
+    
+    isInternalAction = true; // Bật cờ để tạm dừng anti-cheat
+    if (confirm(msg)) {
+        gradeAndSubmit(false);
+    }
+    // Tắt cờ sau một khoảng trễ đủ dài để trình duyệt ổn định lại tiêu điểm
+    setTimeout(() => { isInternalAction = false; }, 2000);
 }
 
 async function gradeAndSubmit(autoSubmit = false) {

@@ -718,7 +718,7 @@ function renderDashboardTable() {
         // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO
         let flagHtml = "";
         let violationColor = "#d93025"; // Mặc định là đỏ cho số lần vi phạm
-        let isFatalP2 = hs.ChiTiet && hs.ChiTiet.includes("PART_II_VIOLATION");
+        let isFatalP2 = hs.ChiTiet && (hs.ChiTiet.includes("PART_II_VIOLATION") || hs.ChiTiet.includes("PHẦN II"));
         
         if (isFatalP2) {
             // Trường hợp 1: Vi phạm nghiêm trọng Phần II (Ép thu bài ngay lập tức)
