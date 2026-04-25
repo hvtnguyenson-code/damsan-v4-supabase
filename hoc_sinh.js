@@ -1,6 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const VERSION = '4.1.2'; // Cập nhật phiên bản để Service Worker nhận biết thay đổi
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -67,11 +68,17 @@ function voHieuHoaCongCuDev() {
 document.addEventListener('DOMContentLoaded', () => {
     // 0. ĐĂNG KÝ SERVICE WORKER ĐỂ KÍCH HOẠT PWA
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js')
+        // Thêm tham số query version để buộc trình duyệt kiểm tra SW mới nếu có thay đổi code
+        navigator.serviceWorker.register('./sw.js?v=' + VERSION)
             .then(reg => {
                 console.log('SW Registered', reg);
-                // Nếu có SW mới đang đợi, báo cho nó chiếm quyền ngay
-                if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                
+                // Kiểm tra cập nhật định kỳ mỗi khi vào app
+                reg.update();
+
+                if (reg.waiting) {
+                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
             })
             .catch(err => console.log('SW Failed', err));
 
@@ -918,6 +925,17 @@ async function joinRoom(maPhongAuto = null) {
         kichHoatLienKetRealtime();
 
         const { data: res } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
+        
+        // LOGIC KHÔI PHỤC QUYỀN THI (CLEAR LOCKOUT) KHI GIÁO VIÊN RESET
+        // Nếu không tìm thấy kết quả trên server (đã bị xóa) hoặc số lần vi phạm đã được reset về 0
+        if (!res || (res && (res.so_lan_vi_pham || 0) === 0)) {
+            localStorage.removeItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
+            // Nếu là phiên thi mới hoàn toàn (res null), xóa luôn bản nháp cũ để tránh râu ông nọ cắm cằm bà kia
+            if (!res) {
+                localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+            }
+        }
+
         if (res && res.diem !== null && res.diem !== undefined) {
             state.user_result = res;
             document.getElementById('finish_name').innerText = state.ho_ten;

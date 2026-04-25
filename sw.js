@@ -1,4 +1,5 @@
-const CACHE_NAME = 'damsan-exam-v2';
+const VERSION = '4.1.2';
+const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
   './hoc_sinh.js',
@@ -8,7 +9,7 @@ const ASSETS = [
 
 // 1. Cài đặt và lưu cache ban đầu
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  self.skipWaiting(); // Buộc SW mới kích hoạt ngay lập tức
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
@@ -19,22 +20,35 @@ self.addEventListener('install', (event) => {
 // 2. Kích hoạt và dọn dẹp cache cũ
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
-          }
-        })
-      );
-    })
+    Promise.all([
+      // Dọn dẹp cache phiên bản cũ
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cache) => {
+            if (cache !== CACHE_NAME) {
+              return caches.delete(cache);
+            }
+          })
+        );
+      }),
+      // Chiếm quyền điều khiển khách hàng ngay lập tức
+      self.clients.claim()
+    ])
   );
 });
 
-// 3. Chiến lược Network First (Ưu tiên mạng, mất mạng mới dùng cache)
+// 3. Lắng nghe lệnh từ hoc_sinh.js
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// 4. Chiến lược Network First (Ưu tiên mạng, mất mạng mới dùng cache)
+// Đặc biệt: Luôn fetch từ mạng trước cho các file HTML/JS để đảm bảo tính mới nhất
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' }) // Chống cache trình duyệt tầng HTTP
       .then((response) => {
         // Nếu lấy được từ mạng, cập nhật lại bản mới vào cache
         const resClone = response.clone();
