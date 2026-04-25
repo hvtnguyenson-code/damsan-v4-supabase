@@ -530,6 +530,12 @@ async function khoiTaoDuLieu() {
         
         // Kích hoạt ngay chức năng Auto-Refresh 5s từ giao diện HTML
         toggleAutoRefresh();
+        // Fallback: Tự động cập nhật danh sách học sinh mỗi 30s nếu đang ở tab quản lý
+        setInterval(() => {
+            if(document.getElementById('quanLyTK') && document.getElementById('quanLyTK').classList.contains('active')) {
+                if(allStudents.length > 0) fetchStudents(true);
+            }
+        }, 30000);
 
         // Kích hoạt thêm kênh Realtime dự phòng (nếu Supabase của bạn đã bật)
         kichHoatLienKetRealtimeGiaoVien();
@@ -796,19 +802,30 @@ function kichHoatLienKetRealtimeGiaoVien() {
             if (window.autoRadarTimeout) clearTimeout(window.autoRadarTimeout);
             window.autoRadarTimeout = setTimeout(() => fetchRadar(), 1500);
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'hoc_sinh' }, payload => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'hoc_sinh' }, payload => {
             if (window.autoStudentTimeout) clearTimeout(window.autoStudentTimeout);
             window.autoStudentTimeout = setTimeout(() => {
-                if(allStudents.length > 0) fetchStudents(true);
-            }, 1000);
+                fetchStudents(true);
+            }, 800);
         })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'giao_vien' }, payload => {
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'giao_vien' }, payload => {
             if (window.autoTeacherTimeout) clearTimeout(window.autoTeacherTimeout);
             window.autoTeacherTimeout = setTimeout(() => {
-                if(allTeachers.length > 0) fetchTeachers(true);
-            }, 1000);
+                fetchTeachers(true);
+            }, 800);
         })
-        .subscribe();
+        .subscribe((status) => {
+            const ind = document.getElementById('realtimeIndicator');
+            const txt = document.getElementById('realtimeText');
+            if(!ind || !txt) return;
+            if(status === 'SUBSCRIBED') {
+                ind.style.background = '#27ae60'; ind.style.boxShadow = '0 0 8px #2ecc71';
+                txt.innerText = 'Realtime: Đã kết nối'; txt.style.color = '#27ae60';
+            } else {
+                ind.style.background = '#e74c3c'; ind.style.boxShadow = '0 0 8px #ff7675';
+                txt.innerText = 'Realtime: Mất kết nối (F5 lại)'; txt.style.color = '#e74c3c';
+            }
+        });
 }
 
 /* ================================================   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU 
@@ -2681,7 +2698,7 @@ async function fetchStudents(forceReload = false) {
     }
 }
 
-function renderSubTabsHS() { let groups = new Set(); allStudents.forEach(s => { if(s.Lop) groups.add(s.Lop); }); let html = `<button class="${currentStudentFilter==='TatCa'?'active':''}" onclick="filterStudents('TatCa')">Tất cả</button>`; groups.forEach(g => { html += `<button class="${currentStudentFilter===g?'active':''}" onclick="filterStudents('${g}')">${g}</button>`; }); document.getElementById('subTabsHS').innerHTML = html; }
+function renderSubTabsHS() { let groups = new Set(); allStudents.forEach(s => { if(s.Lop) groups.add(s.Lop); }); let html = `<button class="${currentStudentFilter==='TatCa'?'active':''}" onclick="filterStudents('TatCa')">Tất cả</button>`; groups.forEach(g => { html += `<button class="${currentStudentFilter===g?'active':''}" onclick="filterStudents('${g}')">${g}</button>`; }); html += `<button onclick='fetchStudents(true)' style='background:#f1f3f4; color:#1a73e8; margin-left:10px; border:1px dashed #1a73e8;' title='Làm mới từ máy chủ'>🔄</button>`; document.getElementById('subTabsHS').innerHTML = html; }
 function filterStudents(filter) { currentStudentFilter = filter; renderSubTabsHS(); renderStudentTable(); }
 
 function renderStudentTable() { 
