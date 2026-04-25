@@ -16,7 +16,9 @@ foreach ($file in $files) {
 foreach ($file in $htmlFiles) {
     if (Test-Path $file) {
         $content = Get-Content $file -Raw
-        $newContent = $content -replace '(\.js|\.css)\?v=[^"''\s>]*', "`$1?v=$buildId"
+        # Regex thông minh: Tìm src hoặc href trỏ đến file .js/.css nội bộ (không có http/https)
+        # và thêm hoặc cập nhật tham số ?v=
+        $newContent = $content -replace '(src|href)="(?!\w+://)([^"]+\.(?:js|css))(?:\?v=[^"]*)?"', "`$1=`"`$2?v=$buildId`""
         Set-Content -Path $file -Value $newContent -NoNewline
         Write-Host "✅ Đã cập nhật tham số phiên bản trong $($file): $buildId" -ForegroundColor Green
     }
