@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260425-2027'; 
+const VERSION = '20260425-2202'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -1304,7 +1304,7 @@ function chanPhimTat(e) {
     }
 }
 
-function xuLyGianLan(reason = 'Hành vi nghi vấn') {
+async function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     if (!isExamActive || isInternalAction) return;
     const now = Date.now();
     if (now - antiCheatLastViolationTs < 2000) return; 
@@ -1332,22 +1332,23 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         cheatCount = 88; // Tín hiệu đặc biệt dành cho giáo viên (Vi phạm Phần II)
         // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
         const forensicData = JSON.stringify(antiCheatRuntime);
-        _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
-            if (data) {
-                _supabase.from('ket_qua').update({ 
-                    so_lan_vi_pham: cheatCount,
-                    chi_tiet: forensicData 
-                }).eq('id', data.id).then(() => console.log("Đã chốt vi phạm Phần II"));
-            } else {
-                _supabase.from('ket_qua').insert({ 
-                    phong_id: state.phong_id, 
-                    hs_id: state.hs_id, 
-                    truong_id: state.truong_id, 
-                    so_lan_vi_pham: cheatCount,
-                    chi_tiet: forensicData
-                }).then(() => console.log("Đã chốt vi phạm Phần II"));
-            }
-        });
+        const { data } = await _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
+        if (data) {
+            await _supabase.from('ket_qua').update({ 
+                so_lan_vi_pham: cheatCount,
+                chi_tiet: forensicData 
+            }).eq('id', data.id);
+            console.log("Đã chốt vi phạm Phần II");
+        } else {
+            await _supabase.from('ket_qua').insert({ 
+                phong_id: state.phong_id, 
+                hs_id: state.hs_id, 
+                truong_id: state.truong_id, 
+                so_lan_vi_pham: cheatCount,
+                chi_tiet: forensicData
+            });
+            console.log("Đã chốt vi phạm Phần II");
+        }
 
         localStorage.setItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id, 'true');
 
@@ -1368,13 +1369,12 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     document.getElementById('cheat-count').innerText = cheatCount;
 
     // ĐỒNG BỘ REALTIME cho các phần khác
-    _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
-        if (data) {
-            _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then();
-        } else {
-            _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount }).then();
-        }
-    });
+    const { data } = await _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
+    if (data) {
+        await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id);
+    } else {
+        await _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount });
+    }
 
     const warningEl = document.getElementById('cheat-warning');
     const msgEl = warningEl ? warningEl.querySelector('p') : null;

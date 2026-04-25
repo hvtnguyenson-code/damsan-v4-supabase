@@ -1,6 +1,7 @@
 # Script tự động cập nhật phiên bản PWA và đẩy lên GitHub
 $buildId = Get-Date -Format "yyyyMMdd-HHmm"
 $files = @("hoc_sinh.js", "sw.js")
+$htmlFiles = @("hoc_sinh.html", "giaovien.html")
 
 foreach ($file in $files) {
     if (Test-Path $file) {
@@ -9,6 +10,15 @@ foreach ($file in $files) {
         $newContent = $newContent -replace "{{BUILD_ID}}", $buildId
         Set-Content -Path $file -Value $newContent -NoNewline
         Write-Host "✅ Đã cập nhật $file lên phiên bản: $buildId" -ForegroundColor Green
+    }
+}
+
+foreach ($file in $htmlFiles) {
+    if (Test-Path $file) {
+        $content = Get-Content $file -Raw
+        $newContent = $content -replace '(\.js|\.css)\?v=[^"''\s>]*', "`$1?v=$buildId"
+        Set-Content -Path $file -Value $newContent -NoNewline
+        Write-Host "✅ Đã cập nhật tham số phiên bản trong $($file): $buildId" -ForegroundColor Green
     }
 }
 
