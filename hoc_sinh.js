@@ -1329,13 +1329,23 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     // LỖ HỔNG ĐÃ BỊT: Nếu là Phần II, ép thu bài ngay lập tức, bất kể đang có cảnh báo hay không
     if (isPhan2) {
         ghiNhanNghiVan(reason + " [!!FATAL_P2!!] (VI PHẠM ĐẶC BIỆT TẠI PHẦN II)");
-        cheatCount++;
+        cheatCount = 88; // Tín hiệu đặc biệt dành cho giáo viên (Vi phạm Phần II)
         // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
+        const forensicData = JSON.stringify(antiCheatRuntime);
         _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
             if (data) {
-                _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then(() => console.log("Đã chốt vi phạm Phần II"));
+                _supabase.from('ket_qua').update({ 
+                    so_lan_vi_pham: cheatCount,
+                    chi_tiet: forensicData 
+                }).eq('id', data.id).then(() => console.log("Đã chốt vi phạm Phần II"));
             } else {
-                _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount }).then(() => console.log("Đã chốt vi phạm Phần II"));
+                _supabase.from('ket_qua').insert({ 
+                    phong_id: state.phong_id, 
+                    hs_id: state.hs_id, 
+                    truong_id: state.truong_id, 
+                    so_lan_vi_pham: cheatCount,
+                    chi_tiet: forensicData
+                }).then(() => console.log("Đã chốt vi phạm Phần II"));
             }
         });
 

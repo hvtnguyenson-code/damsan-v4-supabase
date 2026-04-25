@@ -715,11 +715,12 @@ function renderDashboardTable() {
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
 
-        // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO (DEEP SCAN)
+        // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO (DEEP SCAN + SIGNAL 88)
         let flagHtml = "";
         let violationColor = "#d93025"; 
         const ctStr = (hs.ChiTiet || "").toUpperCase();
-        let isFatalP2 = ctStr.includes("PART_II") || ctStr.includes("PHẦN II") || ctStr.includes("FATAL_P2") || ctStr.includes("SPECIAL_MARKER");
+        // Cờ đỏ nếu: Có tag kỹ thuật HOẶC số vi phạm là 88 (mã đặc biệt)
+        let isFatalP2 = ctStr.includes("PART_II") || ctStr.includes("PHẦN II") || ctStr.includes("FATAL_P2") || hs.ViPham >= 88;
         
         if (isFatalP2) {
             // Trường hợp 1: Vi phạm nghiêm trọng Phần II (Ép thu bài ngay lập tức)
