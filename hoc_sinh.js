@@ -1328,7 +1328,7 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
 
     // LỖ HỔNG ĐÃ BỊT: Nếu là Phần II, ép thu bài ngay lập tức, bất kể đang có cảnh báo hay không
     if (isPhan2) {
-        ghiNhanNghiVan(reason + " (VI PHẠM ĐẶC BIỆT TẠI PHẦN II) [PART_II_VIOLATION]");
+        ghiNhanNghiVan(reason + " [!!FATAL_P2!!] (VI PHẠM ĐẶC BIỆT TẠI PHẦN II)");
         cheatCount++;
         // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
         _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single().then(({data}) => {
@@ -1436,8 +1436,8 @@ async function gradeAndSubmit(autoSubmit = false) {
     });
 
     // TÍCH HỢP ĐÁNH DẤU VI PHẠM PHẦN II (Dành cho Giáo viên)
-    if (antiCheatRuntime.reasons.some(r => r.reason && r.reason.includes("PHẦN II"))) {
-        baiLam.push({ phan: "SPECIAL_MARKER", type: "PART_II_VIOLATION" });
+    if (antiCheatRuntime.reasons.some(r => r.reason && (r.reason.includes("PHẦN II") || r.reason.includes("FATAL_P2")))) {
+        baiLam.push({ phan: "SPECIAL_MARKER", type: "PART_II_VIOLATION", tag: "!!FATAL_P2!!" });
     }
 
     try {

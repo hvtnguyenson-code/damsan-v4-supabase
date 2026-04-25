@@ -715,10 +715,11 @@ function renderDashboardTable() {
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
         const txtTen = (hs.HoTen || "").toString().toUpperCase();
 
-        // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO
+        // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO (DEEP SCAN)
         let flagHtml = "";
-        let violationColor = "#d93025"; // Mặc định là đỏ cho số lần vi phạm
-        let isFatalP2 = hs.ChiTiet && (hs.ChiTiet.includes("PART_II_VIOLATION") || hs.ChiTiet.includes("PHẦN II"));
+        let violationColor = "#d93025"; 
+        const ctStr = (hs.ChiTiet || "").toUpperCase();
+        let isFatalP2 = ctStr.includes("PART_II") || ctStr.includes("PHẦN II") || ctStr.includes("FATAL_P2") || ctStr.includes("SPECIAL_MARKER");
         
         if (isFatalP2) {
             // Trường hợp 1: Vi phạm nghiêm trọng Phần II (Ép thu bài ngay lập tức)
