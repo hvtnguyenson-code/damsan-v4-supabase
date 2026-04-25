@@ -2006,6 +2006,7 @@ async function dieuKhienFast(maPhong, trangThai) {
     }
 }
 
+
 async function xoaPhongHoanToan(maPhong) { 
     if(!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) return; 
     let btn = event.target;
@@ -2024,6 +2025,30 @@ async function xoaPhongHoanToan(maPhong) {
     } catch(e) {
         alert("Lỗi khi xóa: " + e.message);
         btn.innerText = oldText; btn.disabled = false;
+    }
+}
+
+async function xoaDeTrongPhong(maPhong) {
+    if(!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã trộn trong phòng [${maPhong}]?\n(Phòng thi và Điểm số của học sinh vẫn sẽ được giữ lại)`)) return;
+    
+    let btn = event.target;
+    let oldText = (btn && btn.innerText) ? btn.innerText : "Xóa Đề";
+    if(btn) { btn.innerText = "⏳..."; btn.disabled = true; }
+
+    try {
+        let {data: room} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
+        if(room) {
+            let { error } = await sb.from('de_thi').delete().eq('phong_id', room.id);
+            if(error) throw error;
+            alert(`✅ Đã xóa sạch đề thi trong phòng [${maPhong}] thành công!`);
+        } else {
+            alert("❌ Không tìm thấy thông tin phòng thi trên máy chủ.");
+        }
+        fetchRadar();
+    } catch(e) {
+        alert("❌ Lỗi khi xóa đề: " + e.message);
+    } finally {
+        if(btn) { btn.innerText = oldText; btn.disabled = false; }
     }
 }
 
