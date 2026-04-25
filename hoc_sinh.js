@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260425-2113'; 
+const VERSION = '20260425-2122'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -50,9 +50,7 @@ const antiCheatRuntime = {
     }
 };
 
-// ===================================// AUTO-LOGIN (CHỐNG F5) VÀ ĐĂNG XUẤT
-// ===================================function voHieuHoaCongCuDev() {
-    // 1. Chống chuột phải
+// //     // 1. Chống chuột phải
     document.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // 2. Chống các tổ hợp phím nóng (F12, Ctrl+Shift+I, Ctrl+U...)
@@ -167,9 +165,7 @@ async function kichHoatCaiDatPWA() {
     document.getElementById('btn-auto-install').style.display = 'none';
 }
 
-// ===================================// QUẢN LÝ ĐA TÀI KHOẢN ĐÃ LƯU
-// ===================================function getSavedAccounts() {
-    try {
+// //     try {
         return JSON.parse(localStorage.getItem('damsan_saved_accounts') || '[]');
     } catch (e) { return []; }
 }
@@ -258,9 +254,7 @@ function dangXuatHS() {
     }
 }
 
-// ===================================// TẠO GIAO DIỆN THÔNG BÁO VÀ CẢNH BÁO MẠNG
-// ===================================const styleCustom = document.createElement('style');
-styleCustom.innerHTML = `
+// // styleCustom.innerHTML = `
     /* 1. CHỐNG BÔI ĐEN VÀ QUÉT VĂN BẢN TRỰC TIẾP */
     .question-block, .q-text, .options-list, .tf-table {
         -webkit-touch-callout: none;
@@ -683,9 +677,7 @@ function batDauGiamSatNangCao() {
     } catch (e) { }
 }
 
-// ===================================// CÁC HÀM XỬ LÝ CHÍNH
-// ===================================async function hashPassword(message) {
-    if (window.crypto && window.crypto.subtle) {
+// //     if (window.crypto && window.crypto.subtle) {
         try {
             const msgBuffer = new TextEncoder().encode(message);
             const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);

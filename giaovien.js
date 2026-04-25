@@ -86,9 +86,7 @@ window.onload = function() {
     }
 };
 
-/* ================================================   LOGIC ĐĂNG NHẬP & BẢO MẬT
-======================================================= */
-async function thucHienDangNhapGV() {
+/* async function thucHienDangNhapGV() {
     let user = document.getElementById("gvUser").value.trim();
     let pass = document.getElementById("gvPass").value.trim();
     let msg = document.getElementById("gvLoginMsg");
@@ -130,7 +128,7 @@ async function thucHienDangNhapGV() {
 function hoanTatDangNhap(data) {
     gvData = { 
         ma_gv: data.ma_gv, ho_ten: data.ho_ten, quyen: data.quyen, 
-        truong_id: data.truong_id, truong_ten: data.truong_hoc.ten_truong,
+        truong_id: data.truong_id, truong_ten: (data.truong_hoc && data.truong_hoc.ten_truong) ? data.truong_hoc.ten_truong : 'HỆ THỐNG V4',
         mon_id: data.mon_id, id: data.id 
     };
     sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
@@ -233,9 +231,7 @@ function dangXuatGV() {
     }
 }
 
-/* ================================================   LOGIC KHỞI TẠO DỮ LIỆU CHUNG & GIAO DIỆN
-======================================================= */
-async function khoiTaoWorkspace() {
+/* async function khoiTaoWorkspace() {
     let {data: mons} = await sb.from('mon_hoc').select('*').order('created_at', {ascending: true});
     let sysMonList = mons || new Array();
 
@@ -544,9 +540,7 @@ async function khoiTaoDuLieu() {
     }
 }
 
-// ================================================// CƠ CHẾ AUTO-REFRESH 5 GIÂY (CHỐNG MÙ BẢNG ĐIỂM)
-// ================================================function toggleAutoRefresh() {
-    let toggleBtn = document.getElementById('autoRefreshToggle');
+// //     let toggleBtn = document.getElementById('autoRefreshToggle');
     if (!toggleBtn) return;
     
     let isChecked = toggleBtn.checked;
@@ -828,9 +822,7 @@ function kichHoatLienKetRealtimeGiaoVien() {
         });
 }
 
-/* ================================================   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU 
-======================================================= */
-function switchTab(tabId) {
+/* function switchTab(tabId) {
     let clickedBtn = document.querySelector(`.nav-btn[onclick*="${tabId}"]`);
     let isAlreadyActive = clickedBtn ? clickedBtn.classList.contains('active') : false;
 
@@ -926,9 +918,7 @@ function switchSubTabTK(mode) {
     }
 }
 
-/* ================================================   BÓC TÁCH WORD HYBRID (TRẢI PHẲNG CÂU CHÙM + KIỂM DỊCH)
-======================================================= */
-window.getMammothOptions = function() {
+/* window.getMammothOptions = function() {
     return {
         styleMap: ["u => u", "strike => del", "b => b", "i => i"],
         convertImage: mammoth.images.imgElement(img => {
@@ -1361,9 +1351,7 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
     }
 };
 
-/* ================================================   TRỘN ĐỀ VÀ TIỆN ÍCH
-======================================================= */
-function changePhanThuCong() { 
+/* function changePhanThuCong() { 
     let phan = document.getElementById("manPhan").value; 
     document.getElementById("manAreaP1").style.display = (phan === "1") ? "block" : "none"; 
     document.getElementById("manAreaP2").style.display = (phan === "2") ? "block" : "none"; 
@@ -1947,9 +1935,7 @@ async function saveEditedQuestion() {
     if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); } else alert("Lỗi");
 }
 
-/* ================================================   ĐIỀU HÀNH & QUẢN LÝ PHÒNG THI
-======================================================= */
-async function loadMetaData() { 
+/* async function loadMetaData() { 
     let {data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', gvData.truong_id);
     let sel = document.getElementById('ctrlDoiTuong'); let html = '<option value="TatCa">🌎 Tất cả (Mặc định)</option>'; 
     if(data) {
@@ -2576,9 +2562,7 @@ async function xuatExcel() {
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
-// ===================================================// TÍNH NĂNG IMPORT EXCEL
-// ===================================================
-async function taiFileMau(loai) {
+// // async function taiFileMau(loai) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Mau_Nhap_Lieu');
     
@@ -2680,9 +2664,7 @@ let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conf
     }
 }
 
-// ===================================================// QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
-// ===================================================
-async function fetchStudents(forceReload = false) { 
+// // async function fetchStudents(forceReload = false) { 
     document.getElementById('hsBody').innerHTML = '<tr><td colspan="6">⏳ Đang tải...</td></tr>'; 
     let cached = sessionStorage.getItem('cache_students');
     if (!forceReload && cached) {
@@ -2942,9 +2924,7 @@ async function deleteBankBatch(deleteAll, btnElement) {
     } 
 }
 
-/* ================================================   QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
-======================================================= */
-async function loadSysData() {
+/* async function loadSysData() {
     let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
     let htmlTruong = '';
     if (truongs && truongs.length > 0) {
@@ -3065,9 +3045,7 @@ async function migrateLegacyPasswords(loai, btnElement) {
     }
 }
 
-// ===================================================// TÍNH NĂNG TÌM KIẾM THEO THỜI GIAN THỰC (LIVE SEARCH)
-// ===================================================
-function removeVietnameseTones(str) {
+// // function removeVietnameseTones(str) {
     if (!str) return "";
     str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
     str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
