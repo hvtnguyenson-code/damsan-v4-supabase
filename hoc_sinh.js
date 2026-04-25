@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260425-1743'; 
+const VERSION = '20260425-1810'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;

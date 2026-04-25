@@ -1582,16 +1582,31 @@ async function xemTruocDeThi() {
     let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
 
     try {
-        let query = sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
+        console.log("🔍 Đang tìm phòng thi:", { maPhong, truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId });
+        let query = sb.from('phong_thi').select('id, mon_id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
         if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
         
         let {data: room} = await query.single();
-        if(!room) { alert("Phòng thi này chưa được tạo trên hệ thống!"); btn.innerText = oldText; btn.disabled = false; return; }
+        if(!room) { 
+            console.error("❌ Không tìm thấy phòng thi khớp với tiêu chí.");
+            alert("Phòng thi này chưa được tạo trên hệ thống hoặc không thuộc bộ môn bạn đang chọn!"); 
+            btn.innerText = oldText; btn.disabled = false; return; 
+        }
+
+        console.log("✅ Đã tìm thấy phòng:", room);
 
         let {data: exams, error} = await sb.from('de_thi').select('*').eq('phong_id', room.id);
         btn.innerText = oldText; btn.disabled = false;
 
-        if(error || !exams || exams.length === 0) { return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên."); }
+        if (error) {
+            console.error("❌ Lỗi Supabase khi tải đề:", error);
+            return alert("Lỗi phân quyền hoặc hệ thống: " + (error.message || "Không xác định"));
+        }
+
+        if(!exams || exams.length === 0) { 
+            console.warn("⚠️ Phòng này tồn tại nhưng bảng de_thi không có dữ liệu cho phong_id:", room.id);
+            return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên."); 
+        }
 
         previewExamData = exams;
         let uniqueMaDe = Array.from(new Set(exams.map(e => e.ma_de))).sort();

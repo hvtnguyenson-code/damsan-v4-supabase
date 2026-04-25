@@ -35,7 +35,7 @@ if ($null -eq $remote -or $remote -notcontains "origin") {
     Write-Host "Gợi ý: git remote add origin <URL_CUA_BAN>" -ForegroundColor Gray
 } else {
     # Đẩy lên GitHub
-    git push origin master  # Hoặc 'main' tùy cấu hình của bạn
+    git push origin main
     if ($LASTEXITCODE -eq 0) {
         Write-Host "`n✨ HOÀN TẤT! Code đã được đưa lên GitHub." -ForegroundColor Cyan
     } else {
