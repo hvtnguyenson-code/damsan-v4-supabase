@@ -732,7 +732,8 @@ function renderDashboardTable() {
             flagHtml = '<span title="VI PHẠM ĐỦ 3 LẦN - HỆ THỐNG ĐÃ ÉP THU BÀI" style="color:#f39c12; cursor:help; font-size:18px; margin-left:5px;">🚩</span>';
         }
 
-        let viPhamDisplay = (hs.ViPham > 0 ? `<b style="color: ${violationColor}; font-size: 16px;">${hs.ViPham}</b>` : "") + flagHtml;
+        let displayViPham = hs.ViPham >= 88 ? "X" : hs.ViPham;
+        let viPhamDisplay = (hs.ViPham > 0 ? `<b style="color: ${violationColor}; font-size: 16px;">${displayViPham}</b>` : "") + flagHtml;
         
         html += `<tr style="${trStyle}">
             <td><b>${hs.MaHS || '-'}</b></td>
