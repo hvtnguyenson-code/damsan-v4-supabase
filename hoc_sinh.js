@@ -68,12 +68,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // 0. ĐĂNG KÝ SERVICE WORKER ĐỂ KÍCH HOẠT PWA
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('SW Registered', reg))
+            .then(reg => {
+                console.log('SW Registered', reg);
+                // Nếu có SW mới đang đợi, báo cho nó chiếm quyền ngay
+                if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            })
             .catch(err => console.log('SW Failed', err));
+
+        // Tự động load lại trang khi có SW mới chiếm quyền để đảm bảo dùng code mới nhất
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (refreshing) return;
+            refreshing = true;
+            window.location.reload();
+        });
     }
 
     // 0.1. KHÓA CHUỘT PHẢI VÀ PHÍM NÓNG (CHỐNG SOI CODE)
     voHieuHoaCongCuDev();
+
+    // 0.2. QUẢN LÝ MẬT KHẨU ĐÃ LƯU (BẢO MẬT)
+    const matKhauInput = document.getElementById('mat_khau');
+    if (matKhauInput) {
+        matKhauInput.addEventListener('input', (e) => {
+            e.target.dataset.savedHash = '';
+            e.target.placeholder = 'Mật khẩu';
+        });
+    }
 
     // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
@@ -178,7 +199,13 @@ function chonTaiKhoan(maHs) {
     const acc = accounts.find(a => a.ma_hs === maHs);
     if (acc) {
         document.getElementById('ma_hs').value = acc.ma_hs;
-        document.getElementById('mat_khau').value = acc.pass;
+        
+        // BẢO MẬT: Không điền hash vào ô input, lưu vào dataset
+        const passInput = document.getElementById('mat_khau');
+        passInput.value = '';
+        passInput.dataset.savedHash = acc.pass;
+        passInput.placeholder = '••••••••'; // Hiệu ứng thị giác đã có mật khẩu
+        
         document.getElementById('ghi_nho_dn').checked = true;
         // Tự động nhấn đăng nhập sau 300ms để trải nghiệm mượt hơn
         setTimeout(() => login(), 300);
@@ -190,6 +217,14 @@ function xoaTaiKhoan(maHs) {
         let accounts = getSavedAccounts();
         accounts = accounts.filter(a => a.ma_hs !== maHs);
         localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
+        
+        // Xóa dấu vết nếu tài khoản đang chọn bị xóa
+        const passInput = document.getElementById('mat_khau');
+        if (document.getElementById('ma_hs').value === maHs) {
+            passInput.dataset.savedHash = '';
+            passInput.placeholder = 'Mật khẩu';
+        }
+        
         renderSavedAccounts();
     }
 }
@@ -682,15 +717,23 @@ async function login() {
 
     const maTruong = document.getElementById('ma_truong').value.trim().toUpperCase();
     const maHs = document.getElementById('ma_hs').value.trim().toUpperCase();
-    const matKhau = document.getElementById('mat_khau').value.trim();
+    const matKhauRaw = document.getElementById('mat_khau').value.trim();
+    const savedHash = document.getElementById('mat_khau').dataset.savedHash;
     const btn = document.getElementById('btn-login');
 
-    if (!maTruong || !maHs || !matKhau) return alert("Vui lòng nhập đầy đủ thông tin định danh!");
+    // LOGIC XỬ LÝ MẬT KHẨU (ƯU TIÊN TỰ GÕ -> HASH ĐÃ LƯU)
+    let hashedPass = "";
+    if (matKhauRaw) {
+        hashedPass = await hashPassword(matKhauRaw);
+    } else if (savedHash) {
+        hashedPass = savedHash;
+    } else {
+        return alert("Vui lòng nhập đầy đủ thông tin định danh!");
+    }
 
     btn.innerText = "⏳ ĐANG XÁC THỰC..."; btn.disabled = true;
 
     try {
-        let hashedPass = await hashPassword(matKhau);
         const { data: truongData } = await _supabase.from('truong_hoc').select('id').eq('ma_truong', maTruong).single();
         if (!truongData) throw new Error("Mã trường không hợp lệ!");
 
@@ -703,9 +746,9 @@ async function login() {
 
         if (!hsData) throw new Error("Thông tin tài khoản không chính xác!");
 
-        // XỬ LÝ GHI NHỚ MẬT KHẨU (ĐA TÀI KHOẢN)
+        // XỬ LÝ GHI NHỚ MẬT KHẨU (ĐA TÀI KHOẢN) - LƯU DẠNG HASH ĐỂ BẢO MẬT
         if (document.getElementById('ghi_nho_dn').checked) {
-            luuTaiKhoan(maHs, matKhau, hsData.ho_ten, hsData.lop);
+            luuTaiKhoan(maHs, hashedPass, hsData.ho_ten, hsData.lop);
         }
 
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
@@ -751,11 +794,11 @@ async function capNhatMatKhau() {
 
         if (error) throw error;
 
-        // Cập nhật lại mật khẩu trong danh sách tài khoản đã lưu
+        // Cập nhật lại mật khẩu trong danh sách tài khoản đã lưu (DẠNG HASH)
         let accounts = getSavedAccounts();
         const idx = accounts.findIndex(a => a.ma_hs === state.ma_hs);
         if (idx > -1) {
-            accounts[idx].pass = newPass;
+            accounts[idx].pass = hashedNewPass;
             localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
             renderSavedAccounts();
         }
@@ -1369,34 +1412,51 @@ async function gradeAndSubmit(autoSubmit = false) {
     }
 
     try {
-        const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', {
-            p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam
-        });
+        // CƠ CHẾ NỘP BÀI THỬ LẠI (RETRY) TỐI ĐA 3 LẦN
+        let maxRetries = 3;
+        let attempt = 0;
+        let success = false;
+        let lastError = null;
 
-        if (!error && data && data.status === 'success') {
-            if (antiCheatRuntime.reasons.length > 0) {
-                console.warn("Anti-cheat evidence trail:", antiCheatRuntime.reasons);
+        while (attempt < maxRetries && !success) {
+            const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', {
+                p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam
+            });
+
+            if (!error && data && data.status === 'success') {
+                success = true;
+                if (antiCheatRuntime.reasons.length > 0) {
+                    console.warn("Anti-cheat evidence trail:", antiCheatRuntime.reasons);
+                }
+
+                localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+                
+                // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu sau khi RPC đã chạy xong
+                if (cheatCount > 0) {
+                    await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
+                }
+
+                document.getElementById('finish_name').innerText = state.ho_ten;
+                showSection('result-section');
+                try { document.exitFullscreen(); } catch (e) { }
+                renderForensicPanel();
+                checkTeacherCommand(true);
+            } else {
+                attempt++;
+                lastError = error ? error.message : "Lỗi không xác định";
+                if (attempt < maxRetries) {
+                    console.warn(`Lỗi nộp bài lần ${attempt}. Đang thử lại sau 1.5s...`);
+                    await new Promise(res => setTimeout(res, 1500));
+                }
             }
-
-            localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
-            
-            // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu sau khi RPC đã chạy xong
-            if (cheatCount > 0) {
-                await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
-            }
-
-            document.getElementById('finish_name').innerText = state.ho_ten;
-            showSection('result-section');
-            try { document.exitFullscreen(); } catch (e) { }
-            renderForensicPanel();
-
-            checkTeacherCommand(true);
-
-        } else {
-            throw new Error(error ? error.message : "Lỗi không xác định từ Server");
         }
+
+        if (!success) {
+            throw new Error(lastError);
+        }
+
     } catch (err) {
-        alert("❌ Có lỗi mạng khi nộp bài. Vui lòng không đóng trình duyệt và báo ngay cho Giám thị!");
+        alert("❌ LỖI NẠNG: Máy chủ không nhận được bài làm của bạn!\n\nLÝ DO: " + err.message + "\n\nHÀNH ĐỘNG: Đừng đóng trình duyệt, hãy nhấn nút 'NỘP LẠI BÀI THI' ngay bên dưới hoặc báo ngay cho Giám thị.");
         if (btn) { btn.innerText = "NỘP LẠI BÀI THI"; btn.disabled = false; }
         isSubmitting = false;
     }

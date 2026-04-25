@@ -72,7 +72,7 @@ window.onload = function() {
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js";
     document.head.appendChild(script);
 
-    let gvSession = localStorage.getItem('damSan_GVSession');
+    let gvSession = sessionStorage.getItem('damSan_GVSession');
     if (gvSession) {
         gvData = JSON.parse(gvSession);
         document.getElementById('gvNameDisplay').innerText = gvData.ho_ten || "Giáo viên";
@@ -134,7 +134,7 @@ function hoanTatDangNhap(data) {
         truong_id: data.truong_id, truong_ten: data.truong_hoc.ten_truong,
         mon_id: data.mon_id, id: data.id 
     };
-    localStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
+    sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
     document.getElementById('gvNameDisplay').innerText = gvData.ho_ten;
     document.getElementById('truongNameDisplay').innerText = gvData.truong_ten;
     
@@ -227,7 +227,7 @@ async function thucHienDoiMatKhau() {
 
 function dangXuatGV() {
     if(confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-        localStorage.removeItem('damSan_GVSession');
+        sessionStorage.removeItem('damSan_GVSession');
         localStorage.removeItem('damSan_Workspace');
         sessionStorage.clear(); 
         location.reload();
