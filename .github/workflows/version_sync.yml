@@ -1,0 +1,30 @@
+name: PWA Version Sync
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate Build ID
+        id: build_id
+        run: echo "id=$(date +'%Y%m%d-%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Replace Placeholder
+        run: |
+          sed -i "s/{{BUILD_ID}}/${{ steps.build_id.outputs.id }}/g" hoc_sinh.js
+          sed -i "s/{{BUILD_ID}}/${{ steps.build_id.outputs.id }}/g" sw.js
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: auto-update PWA version to ${{ steps.build_id.outputs.id }}"
+          file_pattern: 'hoc_sinh.js sw.js'

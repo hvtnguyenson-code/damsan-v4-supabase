@@ -1,4 +1,4 @@
-const VERSION = '{{BUILD_ID}}';
+const VERSION = '20260425-1743';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
