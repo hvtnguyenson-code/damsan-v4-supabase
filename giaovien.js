@@ -2685,8 +2685,13 @@ function renderSubTabsHS() { let groups = new Set(); allStudents.forEach(s => { 
 function filterStudents(filter) { currentStudentFilter = filter; renderSubTabsHS(); renderStudentTable(); }
 
 function renderStudentTable() { 
-    let filtered = allStudents; 
-    if(currentStudentFilter !== 'TatCa') { filtered = allStudents.filter(s => s.Lop === currentStudentFilter); } 
+    let filtered = [...allStudents]; 
+    // Sắp xếp cứng theo MaHS (hỗ trợ sắp xếp số tự nhiên HS1, HS2... HS10)
+    filtered.sort((a, b) => (a.MaHS || "").localeCompare((b.MaHS || ""), undefined, {numeric: true, sensitivity: 'base'}));
+
+    if(currentStudentFilter !== 'TatCa') { 
+        filtered = filtered.filter(s => s.Lop === currentStudentFilter); 
+    } 
     let html = ""; 
     if(filtered.length === 0) html = '<tr><td colspan="6">Không có dữ liệu.</td></tr>'; 
     else { 
@@ -2744,7 +2749,10 @@ function renderTeacherTable() {
     let html = ""; 
     if(allTeachers.length === 0) html = '<tr><td colspan="6" style="text-align:center;">Không có dữ liệu.</td></tr>'; 
     else { 
-        allTeachers.forEach(gv => { 
+        // Sắp xếp cứng danh sách giáo viên theo MaGV
+        let sortedTeachers = [...allTeachers].sort((a, b) => (a.MaGV || "").localeCompare((b.MaGV || ""), undefined, {numeric: true, sensitivity: 'base'}));
+        
+        sortedTeachers.forEach(gv => { 
             let statusHTML = gv.TrangThai === "DaDoi" 
                 ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
                 : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
