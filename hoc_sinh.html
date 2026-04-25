@@ -174,7 +174,13 @@
             .auth-container { margin: 20px auto; padding: 20px; width: 95%; }
             .auth-title { font-size: 20px; margin-bottom: 15px; }
             .input-group { margin-bottom: 12px; }
-            #login-section.active { overflow-y: auto !important; height: 100vh; }
+        }
+
+        /* HỖ TRỢ CUỘN CHO CÁC MÀN HÌNH CHỜ/ĐĂNG NHẬP */
+        #login-section.active, #room-section.active, #change-password-section.active, #pwa-install-section.active { 
+            overflow-y: auto !important; 
+            height: 100vh; 
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Animation cho nút Install */
@@ -360,6 +366,6 @@
         <button class="btn-warning" onclick="closeCheatWarning()">TÔI ĐÃ HIỂU VÀ SẼ KHÔNG TÁI PHẠM</button>
     </div>
 
-    <script src="hoc_sinh.js?v=20260425-2356"></script>
+    <script src="hoc_sinh.js?v=20260426-0001"></script>
 </body>
 </html>
