@@ -696,8 +696,34 @@ function renderDashboardTable() {
             else countYeu++;
         } 
         
-        let total = isSubmitted ? parseFloat(hs.Diem).toFixed(2) : "-"; 
+        let totalRaw = isSubmitted ? parseFloat(hs.Diem) : 0;
+        let totalDisplay = isSubmitted ? totalRaw : "-";
+
+        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT TRÊN DASHBOARD (HIỂN THỊ)
+        if (isSubmitted) {
+            try {
+                let ct = typeof hs.ChiTiet === 'string' ? JSON.parse(hs.ChiTiet) : hs.ChiTiet;
+                let hasP2P3 = Object.values(ct).some(v => v.phan === "2" || v.phan === "3");
+                if (!hasP2P3) {
+                    let totalQ = Object.keys(ct).length;
+                    let maxRaw = totalQ * 0.25;
+                    if (maxRaw > 0) totalDisplay = (totalRaw / maxRaw) * 10;
+                }
+            } catch(e) {}
+        }
         
+        let total = isSubmitted ? parseFloat(totalDisplay).toFixed(2) : "-"; 
+        
+        // ĐỒNG BỘ ĐIỂM THÀNH PHẦN (P1) NẾU LÀ BÀI KIỂM TRA NGẮN
+        let p1Display = isSubmitted ? parseFloat(hs.p1Score) : "-";
+        let p2Display = isSubmitted ? parseFloat(hs.p2Score) : "-";
+        let p3Display = isSubmitted ? parseFloat(hs.p3Score) : "-";
+
+        if (isSubmitted && totalDisplay !== totalRaw) {
+            // Nếu có quy đổi (chỉ có Phần I), gán P1 bằng tổng điểm luôn
+            p1Display = parseFloat(totalDisplay).toFixed(2);
+        }
+
         let badgeClass = '';
         if(isSubmitted) {
             let score = parseFloat(total);
@@ -742,9 +768,9 @@ function renderDashboardTable() {
             <td id="live-status-${hs.id}">${sttHtml}</td>
             <td>${hs.MaDe || '-'}</td>
             <td>${scoreHtml}</td>
-            <td>${isSubmitted ? parseFloat(hs.p1Score) : '-'}</td>
-            <td>${isSubmitted ? parseFloat(hs.p2Score) : '-'}</td>
-            <td>${isSubmitted ? parseFloat(hs.p3Score) : '-'}</td>
+            <td>${p1Display}</td>
+            <td>${p2Display}</td>
+            <td>${p3Display}</td>
             <td>${viPhamDisplay}</td>
         </tr>`; 
     }); 
@@ -2135,7 +2161,10 @@ function khoiDongDongHoGiaoVien() {
 
 async function fetchRadar() { 
     try {
-        let query = sb.from('phong_thi').select('*').eq('truong_id', gvData.truong_id).order('created_at', { ascending: true }); 
+        let query = sb.from('phong_thi').select('*, truong_hoc(ten_truong)').order('created_at', { ascending: true }); 
+        // Chỉ lọc theo trường nếu không phải Admin
+        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
+        
         if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
         let {data, error} = await query;
         if(error) throw error;
@@ -2157,7 +2186,16 @@ async function fetchRadar() {
             }
         }
 
-        allRoomsData = (data||[]).map(d => ({ MaPhong: d.ma_phong, TenDotKiemTra: d.ten_dot, DoiTuong: d.doi_tuong, ThoiGian: d.thoi_gian, TrangThai: d.trang_thai, ThoiGianMo: d.thoi_gian_mo, id: d.id }));
+        allRoomsData = (data||[]).map(d => ({ 
+            MaPhong: d.ma_phong, 
+            TenDotKiemTra: d.ten_dot, 
+            DoiTuong: d.doi_tuong, 
+            ThoiGian: d.thoi_gian, 
+            TrangThai: d.trang_thai, 
+            ThoiGianMo: d.thoi_gian_mo, 
+            TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
+            id: d.id 
+        }));
         
         let tbody = document.getElementById('radarBody');
         let tableElement = tbody.parentNode;
@@ -2206,12 +2244,15 @@ async function fetchRadar() {
                 let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
 
                 let displayVal = r.DoiTuong === 'TatCa' ? '🌎 Tất cả' : r.DoiTuong;
+                let truongTag = gvData.quyen === 'Admin' ? `<div style="font-size:10px; color:#7f8c8d; margin-top:2px;">🏫 ${r.TenTruong}</div>` : '';
+                
                 let doiTuongCell = `
-                    <div style="display:flex; align-items:center; justify-content:center;">
+                    <div style="display:flex; align-items:center; justify-content:center; flex-direction:column;">
                         <div style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;" 
                              onclick="moModalChonLop('${r.id}', '${r.DoiTuong}')" title="${r.DoiTuong} (Bấm để chỉnh sửa)">
                             ${displayVal} ✏️
                         </div>
+                        ${truongTag}
                         <input type="hidden" class="fast-doituong" value="${r.DoiTuong}">
                     </div>
                 `;
@@ -2297,7 +2338,9 @@ async function taiDanhSachPhong() {
     if(selectBoxTab3) selectBoxTab3.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
 
     try {
-        let query = sb.from('phong_thi').select('ma_phong').eq('truong_id', gvData.truong_id).order('created_at', { ascending: true }); 
+        let query = sb.from('phong_thi').select('ma_phong').order('created_at', { ascending: true }); 
+        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
+        
         if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
         let {data, error} = await query;
         if(error) throw error;
@@ -2358,7 +2401,9 @@ async function fetchDashboard(isAuto = false) {
         pArr.push(sb.from('ket_qua').select('*, hoc_sinh(ma_hs, ho_ten, lop)').eq('phong_id', currentRoom.id).neq('chi_tiet', dummyCacheBuster));
         
         if(allStudents.length === 0 || !isAuto) {
-             pArr.push(sb.from('hoc_sinh').select('*').eq('truong_id', gvData.truong_id));
+             let qHS = sb.from('hoc_sinh').select('*');
+             if (gvData.quyen !== 'Admin') qHS = qHS.eq('truong_id', gvData.truong_id);
+             pArr.push(qHS);
         }
         
         let myFetchId = ++globalFetchDashId;
@@ -2491,11 +2536,28 @@ async function xuatExcel() {
                 }); 
             } catch(e){} 
         } 
-        let total = hs.Diem !== "-" ? (parseFloat(hs.Diem) || 0) : "-"; 
-        if(total !== "-") {
-            if(total < 5.0) belowAvg++; if(total > maxScore) maxScore = total; if(total < minScore) minScore = total; 
+        let totalRaw = hs.Diem !== "-" ? (parseFloat(hs.Diem) || 0) : "-"; 
+        let totalDisplay = totalRaw;
+        let p1Display = p1;
+
+        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT KHI XUẤT EXCEL
+        if (totalRaw !== "-") {
+            try {
+                let ct = JSON.parse(hs.ChiTiet);
+                let hasP2P3 = Object.values(ct).some(v => v.phan === "2" || v.phan === "3");
+                if (!hasP2P3) {
+                    let totalQ = Object.keys(ct).length;
+                    let maxRaw = totalQ * 0.25;
+                    if (maxRaw > 0) {
+                        totalDisplay = (totalRaw / maxRaw) * 10;
+                        p1Display = totalDisplay; // Đồng bộ P1
+                    }
+                }
+            } catch(e) {}
+
+            if(totalDisplay < 5.0) belowAvg++; if(totalDisplay > maxScore) maxScore = totalDisplay; if(totalDisplay < minScore) minScore = totalDisplay; 
         }
-        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: total, p1: hs.Diem!=="-" ? parseFloat(p1.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
+        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: typeof totalDisplay === 'number' ? parseFloat(totalDisplay.toFixed(2)) : totalDisplay, p1: hs.Diem!=="-" ? parseFloat(p1Display.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
@@ -2568,17 +2630,19 @@ async function taiFileMau(loai) {
             { header: 'STT', key: 'stt', width: 8 },
             { header: 'Mã HS', key: 'ma_hs', width: 15 },
             { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
-            { header: 'Lớp', key: 'lop', width: 15 }
+            { header: 'Lớp', key: 'lop', width: 15 },
+            { header: 'Mã Trường', key: 'ma_truong', width: 15 }
         ];
-        worksheet.addRow({ stt: 1, ma_hs: 'HS001', ho_ten: 'Nguyễn Văn A', lop: '10A1' });
+        worksheet.addRow({ stt: 1, ma_hs: 'HS001', ho_ten: 'Nguyễn Văn A', lop: '10A1', ma_truong: 'DAMSAN' });
     } else {
         worksheet.columns = [
             { header: 'STT', key: 'stt', width: 8 },
             { header: 'Mã GV', key: 'ma_gv', width: 15 },
             { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
-            { header: 'Quyền (Admin/GV)', key: 'quyen', width: 20 }
+            { header: 'Quyền (Admin/GV)', key: 'quyen', width: 20 },
+            { header: 'Mã Trường', key: 'ma_truong', width: 15 }
         ];
-        worksheet.addRow({ stt: 1, ma_gv: 'GV001', ho_ten: 'Phạm Văn C', quyen: 'Admin' });
+        worksheet.addRow({ stt: 1, ma_gv: 'GV001', ho_ten: 'Phạm Văn C', quyen: 'Admin', ma_truong: 'DAMSAN' });
     }
     
     worksheet.getRow(1).eachCell((cell) => { 
@@ -2607,35 +2671,41 @@ async function docFileExcelVaNap(loai) {
         let rowsToInsert = new Array();
         let defaultPass = await hashPassword('123456');
 
-        // Biến theo dõi Số thứ tự lớn nhất trong danh sách
+        // Tải bản đồ mã trường -> ID trường để gán động
+        const { data: truongs } = await sb.from('truong_hoc').select('id, ma_truong');
+        const mapTruong = {};
+        if (truongs) truongs.forEach(t => mapTruong[t.ma_truong.toUpperCase()] = t.id);
+
         let maxStt = 0; 
 
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) { // Bỏ qua dòng tiêu đề
-                
-                // Đọc cột 1 để lấy STT
+            if (rowNumber > 1) { 
                 let sttRaw = row.getCell(1).value;
                 let stt = sttRaw ? parseInt(sttRaw.toString().trim()) : 0;
-                if (!isNaN(stt) && stt > maxStt) {
-                    maxStt = stt;
-                }
+                if (!isNaN(stt) && stt > maxStt) maxStt = stt;
 
                 if (loai === 'HS') {
-                    // Lấy dữ liệu các cột còn lại
                     let ma_hs = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
                     let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
                     let lop = row.getCell(4).value ? row.getCell(4).value.toString().trim() : '';
+                    let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
+                    // Ưu tiên dùng truong_id từ file Excel, nếu không có thì dùng của người nạp
+                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : gvData.truong_id;
+
                     if (ma_hs && ho_ten) {
-                        rowsToInsert.push({ ma_hs: ma_hs, ho_ten: ho_ten, lop: lop, mat_khau: defaultPass, truong_id: gvData.truong_id });
+                        rowsToInsert.push({ ma_hs: ma_hs, ho_ten: ho_ten, lop: lop, mat_khau: defaultPass, truong_id: t_id });
                     }
                 } else {
                     let ma_gv = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
                     let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
                     let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
+                    let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
+                    
+                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : gvData.truong_id;
                     
                     if (ma_gv && ho_ten) {
-                        rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: gvData.truong_id });
+                        rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: t_id });
                     }
                 }
             }
@@ -2666,15 +2736,28 @@ let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conf
 // ==========================================================
 
 async function fetchStudents(forceReload = false) { 
-    document.getElementById('hsBody').innerHTML = '<tr><td colspan="6">⏳ Đang tải...</td></tr>'; 
+    document.getElementById('hsBody').innerHTML = '<tr><td colspan="7">⏳ Đang tải...</td></tr>'; 
     let cached = sessionStorage.getItem('cache_students');
     if (!forceReload && cached) {
         allStudents = JSON.parse(cached); renderSubTabsHS(); renderStudentTable(); 
         if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); return;
     }
-    let {data} = await sb.from('hoc_sinh').select('*').eq('truong_id', gvData.truong_id).order('ma_hs', { ascending: true });
+    
+    let query = sb.from('hoc_sinh').select('*, truong_hoc(ten_truong)').order('ma_hs', { ascending: true });
+    // Chỉ lọc theo trường nếu không phải Admin
+    if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
+    
+    let {data} = await query;
     if(data) {
-        allStudents = data.map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', Quyen: d.quyen, id: d.id }));
+        allStudents = data.map(d => ({ 
+            MaHS: d.ma_hs, 
+            HoTen: d.ho_ten, 
+            Lop: d.lop, 
+            TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
+            TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
+            Quyen: d.quyen, 
+            id: d.id 
+        }));
         sessionStorage.setItem('cache_students', JSON.stringify(allStudents));
         renderSubTabsHS(); renderStudentTable(); 
         if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); 
@@ -2686,36 +2769,49 @@ function filterStudents(filter) { currentStudentFilter = filter; renderSubTabsHS
 
 function renderStudentTable() { 
     let filtered = [...allStudents]; 
-    // Sắp xếp cứng theo MaHS (hỗ trợ sắp xếp số tự nhiên HS1, HS2... HS10)
     filtered.sort((a, b) => (a.MaHS || "").localeCompare((b.MaHS || ""), undefined, {numeric: true, sensitivity: 'base'}));
 
     if(currentStudentFilter !== 'TatCa') { 
         filtered = filtered.filter(s => s.Lop === currentStudentFilter); 
     } 
+
+    // Cập nhật tiêu đề bảng
+    let thead = document.querySelector('#hsBody').previousElementSibling;
+    if(thead && !thead.innerHTML.includes('Trường')) {
+        thead.innerHTML = `<tr><th style="width:40px; text-align:center;"><input type="checkbox" id="chkAllHS" onchange="toggleAll('HS')"></th><th>Mã HS</th><th>Họ và Tên</th><th>Lớp</th><th>Trường học</th><th>Trạng Thái</th><th>Thao Tác</th></tr>`;
+    }
+
     let html = ""; 
-    if(filtered.length === 0) html = '<tr><td colspan="6">Không có dữ liệu.</td></tr>'; 
+    if(filtered.length === 0) html = '<tr><td colspan="7">Không có dữ liệu.</td></tr>'; 
     else { 
         filtered.forEach(hs => { 
             let statusHTML = hs.TrangThai === "DaDoi" 
                 ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
                 : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
             
-            html += `<tr><td><input type="checkbox" class="chk-HS" value="${hs.id}"></td><td><b>${hs.MaHS}</b></td><td style="text-align:left;">${hs.HoTen}</td><td>${hs.Lop}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${hs.MaHS}', '${hs.id}', 'HS')">Khôi phục</button></td></tr>`; 
+            html += `<tr><td><input type="checkbox" class="chk-HS" value="${hs.id}"></td><td><b>${hs.MaHS}</b></td><td style="text-align:left;">${hs.HoTen}</td><td>${hs.Lop}</td><td style="font-size:11px; color:#5f6368;">${hs.TenTruong}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${hs.MaHS}', '${hs.id}', 'HS')">Khôi phục</button></td></tr>`; 
         }); 
     } 
     document.getElementById('hsBody').innerHTML = html; 
 }
 
 async function fetchTeachers(forceReload = false) { 
-    document.getElementById('gvBody').innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Đang tải dữ liệu...</td></tr>'; 
+    document.getElementById('gvBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">⏳ Đang tải dữ liệu...</td></tr>'; 
     
     try {
         let pArr = new Array();
         pArr.push(sb.from('mon_hoc').select('*').order('created_at', {ascending: true}));
-        let resMonArr = await Promise.all(pArr);
-        g_sysMonList = resMonArr[0].data || new Array();
+        if (gvData.quyen === 'Admin') {
+            pArr.push(sb.from('truong_hoc').select('*').order('ten_truong', {ascending: true}));
+        }
+        let resArr = await Promise.all(pArr);
+        g_sysMonList = resArr[0].data || new Array();
+        if (resArr.length > 1) g_sysTruongList = resArr[1].data || new Array();
 
-        let {data, error} = await sb.from('giao_vien').select('*').eq('truong_id', gvData.truong_id).order('ma_gv', {ascending: true});
+        let query = sb.from('giao_vien').select('*, truong_hoc(ten_truong)').order('ma_gv', {ascending: true});
+        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
+        
+        let {data, error} = await query;
         
         if (error) throw error;
 
@@ -2726,7 +2822,9 @@ async function fetchTeachers(forceReload = false) {
                     MaGV: d.ma_gv, 
                     HoTen: d.ho_ten, 
                     MonId: d.mon_id,
+                    TruongId: d.truong_id,
                     TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
+                    TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
                     TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
                     Quyen: d.quyen, 
                     id: d.id 
@@ -2736,18 +2834,18 @@ async function fetchTeachers(forceReload = false) {
         }
     } catch (err) {
         console.error("Lỗi tải danh sách giáo viên:", err);
-        document.getElementById('gvBody').innerHTML = `<tr><td colspan="6" style="text-align:center; color:#c0392b; font-weight:bold;">❌ Lỗi tải dữ liệu: Vui lòng kiểm tra lại kết nối mạng.</td></tr>`;
+        document.getElementById('gvBody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:#c0392b; font-weight:bold;">❌ Lỗi tải dữ liệu: Vui lòng kiểm tra lại kết nối mạng.</td></tr>`;
     }
 }
 
 function renderTeacherTable() {
     let thead = document.querySelector('#gvBody').previousElementSibling;
-    if(thead && !thead.innerHTML.includes('Môn Phụ Trách')) {
-        thead.innerHTML = `<tr><th style="width:40px; text-align:center;"><input type="checkbox" id="chkAllGV" onchange="toggleAll('GV')"></th><th>Mã GV</th><th>Họ và Tên</th><th>Môn Phụ Trách</th><th>Trạng Thái</th><th>Thao Tác</th></tr>`;
+    if(thead && !thead.innerHTML.includes('Trường học')) {
+        thead.innerHTML = `<tr><th style="width:40px; text-align:center;"><input type="checkbox" id="chkAllGV" onchange="toggleAll('GV')"></th><th>Mã GV</th><th>Họ và Tên</th><th>Môn Phụ Trách</th><th>Trường học</th><th>Trạng Thái</th><th>Thao Tác</th></tr>`;
     }
 
     let html = ""; 
-    if(allTeachers.length === 0) html = '<tr><td colspan="6" style="text-align:center;">Không có dữ liệu.</td></tr>'; 
+    if(allTeachers.length === 0) html = '<tr><td colspan="7" style="text-align:center;">Không có dữ liệu.</td></tr>'; 
     else { 
         // Sắp xếp cứng danh sách giáo viên theo MaGV
         let sortedTeachers = [...allTeachers].sort((a, b) => (a.MaGV || "").localeCompare((b.MaGV || ""), undefined, {numeric: true, sensitivity: 'base'}));
@@ -2765,19 +2863,44 @@ function renderTeacherTable() {
             });
             selHtml += `</select>`;
 
+            let selTruongHtml = `<select onchange="capNhatTruongGiaoVien('${gv.id}', this.value)" style="padding:6px; border-radius:4px; border:1px solid #ccc; font-weight:bold; color:#27ae60; cursor:pointer; width:100%; outline:none; background:#f1f8e9; font-size:11px;">`;
+            if (window.g_sysTruongList) {
+                g_sysTruongList.forEach(t => {
+                    let sel = (gv.TruongId === t.id) ? 'selected' : '';
+                    selTruongHtml += `<option value="${t.id}" ${sel}>${t.ten_truong}</option>`;
+                });
+            } else {
+                selTruongHtml += `<option value="${gv.TruongId}">${gv.TenTruong}</option>`;
+            }
+            selTruongHtml += `</select>`;
+
             let chucVuHtml = gv.Quyen === 'Admin' ? `<span style="background:#fadbd8; color:#e74c3c; padding:4px 10px; border-radius:20px; font-weight:bold; font-size:12px; display:inline-block; margin-top:4px;">Admin Toàn quyền</span>` : selHtml;
+            let truongDisplay = gvData.quyen === 'Admin' ? selTruongHtml : `<span style="font-size:11px; color:#5f6368;">${gv.TenTruong}</span>`;
 
             html += `<tr>
                 <td style="text-align:center;"><input type="checkbox" class="chk-GV" value="${gv.id}" style="transform: scale(1.2);"></td>
                 <td><b>${gv.MaGV}</b></td>
                 <td>${gv.HoTen}</td>
                 <td style="min-width: 150px;">${chucVuHtml}</td>
+                <td style="min-width: 150px;">${truongDisplay}</td>
                 <td>${statusHTML}</td>
                 <td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${gv.MaGV}', '${gv.id}', 'GV')">Khôi phục MK</button></td>
             </tr>`; 
         }); 
     } 
     document.getElementById('gvBody').innerHTML = html; 
+}
+
+async function capNhatTruongGiaoVien(gvId, truongId) {
+    if(!confirm("Xác nhận chuyển giáo viên này sang trường mới?")) return fetchTeachers();
+    let {error} = await sb.from('giao_vien').update({truong_id: truongId}).eq('id', gvId);
+    if(error) {
+        alert("❌ Lỗi cập nhật trường học: " + error.message);
+        fetchTeachers(); 
+    } else {
+        alert("✅ Đã chuyển trường thành công!");
+        fetchTeachers();
+    }
 }
 
 async function capNhatMonGiaoVien(gvId, monId) {

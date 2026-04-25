@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260425-2251'; 
+const VERSION = '20260426-0003'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -1533,9 +1533,24 @@ async function checkTeacherCommand(isAuto = false) {
         state.user_result = kq;
         renderForensicPanel();
 
+        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT (DISPLAY-ONLY)
+        let displayScore = kq.diem;
+        const questions = state.cau_hỏi || [];
+        if (questions.length > 0) {
+            const hasPart2Or3 = questions.some(q => {
+                let p = String(q.phan || q.Phan);
+                return p === "2" || p === "3";
+            });
+            // Nếu chỉ có Phần I, tự động quy đổi về thang 10 dựa trên tổng số câu
+            if (!hasPart2Or3) {
+                const maxRaw = questions.length * 0.25;
+                if (maxRaw > 0) displayScore = (kq.diem / maxRaw) * 10;
+            }
+        }
+
         if (phong.trang_thai === 'CONG_BO_DIEM' || phong.trang_thai === 'XEM_DAP_AN') {
             document.getElementById('score-display-area').style.display = 'block';
-            document.getElementById('final_score_val').innerText = kq.diem.toFixed(2);
+            document.getElementById('final_score_val').innerText = displayScore.toFixed(2);
         } else {
             document.getElementById('score-display-area').style.display = 'none';
             document.getElementById('review-content').innerHTML = `
