@@ -1,7 +1,12 @@
 const { createClient } = supabase;
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const ADMIN_SECRET = 'DAMSAN_V4_SECURE_ADMIN_2026'; 
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    global: {
+        headers: { 'x-admin-secret': ADMIN_SECRET }
+    }
+});
 
 let gvData = null; 
 let activeWorkspaceMonId = null; 
