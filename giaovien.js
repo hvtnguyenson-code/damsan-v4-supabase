@@ -696,7 +696,23 @@ function renderDashboardTable() {
             else countYeu++;
         } 
         
-        let total = isSubmitted ? parseFloat(hs.Diem).toFixed(2) : "-"; 
+        let totalRaw = isSubmitted ? parseFloat(hs.Diem) : 0;
+        let totalDisplay = isSubmitted ? totalRaw : "-";
+
+        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT TRÊN DASHBOARD (HIỂN THỊ)
+        if (isSubmitted) {
+            try {
+                let ct = typeof hs.ChiTiet === 'string' ? JSON.parse(hs.ChiTiet) : hs.ChiTiet;
+                let hasP2P3 = Object.values(ct).some(v => v.phan === "2" || v.phan === "3");
+                if (!hasP2P3) {
+                    let totalQ = Object.keys(ct).length;
+                    let maxRaw = totalQ * 0.25;
+                    if (maxRaw > 0) totalDisplay = (totalRaw / maxRaw) * 10;
+                }
+            } catch(e) {}
+        }
+        
+        let total = isSubmitted ? parseFloat(totalDisplay).toFixed(2) : "-"; 
         
         let badgeClass = '';
         if(isSubmitted) {
@@ -2511,10 +2527,30 @@ async function xuatExcel() {
             } catch(e){} 
         } 
         let total = hs.Diem !== "-" ? (parseFloat(hs.Diem) || 0) : "-"; 
-        if(total !== "-") {
+        
+        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT KHI XUẤT EXCEL
+        if (total !== "-") {
+            // Kiểm tra cấu trúc đề của phòng thi hiện tại
+            let isShortTest = true;
+            if (currentRoom && currentRoom.id) {
+                // Chúng ta sẽ kiểm tra xem trong exportData có câu nào thuộc Phần 2 hoặc 3 không thông qua ChiTiet
+                // Tuy nhiên, cách nhanh nhất là kiểm tra xem Diem thô có khớp với chuẩn 10/10 không
+                // Hoặc tốt hơn, ta kiểm tra trực tiếp từ dữ liệu câu hỏi nếu có.
+                // Ở đây ta dùng logic: Nếu đề thi P.I thì max điểm thô là (số câu * 0.25)
+                try {
+                    let ct = JSON.parse(hs.ChiTiet);
+                    let hasP2P3 = Object.values(ct).some(v => v.phan === "2" || v.phan === "3");
+                    if (!hasP2P3) {
+                        let totalQ = Object.keys(ct).length;
+                        let maxRaw = totalQ * 0.25;
+                        if (maxRaw > 0) total = (total / maxRaw) * 10;
+                    }
+                } catch(e) {}
+            }
+
             if(total < 5.0) belowAvg++; if(total > maxScore) maxScore = total; if(total < minScore) minScore = total; 
         }
-        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: total, p1: hs.Diem!=="-" ? parseFloat(p1.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
+        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: typeof total === 'number' ? parseFloat(total.toFixed(2)) : total, p1: hs.Diem!=="-" ? parseFloat(p1.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
