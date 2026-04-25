@@ -164,8 +164,10 @@
         
         .hidden { display: none !important; }
 
-        /*            ĐIỀU CHỈNH GIAO DIỆN MOBILE (RESPONSIVE TỰ ĐỘNG)
-                   @media (max-width: 768px) {
+        /* =======================================================
+           ĐIỀU CHỈNH GIAO DIỆN MOBILE (RESPONSIVE TỰ ĐỘNG)
+           ======================================================= */
+        @media (max-width: 768px) {
             .mobile-menu-btn { display: block; margin-right: 10px;}
             .header-titles h1 { font-size: 15px; white-space: normal; line-height: 1.2; letter-spacing: 0;}
             .header-titles h2 { font-size: 10px; }
@@ -326,11 +328,6 @@
                             <button id="btnSubImport" onclick="switchSubTabTK('import'); closeSidebarMobile()">📥 Nạp dữ liệu Excel</button>
                             <button id="btnSubSys" onclick="switchSubTabTK('sys'); closeSidebarMobile(); loadSysData()">⚙️ Quản lý Trường & Môn</button>
                         </div>
-                    </div>
-
-                                        <div id="realtimeStatus" style="margin: 0 20px 10px 20px; padding: 10px; border-radius: 8px; font-size: 11px; display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #eee;">
-                        <div id="realtimeIndicator" style="width: 10px; height: 10px; border-radius: 50%; background: #95a5a6; box-shadow: 0 0 5px rgba(0,0,0,0.1);"></div>
-                        <span id="realtimeText" style="color: #7f8c8d; font-weight: 600;">Realtime: Đang kết nối...</span>
                     </div>
 
                     <button onclick="dangXuatGV()" class="logout-btn">

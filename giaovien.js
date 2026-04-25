@@ -1,8 +1,8 @@
-const { createClient } = supabase;
+
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const ADMIN_SECRET = 'DAMSAN_V4_SECURE_ADMIN_2026'; 
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     global: {
         headers: { 'x-admin-secret': ADMIN_SECRET }
     }
@@ -86,7 +86,10 @@ window.onload = function() {
     }
 };
 
-/* async function thucHienDangNhapGV() {
+/* =======================================================
+   LOGIC ĐĂNG NHẬP & BẢO MẬT
+======================================================= */
+async function thucHienDangNhapGV() {
     let user = document.getElementById("gvUser").value.trim();
     let pass = document.getElementById("gvPass").value.trim();
     let msg = document.getElementById("gvLoginMsg");
@@ -128,7 +131,7 @@ window.onload = function() {
 function hoanTatDangNhap(data) {
     gvData = { 
         ma_gv: data.ma_gv, ho_ten: data.ho_ten, quyen: data.quyen, 
-        truong_id: data.truong_id, truong_ten: (data.truong_hoc && data.truong_hoc.ten_truong) ? data.truong_hoc.ten_truong : 'HỆ THỐNG V4',
+        truong_id: data.truong_id, truong_ten: data.truong_hoc.ten_truong,
         mon_id: data.mon_id, id: data.id 
     };
     sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
@@ -231,7 +234,10 @@ function dangXuatGV() {
     }
 }
 
-/* async function khoiTaoWorkspace() {
+/* =======================================================
+   LOGIC KHỞI TẠO DỮ LIỆU CHUNG & GIAO DIỆN
+======================================================= */
+async function khoiTaoWorkspace() {
     let {data: mons} = await sb.from('mon_hoc').select('*').order('created_at', {ascending: true});
     let sysMonList = mons || new Array();
 
@@ -526,12 +532,6 @@ async function khoiTaoDuLieu() {
         
         // Kích hoạt ngay chức năng Auto-Refresh 5s từ giao diện HTML
         toggleAutoRefresh();
-        // Fallback: Tự động cập nhật danh sách học sinh mỗi 30s nếu đang ở tab quản lý
-        setInterval(() => {
-            if(document.getElementById('quanLyTK') && document.getElementById('quanLyTK').classList.contains('active')) {
-                if(allStudents.length > 0) fetchStudents(true);
-            }
-        }, 30000);
 
         // Kích hoạt thêm kênh Realtime dự phòng (nếu Supabase của bạn đã bật)
         kichHoatLienKetRealtimeGiaoVien();
@@ -540,7 +540,11 @@ async function khoiTaoDuLieu() {
     }
 }
 
-// //     let toggleBtn = document.getElementById('autoRefreshToggle');
+// =======================================================
+// CƠ CHẾ AUTO-REFRESH 5 GIÂY (CHỐNG MÙ BẢNG ĐIỂM)
+// =======================================================
+function toggleAutoRefresh() {
+    let toggleBtn = document.getElementById('autoRefreshToggle');
     if (!toggleBtn) return;
     
     let isChecked = toggleBtn.checked;
@@ -796,33 +800,13 @@ function kichHoatLienKetRealtimeGiaoVien() {
             if (window.autoRadarTimeout) clearTimeout(window.autoRadarTimeout);
             window.autoRadarTimeout = setTimeout(() => fetchRadar(), 1500);
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'hoc_sinh' }, payload => {
-            if (window.autoStudentTimeout) clearTimeout(window.autoStudentTimeout);
-            window.autoStudentTimeout = setTimeout(() => {
-                fetchStudents(true);
-            }, 800);
-        })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'giao_vien' }, payload => {
-            if (window.autoTeacherTimeout) clearTimeout(window.autoTeacherTimeout);
-            window.autoTeacherTimeout = setTimeout(() => {
-                fetchTeachers(true);
-            }, 800);
-        })
-        .subscribe((status) => {
-            const ind = document.getElementById('realtimeIndicator');
-            const txt = document.getElementById('realtimeText');
-            if(!ind || !txt) return;
-            if(status === 'SUBSCRIBED') {
-                ind.style.background = '#27ae60'; ind.style.boxShadow = '0 0 8px #2ecc71';
-                txt.innerText = 'Realtime: Đã kết nối'; txt.style.color = '#27ae60';
-            } else {
-                ind.style.background = '#e74c3c'; ind.style.boxShadow = '0 0 8px #ff7675';
-                txt.innerText = 'Realtime: Mất kết nối (F5 lại)'; txt.style.color = '#e74c3c';
-            }
-        });
+        .subscribe();
 }
 
-/* function switchTab(tabId) {
+/* =======================================================
+   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU 
+======================================================= */
+function switchTab(tabId) {
     let clickedBtn = document.querySelector(`.nav-btn[onclick*="${tabId}"]`);
     let isAlreadyActive = clickedBtn ? clickedBtn.classList.contains('active') : false;
 
@@ -918,7 +902,10 @@ function switchSubTabTK(mode) {
     }
 }
 
-/* window.getMammothOptions = function() {
+/* =======================================================
+   BÓC TÁCH WORD HYBRID (TRẢI PHẲNG CÂU CHÙM + KIỂM DỊCH)
+======================================================= */
+window.getMammothOptions = function() {
     return {
         styleMap: ["u => u", "strike => del", "b => b", "i => i"],
         convertImage: mammoth.images.imgElement(img => {
@@ -1351,7 +1338,10 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
     }
 };
 
-/* function changePhanThuCong() { 
+/* =======================================================
+   TRỘN ĐỀ VÀ TIỆN ÍCH
+======================================================= */
+function changePhanThuCong() { 
     let phan = document.getElementById("manPhan").value; 
     document.getElementById("manAreaP1").style.display = (phan === "1") ? "block" : "none"; 
     document.getElementById("manAreaP2").style.display = (phan === "2") ? "block" : "none"; 
@@ -1935,7 +1925,10 @@ async function saveEditedQuestion() {
     if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); } else alert("Lỗi");
 }
 
-/* async function loadMetaData() { 
+/* =======================================================
+   ĐIỀU HÀNH & QUẢN LÝ PHÒNG THI
+======================================================= */
+async function loadMetaData() { 
     let {data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', gvData.truong_id);
     let sel = document.getElementById('ctrlDoiTuong'); let html = '<option value="TatCa">🌎 Tất cả (Mặc định)</option>'; 
     if(data) {
@@ -2562,7 +2555,11 @@ async function xuatExcel() {
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
-// // async function taiFileMau(loai) {
+// ==========================================================
+// TÍNH NĂNG IMPORT EXCEL
+// ==========================================================
+
+async function taiFileMau(loai) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Mau_Nhap_Lieu');
     
@@ -2664,7 +2661,11 @@ let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conf
     }
 }
 
-// // async function fetchStudents(forceReload = false) { 
+// ==========================================================
+// QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
+// ==========================================================
+
+async function fetchStudents(forceReload = false) { 
     document.getElementById('hsBody').innerHTML = '<tr><td colspan="6">⏳ Đang tải...</td></tr>'; 
     let cached = sessionStorage.getItem('cache_students');
     if (!forceReload && cached) {
@@ -2680,7 +2681,7 @@ let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conf
     }
 }
 
-function renderSubTabsHS() { let groups = new Set(); allStudents.forEach(s => { if(s.Lop) groups.add(s.Lop); }); let html = `<button class="${currentStudentFilter==='TatCa'?'active':''}" onclick="filterStudents('TatCa')">Tất cả</button>`; groups.forEach(g => { html += `<button class="${currentStudentFilter===g?'active':''}" onclick="filterStudents('${g}')">${g}</button>`; }); html += `<button onclick='fetchStudents(true)' style='background:#f1f3f4; color:#1a73e8; margin-left:10px; border:1px dashed #1a73e8;' title='Làm mới từ máy chủ'>🔄</button>`; document.getElementById('subTabsHS').innerHTML = html; }
+function renderSubTabsHS() { let groups = new Set(); allStudents.forEach(s => { if(s.Lop) groups.add(s.Lop); }); let html = `<button class="${currentStudentFilter==='TatCa'?'active':''}" onclick="filterStudents('TatCa')">Tất cả</button>`; groups.forEach(g => { html += `<button class="${currentStudentFilter===g?'active':''}" onclick="filterStudents('${g}')">${g}</button>`; }); document.getElementById('subTabsHS').innerHTML = html; }
 function filterStudents(filter) { currentStudentFilter = filter; renderSubTabsHS(); renderStudentTable(); }
 
 function renderStudentTable() { 
@@ -2924,7 +2925,10 @@ async function deleteBankBatch(deleteAll, btnElement) {
     } 
 }
 
-/* async function loadSysData() {
+/* =======================================================
+   QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
+======================================================= */
+async function loadSysData() {
     let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
     let htmlTruong = '';
     if (truongs && truongs.length > 0) {
@@ -3045,7 +3049,11 @@ async function migrateLegacyPasswords(loai, btnElement) {
     }
 }
 
-// // function removeVietnameseTones(str) {
+// ==========================================================
+// TÍNH NĂNG TÌM KIẾM THEO THỜI GIAN THỰC (LIVE SEARCH)
+// ==========================================================
+
+function removeVietnameseTones(str) {
     if (!str) return "";
     str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
     str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
