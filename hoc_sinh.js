@@ -946,7 +946,7 @@ async function joinRoom(maPhongAuto = null) {
         khoiPhucBaiLamNhap();
 
         // CHỐNG LÁCH LUẬT F5: Nếu học sinh đã vi phạm quá số lần hoặc vi phạm Phần II trước đó
-        let isFatal = localStorage.getItem('fatal_violation_' + state.ma_hs);
+        let isFatal = localStorage.getItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
         if ((res && res.so_lan_vi_pham >= MAX_CHEATS) || isFatal) {
             const warningEl = document.getElementById('cheat-warning');
             if(warningEl) {
@@ -1316,7 +1316,7 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
             }
         });
 
-        localStorage.setItem('fatal_violation_' + state.ma_hs, 'true');
+        localStorage.setItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id, 'true');
 
         const warningEl = document.getElementById('cheat-warning');
         if (warningEl) {
@@ -1351,7 +1351,7 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     document.getElementById('cheat-warning').style.display = 'block';
     
     if (cheatCount >= MAX_CHEATS) {
-        localStorage.setItem('fatal_violation_' + state.ma_hs, 'true');
+        localStorage.setItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id, 'true');
         const warningEl = document.getElementById('cheat-warning');
         if (warningEl) {
             warningEl.innerHTML = `<h1>🚨 ĐÌNH CHỈ THI!</h1><p style="font-size: 20px; max-width: 600px; margin: 0 auto 20px auto; line-height: 1.5;">BẠN ĐÃ VI PHẠM QUY CHẾ THI QUÁ SỐ LẦN CHO PHÉP!<br>Hệ thống tự động đình chỉ và đang thu bài.</p>`;
