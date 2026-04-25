@@ -86,8 +86,7 @@ window.onload = function() {
     }
 };
 
-/* =======================================================
-   LOGIC ĐĂNG NHẬP & BẢO MẬT
+/* ================================================   LOGIC ĐĂNG NHẬP & BẢO MẬT
 ======================================================= */
 async function thucHienDangNhapGV() {
     let user = document.getElementById("gvUser").value.trim();
@@ -234,8 +233,7 @@ function dangXuatGV() {
     }
 }
 
-/* =======================================================
-   LOGIC KHỞI TẠO DỮ LIỆU CHUNG & GIAO DIỆN
+/* ================================================   LOGIC KHỞI TẠO DỮ LIỆU CHUNG & GIAO DIỆN
 ======================================================= */
 async function khoiTaoWorkspace() {
     let {data: mons} = await sb.from('mon_hoc').select('*').order('created_at', {ascending: true});
@@ -540,10 +538,8 @@ async function khoiTaoDuLieu() {
     }
 }
 
-// =======================================================
-// CƠ CHẾ AUTO-REFRESH 5 GIÂY (CHỐNG MÙ BẢNG ĐIỂM)
-// =======================================================
-function toggleAutoRefresh() {
+// ================================================// CƠ CHẾ AUTO-REFRESH 5 GIÂY (CHỐNG MÙ BẢNG ĐIỂM)
+// ================================================function toggleAutoRefresh() {
     let toggleBtn = document.getElementById('autoRefreshToggle');
     if (!toggleBtn) return;
     
@@ -800,11 +796,22 @@ function kichHoatLienKetRealtimeGiaoVien() {
             if (window.autoRadarTimeout) clearTimeout(window.autoRadarTimeout);
             window.autoRadarTimeout = setTimeout(() => fetchRadar(), 1500);
         })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'hoc_sinh' }, payload => {
+            if (window.autoStudentTimeout) clearTimeout(window.autoStudentTimeout);
+            window.autoStudentTimeout = setTimeout(() => {
+                if(allStudents.length > 0) fetchStudents(true);
+            }, 1000);
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'giao_vien' }, payload => {
+            if (window.autoTeacherTimeout) clearTimeout(window.autoTeacherTimeout);
+            window.autoTeacherTimeout = setTimeout(() => {
+                if(allTeachers.length > 0) fetchTeachers(true);
+            }, 1000);
+        })
         .subscribe();
 }
 
-/* =======================================================
-   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU 
+/* ================================================   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU 
 ======================================================= */
 function switchTab(tabId) {
     let clickedBtn = document.querySelector(`.nav-btn[onclick*="${tabId}"]`);
@@ -902,8 +909,7 @@ function switchSubTabTK(mode) {
     }
 }
 
-/* =======================================================
-   BÓC TÁCH WORD HYBRID (TRẢI PHẲNG CÂU CHÙM + KIỂM DỊCH)
+/* ================================================   BÓC TÁCH WORD HYBRID (TRẢI PHẲNG CÂU CHÙM + KIỂM DỊCH)
 ======================================================= */
 window.getMammothOptions = function() {
     return {
@@ -1338,8 +1344,7 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
     }
 };
 
-/* =======================================================
-   TRỘN ĐỀ VÀ TIỆN ÍCH
+/* ================================================   TRỘN ĐỀ VÀ TIỆN ÍCH
 ======================================================= */
 function changePhanThuCong() { 
     let phan = document.getElementById("manPhan").value; 
@@ -1925,8 +1930,7 @@ async function saveEditedQuestion() {
     if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); } else alert("Lỗi");
 }
 
-/* =======================================================
-   ĐIỀU HÀNH & QUẢN LÝ PHÒNG THI
+/* ================================================   ĐIỀU HÀNH & QUẢN LÝ PHÒNG THI
 ======================================================= */
 async function loadMetaData() { 
     let {data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', gvData.truong_id);
@@ -2555,10 +2559,8 @@ async function xuatExcel() {
     const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
 }
 
-// ==========================================================
-// TÍNH NĂNG IMPORT EXCEL
-// ==========================================================
-
+// ===================================================// TÍNH NĂNG IMPORT EXCEL
+// ===================================================
 async function taiFileMau(loai) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Mau_Nhap_Lieu');
@@ -2661,10 +2663,8 @@ let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conf
     }
 }
 
-// ==========================================================
-// QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
-// ==========================================================
-
+// ===================================================// QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
+// ===================================================
 async function fetchStudents(forceReload = false) { 
     document.getElementById('hsBody').innerHTML = '<tr><td colspan="6">⏳ Đang tải...</td></tr>'; 
     let cached = sessionStorage.getItem('cache_students');
@@ -2925,8 +2925,7 @@ async function deleteBankBatch(deleteAll, btnElement) {
     } 
 }
 
-/* =======================================================
-   QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
+/* ================================================   QUẢN LÝ TRƯỜNG VÀ MÔN HỌC (LOGIC BỊ THIẾU)
 ======================================================= */
 async function loadSysData() {
     let { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('*').order('created_at', { ascending: true });
@@ -3049,10 +3048,8 @@ async function migrateLegacyPasswords(loai, btnElement) {
     }
 }
 
-// ==========================================================
-// TÍNH NĂNG TÌM KIẾM THEO THỜI GIAN THỰC (LIVE SEARCH)
-// ==========================================================
-
+// ===================================================// TÍNH NĂNG TÌM KIẾM THEO THỜI GIAN THỰC (LIVE SEARCH)
+// ===================================================
 function removeVietnameseTones(str) {
     if (!str) return "";
     str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
