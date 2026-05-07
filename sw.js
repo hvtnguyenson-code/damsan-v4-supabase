@@ -1,4 +1,4 @@
-const VERSION = '20260507-2359';
+const VERSION = '20260508-0014';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
@@ -13,9 +13,9 @@ const ASSETS = [
   'https://cdn-icons-png.flaticon.com/512/3413/3413535.png'
 ];
 
-// 1. Cài đặt và lưu cache ban đầu
+// 1. CÃƒÂ i Ã„â€˜Ã¡ÂºÂ·t vÃƒÂ  lÃ†Â°u cache ban Ã„â€˜Ã¡ÂºÂ§u
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Buộc SW mới kích hoạt ngay lập tức
+  self.skipWaiting(); // BuÃ¡Â»â„¢c SW mÃ¡Â»â€ºi kÃƒÂ­ch hoÃ¡ÂºÂ¡t ngay lÃ¡ÂºÂ­p tÃ¡Â»Â©c
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
@@ -23,11 +23,11 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Kích hoạt và dọn dẹp cache cũ
+// 2. KÃƒÂ­ch hoÃ¡ÂºÂ¡t vÃƒÂ  dÃ¡Â»Ân dÃ¡ÂºÂ¹p cache cÃ…Â©
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
-      // Dọn dẹp cache phiên bản cũ
+      // DÃ¡Â»Ân dÃ¡ÂºÂ¹p cache phiÃƒÂªn bÃ¡ÂºÂ£n cÃ…Â©
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cache) => {
@@ -37,26 +37,26 @@ self.addEventListener('activate', (event) => {
           })
         );
       }),
-      // Chiếm quyền điều khiển khách hàng ngay lập tức
+      // ChiÃ¡ÂºÂ¿m quyÃ¡Â»Ân Ã„â€˜iÃ¡Â»Âu khiÃ¡Â»Æ’n khÃƒÂ¡ch hÃƒÂ ng ngay lÃ¡ÂºÂ­p tÃ¡Â»Â©c
       self.clients.claim()
     ])
   );
 });
 
-// 3. Lắng nghe lệnh từ hoc_sinh.js
+// 3. LÃ¡ÂºÂ¯ng nghe lÃ¡Â»â€¡nh tÃ¡Â»Â« hoc_sinh.js
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 });
 
-// 4. Chiến lược Network First (Ưu tiên mạng, mất mạng mới dùng cache)
-// Đặc biệt: Luôn fetch từ mạng trước cho các file HTML/JS để đảm bảo tính mới nhất
+// 4. ChiÃ¡ÂºÂ¿n lÃ†Â°Ã¡Â»Â£c Network First (Ã†Â¯u tiÃƒÂªn mÃ¡ÂºÂ¡ng, mÃ¡ÂºÂ¥t mÃ¡ÂºÂ¡ng mÃ¡Â»â€ºi dÃƒÂ¹ng cache)
+// Ã„ÂÃ¡ÂºÂ·c biÃ¡Â»â€¡t: LuÃƒÂ´n fetch tÃ¡Â»Â« mÃ¡ÂºÂ¡ng trÃ†Â°Ã¡Â»â€ºc cho cÃƒÂ¡c file HTML/JS Ã„â€˜Ã¡Â»Æ’ Ã„â€˜Ã¡ÂºÂ£m bÃ¡ÂºÂ£o tÃƒÂ­nh mÃ¡Â»â€ºi nhÃ¡ÂºÂ¥t
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    fetch(event.request, { cache: 'no-store' }) // Chống cache trình duyệt tầng HTTP
+    fetch(event.request, { cache: 'no-store' }) // ChÃ¡Â»â€˜ng cache trÃƒÂ¬nh duyÃ¡Â»â€¡t tÃ¡ÂºÂ§ng HTTP
       .then((response) => {
-        // Nếu lấy được từ mạng, cập nhật lại bản mới vào cache
+        // NÃ¡ÂºÂ¿u lÃ¡ÂºÂ¥y Ã„â€˜Ã†Â°Ã¡Â»Â£c tÃ¡Â»Â« mÃ¡ÂºÂ¡ng, cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t lÃ¡ÂºÂ¡i bÃ¡ÂºÂ£n mÃ¡Â»â€ºi vÃƒÂ o cache
         const resClone = response.clone();
         caches.open(CACHE_NAME).then((cache) => {
           cache.put(event.request, resClone);
@@ -64,7 +64,7 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Nếu mất mạng hoặc lỗi kết nối, dùng bản lưu gần nhất trong cache
+        // NÃ¡ÂºÂ¿u mÃ¡ÂºÂ¥t mÃ¡ÂºÂ¡ng hoÃ¡ÂºÂ·c lÃ¡Â»â€”i kÃ¡ÂºÂ¿t nÃ¡Â»â€˜i, dÃƒÂ¹ng bÃ¡ÂºÂ£n lÃ†Â°u gÃ¡ÂºÂ§n nhÃ¡ÂºÂ¥t trong cache
         return caches.match(event.request);
       })
   );
