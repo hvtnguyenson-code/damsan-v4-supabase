@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260507-2240'; 
+const VERSION = '20260507-2327'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -1149,12 +1149,19 @@ function startTimer(thoiGianPhut, thoiGianMo) {
             clearInterval(examTimer); document.getElementById('display-timer').innerText = "00:00";
             if (isExamActive) {
                 alert("⏳ ĐÃ HẾT THỜI GIAN LÀM BÀI! Hệ thống tự động thu bài.");
-                if (!state.isOffline) gradeAndSubmit(true);
-                else {
+                if (!state.isOffline) {
+                    // [Fix 1] Trải đều 34 học sinh trong 15s để tránh nghẽn connection pool
+                    const jitter = Math.floor(Math.random() * 15000);
+                    setTimeout(() => gradeAndSubmit(true), jitter);
+                } else {
                     tatAntiCheat();
                     document.getElementById('exam-main-area').innerHTML = '<h3 style="color:red; text-align:center;">HẾT GIỜ. ĐANG CHỜ KHÔI PHỤC KẾT NỐI MẠNG ĐỂ NỘP BÀI...</h3>';
                     let waitNet = setInterval(() => {
-                        if (!state.isOffline) { clearInterval(waitNet); gradeAndSubmit(true); }
+                        if (!state.isOffline) {
+                            clearInterval(waitNet);
+                            const jitter = Math.floor(Math.random() * 15000);
+                            setTimeout(() => gradeAndSubmit(true), jitter);
+                        }
                     }, 2000);
                 }
             }
@@ -1474,8 +1481,8 @@ async function gradeAndSubmit(autoSubmit = false) {
     }
 
     try {
-        // CƠ CHẾ NỘP BÀI THỬ LẠI (RETRY) TỐI ĐA 3 LẦN
-        let maxRetries = 3;
+        // CƠ CHẾ NỘP BÀI THỬ LẠI (RETRY) TỐI ĐA 5 LẦN với exponential backoff
+        let maxRetries = 5;
         let attempt = 0;
         let success = false;
         let lastError = null;
@@ -1500,6 +1507,8 @@ async function gradeAndSubmit(autoSubmit = false) {
                 }
 
                 isSubmitting = false; // [Fix A] reset trước khi chuyển màn — bài đã được server chấp nhận
+                // [Fix 3] Giải phóng Realtime connection để lớp sau không bị tích lũy kết nối
+                if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
                 document.getElementById('finish_name').innerText = state.ho_ten;
                 showSection('result-section');
                 try { document.exitFullscreen(); } catch (e) { }
@@ -1509,8 +1518,10 @@ async function gradeAndSubmit(autoSubmit = false) {
                 attempt++;
                 lastError = error ? error.message : "Lỗi không xác định";
                 if (attempt < maxRetries) {
-                    console.warn(`Lỗi nộp bài lần ${attempt}. Đang thử lại sau 1.5s...`);
-                    await new Promise(res => setTimeout(res, 1500));
+                    // [Fix 2] Exponential backoff: ~1.5s, ~3s, ~6s, ~10s
+                    const delay = Math.min(1500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500), 10000);
+                    console.warn(`Lỗi nộp bài lần ${attempt}. Đang thử lại sau ${delay}ms...`);
+                    await new Promise(res => setTimeout(res, delay));
                 }
             }
         }
