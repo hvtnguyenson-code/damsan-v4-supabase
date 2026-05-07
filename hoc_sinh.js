@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260426-0003'; 
+const VERSION = '20260507-2240'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -1484,6 +1484,7 @@ async function gradeAndSubmit(autoSubmit = false) {
             const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', {
                 p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam
             });
+            console.log(`[DEBUG nopbai] lần ${attempt + 1} | data: ${JSON.stringify(data)} | error: ${JSON.stringify(error)}`);
 
             if (!error && data && data.status === 'success') {
                 success = true;
@@ -1492,12 +1493,13 @@ async function gradeAndSubmit(autoSubmit = false) {
                 }
 
                 localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
-                
-                // ĐỒNG BỘ CUỐI CÙNG: Đảm bảo số lần vi phạm mới nhất được lưu sau khi RPC đã chạy xong
+
+                // ĐỒNG BỘ CUỐI CÙNG: fire-and-forget — không await để tránh lỗi phụ che khuất thành công nộp bài
                 if (cheatCount > 0) {
-                    await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
+                    _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
                 }
 
+                isSubmitting = false; // [Fix A] reset trước khi chuyển màn — bài đã được server chấp nhận
                 document.getElementById('finish_name').innerText = state.ho_ten;
                 showSection('result-section');
                 try { document.exitFullscreen(); } catch (e) { }
