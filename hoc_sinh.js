@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260507-2327'; 
+const VERSION = '20260507-2359'; 
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hỏi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -1012,7 +1012,9 @@ function kichHoatLienKetRealtime() {
             const newStatus = payload.new.trang_thai;
             if (newStatus === 'THU_BAI' && document.getElementById('exam-section').classList.contains('active')) {
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
-                gradeAndSubmit(true);
+                // [Fix THU_BAI] Jitter giống timer expiry — tránh 34 HS submit đồng thời khi GV bấm Thu bài
+                const jitter = Math.floor(Math.random() * 15000);
+                setTimeout(() => gradeAndSubmit(true), jitter);
             }
             else if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN' || newStatus === 'THU_BAI') && document.getElementById('result-section').classList.contains('active')) {
                 checkTeacherCommand(true);
@@ -1531,7 +1533,7 @@ async function gradeAndSubmit(autoSubmit = false) {
         }
 
     } catch (err) {
-        alert("❌ LỖI NẠNG: Máy chủ không nhận được bài làm của bạn!\n\nLÝ DO: " + err.message + "\n\nHÀNH ĐỘNG: Đừng đóng trình duyệt, hãy nhấn nút 'NỘP LẠI BÀI THI' ngay bên dưới hoặc báo ngay cho Giám thị.");
+        alert("❌ LỖI NẶNG: Máy chủ không nhận được bài làm của bạn!\n\nLÝ DO: " + err.message + "\n\nHÀNH ĐỘNG: Đừng đóng trình duyệt, hãy nhấn nút 'NỘP LẠI BÀI THI' ngay bên dưới hoặc báo ngay cho Giám thị.");
         if (btn) { btn.innerText = "NỘP LẠI BÀI THI"; btn.disabled = false; }
         isSubmitting = false;
     }
@@ -1597,55 +1599,105 @@ async function checkTeacherCommand(isAuto = false) {
 
 function renderReview(chiTietData) {
     const container = document.getElementById('review-content');
-    let fullReviewHtml = `<h3 style="color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px; margin-top: 30px;">CHI TIẾT BÀI LÀM & ĐÁP ÁN</h3>`;
+    let fullReviewHtml = `<h3 style="color:#1a73e8; border-bottom:2px solid #1a73e8; padding-bottom:10px; margin-top:30px;">CHI TIẾT BÀI LÀM & ĐÁP ÁN</h3>`;
     let items = Array.isArray(chiTietData) ? chiTietData : Object.values(chiTietData);
 
     items.forEach((item, index) => {
-        let isRight = false; let phan = String(item.phan || item.Phan || "1");
-        let userAns = item.chon || item.Chon || ""; let correctAns = item.dung || item.Dung || "";
-        if (phan === "1" || phan === "2") isRight = (userAns === correctAns);
-        else {
-            let aClean = String(userAns).replace(new RegExp(",", "g"), '.').replace(new RegExp("\\s", "g"), '').toLowerCase();
-            let dClean = String(correctAns).replace(new RegExp("'", "g"), '').replace(new RegExp(",", "g"), '.').replace(new RegExp("\\s", "g"), '').toLowerCase();
+        let phan = String(item.phan || item.Phan || "1");
+        let userAns = item.chon || item.Chon || "";
+        let correctAns = item.dung || item.Dung || "";
+
+        // Dữ liệu câu hỏi gốc trong state — nguồn chính xác nhất cho nội dung A/B/C/D
+        let qData = (state.cau_hỏi && state.cau_hỏi[index]) ? state.cau_hỏi[index] : {};
+
+        let isRight = false;
+        if (phan === "1" || phan === "2") {
+            isRight = (userAns === correctAns);
+        } else {
+            let aClean = String(userAns).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+            let dClean = String(correctAns).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
             isRight = (aClean !== "" && aClean === dClean);
         }
-        let qNum = item.q || item.cauSo || (index + 1); let textContent = item.noiDung || item.noiDungCau || "(Không trích xuất được nội dung câu hỏi)";
 
-        let html = `<div style="margin-bottom: 20px; padding: 20px; border-radius: 8px; background: #f8f9fa; border: 1px solid ${isRight ? '#34a853' : '#ea4335'};">
-            <span style="font-weight: 600; font-size: 16px; margin-bottom: 15px; display: block; color: #202124;">Câu ${qNum}: ${safeHTML(textContent)} 
-            <span style="background: ${isRight ? '#34a853' : '#ea4335'}; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; margin-left: 10px;">${isRight ? 'ĐÚNG' : 'SAI'}</span></span>`;
+        let qNum = item.q || item.cauSo || (index + 1);
+        let textContent = item.noiDung || item.noiDungCau || qData.noi_dung || qData.NoiDung || "";
+        let borderColor = isRight ? '#34a853' : '#ea4335';
+
+        let html = `<div style="margin-bottom:18px; padding:18px 20px; border-radius:10px; background:#fff; border:2px solid ${borderColor}; box-shadow:0 1px 4px rgba(0,0,0,0.06);">`;
+
+        // Header: nội dung câu + badge ĐÚNG/SAI
+        html += `<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:14px;">
+            <div style="font-weight:700; font-size:16px; color:#202124; line-height:1.6; flex:1;"><b>Câu ${qNum}:</b> ${safeHTML(textContent)}</div>
+            <span style="flex-shrink:0; background:${borderColor}; color:white; padding:4px 13px; border-radius:20px; font-size:13px; font-weight:700; margin-top:2px;">${isRight ? 'ĐÚNG' : 'SAI'}</span>
+        </div>`;
 
         if (phan === "1") {
-            let userText = userAns ? `<span style="color:${isRight ? '#1e8e3e' : '#d93025'}; font-weight:bold;">${safeHTML(userAns)}</span>` : `<span style="color:#d93025; font-weight:bold;">(Bỏ trống)</span>`;
-            html += `<div style="margin-bottom: 15px; font-size: 14px; background: #fff; padding: 10px; border-radius: 6px; border: 1px dashed #dadce0;">Bạn chọn: ${userText}</div>`;
-            let ABCD = new Array('A', 'B', 'C', 'D');
-            ABCD.forEach(opt => {
-                let optText = item[opt] || item[`DapAn${opt}`] || "";
-                if (!optText) return;
-                let isChosen = (userAns === opt); let isCorrect = (correctAns === opt);
-                let style = "padding: 10px 15px; margin: 6px 0; border-radius: 6px; background: #fff; border: 1px solid #e8eaed;";
-                let icon = "&nbsp;&nbsp;&nbsp;&nbsp;";
-                if (isCorrect) { style = "padding: 10px 15px; margin: 6px 0; border-radius: 6px; background: #e8f5e9; border: 2px solid #34a853; color: #1e8e3e; font-weight: bold;"; icon = "✅"; }
-                else if (isChosen && !isCorrect) { style = "padding: 10px 15px; margin: 6px 0; border-radius: 6px; background: #fce8e6; border: 2px solid #ea4335; color: #d93025; font-weight: bold;"; icon = "❌"; }
-                html += `<div style="${style}">${icon} <b>${opt}.</b> ${safeHTML(optText)}</div>`;
-            });
+            let ABCD = ['A', 'B', 'C', 'D'];
+            // Ưu tiên dữ liệu từ chiTiet, fallback sang state.cau_hỏi
+            let hasOptions = ABCD.some(o => item[o] || item[`DapAn${o}`] || qData[o] || qData[`DapAn${o}`]);
+
+            if (hasOptions) {
+                html += `<div style="display:flex; flex-direction:column; gap:7px;">`;
+                ABCD.forEach(opt => {
+                    let optText = item[opt] || item[`DapAn${opt}`] || qData[opt] || qData[`DapAn${opt}`] || "";
+                    if (!optText) return;
+                    let isChosen = (userAns === opt), isCorrect = (correctAns === opt);
+                    let bg, border, color, icon, tag = "";
+                    if (isCorrect && isChosen) {
+                        bg='#e8f5e9'; border='2px solid #34a853'; color='#1e8e3e'; icon='✅';
+                        tag=`<span style="margin-left:8px;font-size:11px;background:#34a853;color:white;padding:2px 8px;border-radius:10px;font-weight:700;">Bạn chọn · Đúng</span>`;
+                    } else if (isCorrect) {
+                        bg='#e8f5e9'; border='2px solid #34a853'; color='#1e8e3e'; icon='✅'; tag='';
+                    } else if (isChosen) {
+                        bg='#fce8e6'; border='2px solid #ea4335'; color='#d93025'; icon='❌';
+                        tag=`<span style="margin-left:8px;font-size:11px;background:#ea4335;color:white;padding:2px 8px;border-radius:10px;font-weight:700;">Bạn chọn</span>`;
+                    } else {
+                        bg='#f8f9fa'; border='1px solid #e8eaed'; color='#3c4043'; icon=`<span style="display:inline-block;width:20px;"></span>`;
+                    }
+                    html += `<div style="display:flex;align-items:flex-start;padding:10px 14px;background:${bg};border:${border};border-radius:8px;color:${color};font-size:15px;line-height:1.5;">
+                        <span style="margin-right:10px;flex-shrink:0;">${icon}</span>
+                        <span><b>${opt}.</b> ${safeHTML(optText)}${tag}</span>
+                    </div>`;
+                });
+                html += `</div>`;
+                if (!userAns) html += `<div style="margin-top:10px;padding:8px 14px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;color:#856404;font-size:13px;font-weight:600;">⚠️ Bỏ trống — không được điểm câu này</div>`;
+            } else {
+                // Không có text đáp án (hiếm gặp) — hiển thị tối giản
+                let ut = userAns ? `<b style="color:${isRight?'#1e8e3e':'#d93025'}">${safeHTML(userAns)}</b>` : `<b style="color:#d93025">(Bỏ trống)</b>`;
+                html += `<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:14px;margin-top:4px;">
+                    <span>Bạn chọn: ${ut}</span>
+                    <span>Đáp án đúng: <b style="color:#1e8e3e">${safeHTML(correctAns||'?')}</b></span>
+                </div>`;
+            }
         } else if (phan === "2") {
-            html += `<table class="tf-table" style="margin-top: 10px;"><tr><th>Ý</th><th>Nội dung</th><th>Bạn chọn</th><th>Đáp án chuẩn</th></tr>`;
-            let userArr = userAns.split('-'); let correctArr = correctAns.split('-');
-            let abcd = new Array('a', 'b', 'c', 'd');
-            abcd.forEach((letter, i) => {
-                let uA = userArr[i] || ""; let cA = correctArr[i] || ""; let optText = item[letter.toUpperCase()] || item[`DapAn${letter.toUpperCase()}`] || "";
-                html += `<tr><td style="font-weight:bold;">${letter}</td><td style="text-align:left;">${safeHTML(optText)}</td><td style="color: ${uA === cA ? '#1e8e3e' : '#d93025'}; font-weight:bold;">${safeHTML(uA || '-')}</td><td style="color: #1e8e3e; font-weight:bold;">${safeHTML(cA)}</td></tr>`;
+            html += `<table class="tf-table" style="margin-top:10px;font-size:14px;">
+                <tr><th style="text-align:left;width:50%;">Phát biểu</th><th style="width:17%;">Bạn chọn</th><th style="width:17%;">Đáp án</th><th style="width:16%;">Kết quả</th></tr>`;
+            let userArr = userAns.split('-'), correctArr = correctAns.split('-');
+            ['A','B','C','D'].forEach((letter, i) => {
+                let optText = item[letter]||item[`DapAn${letter}`]||qData[letter]||qData[`DapAn${letter}`]||"";
+                let uA = userArr[i]||"", cA = correctArr[i]||"";
+                let ok = uA === cA;
+                html += `<tr style="background:${ok?'#f0fdf4':'#fff5f5'}">
+                    <td style="text-align:left;"><b>${letter.toLowerCase()}.</b> ${safeHTML(optText)}</td>
+                    <td style="color:${ok?'#1e8e3e':'#d93025'};font-weight:700;">${safeHTML(uA||'—')}</td>
+                    <td style="color:#1e8e3e;font-weight:700;">${safeHTML(cA)}</td>
+                    <td style="font-size:18px;">${ok?'✅':'❌'}</td>
+                </tr>`;
             });
             html += `</table>`;
         } else {
-            html += `<div style="margin-top: 10px; padding: 15px; background: #fff; border-radius: 6px; border: 1px solid #dadce0;">
-                <p style="margin: 0 0 8px 0;"><b>Bạn chọn:</b> <span style="color:${isRight ? '#1e8e3e' : '#d93025'}; font-weight:bold; font-size: 16px;">${safeHTML(userAns || '(Bỏ trống)')}</span></p>
-                <p style="margin: 0; color:#1e8e3e;"><b>Đáp án chuẩn:</b> <span style="font-size: 16px; font-weight:bold;">${safeHTML(String(correctAns).replace(new RegExp("'", "g"), ''))}</span></p>
+            let cleanCorrect = String(correctAns).replace(/'/g, '');
+            html += `<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                <div style="padding:11px 14px;background:${isRight?'#e8f5e9':'#fce8e6'};border:2px solid ${borderColor};border-radius:8px;font-size:15px;">
+                    <b>Bạn trả lời:</b> <span style="color:${isRight?'#1e8e3e':'#d93025'};font-weight:700;">${safeHTML(userAns||'(Bỏ trống)')}</span>
+                </div>
+                ${!isRight ? `<div style="padding:11px 14px;background:#e8f5e9;border:2px solid #34a853;border-radius:8px;font-size:15px;">
+                    <b>Đáp án đúng:</b> <span style="color:#1e8e3e;font-weight:700;">${safeHTML(cleanCorrect)}</span>
+                </div>` : ''}
             </div>`;
         }
-        html += `</div>`;
 
+        html += `</div>`;
         fullReviewHtml += html;
     });
 
