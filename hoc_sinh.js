@@ -1,9 +1,9 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260508-0014'; 
+const VERSION = '20260508-0015'; 
 
-let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hÃ¡Â»Âi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
+let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
 let examTimer = null;
 
@@ -978,7 +978,7 @@ async function joinRoom(maPhongAuto = null) {
         if (!safeExamData || !safeExamData.cau_so) throw new Error("KhÃƒÂ´ng thÃ¡Â»Æ’ lÃ¡ÂºÂ¥y dÃ¡Â»Â¯ liÃ¡Â»â€¡u Ã„â€˜Ã¡Â»Â thi!");
 
         state.ma_de = safeExamData.ma_de;
-        state.cau_hÃ¡Â»Âi = typeof safeExamData.cau_so === 'string' ? JSON.parse(safeExamData.cau_so) : safeExamData.cau_so;
+        state.cau_hoi = typeof safeExamData.cau_so === 'string' ? JSON.parse(safeExamData.cau_so) : safeExamData.cau_so;
 
         document.getElementById('ten_mon_hien_thi').innerText = safeHTML(phongData.mon_hoc?.ten_mon || "MÃƒÂ´n Chung");
         document.getElementById('ma_de_hien_thi').innerText = state.ma_de;
@@ -1028,7 +1028,7 @@ function renderExam() {
     container.innerHTML = '';
     gridContainer.innerHTML = '';
 
-    state.cau_hÃ¡Â»Âi.forEach((cau, index) => {
+    state.cau_hoi.forEach((cau, index) => {
         let activeClassBlock = index === 0 ? "active-q" : "";
         let html = `<div class="question-block ${activeClassBlock}" id="q-block-${index}">`;
 
@@ -1111,10 +1111,10 @@ function chuyenCauHoi(index) {
     document.getElementById('exam-main-area').scrollTo({ top: 0, behavior: 'smooth' });
 }
 function cauTruoc() { if (currentQuestionIndex > 0) chuyenCauHoi(currentQuestionIndex - 1); }
-function cauTiep() { if (currentQuestionIndex < state.cau_hÃ¡Â»Âi.length - 1) chuyenCauHoi(currentQuestionIndex + 1); }
+function cauTiep() { if (currentQuestionIndex < state.cau_hoi.length - 1) chuyenCauHoi(currentQuestionIndex + 1); }
 function capNhatNutDieuHuong() {
     document.getElementById('btn-prev').disabled = (currentQuestionIndex === 0);
-    document.getElementById('btn-next').disabled = (currentQuestionIndex === state.cau_hÃ¡Â»Âi.length - 1);
+    document.getElementById('btn-next').disabled = (currentQuestionIndex === state.cau_hoi.length - 1);
 }
 
 function danhDauDaLam(index, isRestoring = false) {
@@ -1352,7 +1352,7 @@ async function xuLyGianLan(reason = 'HÃƒÂ nh vi nghi vÃ¡ÂºÂ¥n') {
     } 
     // DÃ¡Â»Â± phÃƒÂ²ng: KiÃ¡Â»Æ’m tra qua chÃ¡Â»â€° sÃ¡Â»â€˜ cÃƒÂ¢u hÃ¡Â»Âi nÃ¡ÂºÂ¿u DOM chÃ†Â°a kÃ¡Â»â€¹p cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t
     else {
-        let currentQ = state.cau_hÃ¡Â»Âi[currentQuestionIndex];
+        let currentQ = state.cau_hoi[currentQuestionIndex];
         if (currentQ && String(currentQ.phan || currentQ.Phan) === "2") {
             isPhan2 = true;
         }
@@ -1462,7 +1462,7 @@ async function gradeAndSubmit(autoSubmit = false) {
     tatAntiCheat();
 
     let baiLam = new Array();
-    state.cau_hÃ¡Â»Âi.forEach((cau, index) => {
+    state.cau_hoi.forEach((cau, index) => {
         let phan = String(cau.phan || cau.Phan);
         let ans = "";
         if (phan === "1") ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
@@ -1550,7 +1550,7 @@ async function checkTeacherCommand(isAuto = false) {
 
         // LOGIC QUY Ã„ÂÃ¡Â»â€I Ã„ÂIÃ¡Â»â€šM LINH HOÃ¡ÂºÂ T (DISPLAY-ONLY)
         let displayScore = kq.diem;
-        const questions = state.cau_hÃ¡Â»Âi || [];
+        const questions = state.cau_hoi || [];
         if (questions.length > 0) {
             const hasPart2Or3 = questions.some(q => {
                 let p = String(q.phan || q.Phan);
@@ -1608,7 +1608,7 @@ function renderReview(chiTietData) {
         let correctAns = item.dung || item.Dung || "";
 
         // DÃ¡Â»Â¯ liÃ¡Â»â€¡u cÃƒÂ¢u hÃ¡Â»Âi gÃ¡Â»â€˜c trong state Ã¢â‚¬â€ nguÃ¡Â»â€œn chÃƒÂ­nh xÃƒÂ¡c nhÃ¡ÂºÂ¥t cho nÃ¡Â»â„¢i dung A/B/C/D
-        let qData = (state.cau_hÃ¡Â»Âi && state.cau_hÃ¡Â»Âi[index]) ? state.cau_hÃ¡Â»Âi[index] : {};
+        let qData = (state.cau_hoi && state.cau_hoi[index]) ? state.cau_hoi[index] : {};
 
         let isRight = false;
         if (phan === "1" || phan === "2") {
@@ -1633,7 +1633,7 @@ function renderReview(chiTietData) {
 
         if (phan === "1") {
             let ABCD = ['A', 'B', 'C', 'D'];
-            // Ã†Â¯u tiÃƒÂªn dÃ¡Â»Â¯ liÃ¡Â»â€¡u tÃ¡Â»Â« chiTiet, fallback sang state.cau_hÃ¡Â»Âi
+            // Ã†Â¯u tiÃƒÂªn dÃ¡Â»Â¯ liÃ¡Â»â€¡u tÃ¡Â»Â« chiTiet, fallback sang state.cau_hoi
             let hasOptions = ABCD.some(o => item[o] || item[`DapAn${o}`] || qData[o] || qData[`DapAn${o}`]);
 
             if (hasOptions) {
@@ -1706,7 +1706,7 @@ function renderReview(chiTietData) {
 
 function luuNhapBaiLam() {
     let baiLamNhap = {};
-    state.cau_hÃ¡Â»Âi.forEach((cau, index) => {
+    state.cau_hoi.forEach((cau, index) => {
         let phan = String(cau.phan || cau.Phan);
         let ans = "";
         if (phan === "1") ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
@@ -1749,7 +1749,7 @@ function khoiPhucBaiLamNhap() {
             let soCauDaKhoiPhuc = 0;
             Object.keys(baiLamNhap).forEach(index => {
                 let ans = Reflect.get(baiLamNhap, index);
-                let cau = state.cau_hÃ¡Â»Âi[index];
+                let cau = state.cau_hoi[index];
                 if (!cau) return;
                 let phan = String(cau.phan || cau.Phan);
                 if (phan === "1") {
