@@ -4,6 +4,35 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 
 ---
 
+## [20260508-Fix1A1B1C2A] — 2026-05-08 (phiên chiều)
+
+### Fix 1A: Màn hình đáp án hiển thị thiếu A/B/C/D (gate lỗi)
+- **Triệu chứng:** Một số học sinh xem đáp án thấy thiếu text phương án, chỉ hiện "Bạn chọn: X | Đáp án đúng: Y".
+- **Nguyên nhân gốc:** Điều kiện `!chiTiet[0].A` trong `checkTeacherCommand` chỉ kiểm tra câu đầu tiên. Nếu câu đầu có `.A` (bất kỳ nguồn nào), toàn bộ enrichment bị skip dù các câu còn lại chưa có A/B/C/D.
+- **Fix:** Bỏ gate `!chiTiet[0].A` — luôn enrich từ `de_thi` khi `trang_thai = XEM_DAP_AN` và có `ma_de`. Thêm `|| ct.X` để bảo toàn giá trị đang có trong `chi_tiet` phòng trường hợp `de_thi` không có trường tương ứng.
+- **File:** `hoc_sinh.js` — `checkTeacherCommand()`, line ~1583–1599
+
+### Fix 1C: Màn hình đáp án trống nội dung câu hỏi khi học sinh re-login/F5
+- **Triệu chứng:** Học sinh F5 hoặc đóng/mở lại app sau khi đã nộp bài — xem đáp án thấy câu hỏi không có nội dung (vì `state.cau_hoi` trống).
+- **Nguyên nhân gốc:** Đường re-login (line 963–968) early-return trước khi `state.cau_hoi` được populate ở line 981. `renderReview` dùng `state.cau_hoi[index]` làm fallback nhưng array trống → `qData = {}`.
+- **Fix:** Sau khi enrichment từ `de_thi` thành công, nếu `state.cau_hoi.length === 0` thì populate từ `cauHois` (data đã có sẵn trong cùng query). Lớp bảo vệ thứ 2 cho Fix 1A.
+- **File:** `hoc_sinh.js` — `checkTeacherCommand()`, line ~1598–1602
+
+### Fix 1B: Học sinh phải bấm thủ công mới thấy đáp án sau khi nộp bài
+- **Triệu chứng:** Sau khi nộp bài thành công, khi giáo viên bấm "Công bố đáp án", học sinh KHÔNG tự động thấy — phải bấm "Tải lại thủ công".
+- **Nguyên nhân gốc:** Fix 3 (tối 20260507) đóng Realtime channel ngay sau nộp bài để tránh tích lũy connection. Khi giáo viên publish sau đó, event Realtime không còn ai nhận.
+- **Fix:** Thêm hàm `kichHoatLienKetRealtimeKetQua()` — subscribe channel riêng `result-watch-{phong_id}` ngay sau khi nộp bài thành công. Handler chỉ xử lý `CONG_BO_DIEM`/`XEM_DAP_AN`, **không có nhánh THU_BAI→gradeAndSubmit** để tránh submit lần 2. Tự dọn sau 30 phút (timeout) và khi đóng tab (`beforeunload`). Hàm `dongRealtimeKetQua()` cleanup cả timer lẫn event listener.
+- **File:** `hoc_sinh.js` — `kichHoatLienKetRealtimeKetQua()`, `dongRealtimeKetQua()`, `gradeAndSubmit()` success path
+
+### Fix 2A: Retry storm — học sinh thất bại retry đồng thời gây burst thứ hai
+- **Triệu chứng:** 6/35 học sinh lớp 3 vẫn "Lỗi nặng" dù đã có jitter ban đầu + 5 lần retry.
+- **Nguyên nhân gốc:** Công thức retry cũ `1500 × 2^(attempt-1) + random(500ms)` có jitter quá nhỏ (+0–500ms). Khi N học sinh cùng fail lần 1, họ retry gần đồng thời tại ~1500ms, tạo burst thứ 2 trước khi pool Supabase kịp phục hồi.
+- **Fix:** Đổi sang flat random `2000 + random(0–5000ms)` — mỗi lần retry chờ 2–7 giây ngẫu nhiên, không phụ thuộc số lần thất bại. Học sinh thất bại cùng lúc retry ở các thời điểm khác nhau trong window 2–7s. Thêm progress text vào nút: "⏳ Đang thử lại... (2/5)" để học sinh biết hệ thống vẫn đang xử lý.
+- **Tổng thời gian retry:** ~10–35s (so với ~20.5s cũ, nhưng phân tán đều hơn).
+- **File:** `hoc_sinh.js` — `gradeAndSubmit()`, line ~1550–1557
+
+---
+
 ## [20260508-0015] — 2026-05-08
 
 ### Fix: Giao diện tiếng Việt bị lỗi hoàn toàn (garbled)

@@ -5,6 +5,8 @@ const VERSION = '20260508-0015';
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
+let realtimeResultChannel = null;   // [Fix 1B] Channel riêng cho màn kết quả sau khi nộp bài
+let realtimeResultCleanupTimer = null; // Timer tự dọn channel sau 30 phút
 let examTimer = null;
 
 let currentQuestionIndex = 0;
@@ -1022,6 +1024,33 @@ function kichHoatLienKetRealtime() {
         }).subscribe();
 }
 
+// [Fix 1B] Channel riêng cho màn kết quả — KHÔNG có nhánh THU_BAI→gradeAndSubmit
+// để tránh submit lần 2 sau khi đã nộp xong. Tự dọn sau 30 phút hoặc khi đóng tab.
+function kichHoatLienKetRealtimeKetQua() {
+    dongRealtimeKetQua(); // dọn channel cũ nếu có trước khi tạo mới
+
+    realtimeResultChannel = _supabase.channel('result-watch-' + state.phong_id)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'phong_thi', filter: `id=eq.${state.phong_id}` }, payload => {
+            const newStatus = payload.new.trang_thai;
+            if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN') && document.getElementById('result-section').classList.contains('active')) {
+                checkTeacherCommand(true);
+            }
+        }).subscribe();
+
+    // Tự dọn sau 30 phút — ngăn tích lũy connection khi giáo viên chuyển lớp
+    if (realtimeResultCleanupTimer) clearTimeout(realtimeResultCleanupTimer);
+    realtimeResultCleanupTimer = setTimeout(() => dongRealtimeKetQua(), 30 * 60 * 1000);
+
+    // Dọn khi đóng tab/trình duyệt
+    window.addEventListener('beforeunload', dongRealtimeKetQua);
+}
+
+function dongRealtimeKetQua() {
+    if (realtimeResultCleanupTimer) { clearTimeout(realtimeResultCleanupTimer); realtimeResultCleanupTimer = null; }
+    if (realtimeResultChannel) { _supabase.removeChannel(realtimeResultChannel); realtimeResultChannel = null; }
+    window.removeEventListener('beforeunload', dongRealtimeKetQua);
+}
+
 function renderExam() {
     const container = document.getElementById('exam-content');
     const gridContainer = document.getElementById('question-grid');
@@ -1509,8 +1538,9 @@ async function gradeAndSubmit(autoSubmit = false) {
                 }
 
                 isSubmitting = false; // [Fix A] reset trước khi chuyển màn — bài đã được server chấp nhận
-                // [Fix 3] Giải phóng Realtime connection để lớp sau không bị tích lũy kết nối
+                // [Fix 3] Giải phóng channel thi, sau đó mở channel kết quả riêng (Fix 1B)
                 if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
+                kichHoatLienKetRealtimeKetQua(); // [Fix 1B] subscribe lại chỉ để nhận lệnh công bố đáp án
                 document.getElementById('finish_name').innerText = state.ho_ten;
                 showSection('result-section');
                 try { document.exitFullscreen(); } catch (e) { }
@@ -1520,9 +1550,10 @@ async function gradeAndSubmit(autoSubmit = false) {
                 attempt++;
                 lastError = error ? error.message : "Lỗi không xác định";
                 if (attempt < maxRetries) {
-                    // [Fix 2] Exponential backoff: ~1.5s, ~3s, ~6s, ~10s
-                    const delay = Math.min(1500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 500), 10000);
-                    console.warn(`Lỗi nộp bài lần ${attempt}. Đang thử lại sau ${delay}ms...`);
+                    // [Fix 2A] Flat random 2–7s — phá vỡ retry storm, tổng chờ ~10–35s (vs exponential gây burst)
+                    const delay = 2000 + Math.floor(Math.random() * 5000);
+                    console.warn(`[nopbai] lần ${attempt} thất bại. Thử lại sau ${delay}ms... (lần ${attempt + 1}/${maxRetries})`);
+                    if (btn) btn.innerText = `⏳ Đang thử lại... (${attempt + 1}/${maxRetries})`;
                     await new Promise(res => setTimeout(res, delay));
                 }
             }
@@ -1580,14 +1611,26 @@ async function checkTeacherCommand(isAuto = false) {
 
         if (phong.trang_thai === 'XEM_DAP_AN') {
             let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : kq.chi_tiet;
-            if (chiTiet.length > 0 && !chiTiet[0].A && kq.ma_de) {
+            // [Fix 1A] Bỏ gate !chiTiet[0].A — luôn enrich khi có ma_de để tránh bỏ sót câu hỏi
+            // || ct.X bảo toàn giá trị hiện có trong chi_tiet nếu de_thi không có trường tương ứng
+            if (chiTiet.length > 0 && kq.ma_de) {
                 const { data: deData } = await _supabase.from('de_thi').select('cau_so').eq('phong_id', state.phong_id).eq('ma_de', kq.ma_de).single();
                 if (deData) {
                     let cauHois = typeof deData.cau_so === 'string' ? JSON.parse(deData.cau_so) : deData.cau_so;
                     chiTiet = chiTiet.map((ct, idx) => {
                         let cauGoc = cauHois[idx] || {};
-                        return { ...ct, A: cauGoc.A || cauGoc.DapAnA, B: cauGoc.B || cauGoc.DapAnB, C: cauGoc.C || cauGoc.DapAnC, D: cauGoc.D || cauGoc.DapAnD };
+                        return { ...ct,
+                            A: cauGoc.A || cauGoc.DapAnA || ct.A,
+                            B: cauGoc.B || cauGoc.DapAnB || ct.B,
+                            C: cauGoc.C || cauGoc.DapAnC || ct.C,
+                            D: cauGoc.D || cauGoc.DapAnD || ct.D
+                        };
                     });
+                    // [Fix 1C] Nếu state.cau_hoi trống (học sinh re-login/F5), populate từ de_thi
+                    // để renderReview có nguồn fallback qua qData cho cả nội dung câu hỏi
+                    if (!state.cau_hoi || state.cau_hoi.length === 0) {
+                        state.cau_hoi = cauHois;
+                    }
                 }
             }
             renderReview(chiTiet);
