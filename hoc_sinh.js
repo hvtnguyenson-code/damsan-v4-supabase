@@ -14,6 +14,7 @@ let cheatCount = 0;
 const MAX_CHEATS = 3; 
 let isExamActive = false;
 let isSubmitting = false;
+let isCheckingCommand = false; // Guard tránh concurrent checkTeacherCommand gây race condition
 let isInternalAction = false; // Cờ đánh dấu đang thực hiện hành động hệ thống (hiện confirm/alert)
 
 // Foreensic report should stay hidden in student UI; enable only for authorized review.
@@ -966,6 +967,9 @@ async function joinRoom(maPhongAuto = null) {
             state.user_result = res;
             document.getElementById('finish_name').innerText = state.ho_ten;
             showSection('result-section');
+            // [Fix A] Re-login sau khi đã nộp bài — đóng exam channel, mở result channel riêng
+            if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
+            kichHoatLienKetRealtimeKetQua();
             checkTeacherCommand(true);
             return;
         }
@@ -1012,9 +1016,9 @@ function kichHoatLienKetRealtime() {
     realtimeChannel = _supabase.channel('room-updates')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'phong_thi', filter: `id=eq.${state.phong_id}` }, payload => {
             const newStatus = payload.new.trang_thai;
-            if (newStatus === 'THU_BAI' && document.getElementById('exam-section').classList.contains('active')) {
+            if ((newStatus === 'THU_BAI' || newStatus === 'XEM_DAP_AN') && document.getElementById('exam-section').classList.contains('active')) {
+                // [Fix B] XEM_DAP_AN cũng trigger nộp bài — học sinh chưa nộp khi GV công bố đáp án sẽ được thu bài tự động
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
-                // [Fix THU_BAI] Jitter giống timer expiry — tránh 34 HS submit đồng thời khi GV bấm Thu bài
                 const jitter = Math.floor(Math.random() * 15000);
                 setTimeout(() => gradeAndSubmit(true), jitter);
             }
@@ -1572,10 +1576,15 @@ async function gradeAndSubmit(autoSubmit = false) {
 
 async function checkTeacherCommand(isAuto = false) {
     if (state.isOffline) return alert("Không thể tải kết quả vì bạn đang mất mạng!");
+    // [Fix C] Guard tránh race condition: nếu đã có lần gọi đang chạy, bỏ qua lần sau
+    if (isCheckingCommand) { console.log('[checkCmd] skipped — đang xử lý lần trước, isAuto=', isAuto); return; }
+    isCheckingCommand = true;
 
     try {
         const { data: phong } = await _supabase.from('phong_thi').select('trang_thai').eq('id', state.phong_id).single();
         const { data: kq } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
+        // [Fix D] Diagnostic log — xem nguồn gọi, trạng thái phòng, và độ sẵn sàng của dữ liệu
+        console.log('[checkCmd] isAuto=', isAuto, '| trang_thai=', phong?.trang_thai, '| cau_hoi.length=', state.cau_hoi?.length, '| ma_de=', kq?.ma_de);
         state.user_result = kq;
         renderForensicPanel();
 
@@ -1638,6 +1647,7 @@ async function checkTeacherCommand(isAuto = false) {
             document.getElementById('review-content').innerHTML = '';
         }
     } catch (e) { console.error(e); }
+    finally { isCheckingCommand = false; } // [Fix C] reset guard dù thành công hay lỗi
 }
 
 function renderReview(chiTietData) {

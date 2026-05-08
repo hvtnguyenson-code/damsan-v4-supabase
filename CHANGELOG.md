@@ -4,6 +4,33 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 
 ---
 
+## [20260508-FixABCD] — 2026-05-08 (phiên tối)
+
+### Fix A: Re-login/F5 sau khi nộp bài không mở result channel → đáp án thủ công bị rút gọn
+- **Triệu chứng:** Học sinh F5 hoặc đóng/mở lại app sau khi đã nộp bài, rồi bấm "Tải lại thủ công" → đáp án hiển thị rút gọn (không có A/B/C/D). Học sinh tự động nhận thông báo thì hiển thị đầy đủ.
+- **Nguyên nhân gốc:** Đường re-login (line 965-971) early-return vào `result-section` mà không gọi `kichHoatLienKetRealtimeKetQua()`. Exam channel (`room-updates`) vẫn còn active cho học sinh này. Khi thủ công bấm `checkTeacherCommand(false)` và auto notification từ exam channel cùng fire đồng thời → race condition: nếu lần manual hoàn thành trước khi Fix 1C populate `state.cau_hoi`, `qData = {}` → `hasOptions = false` → hiển thị tối giản.
+- **Fix:** Sau `showSection('result-section')` trong re-login path: đóng `realtimeChannel`, gọi `kichHoatLienKetRealtimeKetQua()` — học sinh re-login được cấp đúng channel result như học sinh nộp bài lần đầu.
+- **File:** `hoc_sinh.js` — `joinRoom()` re-login path, line ~968–973
+
+### Fix B: Học sinh còn trong màn thi khi GV bấm "Công bố đáp án" không được thu bài
+- **Triệu chứng:** Nếu GV bấm thẳng "Công bố đáp án" (XEM_DAP_AN) mà không qua "Thu bài" (THU_BAI), học sinh còn trong exam-section không được tự động nộp bài.
+- **Nguyên nhân gốc:** Realtime handler chỉ xét `THU_BAI` để trigger `gradeAndSubmit`. `XEM_DAP_AN` bị bỏ qua ở exam-section.
+- **Fix:** Thêm `newStatus === 'XEM_DAP_AN'` vào điều kiện exam-section — cả THU_BAI và XEM_DAP_AN đều trigger `gradeAndSubmit` với jitter 0–15s.
+- **File:** `hoc_sinh.js` — `kichHoatLienKetRealtime()`, line ~1018–1022
+
+### Fix C: Race condition concurrent checkTeacherCommand → đáp án bị ghi đè bởi lần chạy chưa đủ dữ liệu
+- **Triệu chứng:** Hai nguồn (auto Realtime + manual button) có thể gọi `checkTeacherCommand` cùng lúc; lần nào chạy sau sẽ ghi đè kết quả lần trước, có thể trả về `qData = {}` nếu `state.cau_hoi` chưa được Fix 1C populate.
+- **Nguyên nhân gốc:** Không có guard — mỗi lần gọi đều chạy độc lập song song.
+- **Fix:** Thêm biến `isCheckingCommand = false`. Đầu hàm: `if (isCheckingCommand) return`. Set `true` khi vào, reset về `false` trong `finally` — đảm bảo chỉ một lần chạy tại một thời điểm.
+- **File:** `hoc_sinh.js` — global line 17, `checkTeacherCommand()` line ~1579–1651
+
+### Fix D: Diagnostic log trong checkTeacherCommand
+- **Mục đích:** Trace lỗi hiển thị đáp án trong môi trường production không có DevTools thường trực.
+- **Nội dung log:** `isAuto`, `trang_thai`, `cau_hoi.length`, `ma_de` — đủ để xác định race condition và thiếu dữ liệu.
+- **File:** `hoc_sinh.js` — `checkTeacherCommand()`, line ~1586
+
+---
+
 ## [20260508-Fix1A1B1C2A] — 2026-05-08 (phiên chiều)
 
 ### Fix 1A: Màn hình đáp án hiển thị thiếu A/B/C/D (gate lỗi)
