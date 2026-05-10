@@ -1369,7 +1369,7 @@ function chanPhimTat(e) {
     }
 }
 
-async function xuLyGianLan(reason = 'Hành vi nghi vấn') {
+function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     if (!isExamActive || isInternalAction) return;
     const now = Date.now();
     if (now - antiCheatLastViolationTs < 2000) return; 
@@ -1397,23 +1397,18 @@ async function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         cheatCount = 88; // Tín hiệu đặc biệt dành cho giáo viên (Vi phạm Phần II)
         // Cập nhật lên server ngay lập tức trước khi hiện alert để giáo viên thấy bằng chứng
         const forensicData = JSON.stringify(antiCheatRuntime);
-        const { data } = await _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
-        if (data) {
-            await _supabase.from('ket_qua').update({ 
-                so_lan_vi_pham: cheatCount,
-                chi_tiet: forensicData 
-            }).eq('id', data.id);
-            console.log("Đã chốt vi phạm Phần II");
-        } else {
-            await _supabase.from('ket_qua').insert({ 
-                phong_id: state.phong_id, 
-                hs_id: state.hs_id, 
-                truong_id: state.truong_id, 
-                so_lan_vi_pham: cheatCount,
-                chi_tiet: forensicData
-            });
-            console.log("Đã chốt vi phạm Phần II");
-        }
+        // [Fix Perf] Fire-and-forget: tránh chiếm Supabase connection pool trong lúc thi.
+        // so_lan_vi_pham được sync chính xác khi nộp bài (gradeAndSubmit).
+        try {
+            _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single()
+                .then(({ data }) => {
+                    if (data) {
+                        _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount, chi_tiet: forensicData }).eq('id', data.id).then(() => { console.log("Đã chốt vi phạm Phần II"); });
+                    } else {
+                        _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount, chi_tiet: forensicData }).then(() => { console.log("Đã chốt vi phạm Phần II"); });
+                    }
+                });
+        } catch(e) { console.warn('[violation-write]', e); }
 
         localStorage.setItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id, 'true');
 
@@ -1433,13 +1428,18 @@ async function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     cheatCount++;
     document.getElementById('cheat-count').innerText = cheatCount;
 
-    // ĐỒNG BỘ REALTIME cho các phần khác
-    const { data } = await _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
-    if (data) {
-        await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id);
-    } else {
-        await _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount });
-    }
+    // [Fix Perf] Fire-and-forget: tránh chiếm Supabase connection pool trong lúc thi.
+    // so_lan_vi_pham được sync chính xác khi nộp bài (gradeAndSubmit).
+    try {
+        _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single()
+            .then(({ data }) => {
+                if (data) {
+                    _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then(() => {});
+                } else {
+                    _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount }).then(() => {});
+                }
+            });
+    } catch(e) { console.warn('[violation-write]', e); }
 
     const warningEl = document.getElementById('cheat-warning');
     const msgEl = warningEl ? warningEl.querySelector('p') : null;
@@ -1494,6 +1494,28 @@ async function gradeAndSubmit(autoSubmit = false) {
     if (btn) { btn.innerText = "⏳ ĐANG GỬI DỮ LIỆU..."; btn.disabled = true; }
     tatAntiCheat();
 
+    // [Idempotency] Kiểm tra server đã ghi nhận bài chưa — tránh "LỖI NẶNG"
+    // khi RPC thành công nhưng client không nhận được response (network drop)
+    try {
+        const { data: existingResult } = await _supabase
+            .from('ket_qua')
+            .select('diem')
+            .eq('phong_id', state.phong_id)
+            .eq('hs_id', state.hs_id)
+            .single();
+        if (existingResult && existingResult.diem !== null && existingResult.diem !== undefined) {
+            isSubmitting = false;
+            localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
+            if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
+            kichHoatLienKetRealtimeKetQua();
+            document.getElementById('finish_name').innerText = state.ho_ten;
+            showSection('result-section');
+            try { document.exitFullscreen(); } catch (e) {}
+            checkTeacherCommand(true);
+            return;
+        }
+    } catch (e) { /* Chưa có bản ghi = chưa nộp, tiếp tục bình thường */ }
+
     let baiLam = new Array();
     state.cau_hoi.forEach((cau, index) => {
         let phan = String(cau.phan || cau.Phan);
@@ -1516,8 +1538,8 @@ async function gradeAndSubmit(autoSubmit = false) {
     }
 
     try {
-        // CƠ CHẾ NỘP BÀI THỬ LẠI (RETRY) TỐI ĐA 5 LẦN với exponential backoff
-        let maxRetries = 5;
+        // CƠ CHẾ NỘP BÀI THỬ LẠI (RETRY) TỐI ĐA 8 LẦN với exponential backoff
+        let maxRetries = 8;
         let attempt = 0;
         let success = false;
         let lastError = null;
@@ -1570,6 +1592,8 @@ async function gradeAndSubmit(autoSubmit = false) {
     } catch (err) {
         alert("❌ LỖI NẶNG: Máy chủ không nhận được bài làm của bạn!\n\nLÝ DO: " + err.message + "\n\nHÀNH ĐỘNG: Đừng đóng trình duyệt, hãy nhấn nút 'NỘP LẠI BÀI THI' ngay bên dưới hoặc báo ngay cho Giám thị.");
         if (btn) { btn.innerText = "NỘP LẠI BÀI THI"; btn.disabled = false; }
+        const retryMsg = document.getElementById('retry-status-msg');
+        if (retryMsg) { retryMsg.style.display = ''; retryMsg.innerText = '⚠️ Bài làm vẫn còn trên máy. Nhấn nút trên để thử lại. Tuyệt đối không F5 hay đóng tab!'; }
         isSubmitting = false;
     }
 }
@@ -1828,7 +1852,9 @@ function khoiPhucBaiLamNhap() {
                 }
             });
             if (soCauDaKhoiPhuc > 0) {
+                isInternalAction = true;
                 alert(`Hệ thống đã tự động khôi phục ${soCauDaKhoiPhuc} câu trả lời và các dấu cờ của bạn!`);
+                setTimeout(() => { isInternalAction = false; }, 2000);
             }
         } catch (e) { console.error("Lỗi khi khôi phục bản nháp:", e); }
     }
