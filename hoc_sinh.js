@@ -1019,7 +1019,7 @@ function kichHoatLienKetRealtime() {
             if ((newStatus === 'THU_BAI' || newStatus === 'XEM_DAP_AN') && document.getElementById('exam-section').classList.contains('active')) {
                 // [Fix B] XEM_DAP_AN cũng trigger nộp bài — học sinh chưa nộp khi GV công bố đáp án sẽ được thu bài tự động
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
-                const jitter = Math.floor(Math.random() * 15000);
+                const jitter = Math.floor(Math.random() * 30000);
                 setTimeout(() => gradeAndSubmit(true), jitter);
             }
             else if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN' || newStatus === 'THU_BAI') && document.getElementById('result-section').classList.contains('active')) {
@@ -1186,7 +1186,7 @@ function startTimer(thoiGianPhut, thoiGianMo) {
                 alert("⏳ ĐÃ HẾT THỜI GIAN LÀM BÀI! Hệ thống tự động thu bài.");
                 if (!state.isOffline) {
                     // [Fix 1] Trải đều 34 học sinh trong 15s để tránh nghẽn connection pool
-                    const jitter = Math.floor(Math.random() * 15000);
+                    const jitter = Math.floor(Math.random() * 30000);
                     setTimeout(() => gradeAndSubmit(true), jitter);
                 } else {
                     tatAntiCheat();
@@ -1194,7 +1194,7 @@ function startTimer(thoiGianPhut, thoiGianMo) {
                     let waitNet = setInterval(() => {
                         if (!state.isOffline) {
                             clearInterval(waitNet);
-                            const jitter = Math.floor(Math.random() * 15000);
+                            const jitter = Math.floor(Math.random() * 30000);
                             setTimeout(() => gradeAndSubmit(true), jitter);
                         }
                     }, 2000);
@@ -1404,9 +1404,8 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
                 .then(({ data }) => {
                     if (data) {
                         _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount, chi_tiet: forensicData }).eq('id', data.id).then(() => { console.log("Đã chốt vi phạm Phần II"); });
-                    } else {
-                        _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount, chi_tiet: forensicData }).then(() => { console.log("Đã chốt vi phạm Phần II"); });
                     }
+                    // Không INSERT khi chưa có row — tránh conflict với RPC nop_bai_va_cham_diem
                 });
         } catch(e) { console.warn('[violation-write]', e); }
 
@@ -1435,9 +1434,8 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
             .then(({ data }) => {
                 if (data) {
                     _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then(() => {});
-                } else {
-                    _supabase.from('ket_qua').insert({ phong_id: state.phong_id, hs_id: state.hs_id, truong_id: state.truong_id, so_lan_vi_pham: cheatCount }).then(() => {});
                 }
+                // Không INSERT khi chưa có row — tránh conflict với RPC nop_bai_va_cham_diem
             });
     } catch(e) { console.warn('[violation-write]', e); }
 
