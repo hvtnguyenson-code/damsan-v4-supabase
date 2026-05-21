@@ -101,24 +101,23 @@ async function thucHienDangNhapGV() {
     try {
         let hashedPass = await hashPassword(pass);
         
-        const { data, error } = await sb
-            .from('giao_vien')
-            .select('*, truong_hoc(ten_truong)')
-            .eq('ma_gv', user)
-            .eq('mat_khau', hashedPass)
-            .single();
+        const { data, error } = await sb.rpc('rpc_login_giao_vien', {
+            p_ma_gv: user,
+            p_mat_khau: hashedPass
+        });
         
-        if (error || !data) {
+        if (error || !data || data.status !== 'success') {
             msg.innerText = "❌ Sai Tài khoản hoặc Mật khẩu!";
             btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false;
         } else {
-            if (data.mat_khau === DEFAULT_PASS_HASH || data.mat_khau === '123456') {
-                window.tempGvData = data; 
+            const userData = data.user;
+            if (userData.mat_khau === DEFAULT_PASS_HASH || userData.mat_khau === '123456') {
+                window.tempGvData = userData; 
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('forceChangePassOverlay').style.display = 'flex';
                 btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false; 
             } else {
-                hoanTatDangNhap(data);
+                hoanTatDangNhap(userData);
             }
         }
     } catch (err) {
@@ -130,7 +129,7 @@ async function thucHienDangNhapGV() {
 function hoanTatDangNhap(data) {
     gvData = { 
         ma_gv: data.ma_gv, ho_ten: data.ho_ten, quyen: data.quyen, 
-        truong_id: data.truong_id, truong_ten: data.truong_hoc.ten_truong,
+        truong_id: data.truong_id, truong_ten: data.truong_ten,
         mon_id: data.mon_id, id: data.id 
     };
     sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
@@ -1997,15 +1996,17 @@ async function dieuKhien(trangThai) {
         }
         
         let phong_id = await getOrCreateRoom(maPhong);
-        let {error} = await sb.from('phong_thi').update(updateData).eq('id', phong_id);
+        await rpcDieuKhienPhongThi(
+            phong_id,
+            trangThai,
+            updateData.doi_tuong ?? null,
+            updateData.ten_dot ?? null,
+            updateData.thoi_gian ?? null,
+            trangThai === 'MO_PHONG'
+        );
         
-        if(!error) { 
-            document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`; 
-            fetchRadar(); 
-        } else {
-            console.error("Supabase Error:", error);
-            document.getElementById('ctrlLog').innerText = `❌ Lỗi máy chủ: ` + error.message;
-        }
+        document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`; 
+        fetchRadar(); 
     } catch(e) {
         console.error(e);
         document.getElementById('ctrlLog').innerText = `❌ Lỗi: ` + e.message;
@@ -2027,8 +2028,14 @@ async function dieuKhienFast(maPhong, trangThai) {
                     updateData.doi_tuong = selDoiTuong;
                 }
             }
-            let {error: upErr} = await sb.from('phong_thi').update(updateData).eq('id', data.id); 
-            if(upErr) throw upErr;
+            await rpcDieuKhienPhongThi(
+                data.id,
+                trangThai,
+                updateData.doi_tuong ?? null,
+                null,
+                null,
+                trangThai === 'MO_PHONG'
+            );
             fetchRadar(); 
         }
     } catch(e) {
@@ -2084,18 +2091,18 @@ async function xoaDeTrongPhong(maPhong) {
 }
 
 async function capNhatNhanhPhong(roomId, field, value) {
-    let updateData = {}; Reflect.set(updateData, field, value);
-    await sb.from('phong_thi').update(updateData).eq('id', roomId);
+    if (field === 'doi_tuong') {
+        await rpcDieuKhienPhongThi(roomId, null, value, null, null, false);
+        return;
+    }
+    throw new Error("Truong cap nhat khong duoc phep: " + field);
 }
 
 async function tuDongKhoaPhongKhiHetGio(roomId) {
     try {
-        let { error } = await sb.from('phong_thi').update({ trang_thai: 'THU_BAI' }).eq('id', roomId);
-        if (error) console.error("Lỗi tự khóa phòng:", error);
-        else {
-            let r = allRoomsData.find(x => String(x.id) === String(roomId));
-            if(r) r.TrangThai = 'THU_BAI';
-        }
+        await rpcDieuKhienPhongThi(roomId, 'THU_BAI', null, null, null, false);
+        let r = allRoomsData.find(x => String(x.id) === String(roomId));
+        if(r) r.TrangThai = 'THU_BAI';
     } catch (e) {
         console.error("Lỗi tự khóa phòng:", e);
     }
@@ -2166,13 +2173,7 @@ function khoiDongDongHoGiaoVien() {
 
 async function fetchRadar() { 
     try {
-        let query = sb.from('phong_thi').select('*, truong_hoc(ten_truong)').order('created_at', { ascending: true }); 
-        // Chỉ lọc theo trường nếu không phải Admin
-        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
-        
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        let {data, error} = await query;
-        if(error) throw error;
+        let data = await rpcLayDanhSachPhongThi();
         
         let now = Date.now();
         if (data) {
@@ -2184,7 +2185,7 @@ async function fetchRadar() {
                         let endTime = startTime + (duration * 60 * 1000);
                         if (now >= endTime) {
                             r.trang_thai = 'THU_BAI'; 
-                            sb.from('phong_thi').update({ trang_thai: 'THU_BAI' }).eq('id', r.id).then(); 
+                            rpcDieuKhienPhongThi(r.id, 'THU_BAI', null, null, null, false).then(); 
                         }
                     }
                 }
@@ -2305,25 +2306,25 @@ async function dieuKhienNhomPhong(trangThai) {
 
     try {
         let promises = new Array();
-        let now = Date.now();
 
         checkedBoxes.forEach(cb => {
             let roomId = cb.value;
             let tr = cb.closest('tr');
             let selDoiTuong = tr.querySelector('.fast-doituong').value;
 
-            let updateData = { trang_thai: trangThai };
-            if(trangThai === 'MO_PHONG') {
-                updateData.thoi_gian_mo = now; 
-                updateData.doi_tuong = selDoiTuong; 
-            }
-
-            promises.push(sb.from('phong_thi').update(updateData).eq('id', roomId));
+            promises.push(
+                rpcDieuKhienPhongThi(
+                    roomId,
+                    trangThai,
+                    trangThai === 'MO_PHONG' ? selDoiTuong : null,
+                    null,
+                    null,
+                    trangThai === 'MO_PHONG'
+                )
+            );
         });
 
-        let results = await Promise.all(promises);
-        let errors = results.filter(r => r.error);
-        if (errors.length > 0) throw errors[0].error;
+        await Promise.all(promises);
 
         logSpan.innerText = "✅ Cập nhật thành công toàn bộ!";
         setTimeout(() => logSpan.innerText = "", 3000);
@@ -2343,18 +2344,13 @@ async function taiDanhSachPhong() {
     if(selectBoxTab3) selectBoxTab3.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
 
     try {
-        let query = sb.from('phong_thi').select('ma_phong').order('created_at', { ascending: true }); 
-        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
-        
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        let {data, error} = await query;
-        if(error) throw error;
+        let data = await rpcLayDanhSachPhongThi();
         
         let defaultOpt = '<option value="">-- Chọn Mã Phòng Thi --</option>';
         if(selectBoxTab2) selectBoxTab2.innerHTML = defaultOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = defaultOpt;
         
         if(data && data.length > 0) {
-            let uniqueRooms = Array.from(new Set(data.map(d=>d.ma_phong)));
+            let uniqueRooms = Array.from(new Set(data.map(d=>d.ma_phong || d.MaPhong)));
             uniqueRooms.forEach(phong => {
                 let optHtml = `<option value="${phong}">${phong}</option>`;
                 if(selectBoxTab2) selectBoxTab2.innerHTML += optHtml; if(selectBoxTab3) selectBoxTab3.innerHTML += optHtml;
@@ -3267,4 +3263,37 @@ function xuLyLiveSearch() {
     } else {
         if (noResultRow) noResultRow.remove();
     }
+}
+
+async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot = null, thoiGian = null, setOpenTime = false) {
+    const { data, error } = await sb.rpc('rpc_dieu_khien_phong_thi', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: gvData.truong_id,
+        p_room_id: roomId,
+        p_trang_thai: trangThai,
+        p_doi_tuong: doiTuong,
+        p_ten_dot: tenDot,
+        p_thoi_gian: thoiGian,
+        p_set_open_time: setOpenTime
+    });
+    if (error) throw error;
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || "Khong the dieu khien phong thi");
+    }
+    return data;
+}
+
+async function rpcLayDanhSachPhongThi() {
+    const monId = (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") ? activeWorkspaceMonId : null;
+    const { data, error } = await sb.rpc('rpc_lay_danh_sach_phong_thi_gv', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: gvData.truong_id,
+        p_mon_id: monId,
+        p_xem_toan_bo: gvData.quyen === 'Admin'
+    });
+    if (error) throw error;
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || "Khong tai duoc danh sach phong thi");
+    }
+    return data.rooms || new Array();
 }

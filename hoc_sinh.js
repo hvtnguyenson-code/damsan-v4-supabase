@@ -791,24 +791,24 @@ async function login() {
     btn.innerText = "⏳ ĐANG XÁC THỰC..."; btn.disabled = true;
 
     try {
-        const { data: truongData } = await _supabase.from('truong_hoc').select('id').eq('ma_truong', maTruong).single();
-        if (!truongData) throw new Error("Mã trường không hợp lệ!");
+        const { data: loginData, error: loginErr } = await _supabase.rpc('rpc_login_hoc_sinh', {
+            p_ma_truong: maTruong,
+            p_ma_hs: maHs,
+            p_mat_khau: hashedPass
+        });
+        if (loginErr) throw loginErr;
+        if (!loginData || loginData.status !== 'success') {
+            throw new Error(loginData?.message || "Thông tin tài khoản không chính xác!");
+        }
+        const hsData = loginData.user;
 
-        const { data: hsData } = await _supabase.from('hoc_sinh')
-            .select('id, ho_ten, lop, mat_khau')
-            .eq('truong_id', truongData.id)
-            .eq('ma_hs', maHs)
-            .eq('mat_khau', hashedPass)
-            .single();
-
-        if (!hsData) throw new Error("Thông tin tài khoản không chính xác!");
 
         // Chi ghi nho dinh danh tai khoan, khong luu hash mat khau tren thiet bi.
         if (document.getElementById('ghi_nho_dn').checked) {
             luuTaiKhoan(maHs, hsData.ho_ten, hsData.lop);
         }
 
-        state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
+        state.truong_id = hsData.truong_id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
 
         // KIỂM TRA MẬT KHẨU MẶC ĐỊNH
         if (hashedPass === DEFAULT_PASS_HASH) {
