@@ -25,13 +25,14 @@ let cheatTimeout = null;
 let antiCheatIntervals = new Array();
 let antiCheatMutationObserver = null;
 let antiCheatLastViolationTs = 0;
+let antiCheatResizeHandler = null;
 
 const antiCheatIntegrity = {
     fetchRef: window.fetch,
     xhrOpenRef: window.XMLHttpRequest ? window.XMLHttpRequest.prototype.open : null,
     xhrSendRef: window.XMLHttpRequest ? window.XMLHttpRequest.prototype.send : null,
     wsRef: window.WebSocket || null,
-    sendBeaconRef: navigator.sendBeacon ? navigator.sendBeacon.bind(navigator) : null,
+    sendBeaconRef: navigator.sendBeacon || null,
     consoleClearRef: console.clear
 };
 
@@ -200,7 +201,20 @@ async function kichHoatCaiDatPWA() {
 // ==========================================
 function getSavedAccounts() {
     try {
-        return JSON.parse(localStorage.getItem('damsan_saved_accounts') || '[]');
+        const rawAccounts = JSON.parse(localStorage.getItem('damsan_saved_accounts') || '[]');
+        let migrated = false;
+        const accounts = (rawAccounts || []).map(acc => {
+            if (acc && Object.prototype.hasOwnProperty.call(acc, 'pass')) migrated = true;
+            return {
+                ma_hs: String(acc?.ma_hs || ''),
+                ho_ten: String(acc?.ho_ten || ''),
+                lop: String(acc?.lop || '')
+            };
+        }).filter(acc => acc.ma_hs);
+        if (migrated) {
+            localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
+        }
+        return accounts;
     } catch (e) { return []; }
 }
 
@@ -219,11 +233,11 @@ function renderSavedAccounts() {
     container.style.display = 'block';
     list.innerHTML = accounts.map(acc => `
         <div style="display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px solid #eee;">
-            <div onclick="chonTaiKhoan('${acc.ma_hs}')" style="flex: 1; cursor: pointer;">
+            <div onclick="chonTaiKhoan('${safeJS(acc.ma_hs)}')" style="flex: 1; cursor: pointer;">
                 <div style="font-weight: bold; font-size: 14px; color: #1a73e8;">${safeHTML(acc.ho_ten)}</div>
-                <div style="font-size: 11px; color: #5f6368;">Mã HS: ${acc.ma_hs} | Lớp: ${acc.lop}</div>
+                <div style="font-size: 11px; color: #5f6368;">Mã HS: ${safeHTML(acc.ma_hs)} | Lớp: ${safeHTML(acc.lop)}</div>
             </div>
-            <button onclick="xoaTaiKhoan('${acc.ma_hs}')" style="background: none; border: none; color: #d93025; font-size: 18px; cursor: pointer; padding: 0 5px;">&times;</button>
+            <button onclick="xoaTaiKhoan('${safeJS(acc.ma_hs)}')" style="background: none; border: none; color: #d93025; font-size: 18px; cursor: pointer; padding: 0 5px;">&times;</button>
         </div>
     `).join('');
 }
@@ -234,15 +248,15 @@ function chonTaiKhoan(maHs) {
     if (acc) {
         document.getElementById('ma_hs').value = acc.ma_hs;
         
-        // BẢO MẬT: Không điền hash vào ô input, lưu vào dataset
+        // BẢO MẬT: Chỉ lưu định danh, không lưu hash mật khẩu như token đăng nhập.
         const passInput = document.getElementById('mat_khau');
         passInput.value = '';
-        passInput.dataset.savedHash = acc.pass;
-        passInput.placeholder = '••••••••'; // Hiệu ứng thị giác đã có mật khẩu
+        passInput.dataset.savedHash = '';
+        
+        passInput.placeholder = 'Mat khau';
+        passInput.focus();
         
         document.getElementById('ghi_nho_dn').checked = true;
-        // Tự động nhấn đăng nhập sau 300ms để trải nghiệm mượt hơn
-        setTimeout(() => login(), 300);
     }
 }
 
@@ -263,10 +277,10 @@ function xoaTaiKhoan(maHs) {
     }
 }
 
-function luuTaiKhoan(maHs, pass, hoTen, lop) {
+function luuTaiKhoan(maHs, hoTen, lop) {
     let accounts = getSavedAccounts();
     const index = accounts.findIndex(a => a.ma_hs === maHs);
-    const newAcc = { ma_hs: maHs, pass, ho_ten: hoTen, lop };
+    const newAcc = { ma_hs: maHs, ho_ten: hoTen, lop };
     
     if (index > -1) {
         accounts[index] = newAcc;
@@ -737,8 +751,20 @@ const DEFAULT_PASS_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020
 function safeHTML(str) {
     if (!str) return "";
     if (window.DOMPurify) { return DOMPurify.sanitize(str); }
-    let doc = new DOMParser().parseFromString(str, 'text/html');
-    return doc.body.innerHTML;
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function safeJS(str) {
+    return String(str || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\r/g, ' ')
+        .replace(/\n/g, ' ');
 }
 
 function showSection(sectionId) {
@@ -752,15 +778,12 @@ async function login() {
     const maTruong = document.getElementById('ma_truong').value.trim().toUpperCase();
     const maHs = document.getElementById('ma_hs').value.trim().toUpperCase();
     const matKhauRaw = document.getElementById('mat_khau').value.trim();
-    const savedHash = document.getElementById('mat_khau').dataset.savedHash;
     const btn = document.getElementById('btn-login');
 
-    // LOGIC XỬ LÝ MẬT KHẨU (ƯU TIÊN TỰ GÕ -> HASH ĐÃ LƯU)
+    // LOGIC XU LY MAT KHAU: khong chap nhan hash luu cuc bo thay cho mat khau.
     let hashedPass = "";
     if (matKhauRaw) {
         hashedPass = await hashPassword(matKhauRaw);
-    } else if (savedHash) {
-        hashedPass = savedHash;
     } else {
         return alert("Vui lòng nhập đầy đủ thông tin định danh!");
     }
@@ -780,9 +803,9 @@ async function login() {
 
         if (!hsData) throw new Error("Thông tin tài khoản không chính xác!");
 
-        // XỬ LÝ GHI NHỚ MẬT KHẨU (ĐA TÀI KHOẢN) - LƯU DẠNG HASH ĐỂ BẢO MẬT
+        // Chi ghi nho dinh danh tai khoan, khong luu hash mat khau tren thiet bi.
         if (document.getElementById('ghi_nho_dn').checked) {
-            luuTaiKhoan(maHs, hashedPass, hsData.ho_ten, hsData.lop);
+            luuTaiKhoan(maHs, hsData.ho_ten, hsData.lop);
         }
 
         state.truong_id = truongData.id; state.hs_id = hsData.id; state.ma_hs = maHs; state.ho_ten = hsData.ho_ten; state.lop = hsData.lop;
@@ -832,7 +855,6 @@ async function capNhatMatKhau() {
         let accounts = getSavedAccounts();
         const idx = accounts.findIndex(a => a.ma_hs === state.ma_hs);
         if (idx > -1) {
-            accounts[idx].pass = hashedNewPass;
             localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
             renderSavedAccounts();
         }
@@ -1238,10 +1260,11 @@ function batDauAntiCheat(initialCheatCount = 0) {
     
     // TỐI ƯU: Debounce resize để tránh quá tải CPU khi co giãn cửa sổ
     let resizeTimer;
-    window.addEventListener('resize', () => {
+    antiCheatResizeHandler = () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(handleResize, 250);
-    });
+    };
+    window.addEventListener('resize', antiCheatResizeHandler);
     
     document.addEventListener('focusin', handleFocusIn);
 
@@ -1334,7 +1357,10 @@ function tatAntiCheat() {
     document.removeEventListener('keydown', chanPhimTat);
     window.onbeforeunload = null;
     document.removeEventListener('pagehide', handlePageHide);
-    window.removeEventListener('resize', handleResize);
+    if (antiCheatResizeHandler) {
+        window.removeEventListener('resize', antiCheatResizeHandler);
+        antiCheatResizeHandler = null;
+    }
     document.removeEventListener('focusin', handleFocusIn);
 
     window.removeEventListener('blur', handleBlur);

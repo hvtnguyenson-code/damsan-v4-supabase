@@ -1,12 +1,7 @@
 
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
-const ADMIN_SECRET = 'DAMSAN_V4_SECURE_ADMIN_2026'; 
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-    global: {
-        headers: { 'x-admin-secret': ADMIN_SECRET }
-    }
-});
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let gvData = null; 
 let activeWorkspaceMonId = null; 
@@ -52,8 +47,12 @@ const DEFAULT_PASS_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020
 function safeHTML(str) { 
     if (!str) return ""; 
     if (window.DOMPurify) { return DOMPurify.sanitize(str); }
-    let doc = new DOMParser().parseFromString(str, 'text/html'); 
-    return doc.body.innerHTML; 
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;'); 
 }
 
 function isSha256Hex(v) {
@@ -815,16 +814,19 @@ function kichHoatLienKetRealtimeGiaoVien() {
     
     ketQuaChannel = sb.channel('gv-ket-qua-master')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'ket_qua' }, payload => {
-            if (document.getElementById('dashMaPhong') && document.getElementById('dashMaPhong').value) {
+            const selectedRoomCode = document.getElementById('dashMaPhong') ? document.getElementById('dashMaPhong').value : "";
+            const selectedRoom = allRoomsData.find(r => String(r.MaPhong).trim() === String(selectedRoomCode).trim());
+            const changedRoomId = payload.new?.phong_id || payload.old?.phong_id;
+            if (selectedRoom && changedRoomId && String(selectedRoom.id) === String(changedRoomId)) {
                 if (window.autoDashTimeout) clearTimeout(window.autoDashTimeout);
                 window.autoDashTimeout = setTimeout(() => {
                     fetchDashboard(true);
-                }, 1000); 
+                }, 3000); 
             }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'phong_thi' }, payload => {
             if (window.autoRadarTimeout) clearTimeout(window.autoRadarTimeout);
-            window.autoRadarTimeout = setTimeout(() => fetchRadar(), 1500);
+            window.autoRadarTimeout = setTimeout(() => fetchRadar(), 3000);
         })
         .subscribe();
 }
@@ -1755,11 +1757,14 @@ async function layDeTuIframe(btnElement) {
         if (!iframeEl || !iframeEl.contentWindow) throw new Error("Iframe chưa sẵn sàng!");
 
         let iframeWindow = iframeEl.contentWindow;
-        let iframeOrigin = "*";
+        let iframeOrigin = window.location.origin;
         try {
             let parsed = new URL(iframeEl.src, window.location.href);
-            iframeOrigin = parsed.origin && parsed.origin !== "null" ? parsed.origin : "*";
+            iframeOrigin = parsed.origin && parsed.origin !== "null" ? parsed.origin : window.location.origin;
         } catch (e) {}
+        if (!iframeOrigin || iframeOrigin === "null") {
+            throw new Error("Bridge tron de chi ho tro khi chay qua http/https cung origin, khong tra du lieu qua origin null.");
+        }
         let requestId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
         let danhSachDeIframe = await new Promise((resolve, reject) => {
@@ -3125,8 +3130,19 @@ async function xoaMon(id) {
 
 async function resetPass(ma, uid, loai) { 
     if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    await sb.from(table).update({mat_khau: DEFAULT_PASS_HASH}).eq('id', uid);
+    let pass = prompt("Hanh dong nhay cam! Vui long nhap mat khau Admin cua ban de xac nhan:");
+    if(!pass) return;
+    let hashedPass = await hashPassword(pass);
+    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
+        p_ma_gv: gvData.ma_gv,
+        p_mat_khau: hashedPass,
+        p_truong_id: gvData.truong_id,
+        p_loai: loai,
+        p_ids: [uid],
+        p_default_hash: DEFAULT_PASS_HASH
+    });
+    if(error) return alert("Loi may chu: " + error.message);
+    if(data && data.status === 'error') return alert(data.message);
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
 

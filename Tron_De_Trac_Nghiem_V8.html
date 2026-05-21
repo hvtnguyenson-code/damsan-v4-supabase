@@ -2,6 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>HỆ THỐNG TRỘN ĐỀ OFFLINE (BỘ GD&ĐT)</title>
 
@@ -273,12 +274,12 @@
   window.addEventListener('message', (ev) => {
     const data = ev.data || {};
     if (!data || data.type !== 'DAMSAN_GET_EXAMS') return;
+    if (!ev.origin || ev.origin === "null" || ev.origin !== window.location.origin) return;
     const requestId = data.requestId;
-    const targetOrigin = (ev.origin && ev.origin !== "null") ? ev.origin : "*";
     try {
       ev.source?.postMessage(
         { type: 'DAMSAN_EXAMS', requestId, payload: danhSachDeThi || [] },
-        targetOrigin
+        ev.origin
       );
     } catch (e) {
       // Best-effort: if postMessage fails, do nothing.
