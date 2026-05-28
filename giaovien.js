@@ -1560,14 +1560,20 @@ async function getOrCreateRoom(maPhong) {
     let query = sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
     if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
     
-    let {data: room} = await query.single();
+    let {data: room, error: roomErr} = await query.single();
+    if (roomErr && roomErr.code !== 'PGRST116') {
+        throw new Error("Khong tai duoc phong thi: " + roomErr.message);
+    }
     if(!room) {
         if(gvData.quyen === 'Admin' && (!activeWorkspaceMonId || activeWorkspaceMonId === 'ALL')) {
             throw new Error("⚠️ Admin chưa chọn bộ môn trên Header!");
         }
-        let {data: newRoom} = await sb.from('phong_thi').insert({
+        let {data: newRoom, error: newRoomErr} = await sb.from('phong_thi').insert({
             ma_phong: maPhong, truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId, ten_dot: 'Bài kiểm tra', doi_tuong: 'TatCa', thoi_gian: 45, trang_thai: 'CHO_THI'
         }).select('id').single();
+        if (newRoomErr || !newRoom || !newRoom.id) {
+            throw new Error("Khong tao duoc phong thi: " + ((newRoomErr && newRoomErr.message) || "Du lieu tra ve khong hop le"));
+        }
         return newRoom.id;
     }
     return room.id;
@@ -1576,9 +1582,7 @@ async function getOrCreateRoom(maPhong) {
 async function luuDeThiLenSupabase(deThiArray) {
     if(deThiArray.length === 0) return {status: 'success'};
     let maPhong = deThiArray[0].MaPhong;
-    let phong_id = await getOrCreateRoom(maPhong);
-    await sb.from('de_thi').delete().eq('phong_id', phong_id);
-    
+
     let groupedByMaDe = {};
     deThiArray.forEach(q => {
         let md = q.MaDe;
@@ -1589,15 +1593,47 @@ async function luuDeThiLenSupabase(deThiArray) {
         }
         currentArr.push({ noi_dung: q.NoiDung, A: q.DapAnA, B: q.DapAnB, C: q.DapAnC, D: q.DapAnD, dap_an_dung: q.DapAnDung, phan: q.Phan });
     });
-
+    
     let rowsToInsert = new Array();
     for (let ma_de in groupedByMaDe) {
         let cauSoArr = Reflect.get(groupedByMaDe, ma_de);
-        rowsToInsert.push({ phong_id: phong_id, ma_de: String(ma_de), cau_so: JSON.stringify(cauSoArr) });
+        rowsToInsert.push({ ma_de: String(ma_de), cau_so: cauSoArr });
     }
-    
-    let { error } = await sb.from('de_thi').insert(rowsToInsert);
-    if(error) { throw new Error(error.message); }
+
+    let rpcMonId = (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") ? activeWorkspaceMonId : null;
+    let { data: rpcData, error: rpcErr } = await sb.rpc('rpc_luu_de_thi_len_phong', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: gvData.truong_id,
+        p_mon_id: rpcMonId,
+        p_ma_phong: maPhong,
+        p_de_thi: rowsToInsert
+    });
+
+    if (!rpcErr) {
+        if (!rpcData || rpcData.status !== 'success') {
+            throw new Error(rpcData?.message || "Khong luu duoc de thi len phong");
+        }
+        return {status: 'success'};
+    }
+
+    // Fallback for databases that have not applied migration 004 yet.
+    if (!String(rpcErr.message || '').includes('rpc_luu_de_thi_len_phong')) {
+        throw new Error(rpcErr.message);
+    }
+
+    let phong_id = await getOrCreateRoom(maPhong);
+    await sb.from('de_thi').delete().eq('phong_id', phong_id);
+
+    let directRowsToInsert = rowsToInsert.map(row => ({
+        phong_id: phong_id,
+        ma_de: row.ma_de,
+        cau_so: JSON.stringify(row.cau_so)
+    }));
+
+    let { error } = await sb.from('de_thi').insert(directRowsToInsert);
+    if(error) {
+        throw new Error(error.message);
+    }
     return {status: 'success'};
 }
 
@@ -1793,14 +1829,14 @@ async function layDeTuIframe(btnElement) {
         danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
         danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
 
-        let oldText = btnElement.innerText;
-        btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN...";
-        btnElement.disabled = true;
+        let oldText = btnElement ? btnElement.innerText : "";
+        if (btnElement) btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN...";
+        if (btnElement) btnElement.disabled = true;
 
         let result = await luuDeThiLenSupabase(danhSachDeIframe);
         
-        btnElement.innerText = oldText;
-        btnElement.disabled = false;
+        if (btnElement) btnElement.innerText = oldText;
+        if (btnElement) btnElement.disabled = false;
 
         if (result.status === 'success') {
             alert(`🎉 HOÀN TẤT! Đã đẩy thành công ${danhSachDeIframe.length} câu vào phòng [${maPhong}].`);
@@ -1808,8 +1844,8 @@ async function layDeTuIframe(btnElement) {
             alert("❌ Lỗi Supabase: " + result.message);
         }
     } catch (e) {
-        btnElement.innerText = "🚀 Hút đề & Đẩy";
-        btnElement.disabled = false;
+        if (btnElement) btnElement.innerText = "🚀 Hút đề & Đẩy";
+        if (btnElement) btnElement.disabled = false;
         alert("❌ Lỗi Iframe: " + e.message);
     }
 }

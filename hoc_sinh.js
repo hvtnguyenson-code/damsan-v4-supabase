@@ -884,26 +884,44 @@ async function timPhongThiTuDong() {
     const autoArea = document.getElementById('auto-room-area');
     autoArea.innerHTML = '<p style="font-weight: bold; color: #1a73e8; margin: 0;">⏳ Đang đồng bộ danh sách phòng thi...</p>';
     try {
-        const { data: rooms, error } = await _supabase.from('phong_thi')
-            .select('id, ma_phong, ten_dot, doi_tuong, trang_thai')
-            .eq('truong_id', state.truong_id)
-            .neq('trang_thai', 'CHO_THI')
-            .order('created_at', { ascending: false });
+        let matchedRooms = new Array();
+        let submittedRoomIds = new Array();
 
-        if (error) throw error;
-
-        const { data: kqData } = await _supabase.from('ket_qua')
-            .select('phong_id, diem')
-            .eq('hs_id', state.hs_id);
-
-        let submittedRoomIds = (kqData || []).filter(k => k.diem !== null && k.diem !== undefined).map(k => k.phong_id);
-
-        let matchedRooms = (rooms || new Array()).filter(room => {
-            if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
-            let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
-            // CHÍNH XÁC: Nhận diện cả Lớp và Mã Học Sinh
-            return allowedClasses.includes(state.lop) || allowedClasses.includes(state.ma_hs);
+        const { data: rpcData, error: rpcErr } = await _supabase.rpc('rpc_lay_danh_sach_phong_thi_hs', {
+            p_hs_id: state.hs_id,
+            p_truong_id: state.truong_id
         });
+
+        if (!rpcErr) {
+            if (!rpcData || rpcData.status !== 'success') {
+                throw new Error(rpcData?.message || "Không tải được danh sách phòng thi.");
+            }
+            matchedRooms = rpcData.rooms || new Array();
+            submittedRoomIds = rpcData.submitted_room_ids || new Array();
+        } else {
+            if (!String(rpcErr.message || '').includes('rpc_lay_danh_sach_phong_thi_hs')) throw rpcErr;
+
+            const { data: rooms, error } = await _supabase.from('phong_thi')
+                .select('id, ma_phong, ten_dot, doi_tuong, trang_thai')
+                .eq('truong_id', state.truong_id)
+                .neq('trang_thai', 'CHO_THI')
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const { data: kqData } = await _supabase.from('ket_qua')
+                .select('phong_id, diem')
+                .eq('hs_id', state.hs_id);
+
+            submittedRoomIds = (kqData || []).filter(k => k.diem !== null && k.diem !== undefined).map(k => k.phong_id);
+
+            matchedRooms = (rooms || new Array()).filter(room => {
+                if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
+                let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
+                // CHÍNH XÁC: Nhận diện cả Lớp và Mã Học Sinh
+                return allowedClasses.includes(state.lop) || allowedClasses.includes(state.ma_hs);
+            });
+        }
 
         if (matchedRooms.length > 0) {
             let html = '<h3 style="color: #1e8e3e; margin: 0 0 15px 0;">📋 Các phòng thi của bạn:</h3>';
@@ -946,7 +964,10 @@ async function timPhongThiTuDong() {
             statusBox.innerHTML += `<button id="btn-logout-hs" onclick="dangXuatHS()" style="margin-top: 10px; background: #fce8e6; color: #d93025; border: 1px solid #fadbd8; padding: 6px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; cursor: pointer; transition: 0.2s;">Đăng xuất tài khoản</button>`;
         }
 
-    } catch (e) { autoArea.innerHTML = '<p style="color: #d93025; margin: 0;">Lỗi kết nối máy chủ khi tải danh sách phòng.</p>'; }
+    } catch (e) {
+        console.error("Lỗi tải danh sách phòng thi:", e);
+        autoArea.innerHTML = '<p style="color: #d93025; margin: 0;">Lỗi kết nối máy chủ khi tải danh sách phòng.</p>';
+    }
 }
 
 async function joinRoom(maPhongAuto = null) {
@@ -957,9 +978,27 @@ async function joinRoom(maPhongAuto = null) {
     state.ma_phong_text = maPhong;
 
     try {
-        const { data: phongData } = await _supabase.from('phong_thi')
-            .select('id, trang_thai, thoi_gian, thoi_gian_mo, doi_tuong, mon_hoc(ten_mon)')
-            .eq('truong_id', state.truong_id).eq('ma_phong', maPhong).single();
+        let phongData = null;
+        const { data: rpcRoomData, error: rpcRoomErr } = await _supabase.rpc('rpc_lay_thong_tin_phong_hs', {
+            p_hs_id: state.hs_id,
+            p_truong_id: state.truong_id,
+            p_ma_phong: maPhong
+        });
+
+        if (!rpcRoomErr) {
+            if (!rpcRoomData || rpcRoomData.status !== 'success') {
+                throw new Error(rpcRoomData?.message || "Không tìm thấy phòng thi này!");
+            }
+            phongData = rpcRoomData.room;
+        } else {
+            if (!String(rpcRoomErr.message || '').includes('rpc_lay_thong_tin_phong_hs')) throw rpcRoomErr;
+
+            const { data: directPhongData, error: directRoomErr } = await _supabase.from('phong_thi')
+                .select('id, trang_thai, thoi_gian, thoi_gian_mo, doi_tuong, mon_hoc(ten_mon)')
+                .eq('truong_id', state.truong_id).eq('ma_phong', maPhong).single();
+            if (directRoomErr) throw directRoomErr;
+            phongData = directPhongData;
+        }
 
         if (!phongData) throw new Error("Không tìm thấy phòng thi này!");
 
