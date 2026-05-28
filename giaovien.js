@@ -2051,29 +2051,32 @@ async function dieuKhien(trangThai) {
 
 async function dieuKhienFast(maPhong, trangThai) { 
     try {
-        let {data, error: getErr} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
-        if(getErr) throw getErr;
-
-        if(data) { 
-            let updateData = {trang_thai: trangThai};
-            if(trangThai === 'MO_PHONG') {
-                updateData.thoi_gian_mo = Date.now(); 
-                let checkbox = document.querySelector(`.chk-Room[value="${data.id}"]`);
-                if(checkbox) {
-                    let selDoiTuong = checkbox.closest('tr').querySelector('.fast-doituong').value;
-                    updateData.doi_tuong = selDoiTuong;
-                }
-            }
-            await rpcDieuKhienPhongThi(
-                data.id,
-                trangThai,
-                updateData.doi_tuong ?? null,
-                null,
-                null,
-                trangThai === 'MO_PHONG'
-            );
-            fetchRadar(); 
+        let room = (allRoomsData || new Array()).find(r => String(r.MaPhong).trim() === String(maPhong).trim());
+        if (!room) {
+            await fetchRadar();
+            room = (allRoomsData || new Array()).find(r => String(r.MaPhong).trim() === String(maPhong).trim());
         }
+        if (!room || !room.id) throw new Error("Không xác định được ID phòng thi. Hãy bấm làm mới danh sách phòng rồi thử lại.");
+
+        let updateData = {trang_thai: trangThai};
+        if(trangThai === 'MO_PHONG') {
+            updateData.thoi_gian_mo = Date.now(); 
+            let checkbox = document.querySelector(`.chk-Room[value="${room.id}"]`);
+            if(checkbox) {
+                let doiTuongInput = checkbox.closest('tr').querySelector('.fast-doituong');
+                if (doiTuongInput) updateData.doi_tuong = doiTuongInput.value;
+            }
+        }
+
+        await rpcDieuKhienPhongThi(
+            room.id,
+            trangThai,
+            updateData.doi_tuong ?? null,
+            null,
+            null,
+            trangThai === 'MO_PHONG'
+        );
+        fetchRadar(); 
     } catch(e) {
         console.error("Lỗi điều khiển nhanh:", e);
         alert("Lỗi khi điều khiển phòng! Chi tiết: " + e.message);
