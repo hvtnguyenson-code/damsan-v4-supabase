@@ -2099,13 +2099,14 @@ async function xoaPhongHoanToan(maPhong) {
     try {
         let cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
         if (!cached) { await fetchRadar(); cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong); }
-        if(cached && cached.id) {
-            await sb.from('ket_qua').delete().eq('phong_id', cached.id);
-            await sb.from('de_thi').delete().eq('phong_id', cached.id);
-            const { error } = await sb.rpc('rpc_dieu_khien_phong_thi', { p_ma_gv: gvData.ma_gv, p_truong_id: gvData.truong_id, p_room_id: cached.id, p_trang_thai: 'XOA_PHONG' });
-            // Fallback nếu RPC không hỗ trợ XOA_PHONG
-            if (error) await sb.from('phong_thi').delete().eq('id', cached.id);
-        }
+        if (!cached || !cached.id) throw new Error("Không tìm thấy phòng thi trong danh sách.");
+        const { data, error } = await sb.rpc('rpc_xoa_phong_thi', {
+            p_ma_gv:     gvData.ma_gv,
+            p_truong_id: gvData.truong_id,
+            p_phong_id:  cached.id
+        });
+        if (error) throw error;
+        if (data && data.status !== 'success') throw new Error(data.message || 'Xóa thất bại');
         fetchRadar();
         alert("Đã xóa sạch dữ liệu phòng thi!");
     } catch(e) {
