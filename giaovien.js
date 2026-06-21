@@ -2097,13 +2097,16 @@ async function xoaPhongHoanToan(maPhong) {
     btn.innerText = "⏳..."; btn.disabled = true;
 
     try {
-        let {data: room} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
-        if(room) {
-            await sb.from('ket_qua').delete().eq('phong_id', room.id);
-            await sb.from('de_thi').delete().eq('phong_id', room.id);
-            await sb.from('phong_thi').delete().eq('id', room.id);
+        let cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
+        if (!cached) { await fetchRadar(); cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong); }
+        if(cached && cached.id) {
+            await sb.from('ket_qua').delete().eq('phong_id', cached.id);
+            await sb.from('de_thi').delete().eq('phong_id', cached.id);
+            const { error } = await sb.rpc('rpc_dieu_khien_phong_thi', { p_ma_gv: gvData.ma_gv, p_truong_id: gvData.truong_id, p_room_id: cached.id, p_trang_thai: 'XOA_PHONG' });
+            // Fallback nếu RPC không hỗ trợ XOA_PHONG
+            if (error) await sb.from('phong_thi').delete().eq('id', cached.id);
         }
-        fetchRadar(); 
+        fetchRadar();
         alert("Đã xóa sạch dữ liệu phòng thi!");
     } catch(e) {
         alert("Lỗi khi xóa: " + e.message);
@@ -2119,9 +2122,10 @@ async function xoaDeTrongPhong(maPhong) {
     if(btn) { btn.innerText = "⏳..."; btn.disabled = true; }
 
     try {
-        let {data: room} = await sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id).single();
-        if(room) {
-            let { error } = await sb.from('de_thi').delete().eq('phong_id', room.id);
+        let cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
+        if (!cached) { await fetchRadar(); cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong); }
+        if(cached && cached.id) {
+            let { error } = await sb.from('de_thi').delete().eq('phong_id', cached.id);
             if(error) throw error;
             alert(`✅ Đã xóa sạch đề thi trong phòng [${maPhong}] thành công!`);
         } else {
