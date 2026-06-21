@@ -4,6 +4,15 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 
 ---
 
+## [20260621-fix] — 2026-06-21 — Fix tab Phòng thi bị RLS khi Mở phòng
+
+- **Triệu chứng:** Tab Phòng thi > bấm "Mở phòng (Đếm giờ)" → `❌ Lỗi: Khong tai duoc phong thi: permission denied for table phong_thi`. Tab Radar > mở đồng loạt hoạt động bình thường.
+- **Nguyên nhân:** `dieuKhien()` gọi `getOrCreateRoom(maPhong)` → `sb.from('phong_thi').select('id')` (direct table query) bị RLS block với anon role. `dieuKhienFast()` (Radar) dùng `allRoomsData` cache từ RPC nên không bị.
+- **Fix:** Thay thế logic trong `dieuKhien()` để tra cứu room ID từ `allRoomsData` trước, gọi `fetchRadar()` nếu cache miss, chỉ fallback `getOrCreateRoom()` khi phòng thực sự chưa tồn tại. Tương đồng hoàn toàn với `dieuKhienFast()`.
+- **File:** `giaovien.js` — `dieuKhien()`, line ~2034
+
+---
+
 ## [20260508-FixABCD] — 2026-05-08 (phiên tối)
 
 ### Fix A: Re-login/F5 sau khi nộp bài không mở result channel → đáp án thủ công bị rút gọn
