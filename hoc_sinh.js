@@ -1621,9 +1621,9 @@ async function gradeAndSubmit(autoSubmit = false) {
 
                 localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
 
-                // ĐỒNG BỘ CUỐI CÙNG: fire-and-forget — .then() bắt buộc để Supabase lazy builder thực sự gửi request
+                // Đồng bộ cheatCount vào DB — await để đảm bảo ghi xong trước khi chuyển màn
                 if (cheatCount > 0) {
-                    _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).then(() => {});
+                    await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
                 }
 
                 isSubmitting = false; // [Fix A] reset trước khi chuyển màn — bài đã được server chấp nhận
