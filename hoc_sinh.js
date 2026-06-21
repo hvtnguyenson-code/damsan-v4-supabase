@@ -1621,9 +1621,13 @@ async function gradeAndSubmit(autoSubmit = false) {
 
                 localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
 
-                // Đồng bộ cheatCount vào DB — await để đảm bảo ghi xong trước khi chuyển màn
+                // Đồng bộ cheatCount qua RPC (bypass RLS trên ket_qua)
                 if (cheatCount > 0) {
-                    await _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('phong_id', state.phong_id).eq('hs_id', state.hs_id);
+                    await _supabase.rpc('rpc_cap_nhat_vi_pham', {
+                        p_phong_id: state.phong_id,
+                        p_hs_id:    state.hs_id,
+                        p_so_lan:   cheatCount
+                    });
                 }
 
                 isSubmitting = false; // [Fix A] reset trước khi chuyển màn — bài đã được server chấp nhận
