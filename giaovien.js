@@ -2031,7 +2031,13 @@ async function dieuKhien(trangThai) {
             }
         }
         
-        let phong_id = await getOrCreateRoom(maPhong);
+        // Dùng allRoomsData cache để tránh direct SELECT bị RLS block
+        let cachedRoom = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
+        if (!cachedRoom) {
+            await fetchRadar();
+            cachedRoom = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
+        }
+        let phong_id = cachedRoom ? cachedRoom.id : await getOrCreateRoom(maPhong);
         await rpcDieuKhienPhongThi(
             phong_id,
             trangThai,
