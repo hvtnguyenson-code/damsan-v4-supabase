@@ -13,6 +13,13 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 - **Service worker:** Supabase REST/RPC/auth/Realtime HTTP requests bypass Cache Storage. Static PWA resources remain cacheable.
 - **Validation:** local deterministic simulation covers 36 receipts, duplicate retries, grading failure/retry, 144 sequential attempts, persisted final state, and no post-submit result watch. This does not execute against Supabase.
 
+### Correction: recovery gaps closed
+
+- Grading now reads the durable receipt plus stored exam and upserts `ket_qua`; it does not call the room-state-dependent legacy grader.
+- Student recovery distinguishes `FINAL_PENDING`, `SERVER_RECEIVED`, and `GRADED`; receipt recovery can run before the exam document fetch, and grading starts immediately after receipt with bounded retry.
+- Reset and room deletion remove canonical receipts as well as derived results. An explicit receipt-status lookup distinguishes a confirmed reset from a transient missing `ket_qua` response.
+- Added teacher reset RPC and pending-room grading recovery RPC. The dashboard reset button uses the reset RPC.
+
 ---
 
 ## [20260621-fix] — 2026-06-21 — Fix tab Phòng thi bị RLS khi Mở phòng

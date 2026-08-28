@@ -2494,31 +2494,50 @@ function filterDashboard(filter) { currentDashFilter = filter; renderDashboardSu
 
 
 
-async function xoaDiemPhong() { 
+async function xoaDiemPhong() {
     const maPhong = document.getElementById('dashMaPhong').value.trim(); 
     if(!maPhong) return alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!"); 
-    if(duLieuBangDiem.length === 0) return alert("ℹ️ Phòng thi này hiện tại chưa có dữ liệu điểm nào để xóa!"); 
-    if(!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) return; 
+    if(!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) return;
     
     let btn = event.target;
     let oldText = btn.innerText;
     btn.innerText = "⏳ Đang xóa sạch..."; btn.disabled = true;
 
     let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
-    
+
     if(currentRoom) {
-        let {error} = await sb.from('ket_qua').delete().eq('phong_id', currentRoom.id);
-        if(error) {
-            alert("❌ Lỗi máy chủ Supabase khi xóa: " + error.message);
+        let {data, error} = await sb.rpc('rpc_reset_room_results', {
+            p_ma_gv: gvData.ma_gv,
+            p_truong_id: gvData.truong_id,
+            p_phong_id: currentRoom.id
+        });
+        if(error || !data || data.status !== 'success') {
+            alert("❌ Lỗi máy chủ Supabase khi xóa: " + (error?.message || data?.message || 'Lỗi không xác định'));
         } else {
-            alert("✅ Đã xóa sạch toàn bộ điểm của phòng thi này!");
+            alert(`✅ Đã reset phòng: xóa ${data.ket_qua_deleted || 0} kết quả và ${data.submissions_deleted || 0} receipt bài làm.`);
         }
     } else {
         alert("❌ Lỗi hệ thống: Không xác định được ID của phòng thi này.");
     }
     
     btn.innerText = oldText; btn.disabled = false;
-    fetchDashboard(); 
+    fetchDashboard();
+}
+
+async function khoiPhucChamDiemPhong() {
+    const maPhong = document.getElementById('dashMaPhong').value.trim();
+    const currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
+    if (!currentRoom) return alert("⚠️ Vui lòng chọn phòng thi cần khôi phục chấm điểm.");
+    const { data, error } = await sb.rpc('rpc_grade_pending_room', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: gvData.truong_id,
+        p_phong_id: currentRoom.id
+    });
+    if (error || !data || data.status !== 'success') {
+        return alert("❌ Không thể khôi phục chấm điểm: " + (error?.message || data?.message || 'Lỗi không xác định'));
+    }
+    alert(`✅ Đã xử lý ${data.attempted || 0} bài chờ: ${data.graded || 0} thành công, ${data.failed || 0} cần kiểm tra thêm.`);
+    fetchDashboard(true);
 }
 
 async function xuatExcel() { 
