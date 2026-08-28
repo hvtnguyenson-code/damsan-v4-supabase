@@ -19,6 +19,8 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 - Student recovery distinguishes `FINAL_PENDING`, `SERVER_RECEIVED`, and `GRADED`; receipt recovery can run before the exam document fetch, and grading starts immediately after receipt with bounded retry.
 - Reset and room deletion remove canonical receipts as well as derived results. An explicit receipt-status lookup distinguishes a confirmed reset from a transient missing `ket_qua` response.
 - Added teacher reset RPC and pending-room grading recovery RPC. The dashboard reset button uses the reset RPC.
+- Part II grading now preserves all four answer positions, derived `ket_qua` retains `truong_id`, and room shared/update locking serializes receive against reset/delete without serializing students.
+- Added pull-request CI for syntax, deterministic recovery simulation, and branch-diff whitespace checks.
 
 ---
 

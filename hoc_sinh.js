@@ -1728,9 +1728,19 @@ async function checkTeacherCommand(isAuto = false) {
         console.log('[checkCmd] isAuto=', isAuto, '| trang_thai=', phong?.trang_thai, '| cau_hoi.length=', state.cau_hoi?.length, '| ma_de=', kq?.ma_de);
         state.user_result = kq;
         if (!kq) {
-            const receipt = getSubmissionReceipt();
+            let receipt = getSubmissionReceipt();
+            const snapshot = getFinalSnapshot();
+            if (!receipt?.submission_id && snapshot?.attempt_id) {
+                await reconcileSavedSubmission(snapshot);
+                receipt = getSubmissionReceipt();
+            }
             if (receipt?.submission_id && !state.isOffline) requestGrading(receipt.submission_id);
-            showReceivedState(receipt || { submission_id: 'Đang khôi phục receipt', received_at: 'Đã nhận trước đó' });
+            if (receipt?.submission_id && receipt?.received_at) {
+                showReceivedState(receipt);
+            } else {
+                document.getElementById('score-display-area').style.display = 'none';
+                document.getElementById('review-content').innerHTML = '<div style="text-align:center; margin-top:30px; padding:20px; background:#f8f9fa; border-radius:8px;"><p>Chưa xác nhận được trạng thái bài nộp từ máy chủ.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA LẠI</button></div>';
+            }
             return;
         }
         renderForensicPanel();

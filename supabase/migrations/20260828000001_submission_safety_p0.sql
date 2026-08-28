@@ -19,7 +19,9 @@ create table public.exam_submissions (
   grading_error text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint exam_submissions_one_student_per_room unique (phong_id, hs_id)
+  constraint exam_submissions_one_student_per_room unique (phong_id, hs_id),
+  constraint exam_submissions_phong_id_fkey foreign key (phong_id)
+    references public.phong_thi(id) on delete cascade
 );
 
 create index exam_submissions_phong_status_idx on public.exam_submissions (phong_id, status);
@@ -60,8 +62,10 @@ begin
       'attempt_id', v_submission.attempt_id, 'received_at', v_submission.received_at);
   end if;
 
+  -- Shared room locks permit all student receives concurrently, but conflict
+  -- with reset/delete's FOR UPDATE lock so validation and insert stay ordered.
   select * into v_room from public.phong_thi
-  where id = p_phong_id and truong_id = p_truong_id limit 1;
+  where id = p_phong_id and truong_id = p_truong_id limit 1 for share;
   if not found or v_room.trang_thai not in ('MO_PHONG', 'THU_BAI', 'XEM_DAP_AN', 'CONG_BO_DIEM') then
     return jsonb_build_object('status', 'error', 'message', 'Phong thi khong nhan bai.');
   end if;
@@ -113,6 +117,8 @@ declare
   v_part2_answer text;
   v_part2_matches integer;
   v_part2_index integer;
+  v_part2_answer_slots text[];
+  v_part2_correct_slots text[];
   v_points numeric := 0;
   v_score numeric := 0;
   v_details jsonb := '[]'::jsonb;
@@ -148,11 +154,15 @@ begin
     if v_part = '1' then
       if upper(trim(v_answer)) = upper(trim(v_correct)) and trim(v_answer) <> '' then v_points := 0.25; end if;
     elsif v_part = '2' then
-      v_part2_answer := regexp_replace(translate(upper(v_answer), 'Đ', 'D'), '[^DS]', '', 'g');
-      v_part2_correct := regexp_replace(translate(upper(v_correct), 'Đ', 'D'), '[^DS]', '', 'g');
+      -- Keep the four a/b/c/d positions. Empty slots must never shift a later
+      -- answer into an earlier statement.
+      v_part2_answer_slots := string_to_array(v_answer, '-');
+      v_part2_correct_slots := string_to_array(v_correct, '-');
       v_part2_matches := 0;
-      for v_part2_index in 1..least(length(v_part2_answer), length(v_part2_correct)) loop
-        if substr(v_part2_answer, v_part2_index, 1) = substr(v_part2_correct, v_part2_index, 1) then v_part2_matches := v_part2_matches + 1; end if;
+      for v_part2_index in 1..4 loop
+        v_part2_answer := translate(upper(trim(coalesce(v_part2_answer_slots[v_part2_index], ''))), 'Đ', 'D');
+        v_part2_correct := translate(upper(trim(coalesce(v_part2_correct_slots[v_part2_index], ''))), 'Đ', 'D');
+        if v_part2_answer <> '' and v_part2_answer = v_part2_correct then v_part2_matches := v_part2_matches + 1; end if;
       end loop;
       v_points := case v_part2_matches when 1 then 0.1 when 2 then 0.25 when 3 then 0.5 when 4 then 1.0 else 0 end;
     else
@@ -163,9 +173,10 @@ begin
     v_details := v_details || jsonb_build_array(jsonb_build_object('q', v_index, 'phan', v_part, 'chon', v_answer, 'dung', v_correct, 'diem', v_points));
   end loop;
 
-  insert into public.ket_qua (phong_id, hs_id, ma_de, diem, chi_tiet)
-  values (v_submission.phong_id, v_submission.hs_id, v_submission.ma_de, v_score, v_details)
-  on conflict (phong_id, hs_id) do update set ma_de = excluded.ma_de, diem = excluded.diem, chi_tiet = excluded.chi_tiet;
+  insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)
+  values (v_submission.truong_id, v_submission.phong_id, v_submission.hs_id, v_submission.ma_de, v_score, v_details)
+  on conflict (phong_id, hs_id) do update set truong_id = excluded.truong_id,
+    ma_de = excluded.ma_de, diem = excluded.diem, chi_tiet = excluded.chi_tiet;
 
   update public.exam_submissions set status = 'graded', score = v_score,
     grading_details = v_details, graded_at = now(), grading_error = null, updated_at = now()
@@ -209,12 +220,13 @@ $function$;
 
 create or replace function public.rpc_reset_room_results(p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_ket_qua integer; v_submissions integer;
+declare v_ket_qua integer; v_submissions integer; v_room public.phong_thi%rowtype;
 begin
-  if not exists (select 1 from public.giao_vien where ma_gv = p_ma_gv and truong_id = p_truong_id)
-    or not exists (select 1 from public.phong_thi where id = p_phong_id and truong_id = p_truong_id) then
+  if not exists (select 1 from public.giao_vien where ma_gv = p_ma_gv and truong_id = p_truong_id) then
     return jsonb_build_object('status', 'error', 'message', 'Khong xac thuc duoc giao vien hoac phong thi.');
   end if;
+  select * into v_room from public.phong_thi where id = p_phong_id and truong_id = p_truong_id for update;
+  if not found then return jsonb_build_object('status', 'error', 'message', 'Khong xac thuc duoc giao vien hoac phong thi.'); end if;
   delete from public.ket_qua where phong_id = p_phong_id; get diagnostics v_ket_qua = row_count;
   delete from public.exam_submissions where phong_id = p_phong_id; get diagnostics v_submissions = row_count;
   -- Existing opening timestamp is the room-attempt generation. A stale local FINAL_PENDING
@@ -226,11 +238,12 @@ $function$;
 
 create or replace function public.rpc_xoa_phong_thi(p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_quyen text;
+declare v_quyen text; v_room public.phong_thi%rowtype;
 begin
   select quyen into v_quyen from public.giao_vien where ma_gv = p_ma_gv and truong_id = p_truong_id limit 1;
   if v_quyen is null then return jsonb_build_object('status','error','message','Khong xac thuc duoc giao vien.'); end if;
-  if not exists (select 1 from public.phong_thi where id = p_phong_id and truong_id = p_truong_id) then
+  select * into v_room from public.phong_thi where id = p_phong_id and truong_id = p_truong_id for update;
+  if not found then
     return jsonb_build_object('status','error','message','Phong thi khong thuoc truong hien tai.');
   end if;
   delete from public.ket_qua where phong_id = p_phong_id;

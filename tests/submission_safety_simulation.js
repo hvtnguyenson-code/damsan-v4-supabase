@@ -31,15 +31,19 @@ const students = Array.from({ length: 36 }, (_, i) => ({ attempt: `a-${i}`, stud
 function scoreQuestion(part, answer, correct) {
   if (part === '1') return answer.trim() && answer.trim().toUpperCase() === correct.trim().toUpperCase() ? 0.25 : 0;
   if (part === '2') {
-    const compact = value => String(value).toUpperCase().replace(/Đ/g, 'D').replace(/[^DS]/g, '');
-    const a = compact(answer); const c = compact(correct); const matches = [...a].filter((v, i) => v === c[i]).length;
+    const normalize = value => String(value || '').trim().toUpperCase().replace(/Đ/g, 'D');
+    const a = String(answer).split('-'); const c = String(correct).split('-');
+    const matches = [0, 1, 2, 3].filter(i => normalize(a[i]) && normalize(a[i]) === normalize(c[i])).length;
     return [0, 0.1, 0.25, 0.5, 1][matches] || 0;
   }
   const normalize = value => String(value).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
   return normalize(answer) && normalize(answer) === normalize(correct) ? 0.25 : 0;
 }
 assert.strictEqual(scoreQuestion('1', 'a', 'A'), 0.25);
+assert.strictEqual(scoreQuestion('2', 'Đ--S-', 'Đ-Đ-S-S'), 0.25);
+assert.strictEqual(scoreQuestion('2', '--S-', 'Đ-Đ-S-S'), 0.1);
 assert.strictEqual(scoreQuestion('2', 'Đ-S-Đ-S', 'D-S-S-S'), 0.5);
+assert.strictEqual(scoreQuestion('2', '----', 'Đ-Đ-S-S'), 0);
 assert.strictEqual(scoreQuestion('3', '1,50', "1.50'"), 0.25);
 
 // C1/C2/C10: grading ignores THU_BAI/XEM_DAP_AN/CONG_BO_DIEM after durable receipt.
@@ -90,8 +94,14 @@ assert(client.includes('if (!kq) {'));
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
+assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
+assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));
 const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8');
 assert(!migration.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration.includes('rpc_reset_room_results') && migration.includes('rpc_grade_pending_room'));
 assert(migration.includes("'room_attempt_changed'"));
+assert(migration.includes('string_to_array(v_answer') && migration.includes('for v_part2_index in 1..4'));
+assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
+assert(migration.includes('for share') && migration.includes('for update'));
+assert(migration.includes('references public.phong_thi(id) on delete cascade'));
 console.log('PASS: deterministic P0 recovery simulation (C1-C12; not a Supabase load test)');
