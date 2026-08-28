@@ -84,15 +84,25 @@ assert.strictEqual(resume({ state: 'FINAL_PENDING' }, null), 'receive');
 assert.strictEqual(resume({ state: 'SERVER_RECEIVED' }, { submission_id: 'sub-1' }), 'grade');
 assert.strictEqual(resume({ state: 'GRADED' }, { submission_id: 'sub-1' }), 'none');
 
-// R1-R8: plain missing/network errors preserve active evidence; only authoritative
-// reset/deletion archives it before freeing active keys for a new attempt.
-function recoveryModel(snapshot, receipt, response) {
-  const active = { snapshot, receipt }; const archives = new Map();
-  const archive = reason => archives.set(`recovery_${snapshot.attempt_id}`, { snapshot: JSON.parse(JSON.stringify(snapshot)), raw_answers: snapshot.raw_answers, reason });
+// R1-R11: local deterministic archive verification. This is not browser-storage testing.
+function archiveModel(storage, snapshot, reason, failWrite = false) {
+  const key = `recovery_${snapshot.attempt_id}`;
+  const clone = JSON.parse(JSON.stringify(snapshot));
+  const matches = archive => archive && archive.attempt_id === clone.attempt_id && archive.room_opened_at === clone.room_opened_at && JSON.stringify(archive.raw_answers) === JSON.stringify(clone.raw_answers) && JSON.stringify(archive.final_snapshot) === JSON.stringify(clone);
+  if (storage.has(key)) return matches(storage.get(key));
+  if (failWrite) return false;
+  storage.set(key, { final_snapshot: clone, attempt_id: clone.attempt_id, room_opened_at: clone.room_opened_at, raw_answers: clone.raw_answers, archived_at: 'local-test', reason });
+  return matches(storage.get(key));
+}
+function recoveryModel(snapshot, receipt, response, archives = new Map(), failWrite = false) {
+  const active = { snapshot, receipt };
   if (response.error || (response.status === 'missing' && !response.reset_confirmed)) return { active, archives, action: 'receive' };
-  if (response.status === 'missing' && response.reset_confirmed) { archive(response.room_exists === false ? 'room_deleted' : 'room_attempt_changed'); return { active: {}, archives, action: 'new_attempt' }; }
+  if (response.status === 'missing' && response.reset_confirmed) return archiveModel(archives, snapshot, response.room_exists === false ? 'room_deleted' : 'room_attempt_changed', failWrite) ? { active: {}, archives, action: 'new_attempt' } : { active, archives, action: 'blocked' };
   if (response.submission_id) return { active: { snapshot: { ...snapshot, state: response.status === 'graded' ? 'GRADED' : 'SERVER_RECEIVED' }, receipt: response }, archives, action: response.status === 'graded' ? 'none' : 'grade' };
   return { active, archives, action: 'receive' };
+}
+function receiveRoomChangedModel(snapshot, receipt, draft, archives, failWrite = false) {
+  return archiveModel(archives, snapshot, 'room_attempt_changed', failWrite) ? { active: {}, archives, action: 'new_attempt' } : { active: { snapshot, receipt, draft }, archives, action: 'blocked' };
 }
 const finalEvidence = { attempt_id: 'attempt-recovery', phong_id: 'room-r', hs_id: 'hs-r', room_opened_at: 1000, state: 'FINAL_PENDING', raw_answers: [{ chon: 'A' }, { chon: 'Đ--S-' }] };
 assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: false, room_exists: true }).action, 'receive'); // R1/R7
@@ -101,6 +111,12 @@ const changed = recoveryModel(finalEvidence, null, { status: 'missing', reset_co
 assert.strictEqual(changed.action, 'new_attempt'); assert.deepStrictEqual(changed.archives.get('recovery_attempt-recovery').raw_answers, finalEvidence.raw_answers); // R3/R8
 assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: true, room_exists: false }).archives.get('recovery_attempt-recovery').reason, 'room_deleted'); // R4
 assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'graded', submission_id: 'sub-r' }).active.snapshot.state, 'GRADED'); // R6
+const receiveArchives = new Map(); const receiveChanged = receiveRoomChangedModel(finalEvidence, { submission_id: 'sub-r' }, { answers: { 0: 'A' } }, receiveArchives);
+assert.strictEqual(receiveChanged.action, 'new_attempt'); assert.deepStrictEqual(receiveChanged.archives.get('recovery_attempt-recovery').raw_answers, finalEvidence.raw_answers); // R5
+assert.strictEqual(receiveRoomChangedModel(finalEvidence, { submission_id: 'sub-r' }, { answers: {} }, new Map(), true).action, 'blocked'); // R9
+const validExisting = new Map(); assert.strictEqual(archiveModel(validExisting, finalEvidence, 'original'), true); assert.strictEqual(receiveRoomChangedModel(finalEvidence, null, {}, validExisting).action, 'new_attempt'); // R10
+const malformedExisting = new Map([['recovery_attempt-recovery', { attempt_id: 'attempt-recovery', raw_answers: [] }]]);
+assert.strictEqual(receiveRoomChangedModel(finalEvidence, null, { answers: {} }, malformedExisting).action, 'blocked'); // R11
 
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 assert(!client.includes('result-watch-'));
@@ -109,6 +125,8 @@ assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
 assert(client.includes('archiveFinalSnapshot(snapshot, \'room_attempt_changed\')'));
+assert(client.includes('return matches(JSON.parse(localStorage.getItem(key)))'));
+assert(client.includes('if (!archived) {'));
 assert(client.includes('p_truong_id: snapshot.truong_id') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
 assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
 assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));

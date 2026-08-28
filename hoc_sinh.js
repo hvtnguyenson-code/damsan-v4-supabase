@@ -1053,6 +1053,11 @@ async function joinRoom(maPhongAuto = null) {
         if (finalSnapshot) {
             showSection('exam-section');
             lockExamForFinalSubmission('Đang khôi phục bài đã chốt và gửi tới máy chủ...');
+            if (finalSnapshot.recovery_archive_failed) {
+                const retryMsg = document.getElementById('retry-status-msg');
+                if (retryMsg) { retryMsg.style.display = ''; retryMsg.innerText = '⚠️ Bản chốt đang được giữ nguyên vì chưa thể tạo bản sao khôi phục an toàn. Không tự gửi lại hoặc tạo lượt mới.'; }
+                return;
+            }
             if (finalSnapshot.state === SUBMISSION_STATE.SERVER_RECEIVED) {
                 const receipt = getSubmissionReceipt();
                 if (receipt?.submission_id) {
@@ -1564,18 +1569,30 @@ function getSubmissionReceipt() {
 }
 
 function archiveFinalSnapshot(snapshot, reason) {
-    if (!snapshot?.attempt_id) return;
-    const key = `recovery_damsan_${snapshot.phong_id}_${snapshot.hs_id}_${snapshot.attempt_id}`;
-    if (localStorage.getItem(key)) return;
-    const evidence = JSON.parse(JSON.stringify(snapshot));
-    localStorage.setItem(key, JSON.stringify({
-        final_snapshot: evidence,
-        attempt_id: snapshot.attempt_id,
-        room_opened_at: snapshot.room_opened_at,
-        raw_answers: evidence.raw_answers,
-        archived_at: new Date().toISOString(),
-        reason
-    }));
+    if (!snapshot?.attempt_id) return false;
+    try {
+        const key = `recovery_damsan_${snapshot.phong_id}_${snapshot.hs_id}_${snapshot.attempt_id}`;
+        const evidence = JSON.parse(JSON.stringify(snapshot));
+        const matches = archive => archive
+            && archive.attempt_id === evidence.attempt_id
+            && archive.room_opened_at === evidence.room_opened_at
+            && JSON.stringify(archive.raw_answers) === JSON.stringify(evidence.raw_answers)
+            && JSON.stringify(archive.final_snapshot) === JSON.stringify(evidence);
+        const existing = localStorage.getItem(key);
+        if (existing !== null) return matches(JSON.parse(existing));
+        localStorage.setItem(key, JSON.stringify({
+            final_snapshot: evidence,
+            attempt_id: evidence.attempt_id,
+            room_opened_at: evidence.room_opened_at,
+            raw_answers: evidence.raw_answers,
+            archived_at: new Date().toISOString(),
+            reason
+        }));
+        return matches(JSON.parse(localStorage.getItem(key)));
+    } catch (e) {
+        console.error('Could not verify final recovery archive:', e);
+        return false;
+    }
 }
 
 function clearActiveSubmissionKeys() {
@@ -1595,7 +1612,12 @@ async function reconcileSavedSubmission(snapshot) {
         });
         if (error) return snapshot; // A network failure is never evidence of an admin reset.
         if (data?.status === 'missing' && data?.reset_confirmed === true) {
-            archiveFinalSnapshot(snapshot, data.room_exists === false ? 'room_deleted' : 'room_attempt_changed');
+            const archived = archiveFinalSnapshot(snapshot, data.room_exists === false ? 'room_deleted' : 'room_attempt_changed');
+            if (!archived) {
+                console.warn('Reset confirmed but final evidence could not be archived; active keys preserved.');
+                snapshot.recovery_archive_failed = true;
+                return snapshot;
+            }
             clearActiveSubmissionKeys();
             return null;
         }
@@ -1707,9 +1729,14 @@ async function receiveFinalSubmission() {
             return;
         }
         if (!error && data?.code === 'room_attempt_changed') {
-            archiveFinalSnapshot(snapshot, 'room_attempt_changed');
-            clearActiveSubmissionKeys();
+            const archived = archiveFinalSnapshot(snapshot, 'room_attempt_changed');
             isSubmitting = false;
+            if (!archived) {
+                console.warn('Room attempt changed but final evidence could not be archived; active keys preserved.');
+                alert('Không thể tạo bản sao khôi phục an toàn. Bài đã chốt vẫn được giữ trên thiết bị; vui lòng báo giám thị trước khi bắt đầu lượt mới.');
+                return;
+            }
+            clearActiveSubmissionKeys();
             alert('Lượt thi này đã được giáo viên reset. Bản chốt cũ không được gửi lại; hãy vào lượt thi mới khi phòng được mở.');
             return;
         }
