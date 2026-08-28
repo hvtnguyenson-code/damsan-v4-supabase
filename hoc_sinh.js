@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260508-0015'; 
+const VERSION = '20260828-submission-safety-p0';
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -16,6 +16,14 @@ let isExamActive = false;
 let isSubmitting = false;
 let isCheckingCommand = false; // Guard tránh concurrent checkTeacherCommand gây race condition
 let isInternalAction = false; // Cờ đánh dấu đang thực hiện hành động hệ thống (hiện confirm/alert)
+let isGradingSubmission = false;
+
+const SUBMISSION_STATE = Object.freeze({
+    DRAFT: 'DRAFT',
+    FINAL_PENDING: 'FINAL_PENDING',
+    SERVER_RECEIVED: 'SERVER_RECEIVED',
+    GRADED: 'GRADED'
+});
 
 // Foreensic report should stay hidden in student UI; enable only for authorized review.
 const SHOW_FORENSIC_REPORT = false;
@@ -365,6 +373,7 @@ window.addEventListener('online', () => {
     let btnSubmit = document.getElementById('btn-submit-exam');
     if (btnSubmit) { btnSubmit.style.opacity = '1'; btnSubmit.style.cursor = 'pointer'; }
     setTimeout(() => { if (!state.isOffline && banner.className === 'online') { banner.className = ''; } }, 4000);
+    if (getFinalSnapshot()) receiveFinalSubmission();
 });
 
 function hienThiThongBaoLuu() {
@@ -1018,24 +1027,22 @@ async function joinRoom(maPhongAuto = null) {
         // Nếu không tìm thấy kết quả trên server (đã bị xóa) hoặc số lần vi phạm đã được reset về 0
         if (!res || (res && (res.so_lan_vi_pham || 0) === 0)) {
             localStorage.removeItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
-            // Nếu là phiên thi mới hoàn toàn (res null), xóa luôn bản nháp cũ để tránh râu ông nọ cắm cằm bà kia
-            if (!res) {
-                localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
-            }
+            // Không xóa draft/final chỉ vì ket_qua chưa tồn tại. Một FINAL_PENDING có thể
+            // đang chờ mạng hoặc chờ retry sau khi server chưa kịp trả receipt.
         }
 
         if (res && res.diem !== null && res.diem !== undefined) {
             state.user_result = res;
             document.getElementById('finish_name').innerText = state.ho_ten;
             showSection('result-section');
-            // [Fix A] Re-login sau khi đã nộp bài — đóng exam channel, mở result channel riêng
-            if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
-            kichHoatLienKetRealtimeKetQua();
+            // Kết quả được kiểm tra thủ công qua HTTP; sau receipt không giữ WebSocket học sinh.
+            dongTatCaRealtimeHocSinh();
             checkTeacherCommand(true);
             return;
         }
 
-        if (phongData.trang_thai !== 'MO_PHONG') throw new Error("Phòng thi hiện đang bị khóa!");
+        const finalSnapshot = getFinalSnapshot();
+        if (phongData.trang_thai !== 'MO_PHONG' && !finalSnapshot) throw new Error("Phòng thi hiện đang bị khóa!");
 
         await dongBoGiamSatThoiGian();
 
@@ -1052,6 +1059,13 @@ async function joinRoom(maPhongAuto = null) {
 
         batDauAntiCheat(res ? (res.so_lan_vi_pham || 0) : 0);
         renderExam();
+        if (finalSnapshot) {
+            khoiPhucFinalSnapshot(finalSnapshot);
+            showSection('exam-section');
+            lockExamForFinalSubmission('Đang khôi phục bài đã chốt và gửi tới máy chủ...');
+            if (!state.isOffline) setTimeout(() => receiveFinalSubmission(), 0);
+            return;
+        }
         khoiPhucBaiLamNhap();
 
         // CHỐNG LÁCH LUẬT F5: Nếu học sinh đã vi phạm quá số lần hoặc vi phạm Phần II trước đó
@@ -1080,8 +1094,7 @@ function kichHoatLienKetRealtime() {
             if ((newStatus === 'THU_BAI' || newStatus === 'XEM_DAP_AN') && document.getElementById('exam-section').classList.contains('active')) {
                 // [Fix B] XEM_DAP_AN cũng trigger nộp bài — học sinh chưa nộp khi GV công bố đáp án sẽ được thu bài tự động
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
-                const jitter = Math.floor(Math.random() * 30000);
-                setTimeout(() => gradeAndSubmit(true), jitter);
+                gradeAndSubmit(true);
             }
             else if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN' || newStatus === 'THU_BAI') && document.getElementById('result-section').classList.contains('active')) {
                 checkTeacherCommand(true);
@@ -1089,31 +1102,10 @@ function kichHoatLienKetRealtime() {
         }).subscribe();
 }
 
-// [Fix 1B] Channel riêng cho màn kết quả — KHÔNG có nhánh THU_BAI→gradeAndSubmit
-// để tránh submit lần 2 sau khi đã nộp xong. Tự dọn sau 30 phút hoặc khi đóng tab.
-function kichHoatLienKetRealtimeKetQua() {
-    dongRealtimeKetQua(); // dọn channel cũ nếu có trước khi tạo mới
-
-    realtimeResultChannel = _supabase.channel('result-watch-' + state.phong_id)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'phong_thi', filter: `id=eq.${state.phong_id}` }, payload => {
-            const newStatus = payload.new.trang_thai;
-            if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN') && document.getElementById('result-section').classList.contains('active')) {
-                checkTeacherCommand(true);
-            }
-        }).subscribe();
-
-    // Tự dọn sau 30 phút — ngăn tích lũy connection khi giáo viên chuyển lớp
-    if (realtimeResultCleanupTimer) clearTimeout(realtimeResultCleanupTimer);
-    realtimeResultCleanupTimer = setTimeout(() => dongRealtimeKetQua(), 30 * 60 * 1000);
-
-    // Dọn khi đóng tab/trình duyệt
-    window.addEventListener('beforeunload', dongRealtimeKetQua);
-}
-
-function dongRealtimeKetQua() {
+function dongTatCaRealtimeHocSinh() {
+    if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
     if (realtimeResultCleanupTimer) { clearTimeout(realtimeResultCleanupTimer); realtimeResultCleanupTimer = null; }
     if (realtimeResultChannel) { _supabase.removeChannel(realtimeResultChannel); realtimeResultChannel = null; }
-    window.removeEventListener('beforeunload', dongRealtimeKetQua);
 }
 
 function renderExam() {
@@ -1245,21 +1237,8 @@ function startTimer(thoiGianPhut, thoiGianMo) {
             clearInterval(examTimer); document.getElementById('display-timer').innerText = "00:00";
             if (isExamActive) {
                 alert("⏳ ĐÃ HẾT THỜI GIAN LÀM BÀI! Hệ thống tự động thu bài.");
-                if (!state.isOffline) {
-                    // [Fix 1] Trải đều 34 học sinh trong 15s để tránh nghẽn connection pool
-                    const jitter = Math.floor(Math.random() * 30000);
-                    setTimeout(() => gradeAndSubmit(true), jitter);
-                } else {
-                    tatAntiCheat();
-                    document.getElementById('exam-main-area').innerHTML = '<h3 style="color:red; text-align:center;">HẾT GIỜ. ĐANG CHỜ KHÔI PHỤC KẾT NỐI MẠNG ĐỂ NỘP BÀI...</h3>';
-                    let waitNet = setInterval(() => {
-                        if (!state.isOffline) {
-                            clearInterval(waitNet);
-                            const jitter = Math.floor(Math.random() * 30000);
-                            setTimeout(() => gradeAndSubmit(true), jitter);
-                        }
-                    }, 2000);
-                }
+                // Chốt snapshot ngay cả khi offline; online handler retry đúng snapshot đó.
+                gradeAndSubmit(true);
             }
         } else {
             let m = Math.floor(diff / 60000); let s = Math.floor((diff % 60000) / 1000);
@@ -1529,11 +1508,6 @@ function closeCheatWarning() {
 }
 
 function xacNhanNopBai() {
-    if (state.isOffline) {
-        alert("⚠️ BẠN ĐANG BỊ MẤT KẾT NỐI MẠNG!\nVui lòng giữ nguyên trang, không được F5. Hãy chờ đến khi thông báo màu xanh xuất hiện mới được nộp bài.");
-        return;
-    }
-
     let chuaLam = 0;
     document.querySelectorAll('.q-btn').forEach(btn => { if (!btn.classList.contains('answered')) chuaLam++; });
     let msg = chuaLam > 0
@@ -1549,120 +1523,129 @@ function xacNhanNopBai() {
 }
 
 async function gradeAndSubmit(autoSubmit = false) {
-    if (isSubmitting) return;
-    if (state.isOffline) return;
+    finalizeSubmissionOnce(autoSubmit);
+}
 
-    isSubmitting = true;
-    let btn = document.getElementById('btn-submit-exam');
-    if (btn) { btn.innerText = "⏳ ĐANG GỬI DỮ LIỆU..."; btn.disabled = true; }
+function submissionKeys() {
+    const suffix = `${state.phong_id}_${state.hs_id}`;
+    return { draft: `nhap_damsan_${suffix}`, final: `final_damsan_${suffix}`, receipt: `receipt_damsan_${suffix}` };
+}
+
+function createAttemptId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+function getFinalSnapshot() {
+    try { return JSON.parse(localStorage.getItem(submissionKeys().final) || 'null'); }
+    catch (e) { console.error('Final snapshot corrupt:', e); return null; }
+}
+
+function collectAnswers() {
+    const answers = state.cau_hoi.map((cau, index) => {
+        const phan = String(cau.phan || cau.Phan);
+        let ans = '';
+        if (phan === '1') ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || '';
+        else if (phan === '2') ans = ['a', 'b', 'c', 'd'].map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || '').join('-');
+        else ans = document.getElementById(`q_${index}_txt`)?.value.trim() || '';
+        return { chon: ans };
+    });
+    if (antiCheatRuntime.reasons.some(r => r.reason && (r.reason.includes('PHẦN II') || r.reason.includes('FATAL_P2')))) {
+        answers.push({ phan: 'SPECIAL_MARKER', type: 'PART_II_VIOLATION', tag: '!!FATAL_P2!!' });
+    }
+    return answers;
+}
+
+function lockExamForFinalSubmission(message) {
+    isExamActive = false;
     tatAntiCheat();
+    document.querySelectorAll('#exam-section input, #exam-section textarea, #exam-section button').forEach(el => { el.disabled = true; });
+    const btn = document.getElementById('btn-submit-exam');
+    if (btn) btn.innerText = message;
+}
 
-    // [Idempotency] Kiểm tra server đã ghi nhận bài chưa — tránh "LỖI NẶNG"
-    // khi RPC thành công nhưng client không nhận được response (network drop)
-    try {
-        const { data: existingResult } = await _supabase
-            .from('ket_qua')
-            .select('diem')
-            .eq('phong_id', state.phong_id)
-            .eq('hs_id', state.hs_id)
-            .single();
-        if (existingResult && existingResult.diem !== null && existingResult.diem !== undefined) {
+function finalizeSubmissionOnce(autoSubmit = false) {
+    let snapshot = getFinalSnapshot();
+    if (!snapshot) {
+        snapshot = {
+            version: 1,
+            state: SUBMISSION_STATE.FINAL_PENDING,
+            attempt_id: createAttemptId(),
+            truong_id: state.truong_id,
+            phong_id: state.phong_id,
+            hs_id: state.hs_id,
+            ma_de: state.ma_de,
+            raw_answers: collectAnswers(),
+            client_submitted_at: new Date().toISOString(),
+            auto_submit: Boolean(autoSubmit)
+        };
+        localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot));
+    }
+    lockExamForFinalSubmission(state.isOffline ? '⏳ ĐÃ CHỐT BÀI — ĐANG CHỜ MẠNG...' : '⏳ ĐANG GỬI BÀI ĐÃ CHỐT...');
+    if (!state.isOffline) receiveFinalSubmission();
+}
+
+function khoiPhucFinalSnapshot(snapshot) {
+    const answers = {};
+    (snapshot.raw_answers || []).forEach((item, index) => { if (!item.phan) answers[index] = item.chon || ''; });
+    localStorage.setItem(submissionKeys().draft, JSON.stringify({ answers, flagged: state.flagged || [] }));
+    khoiPhucBaiLamNhap();
+}
+
+function showReceivedState(receipt) {
+    document.getElementById('finish_name').innerText = state.ho_ten;
+    showSection('result-section');
+    document.getElementById('score-display-area').style.display = 'none';
+    document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(receipt.received_at)}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
+    try { document.exitFullscreen(); } catch (e) { }
+}
+
+async function receiveFinalSubmission() {
+    const snapshot = getFinalSnapshot();
+    if (!snapshot || isSubmitting || state.isOffline) return;
+    isSubmitting = true;
+    let lastError = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+        const { data, error } = await _supabase.rpc('rpc_receive_submission', {
+            p_attempt_id: snapshot.attempt_id, p_truong_id: snapshot.truong_id, p_phong_id: snapshot.phong_id,
+            p_hs_id: snapshot.hs_id, p_ma_de: snapshot.ma_de, p_raw_answers: snapshot.raw_answers,
+            p_client_submitted_at: snapshot.client_submitted_at
+        });
+        if (!error && data && data.status === 'received' && data.submission_id && data.received_at) {
+            const receipt = { ...data, state: SUBMISSION_STATE.SERVER_RECEIVED };
+            localStorage.setItem(submissionKeys().receipt, JSON.stringify(receipt));
+            snapshot.state = SUBMISSION_STATE.SERVER_RECEIVED;
+            localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot));
             isSubmitting = false;
-            localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
-            if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
-            kichHoatLienKetRealtimeKetQua();
-            document.getElementById('finish_name').innerText = state.ho_ten;
-            showSection('result-section');
-            try { document.exitFullscreen(); } catch (e) {}
-            checkTeacherCommand(true);
+            dongTatCaRealtimeHocSinh();
+            showReceivedState(receipt);
+            setTimeout(() => requestGrading(receipt.submission_id), Math.floor(Math.random() * 30000));
             return;
         }
-    } catch (e) { /* Chưa có bản ghi = chưa nộp, tiếp tục bình thường */ }
-
-    let baiLam = new Array();
-    state.cau_hoi.forEach((cau, index) => {
-        let phan = String(cau.phan || cau.Phan);
-        let ans = "";
-        if (phan === "1") ans = document.querySelector(`input[name="q_${index}"]:checked`)?.value || "";
-        else if (phan === "2") {
-            let letters = new Array('a', 'b', 'c', 'd');
-            let userArr = letters.map(l => document.querySelector(`input[name="q_${index}_${l}"]:checked`)?.value || "");
-            ans = userArr.join('-');
-        } else {
-            let txtEl = document.getElementById(`q_${index}_txt`);
-            ans = txtEl ? txtEl.value.trim() : "";
-        }
-        baiLam.push({ chon: ans });
-    });
-
-    // TÍCH HỢP ĐÁNH DẤU VI PHẠM PHẦN II (Dành cho Giáo viên)
-    if (antiCheatRuntime.reasons.some(r => r.reason && (r.reason.includes("PHẦN II") || r.reason.includes("FATAL_P2")))) {
-        baiLam.push({ phan: "SPECIAL_MARKER", type: "PART_II_VIOLATION", tag: "!!FATAL_P2!!" });
+        lastError = error?.message || data?.message || 'Không nhận được receipt từ máy chủ';
+        if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 750 + Math.floor(Math.random() * 2250)));
     }
+    isSubmitting = false;
+    const retryMsg = document.getElementById('retry-status-msg');
+    if (retryMsg) { retryMsg.style.display = ''; retryMsg.innerText = '⚠️ Bài đã chốt vẫn được lưu trên thiết bị. Hệ thống sẽ thử gửi lại khi có mạng; không tạo bài mới.'; }
+    console.error('Receive submission pending:', lastError);
+}
 
+async function requestGrading(submissionId) {
+    if (isGradingSubmission || state.isOffline) return;
+    isGradingSubmission = true;
     try {
-        // CƠ CHẾ NỘP BÀI THỬ LẠI (RETRY) TỐI ĐA 8 LẦN với exponential backoff
-        let maxRetries = 8;
-        let attempt = 0;
-        let success = false;
-        let lastError = null;
-
-        while (attempt < maxRetries && !success) {
-            const { data, error } = await _supabase.rpc('nop_bai_va_cham_diem', {
-                p_truong_id: state.truong_id, p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_ma_de: state.ma_de, p_bai_lam: baiLam
-            });
-            console.log(`[DEBUG nopbai] lần ${attempt + 1} | data: ${JSON.stringify(data)} | error: ${JSON.stringify(error)}`);
-
-            if (!error && data && data.status === 'success') {
-                success = true;
-                if (antiCheatRuntime.reasons.length > 0) {
-                    console.warn("Anti-cheat evidence trail:", antiCheatRuntime.reasons);
-                }
-
-                localStorage.removeItem(`nhap_damsan_${state.phong_id}_${state.hs_id}`);
-
-                // Đồng bộ cheatCount qua RPC (bypass RLS trên ket_qua)
-                if (cheatCount > 0) {
-                    await _supabase.rpc('rpc_cap_nhat_vi_pham', {
-                        p_phong_id: state.phong_id,
-                        p_hs_id:    state.hs_id,
-                        p_so_lan:   cheatCount
-                    });
-                }
-
-                isSubmitting = false; // [Fix A] reset trước khi chuyển màn — bài đã được server chấp nhận
-                // [Fix 3] Giải phóng channel thi, sau đó mở channel kết quả riêng (Fix 1B)
-                if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
-                kichHoatLienKetRealtimeKetQua(); // [Fix 1B] subscribe lại chỉ để nhận lệnh công bố đáp án
-                document.getElementById('finish_name').innerText = state.ho_ten;
-                showSection('result-section');
-                try { document.exitFullscreen(); } catch (e) { }
-                renderForensicPanel();
-                checkTeacherCommand(true);
-            } else {
-                attempt++;
-                lastError = error ? error.message : "Lỗi không xác định";
-                if (attempt < maxRetries) {
-                    // [Fix 2A] Flat random 2–7s — phá vỡ retry storm, tổng chờ ~10–35s (vs exponential gây burst)
-                    const delay = 2000 + Math.floor(Math.random() * 5000);
-                    console.warn(`[nopbai] lần ${attempt} thất bại. Thử lại sau ${delay}ms... (lần ${attempt + 1}/${maxRetries})`);
-                    if (btn) btn.innerText = `⏳ Đang thử lại... (${attempt + 1}/${maxRetries})`;
-                    await new Promise(res => setTimeout(res, delay));
-                }
-            }
-        }
-
-        if (!success) {
-            throw new Error(lastError);
-        }
-
-    } catch (err) {
-        alert("❌ LỖI NẶNG: Máy chủ không nhận được bài làm của bạn!\n\nLÝ DO: " + err.message + "\n\nHÀNH ĐỘNG: Đừng đóng trình duyệt, hãy nhấn nút 'NỘP LẠI BÀI THI' ngay bên dưới hoặc báo ngay cho Giám thị.");
-        if (btn) { btn.innerText = "NỘP LẠI BÀI THI"; btn.disabled = false; }
-        const retryMsg = document.getElementById('retry-status-msg');
-        if (retryMsg) { retryMsg.style.display = ''; retryMsg.innerText = '⚠️ Bài làm vẫn còn trên máy. Nhấn nút trên để thử lại. Tuyệt đối không F5 hay đóng tab!'; }
-        isSubmitting = false;
-    }
+        const { data, error } = await _supabase.rpc('rpc_grade_submission', { p_submission_id: submissionId });
+        if (error || !data || data.status !== 'graded') throw error || new Error(data?.message || 'Grading pending');
+        const snapshot = getFinalSnapshot();
+        if (snapshot) { snapshot.state = SUBMISSION_STATE.GRADED; localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot)); }
+        if (cheatCount > 0) await _supabase.rpc('rpc_cap_nhat_vi_pham', { p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_so_lan: cheatCount });
+        checkTeacherCommand(true);
+    } catch (e) {
+        console.warn('Submission received; grading remains pending:', e.message);
+    } finally { isGradingSubmission = false; }
 }
 
 async function checkTeacherCommand(isAuto = false) {
