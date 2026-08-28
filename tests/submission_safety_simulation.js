@@ -84,9 +84,39 @@ assert.strictEqual(resume({ state: 'FINAL_PENDING' }, null), 'receive');
 assert.strictEqual(resume({ state: 'SERVER_RECEIVED' }, { submission_id: 'sub-1' }), 'grade');
 assert.strictEqual(resume({ state: 'GRADED' }, { submission_id: 'sub-1' }), 'none');
 
-// Reset generation rejects an old FINAL_PENDING snapshot before a new receipt can exist.
-const oldGeneration = 1000; const resetGeneration = 2000;
-assert.notStrictEqual(oldGeneration, resetGeneration);
+// R1-R11: local deterministic archive verification. This is not browser-storage testing.
+function archiveModel(storage, snapshot, reason, failWrite = false) {
+  const key = `recovery_${snapshot.attempt_id}`;
+  const clone = JSON.parse(JSON.stringify(snapshot));
+  const matches = archive => archive && archive.attempt_id === clone.attempt_id && archive.room_opened_at === clone.room_opened_at && JSON.stringify(archive.raw_answers) === JSON.stringify(clone.raw_answers) && JSON.stringify(archive.final_snapshot) === JSON.stringify(clone);
+  if (storage.has(key)) return matches(storage.get(key));
+  if (failWrite) return false;
+  storage.set(key, { final_snapshot: clone, attempt_id: clone.attempt_id, room_opened_at: clone.room_opened_at, raw_answers: clone.raw_answers, archived_at: 'local-test', reason });
+  return matches(storage.get(key));
+}
+function recoveryModel(snapshot, receipt, response, archives = new Map(), failWrite = false) {
+  const active = { snapshot, receipt };
+  if (response.error || (response.status === 'missing' && !response.reset_confirmed)) return { active, archives, action: 'receive' };
+  if (response.status === 'missing' && response.reset_confirmed) return archiveModel(archives, snapshot, response.room_exists === false ? 'room_deleted' : 'room_attempt_changed', failWrite) ? { active: {}, archives, action: 'new_attempt' } : { active, archives, action: 'blocked' };
+  if (response.submission_id) return { active: { snapshot: { ...snapshot, state: response.status === 'graded' ? 'GRADED' : 'SERVER_RECEIVED' }, receipt: response }, archives, action: response.status === 'graded' ? 'none' : 'grade' };
+  return { active, archives, action: 'receive' };
+}
+function receiveRoomChangedModel(snapshot, receipt, draft, archives, failWrite = false) {
+  return archiveModel(archives, snapshot, 'room_attempt_changed', failWrite) ? { active: {}, archives, action: 'new_attempt' } : { active: { snapshot, receipt, draft }, archives, action: 'blocked' };
+}
+const finalEvidence = { attempt_id: 'attempt-recovery', phong_id: 'room-r', hs_id: 'hs-r', room_opened_at: 1000, state: 'FINAL_PENDING', raw_answers: [{ chon: 'A' }, { chon: 'Đ--S-' }] };
+assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: false, room_exists: true }).action, 'receive'); // R1/R7
+assert.strictEqual(recoveryModel(finalEvidence, { submission_id: 'sub-r' }, { error: true }).active.snapshot, finalEvidence); // R2
+const changed = recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: true, room_exists: true });
+assert.strictEqual(changed.action, 'new_attempt'); assert.deepStrictEqual(changed.archives.get('recovery_attempt-recovery').raw_answers, finalEvidence.raw_answers); // R3/R8
+assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: true, room_exists: false }).archives.get('recovery_attempt-recovery').reason, 'room_deleted'); // R4
+assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'graded', submission_id: 'sub-r' }).active.snapshot.state, 'GRADED'); // R6
+const receiveArchives = new Map(); const receiveChanged = receiveRoomChangedModel(finalEvidence, { submission_id: 'sub-r' }, { answers: { 0: 'A' } }, receiveArchives);
+assert.strictEqual(receiveChanged.action, 'new_attempt'); assert.deepStrictEqual(receiveChanged.archives.get('recovery_attempt-recovery').raw_answers, finalEvidence.raw_answers); // R5
+assert.strictEqual(receiveRoomChangedModel(finalEvidence, { submission_id: 'sub-r' }, { answers: {} }, new Map(), true).action, 'blocked'); // R9
+const validExisting = new Map(); assert.strictEqual(archiveModel(validExisting, finalEvidence, 'original'), true); assert.strictEqual(receiveRoomChangedModel(finalEvidence, null, {}, validExisting).action, 'new_attempt'); // R10
+const malformedExisting = new Map([['recovery_attempt-recovery', { attempt_id: 'attempt-recovery', raw_answers: [] }]]);
+assert.strictEqual(receiveRoomChangedModel(finalEvidence, null, { answers: {} }, malformedExisting).action, 'blocked'); // R11
 
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 assert(!client.includes('result-watch-'));
@@ -94,6 +124,10 @@ assert(client.includes('if (!kq) {'));
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
+assert(client.includes('archiveFinalSnapshot(snapshot, \'room_attempt_changed\')'));
+assert(client.includes('return matches(JSON.parse(localStorage.getItem(key)))'));
+assert(client.includes('if (!archived) {'));
+assert(client.includes('p_truong_id: snapshot.truong_id') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
 assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
 assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));
 const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8');
@@ -104,4 +138,5 @@ assert(migration.includes('string_to_array(v_answer') && migration.includes('for
 assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
 assert(migration.includes('for share') && migration.includes('for update'));
 assert(migration.includes('references public.phong_thi(id) on delete cascade'));
+assert(migration.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration.includes("'reset_confirmed', false"));
 console.log('PASS: deterministic P0 recovery simulation (C1-C12; not a Supabase load test)');

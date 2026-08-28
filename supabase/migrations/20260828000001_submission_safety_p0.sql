@@ -207,14 +207,28 @@ as $function$
   where phong_id = p_phong_id;
 $function$;
 
-create or replace function public.rpc_submission_receipt_status(p_attempt_id uuid)
+create or replace function public.rpc_submission_receipt_status(
+  p_attempt_id uuid,
+  p_truong_id uuid,
+  p_phong_id uuid,
+  p_room_opened_at bigint
+)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_submission public.exam_submissions%rowtype;
+declare v_submission public.exam_submissions%rowtype; v_room public.phong_thi%rowtype;
 begin
   select * into v_submission from public.exam_submissions where attempt_id = p_attempt_id;
-  if not found then return jsonb_build_object('status', 'missing'); end if;
-  return jsonb_build_object('status', v_submission.status, 'submission_id', v_submission.id,
-    'attempt_id', v_submission.attempt_id, 'received_at', v_submission.received_at);
+  if found then
+    return jsonb_build_object('status', v_submission.status, 'submission_id', v_submission.id,
+      'attempt_id', v_submission.attempt_id, 'received_at', v_submission.received_at, 'reset_confirmed', false);
+  end if;
+  select * into v_room from public.phong_thi where id = p_phong_id and truong_id = p_truong_id;
+  if not found then
+    return jsonb_build_object('status', 'missing', 'reset_confirmed', true, 'room_exists', false);
+  end if;
+  if v_room.thoi_gian_mo is distinct from p_room_opened_at then
+    return jsonb_build_object('status', 'missing', 'reset_confirmed', true, 'room_exists', true);
+  end if;
+  return jsonb_build_object('status', 'missing', 'reset_confirmed', false, 'room_exists', true);
 end;
 $function$;
 
@@ -276,14 +290,14 @@ $function$;
 revoke all on function public.rpc_receive_submission(uuid, uuid, uuid, uuid, text, jsonb, timestamptz, bigint) from public;
 revoke all on function public.rpc_grade_submission(uuid) from public;
 revoke all on function public.rpc_submission_room_counts(uuid) from public;
-revoke all on function public.rpc_submission_receipt_status(uuid) from public;
+revoke all on function public.rpc_submission_receipt_status(uuid, uuid, uuid, bigint) from public;
 revoke all on function public.rpc_reset_room_results(text, uuid, uuid) from public;
 revoke all on function public.rpc_xoa_phong_thi(text, uuid, uuid) from public;
 revoke all on function public.rpc_grade_pending_room(text, uuid, uuid) from public;
 grant execute on function public.rpc_receive_submission(uuid, uuid, uuid, uuid, text, jsonb, timestamptz, bigint) to anon, authenticated;
 grant execute on function public.rpc_grade_submission(uuid) to anon, authenticated;
 grant execute on function public.rpc_submission_room_counts(uuid) to anon, authenticated;
-grant execute on function public.rpc_submission_receipt_status(uuid) to anon, authenticated;
+grant execute on function public.rpc_submission_receipt_status(uuid, uuid, uuid, bigint) to anon, authenticated;
 grant execute on function public.rpc_reset_room_results(text, uuid, uuid) to anon, authenticated;
 grant execute on function public.rpc_xoa_phong_thi(text, uuid, uuid) to anon, authenticated;
 grant execute on function public.rpc_grade_pending_room(text, uuid, uuid) to anon, authenticated;
