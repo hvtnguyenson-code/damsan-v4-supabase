@@ -1,0 +1,35 @@
+name: Submission Safety CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'fix/submission-safety-p0-*'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript syntax
+        run: |
+          node --check hoc_sinh.js
+          node --check giaovien.js
+          node --check sw.js
+      - name: Submission safety simulation
+        run: node tests/submission_safety_simulation.js
+      - name: Whitespace errors in branch diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git diff --check "origin/${{ github.base_ref }}...HEAD"
+          else
+            git diff --check HEAD^...HEAD
+          fi

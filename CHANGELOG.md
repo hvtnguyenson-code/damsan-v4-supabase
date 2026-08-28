@@ -4,6 +4,26 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 
 ---
 
+## [20260828-submission-safety-p0] — 2026-08-28
+
+- **Root problem:** the former student RPC graded and wrote `ket_qua` in one long operation, so a timeout before grading completed had no durable raw answer receipt. The join path also deleted a local draft when `ket_qua` was absent.
+- **Receive-first pipeline:** adds `exam_submissions` and a short idempotent `rpc_receive_submission`. The browser freezes and persists a final local snapshot plus stable `attempt_id` before sending. Server receipt is persisted locally; the snapshot is retained as a safety backup.
+- **Grading compatibility:** `rpc_grade_submission` grades only after receipt and writes the derived, existing `ket_qua` record through the legacy grader. A grading error leaves raw answers and the receipt available for retry.
+- **Realtime:** after a server receipt, every student Realtime channel is closed. `result-watch-*` is removed; the result screen uses its existing manual HTTP check.
+- **Service worker:** Supabase REST/RPC/auth/Realtime HTTP requests bypass Cache Storage. Static PWA resources remain cacheable.
+- **Validation:** local deterministic simulation covers 36 receipts, duplicate retries, grading failure/retry, 144 sequential attempts, persisted final state, and no post-submit result watch. This does not execute against Supabase.
+
+### Correction: recovery gaps closed
+
+- Grading now reads the durable receipt plus stored exam and upserts `ket_qua`; it does not call the room-state-dependent legacy grader.
+- Student recovery distinguishes `FINAL_PENDING`, `SERVER_RECEIVED`, and `GRADED`; receipt recovery can run before the exam document fetch, and grading starts immediately after receipt with bounded retry.
+- Reset and room deletion remove canonical receipts as well as derived results. An explicit receipt-status lookup distinguishes a confirmed reset from a transient missing `ket_qua` response.
+- Added teacher reset RPC and pending-room grading recovery RPC. The dashboard reset button uses the reset RPC.
+- Part II grading now preserves all four answer positions, derived `ket_qua` retains `truong_id`, and room shared/update locking serializes receive against reset/delete without serializing students.
+- Added pull-request CI for syntax, deterministic recovery simulation, and branch-diff whitespace checks.
+
+---
+
 ## [20260621-fix] — 2026-06-21 — Fix tab Phòng thi bị RLS khi Mở phòng
 
 - **Triệu chứng:** Tab Phòng thi > bấm "Mở phòng (Đếm giờ)" → `❌ Lỗi: Khong tai duoc phong thi: permission denied for table phong_thi`. Tab Radar > mở đồng loạt hoạt động bình thường.
