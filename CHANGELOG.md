@@ -21,6 +21,7 @@ Nhật ký thay đổi, lỗi đã xử lý và quyết định kỹ thuật.
 - Added teacher reset RPC and pending-room grading recovery RPC. The dashboard reset button uses the reset RPC.
 - Part II grading now preserves all four answer positions, derived `ket_qua` retains `truong_id`, and room shared/update locking serializes receive against reset/delete without serializing students.
 - Added pull-request CI for syntax, deterministic recovery simulation, and branch-diff whitespace checks.
+- Receipt-status now distinguishes an ordinary missing receipt from an authoritative reset/deleted room. Reset cleanup archives immutable local final evidence instead of destroying it.
 
 ---
 

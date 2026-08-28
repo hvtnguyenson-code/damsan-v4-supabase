@@ -84,9 +84,23 @@ assert.strictEqual(resume({ state: 'FINAL_PENDING' }, null), 'receive');
 assert.strictEqual(resume({ state: 'SERVER_RECEIVED' }, { submission_id: 'sub-1' }), 'grade');
 assert.strictEqual(resume({ state: 'GRADED' }, { submission_id: 'sub-1' }), 'none');
 
-// Reset generation rejects an old FINAL_PENDING snapshot before a new receipt can exist.
-const oldGeneration = 1000; const resetGeneration = 2000;
-assert.notStrictEqual(oldGeneration, resetGeneration);
+// R1-R8: plain missing/network errors preserve active evidence; only authoritative
+// reset/deletion archives it before freeing active keys for a new attempt.
+function recoveryModel(snapshot, receipt, response) {
+  const active = { snapshot, receipt }; const archives = new Map();
+  const archive = reason => archives.set(`recovery_${snapshot.attempt_id}`, { snapshot: JSON.parse(JSON.stringify(snapshot)), raw_answers: snapshot.raw_answers, reason });
+  if (response.error || (response.status === 'missing' && !response.reset_confirmed)) return { active, archives, action: 'receive' };
+  if (response.status === 'missing' && response.reset_confirmed) { archive(response.room_exists === false ? 'room_deleted' : 'room_attempt_changed'); return { active: {}, archives, action: 'new_attempt' }; }
+  if (response.submission_id) return { active: { snapshot: { ...snapshot, state: response.status === 'graded' ? 'GRADED' : 'SERVER_RECEIVED' }, receipt: response }, archives, action: response.status === 'graded' ? 'none' : 'grade' };
+  return { active, archives, action: 'receive' };
+}
+const finalEvidence = { attempt_id: 'attempt-recovery', phong_id: 'room-r', hs_id: 'hs-r', room_opened_at: 1000, state: 'FINAL_PENDING', raw_answers: [{ chon: 'A' }, { chon: 'Đ--S-' }] };
+assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: false, room_exists: true }).action, 'receive'); // R1/R7
+assert.strictEqual(recoveryModel(finalEvidence, { submission_id: 'sub-r' }, { error: true }).active.snapshot, finalEvidence); // R2
+const changed = recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: true, room_exists: true });
+assert.strictEqual(changed.action, 'new_attempt'); assert.deepStrictEqual(changed.archives.get('recovery_attempt-recovery').raw_answers, finalEvidence.raw_answers); // R3/R8
+assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'missing', reset_confirmed: true, room_exists: false }).archives.get('recovery_attempt-recovery').reason, 'room_deleted'); // R4
+assert.strictEqual(recoveryModel(finalEvidence, null, { status: 'graded', submission_id: 'sub-r' }).active.snapshot.state, 'GRADED'); // R6
 
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 assert(!client.includes('result-watch-'));
@@ -94,6 +108,8 @@ assert(client.includes('if (!kq) {'));
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
+assert(client.includes('archiveFinalSnapshot(snapshot, \'room_attempt_changed\')'));
+assert(client.includes('p_truong_id: snapshot.truong_id') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
 assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
 assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));
 const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8');
@@ -104,4 +120,5 @@ assert(migration.includes('string_to_array(v_answer') && migration.includes('for
 assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
 assert(migration.includes('for share') && migration.includes('for update'));
 assert(migration.includes('references public.phong_thi(id) on delete cascade'));
+assert(migration.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration.includes("'reset_confirmed', false"));
 console.log('PASS: deterministic P0 recovery simulation (C1-C12; not a Supabase load test)');

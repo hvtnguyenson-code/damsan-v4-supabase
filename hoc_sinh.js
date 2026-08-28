@@ -1563,17 +1563,44 @@ function getSubmissionReceipt() {
     catch (e) { console.error('Submission receipt corrupt:', e); return null; }
 }
 
+function archiveFinalSnapshot(snapshot, reason) {
+    if (!snapshot?.attempt_id) return;
+    const key = `recovery_damsan_${snapshot.phong_id}_${snapshot.hs_id}_${snapshot.attempt_id}`;
+    if (localStorage.getItem(key)) return;
+    const evidence = JSON.parse(JSON.stringify(snapshot));
+    localStorage.setItem(key, JSON.stringify({
+        final_snapshot: evidence,
+        attempt_id: snapshot.attempt_id,
+        room_opened_at: snapshot.room_opened_at,
+        raw_answers: evidence.raw_answers,
+        archived_at: new Date().toISOString(),
+        reason
+    }));
+}
+
+function clearActiveSubmissionKeys() {
+    const keys = submissionKeys();
+    localStorage.removeItem(keys.final);
+    localStorage.removeItem(keys.receipt);
+    localStorage.removeItem(keys.draft);
+}
+
 async function reconcileSavedSubmission(snapshot) {
     try {
-        const { data, error } = await _supabase.rpc('rpc_submission_receipt_status', { p_attempt_id: snapshot.attempt_id });
+        const { data, error } = await _supabase.rpc('rpc_submission_receipt_status', {
+            p_attempt_id: snapshot.attempt_id,
+            p_truong_id: snapshot.truong_id,
+            p_phong_id: snapshot.phong_id,
+            p_room_opened_at: snapshot.room_opened_at
+        });
         if (error) return snapshot; // A network failure is never evidence of an admin reset.
-        if (data?.status === 'missing') {
-            // This is an explicit server-side receipt lookup, not an inference from ket_qua.
-            // It is the reset-aware path that permits a genuinely new room attempt.
-            const keys = submissionKeys();
-            localStorage.removeItem(keys.final); localStorage.removeItem(keys.receipt); localStorage.removeItem(keys.draft);
+        if (data?.status === 'missing' && data?.reset_confirmed === true) {
+            archiveFinalSnapshot(snapshot, data.room_exists === false ? 'room_deleted' : 'room_attempt_changed');
+            clearActiveSubmissionKeys();
             return null;
         }
+        // A plain missing receipt is not reset evidence: keep immutable final data
+        // and let the receive retry use this exact snapshot.
         if (data?.submission_id) {
             snapshot.state = data.status === 'graded' ? SUBMISSION_STATE.GRADED : SUBMISSION_STATE.SERVER_RECEIVED;
             localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot));
@@ -1680,8 +1707,8 @@ async function receiveFinalSubmission() {
             return;
         }
         if (!error && data?.code === 'room_attempt_changed') {
-            const keys = submissionKeys();
-            localStorage.removeItem(keys.final); localStorage.removeItem(keys.receipt); localStorage.removeItem(keys.draft);
+            archiveFinalSnapshot(snapshot, 'room_attempt_changed');
+            clearActiveSubmissionKeys();
             isSubmitting = false;
             alert('Lượt thi này đã được giáo viên reset. Bản chốt cũ không được gửi lại; hãy vào lượt thi mới khi phòng được mở.');
             return;
