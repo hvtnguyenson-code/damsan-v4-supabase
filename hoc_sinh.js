@@ -1714,7 +1714,6 @@ async function requestGrading(submissionId) {
         console.warn('Submission received; grading remains pending:', e.message);
     } finally { isGradingSubmission = false; }
 }
-
 async function checkTeacherCommand(isAuto = false) {
     if (state.isOffline) return alert("Không thể tải kết quả vì bạn đang mất mạng!");
     // [Fix C] Guard tránh race condition: nếu đã có lần gọi đang chạy, bỏ qua lần sau
