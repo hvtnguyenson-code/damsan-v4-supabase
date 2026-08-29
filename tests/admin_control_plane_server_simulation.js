@@ -17,7 +17,7 @@ mustMatch(/_admin_session_admin_id[\s\S]*s\.revoked_at is null/i, 'S7 validator 
 mustMatch(/_admin_session_admin_id[\s\S]*s\.expires_at > now\(\)/i, 'S8 validator expiry');
 // S9-S12: login, default-password handling, logout, and password change contracts.
 mustMatch(/rpc_login_giao_vien[\s\S]*admin_token[\s\S]*admin_expires_at/i, 'S9 admin login token contract');
-mustMatch(/v_gv\.quyen = 'Admin' and v_gv\.mat_khau <> v_default_hash/i, 'S10 default-password admin receives no token');
+mustMatch(/v_gv\.quyen = 'Admin' and v_gv\.mat_khau not in \(v_default_hash, '123456'\)/i, 'S10 default-password admin receives no token');
 mustMatch(/create or replace function public\.rpc_admin_logout/i, 'S11 admin logout');
 mustMatch(/create or replace function public\.rpc_change_giao_vien_password\s*\(\s*p_gv_id uuid, p_truong_id uuid, p_current_password text, p_new_password text/i, 'S12 teacher password change');
 // S13-S15: the global admin dispatcher has every action and does not scope targets to admin school.
@@ -40,5 +40,39 @@ mustMatch(/revoke insert, update, delete on public\.truong_hoc from anon, authen
 mustMatch(/revoke insert, update, delete on public\.mon_hoc from anon, authenticated/i, 'S24 subject writes revoked');
 // S25: this migration must not replace the P0 receive/grade path.
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_grade_submission|nop_bai_va_cham_diem)/i.test(migration), 'S25 P0 receive/grade functions untouched');
+// S26-S29: table-level reads may expose identity fields only, never passwords.
+mustMatch(/revoke select on table public\.giao_vien from anon, authenticated/i, 'S26 giao_vien SELECT revoked');
+mustMatch(/grant select \(id, truong_id, ma_gv, ho_ten, quyen, created_at, mon_id\) on table public\.giao_vien to anon, authenticated/i, 'S27 giao_vien safe columns');
+mustMatch(/revoke select on table public\.hoc_sinh from anon, authenticated/i, 'S28 hoc_sinh SELECT revoked');
+mustMatch(/grant select \(id, truong_id, ma_hs, ho_ten, lop, quyen, created_at\) on table public\.hoc_sinh to anon, authenticated/i, 'S29 hoc_sinh safe columns');
+const loginBody = migration.match(/create or replace function public\.rpc_login_giao_vien[\s\S]*?\$function\$;/i)[0];
+assert(!/'mat_khau'\s*,\s*v_gv\.mat_khau/i.test(loginBody), 'S30 login does not return password hash');
+mustMatch(/v_gv\.mat_khau in \(v_default_hash, '123456'\)/i, 'S31-S32 default hash and legacy plaintext detected');
+mustMatch(/gv\.mat_khau = '123456' and p_mat_khau = v_default_hash/i, 'S33 only default legacy login compatibility');
+// S34-S36: staff sessions are opaque, short-lived, and revocable.
+mustMatch(/create table if not exists public\.staff_sessions[\s\S]*token_hash text primary key/i, 'S34 staff_sessions');
+mustMatch(/staff_sessions[\s\S]*extensions\.gen_random_bytes\(32\)[\s\S]*extensions\.digest\(v_staff_token, 'sha256'\)[\s\S]*interval '24 hours'/i, 'S35 staff token hash and expiry');
+mustMatch(/create or replace function public\._staff_session_gv_id[\s\S]*s\.revoked_at is null[\s\S]*s\.expires_at > now\(\)/i, 'S36 staff validator revocation and expiry');
+// S37-S42: every teacher-side mutation accepts a session token and old browser entry points are revoked.
+mustMatch(/rpc_giao_vien_bank_write\(p_staff_token text, p_ma_gv text, p_truong_id uuid/i, 'S37 teacher bank requires staff token');
+mustMatch(/revoke all on function public\.rpc_giao_vien_bank_write\(text, uuid, text, jsonb\) from public, anon, authenticated/i, 'S38 old teacher bank revoked');
+mustMatch(/rpc_xoa_de_trong_phong\(p_staff_token text, p_ma_gv text, p_truong_id uuid/i, 'S39 exam deletion requires staff token');
+mustMatch(/revoke all on function public\.rpc_xoa_de_trong_phong\(text, uuid, uuid\) from public, anon, authenticated/i, 'S40 old exam deletion revoked');
+for (const name of ['rpc_luu_de_thi_len_phong', 'rpc_dieu_khien_phong_thi', 'rpc_xoa_phong_thi', 'rpc_reset_room_results', 'rpc_grade_pending_room']) {
+  mustMatch(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?p_staff_token text`, 'i'), `S41 ${name} secure signature`);
+}
+for (const signature of [
+  'rpc_dieu_khien_phong_thi\\(text, uuid, uuid, text, text, text, int, boolean\\)',
+  'rpc_xoa_phong_thi\\(text, uuid, uuid\\)',
+  'rpc_reset_room_results\\(text, uuid, uuid\\)',
+  'rpc_grade_pending_room\\(text, uuid, uuid\\)'
+]) mustMatch(new RegExp(`revoke all on function public\\.${signature} from public, anon, authenticated`, 'i'), `S42 old ${signature} revoked`);
+// S43-S47: arrays and destructive bank filtering cannot broaden unexpectedly.
+assert((migration.match(/jsonb_array_elements_text\(p_payload->'ids'\)/g) || []).length >= 4, 'S43 UUID arrays use text extraction');
+assert(!/value::text::uuid/i.test(migration), 'S44 quoted JSON UUID cast removed');
+mustMatch(/'code', 'admin_session_invalid'/i, 'S45 admin invalid-session code');
+mustMatch(/bank_delete_filter requires truong_id/i, 'S46 bank delete filter requires school');
+mustMatch(/nullif\(p_payload->>'mon_id', ''\) is not null[\s\S]*nullif\(btrim\(p_payload->>'bai_hoc'\), ''\) is not null/i, 'S47 empty optional bank filters rejected');
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_grade_submission|rpc_submission_receipt_status)/i.test(migration), 'S48 P0 receive/grade/recovery untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S25 passed');
+console.log('admin_control_plane_server_simulation: S1-S48 passed');
