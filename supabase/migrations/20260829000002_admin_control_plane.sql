@@ -19,6 +19,7 @@ begin
   from public.admin_sessions s join public.giao_vien gv on gv.id = s.admin_id
   where s.token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex')
     and s.revoked_at is null and s.expires_at > now() and gv.quyen = 'Admin'
+    and gv.mat_khau not in ('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', '123456')
   limit 1;
   return v_admin_id;
 end;
@@ -43,6 +44,7 @@ begin
   from public.staff_sessions s join public.giao_vien gv on gv.id = s.gv_id
   where s.token_hash = encode(extensions.digest(coalesce(p_token, ''), 'sha256'), 'hex')
     and s.revoked_at is null and s.expires_at > now()
+    and gv.mat_khau not in ('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', '123456')
   limit 1;
   return v_gv_id;
 end;
@@ -124,8 +126,14 @@ begin
   where id = p_gv_id and truong_id = p_truong_id
     and (mat_khau = p_current_password or (mat_khau = '123456' and p_current_password = '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92'));
   get diagnostics v_count = row_count;
-  return case when v_count = 1 then jsonb_build_object('status', 'success')
-    else jsonb_build_object('status', 'error', 'message', 'Không thể cập nhật mật khẩu.') end;
+  if v_count = 1 then
+    update public.staff_sessions set revoked_at = coalesce(revoked_at, now())
+    where gv_id = p_gv_id and revoked_at is null;
+    update public.admin_sessions set revoked_at = coalesce(revoked_at, now())
+    where admin_id = p_gv_id and revoked_at is null;
+    return jsonb_build_object('status', 'success');
+  end if;
+  return jsonb_build_object('status', 'error', 'message', 'Không thể cập nhật mật khẩu.');
 end;
 $function$;
 
@@ -133,7 +141,7 @@ create or replace function public.rpc_admin_control(
   p_admin_token text, p_action text, p_payload jsonb default '{}'::jsonb
 ) returns jsonb language plpgsql security definer set search_path = public as $function$
 declare
-  v_admin_id uuid; v_kind text; v_row jsonb; v_fields jsonb; v_count integer := 0;
+  v_admin_id uuid; v_kind text; v_row jsonb; v_fields jsonb; v_target_gv_id uuid; v_count integer := 0;
   v_default_hash constant text := '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92';
 begin
   v_admin_id := public._admin_session_admin_id(p_admin_token);
@@ -151,7 +159,10 @@ begin
         else
           insert into public.giao_vien(truong_id, ma_gv, ho_ten, mat_khau, quyen, mon_id)
           values ((v_row->>'truong_id')::uuid, trim(v_row->>'ma_gv'), v_row->>'ho_ten', v_row->>'mat_khau', coalesce(v_row->>'quyen', 'GiaoVien'), nullif(v_row->>'mon_id', '')::uuid)
-          on conflict (truong_id, ma_gv) do update set ho_ten=excluded.ho_ten, mat_khau=excluded.mat_khau, quyen=excluded.quyen, mon_id=excluded.mon_id;
+          on conflict (truong_id, ma_gv) do update set ho_ten=excluded.ho_ten, mat_khau=excluded.mat_khau, quyen=excluded.quyen, mon_id=excluded.mon_id
+          returning id into v_target_gv_id;
+          update public.staff_sessions set revoked_at=coalesce(revoked_at, now()) where gv_id=v_target_gv_id;
+          update public.admin_sessions set revoked_at=coalesce(revoked_at, now()) where admin_id=v_target_gv_id;
         end if; v_count := v_count + 1;
       end loop;
     when 'accounts_delete' then
@@ -163,7 +174,12 @@ begin
     when 'accounts_reset_password' then
       v_kind := p_payload->>'kind';
       if v_kind = 'HS' then update public.hoc_sinh set mat_khau=v_default_hash where id in (select value::uuid from jsonb_array_elements_text(p_payload->'ids') as t(value));
-      elsif v_kind = 'GV' then update public.giao_vien set mat_khau=v_default_hash where id in (select value::uuid from jsonb_array_elements_text(p_payload->'ids') as t(value));
+      elsif v_kind = 'GV' then
+        update public.giao_vien set mat_khau=v_default_hash where id in (select value::uuid from jsonb_array_elements_text(p_payload->'ids') as t(value));
+        get diagnostics v_count = row_count;
+        update public.staff_sessions set revoked_at=coalesce(revoked_at, now()) where gv_id in (select value::uuid from jsonb_array_elements_text(p_payload->'ids') as t(value));
+        update public.admin_sessions set revoked_at=coalesce(revoked_at, now()) where admin_id in (select value::uuid from jsonb_array_elements_text(p_payload->'ids') as t(value));
+        return jsonb_build_object('status', 'success', 'action', p_action, 'count', v_count);
       else raise exception 'Invalid account kind'; end if;
       get diagnostics v_count = row_count;
     when 'teacher_update_school' then
@@ -286,13 +302,16 @@ $function$;
 
 create or replace function public.rpc_xoa_phong_thi(p_staff_token text, p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text; v_room public.phong_thi%rowtype;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
   select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
   from public.giao_vien where id=v_gv_id limit 1;
-  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id)
-     or not exists (select 1 from public.phong_thi where id=p_phong_id and truong_id=p_truong_id) then
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id) then
+    return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
+  end if;
+  select * into v_room from public.phong_thi where id=p_phong_id and truong_id=p_truong_id for update;
+  if not found then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
   end if;
   delete from public.ket_qua where phong_id=p_phong_id;
@@ -377,8 +396,8 @@ begin
   end if;
   select id, mon_id into v_phong_id, v_room_mon_id from public.phong_thi
   where ma_phong=trim(p_ma_phong) and truong_id=v_effective_truong_id limit 1;
-  if found and v_room_mon_id <> v_effective_mon_id then
-    return jsonb_build_object('status','error','message','Mã phòng đã thuộc một môn học khác.');
+  if found and v_room_mon_id is distinct from v_effective_mon_id then
+    return jsonb_build_object('status','error','message','Mã phòng đã thuộc một môn học khác hoặc chưa được gán môn hợp lệ.');
   end if;
   if v_phong_id is null then
     insert into public.phong_thi(ma_phong, truong_id, mon_id, ten_dot, doi_tuong, thoi_gian, trang_thai)
@@ -400,6 +419,28 @@ begin
   end if;
   if not exists (select 1 from pg_constraint where conname='exam_submissions_hs_id_fkey') then
     alter table public.exam_submissions add constraint exam_submissions_hs_id_fkey foreign key(hs_id) references public.hoc_sinh(id) on delete cascade;
+  end if;
+end;
+$block$;
+
+do $block$
+begin
+  if exists (
+    select 1 from public.giao_vien gv
+    left join public.mon_hoc mh on mh.id=gv.mon_id
+    where gv.mon_id is not null and mh.id is null
+  ) then
+    raise exception 'Cannot add giao_vien_mon_id_fkey: orphan mon_id exists';
+  end if;
+  if not exists (
+    select 1
+    from pg_constraint c
+    join pg_attribute a on a.attrelid=c.conrelid and a.attnum=any(c.conkey)
+    where c.contype='f' and c.conrelid='public.giao_vien'::regclass
+      and c.confrelid='public.mon_hoc'::regclass and a.attname='mon_id'
+  ) then
+    alter table public.giao_vien add constraint giao_vien_mon_id_fkey
+      foreign key(mon_id) references public.mon_hoc(id) on delete set null;
   end if;
 end;
 $block$;

@@ -115,4 +115,47 @@ assert(/else[\s\S]*?p_truong_id is distinct from v_teacher_truong_id/i.test(save
 // S62: the P0 submission pipeline remains outside this migration.
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_grade_submission|rpc_submission_receipt_status|rpc_submission_room_counts)/i.test(migration), 'S62 P0 functions untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S62 passed');
+const deleteRoomBody = functionBody('rpc_xoa_phong_thi');
+const changePasswordBody = functionBody('rpc_change_giao_vien_password');
+const adminSessionBody = functionBody('_admin_session_admin_id');
+const staffSessionBody = functionBody('_staff_session_gv_id');
+
+// S63-S64: destructive room deletion must serialize with the P0 receive FOR SHARE lock.
+assert(/select \* into v_room from public\.phong_thi where id=p_phong_id and truong_id=p_truong_id for update/i.test(deleteRoomBody), 'S63 delete-room locks its target room FOR UPDATE');
+const deleteRoomLockOffset = deleteRoomBody.search(/select \* into v_room from public\.phong_thi[\s\S]*?for update/i);
+const deleteResultsOffset = deleteRoomBody.search(/delete from public\.ket_qua/i);
+const deleteSubmissionsOffset = deleteRoomBody.search(/delete from public\.exam_submissions/i);
+const deleteExamOffset = deleteRoomBody.search(/delete from public\.de_thi/i);
+const deleteRoomOffset = deleteRoomBody.search(/delete from public\.phong_thi/i);
+assert(deleteRoomLockOffset >= 0 && [deleteResultsOffset, deleteSubmissionsOffset, deleteExamOffset, deleteRoomOffset].every((offset) => offset > deleteRoomLockOffset), 'S64 delete-room locks before every destructive delete');
+
+// S65: room-subject validation must reject both NULL and an incorrect subject.
+assert(/v_room_mon_id is distinct from v_effective_mon_id/i.test(saveExamBody), 'S65 room subject comparison is NULL-safe');
+assert(!/v_room_mon_id\s*<>\s*v_effective_mon_id/i.test(saveExamBody), 'S65 room subject comparison is not NULL-unsafe');
+
+// S66-S67: tokens immediately stop working when an account has a default password.
+for (const [label, body] of [['S66 admin session', adminSessionBody], ['S67 staff session', staffSessionBody]]) {
+  assert(/gv\.mat_khau not in \('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', '123456'\)/i.test(body), `${label} rejects hash and legacy default passwords`);
+}
+
+// S68-S69: a successful password change revokes both kinds of existing session.
+assert(/if v_count = 1 then[\s\S]*?update public\.staff_sessions set revoked_at = coalesce\(revoked_at, now\(\)\)[\s\S]*?where gv_id = p_gv_id and revoked_at is null/i.test(changePasswordBody), 'S68 password change revokes staff sessions after success');
+assert(/if v_count = 1 then[\s\S]*?update public\.admin_sessions set revoked_at = coalesce\(revoked_at, now\(\)\)[\s\S]*?where admin_id = p_gv_id and revoked_at is null/i.test(changePasswordBody), 'S69 password change revokes admin sessions after success');
+
+// S70-S72: GV admin actions invalidate sessions without replacing the account-update count.
+const resetGvBranch = adminBody.match(/when 'accounts_reset_password' then[\s\S]*?when 'teacher_update_school' then/i)[0];
+assert(/elsif v_kind = 'GV' then[\s\S]*?update public\.staff_sessions[\s\S]*?update public\.admin_sessions/i.test(resetGvBranch), 'S70 GV password reset revokes staff and admin sessions');
+assert(/update public\.giao_vien set mat_khau=v_default_hash[\s\S]*?get diagnostics v_count = row_count;[\s\S]*?update public\.staff_sessions[\s\S]*?update public\.admin_sessions[\s\S]*?return jsonb_build_object\('status', 'success', 'action', p_action, 'count', v_count\)/i.test(resetGvBranch), 'S71 GV password reset preserves account update count');
+const upsertGvBranch = adminBody.match(/when 'accounts_upsert' then[\s\S]*?when 'accounts_delete' then/i)[0];
+assert(/on conflict[\s\S]*?returning id into v_target_gv_id;[\s\S]*?update public\.staff_sessions[\s\S]*?gv_id=v_target_gv_id[\s\S]*?update public\.admin_sessions[\s\S]*?admin_id=v_target_gv_id/i.test(upsertGvBranch), 'S72 GV upsert revokes stale sessions for its returned account id');
+
+// S73-S75: teacher subjects are protected by an orphan precheck and a semantic FK.
+const teacherSubjectFkBlock = migration.match(/do \$block\$[\s\S]*?Cannot add giao_vien_mon_id_fkey: orphan mon_id exists[\s\S]*?\$block\$;/i)[0];
+assert(/left join public\.mon_hoc mh on mh\.id=gv\.mon_id[\s\S]*?gv\.mon_id is not null and mh\.id is null/i.test(teacherSubjectFkBlock), 'S73 teacher-subject orphan precheck exists');
+assert(/foreign key\(mon_id\) references public\.mon_hoc\(id\)/i.test(teacherSubjectFkBlock), 'S74 giao_vien.mon_id references mon_hoc');
+assert(/on delete set null/i.test(teacherSubjectFkBlock), 'S75 teacher-subject FK clears assignments when subject is deleted');
+
+// S76: this hardening leaves every P0 receive/grade/recovery function untouched.
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S76 P0 receive/grade/recovery functions untouched');
+
+console.log('admin_control_plane_server_simulation: S1-S76 passed');
