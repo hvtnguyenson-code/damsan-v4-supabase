@@ -130,7 +130,7 @@ assert(client.includes('if (!archived) {'));
 assert(client.includes('p_truong_id: snapshot.truong_id') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
 assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
 assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));
-const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration.includes('rpc_reset_room_results') && migration.includes('rpc_grade_pending_room'));
 assert(migration.includes("'room_attempt_changed'"));

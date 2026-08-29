@@ -8,6 +8,8 @@ let realtimeChannel = null;
 let realtimeResultChannel = null;   // [Fix 1B] Channel riêng cho màn kết quả sau khi nộp bài
 let realtimeResultCleanupTimer = null; // Timer tự dọn channel sau 30 phút
 let examTimer = null;
+// Chỉ giữ proof hash của mật khẩu mặc định trong runtime cho lần đổi mật khẩu đầu tiên.
+let pendingStudentPasswordProof = null;
 
 let currentQuestionIndex = 0;
 let cheatCount = 0;
@@ -305,6 +307,7 @@ function luuTaiKhoan(maHs, hoTen, lop) {
 
 function dangXuatHS() {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
+        pendingStudentPasswordProof = null;
         sessionStorage.removeItem('damSan_HSSession');
         location.reload();
     }
@@ -782,6 +785,8 @@ function showSection(sectionId) {
 }
 
 async function login() {
+    // Một lần đăng nhập mới không được dùng proof của lần đăng nhập trước.
+    pendingStudentPasswordProof = null;
     if (state.isOffline) return alert("Hệ thống phát hiện thiết bị đang không có mạng. Vui lòng kiểm tra lại kết nối Internet!");
 
     const maTruong = document.getElementById('ma_truong').value.trim().toUpperCase();
@@ -821,6 +826,7 @@ async function login() {
 
         // KIỂM TRA MẬT KHẨU MẶC ĐỊNH
         if (hashedPass === DEFAULT_PASS_HASH) {
+            pendingStudentPasswordProof = hashedPass;
             showSection('change-password-section');
             return;
         }
@@ -854,11 +860,21 @@ async function capNhatMatKhau() {
 
     try {
         const hashedNewPass = await hashPassword(newPass);
-        const { error } = await _supabase.from('hoc_sinh')
-            .update({ mat_khau: hashedNewPass })
-            .eq('id', state.hs_id);
+        if (!pendingStudentPasswordProof) {
+            throw new Error("Phiên đổi mật khẩu đã hết hạn. Vui lòng đăng nhập lại.");
+        }
+        const { data: changeData, error } = await _supabase.rpc('rpc_change_hoc_sinh_password', {
+            p_truong_id: state.truong_id,
+            p_hs_id: state.hs_id,
+            p_current_password: pendingStudentPasswordProof,
+            p_new_password: hashedNewPass
+        });
 
         if (error) throw error;
+        if (!changeData || changeData.status !== 'success') {
+            throw new Error(changeData?.message || "Không thể cập nhật mật khẩu.");
+        }
+        pendingStudentPasswordProof = null;
 
         // Cập nhật lại mật khẩu trong danh sách tài khoản đã lưu (DẠNG HASH)
         let accounts = getSavedAccounts();
