@@ -66,4 +66,24 @@ for (const name of ['dieuKhien', 'dieuKhienFast', 'xoaPhongHoanToan', 'xoaDeTron
 const changed = childProcess.execSync('git diff --name-only 990aee4f0280e762e94ab2334940b57b1b5befe7 -- hoc_sinh.js sw.js', { encoding: 'utf8' }).trim();
 assert.strictEqual(changed, '', 'F28 P0 student files không được sửa');
 
-console.log('admin_frontend_session_simulation: F1-F28 passed');
+// F29-F43: secure room read plane, explicit school target, and UUID room identity.
+const roomList = body('rpcLayDanhSachPhongThi');
+must(/staffRpc\('rpc_lay_danh_sach_phong_thi_gv'/, 'F29 room list dùng staffRpc');
+assert(!/sb\.rpc\('rpc_lay_danh_sach_phong_thi_gv'/.test(source), 'F30 không còn direct room-list RPC');
+must(/let activeWorkspaceTruongId = null/, 'F31 có state trường đích Admin');
+const targetSchool = body('getExamTargetSchoolId');
+must(/activeWorkspaceTruongId === 'ALL'[\s\S]*Vui lòng chọn TRƯỜNG ĐÍCH cụ thể/, 'F32-F33 tạo phòng Admin yêu cầu trường đích cụ thể');
+const roomSelectors = body('taiDanhSachPhong');
+assert(!/new Set\(data\.map\(d=>d\.ma_phong/.test(roomSelectors), 'F34 không dedupe room toàn cục theo mã');
+must(/option value="\$\{room\.id\}" data-ma-phong/, 'F35 selector dùng UUID');
+must(/function getSelectedRoom[\s\S]*room\.id/, 'F36 resolve action theo UUID');
+must(/candidates\.length > 1/, 'F37 room code trùng không tự chọn record đầu tiên');
+const preview = body('xemTruocDeThi');
+assert(!/from\('phong_thi'\)/.test(preview), 'F38 preview không direct SELECT phong_thi');
+must(/from\('de_thi'\)\.select\('\*'\)\.eq\('phong_id', room\.id\)/, 'F39 preview dùng phong_id UUID');
+must(/selectedRoom\.truong_id|scopedRoom\.truong_id/, 'F40 room khác trường dùng truong_id room');
+must(/data\?\.code === 'staff_session_invalid'[\s\S]*clearGvSessionAndReturnToLogin/, 'F41 staff_session_invalid xóa local session');
+assert(!/from\('(phong_thi|de_thi)'\)\.(insert|update|delete|upsert)\(/.test(source), 'F42 không có direct room write');
+assert.strictEqual(changed, '', 'F43 hoc_sinh.js và sw.js không được sửa');
+
+console.log('admin_frontend_session_simulation: F1-F43 passed');

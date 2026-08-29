@@ -158,4 +158,19 @@ assert(/on delete set null/i.test(teacherSubjectFkBlock), 'S75 teacher-subject F
 // S76: this hardening leaves every P0 receive/grade/recovery function untouched.
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S76 P0 receive/grade/recovery functions untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S76 passed');
+// S77-S85: secure room-list overload and consistent invalid staff-session contract.
+const roomListBody = functionBody('rpc_lay_danh_sach_phong_thi_gv');
+assert(/p_staff_token text, p_ma_gv text, p_truong_id uuid, p_mon_id uuid default null, p_xem_toan_bo boolean default false/i.test(roomListBody), 'S77 secure room-list overload accepts staff token');
+assert(/v_gv_id := public\._staff_session_gv_id\(p_staff_token\);[\s\S]*?'code','staff_session_invalid'/i.test(roomListBody), 'S78 room-list invalid token code');
+assert(/v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id[\s\S]*?pt\.truong_id=v_teacher_truong_id/i.test(roomListBody), 'S79 non-Admin room list is own-school scoped');
+assert(/v_quyen = 'Admin' and p_xem_toan_bo = true/i.test(roomListBody), 'S80 Admin global list path');
+mustMatch(/to_regprocedure\('public\.rpc_lay_danh_sach_phong_thi_gv\(text,uuid,uuid,boolean\)'\)[\s\S]*?revoke all on function public\.rpc_lay_danh_sach_phong_thi_gv\(text, uuid, uuid, boolean\)/i, 'S81 legacy room-list revoke guarded');
+mustMatch(/grant execute[\s\S]*?rpc_lay_danh_sach_phong_thi_gv\(text, text, uuid, uuid, boolean\) to anon, authenticated/i, 'S82 secure room-list grant');
+for (const name of ['rpc_giao_vien_bank_write', 'rpc_xoa_de_trong_phong', 'rpc_dieu_khien_phong_thi', 'rpc_xoa_phong_thi', 'rpc_reset_room_results', 'rpc_grade_pending_room', 'rpc_luu_de_thi_len_phong', 'rpc_lay_danh_sach_phong_thi_gv']) {
+  const secureBody = functionBody(name);
+  assert(/v_gv_id := public\._staff_session_gv_id\(p_staff_token\);[\s\S]*?if v_gv_id is null then[\s\S]*?'code','staff_session_invalid'/i.test(secureBody), `S83 ${name} invalid session contract`);
+}
+mustMatch(/return jsonb_build_object\('status','error','message','Không xác thực được giáo viên hoặc phòng thi\.'\)/i, 'S84 room business mismatch remains distinct from invalid session');
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S85 P0 paths untouched');
+
+console.log('admin_control_plane_server_simulation: S1-S85 passed');
