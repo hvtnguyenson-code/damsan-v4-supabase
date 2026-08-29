@@ -172,5 +172,16 @@ for (const name of ['rpc_giao_vien_bank_write', 'rpc_xoa_de_trong_phong', 'rpc_d
 }
 mustMatch(/return jsonb_build_object\('status','error','message','Không xác thực được giáo viên hoặc phòng thi\.'\)/i, 'S84 room business mismatch remains distinct from invalid session');
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S85 P0 paths untouched');
+mustMatch(/when 'accounts_list' then/i, 'S86 accounts_list exists');
+mustMatch(/v_admin_id := public\._admin_session_admin_id\(p_admin_token\)/i, 'S87 accounts_list requires Admin token');
+const listBranch = adminBody.match(/when 'accounts_list' then[\s\S]*?when 'accounts_delete' then/i)[0];
+assert(!/jsonb_build_object\([^)]*'mat_khau'/i.test(listBranch), 'S88-S89 accounts_list excludes password hashes');
+mustMatch(/'must_change_password',hs\.mat_khau in \(v_default_hash,'123456'\)/i, 'S90 HS default-password status server-side');
+mustMatch(/nullif\(p_payload->>'truong_id',''\) is null/i, 'S91 global null school list');
+mustMatch(/v_kind is null or v_kind not in \('HS', 'GV'\)/i, 'S92 missing kind rejected');
+mustMatch(/update public\.staff_sessions[\s\S]*v_changed_gv_ids/i, 'S93 normalize revokes staff sessions');
+mustMatch(/update public\.admin_sessions[\s\S]*v_changed_gv_ids/i, 'S94 normalize revokes admin sessions');
+mustMatch(/get diagnostics v_count=row_count;[\s\S]*return jsonb_build_object\('status','success','action',p_action,'count',v_count\)/i, 'S95 normalize returns account count');
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S96 P0 paths untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S85 passed');
+console.log('admin_control_plane_server_simulation: S1-S96 passed');

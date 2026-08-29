@@ -85,5 +85,18 @@ must(/selectedRoom\.truong_id|scopedRoom\.truong_id/, 'F40 room khác trường 
 must(/data\?\.code === 'staff_session_invalid'[\s\S]*clearGvSessionAndReturnToLogin/, 'F41 staff_session_invalid xóa local session');
 assert(!/from\('(phong_thi|de_thi)'\)\.(insert|update|delete|upsert)\(/.test(source), 'F42 không có direct room write');
 assert.strictEqual(changed, '', 'F43 hoc_sinh.js và sw.js không được sửa');
+must(/adminRpc\('accounts_list', \{ kind: 'HS'/, 'F44 Admin HS list uses accounts_list');
+must(/adminRpc\('accounts_list', \{ kind: 'GV'/, 'F45 Admin GV list uses accounts_list');
+assert(!/mat_khau/.test(body('fetchStudents')) && !/mat_khau/.test(body('fetchTeachers')), 'F46-F47 account lists do not read passwords');
+assert(!/from\('(hoc_sinh|giao_vien)'\)\.select\('\*'\)/.test(body('fetchStudents')) && !/from\('(hoc_sinh|giao_vien)'\)\.select\('\*'\)/.test(body('fetchTeachers')), 'F48 account safe selects');
+must(/hoc_sinh'\)\.select\('id, truong_id, ma_hs, ho_ten, lop, quyen'\)\.eq\('truong_id', currentRoom\.truong_id\)/, 'F49-F50 dashboard school-scoped safe read');
+must(/getActiveTargetSchoolId\(\)/, 'F51 class metadata target school');
+must(/changeWorkspaceSchool[\s\S]*taiDanhSachPhong\(\)[\s\S]*fetchRadar\(\)/, 'F52 school change refreshes rooms');
+must(/adminRpc\('accounts_upsert'/, 'F53 import control plane');
+must(/Dòng dữ liệu chưa có mã trường và chưa chọn trường đích/, 'F54 import target guard');
+for (const [name, action] of [['resetSelectedPass','accounts_reset_password'],['resetPass','accounts_reset_password'],['deleteSelectedAccounts','accounts_delete'],['capNhatTruongGiaoVien','teacher_update_school'],['capNhatMonGiaoVien','teacher_update_subject'],['migrateLegacyPasswords','normalize_legacy_passwords'],['themTruongMoi','school_create'],['xoaTruong','school_delete'],['themMonMoi','subject_create'],['xoaMon','subject_delete']]) assert(body(name).includes(action), `B1 ${name}`);
+assert(!/rpc_admin_reset_pass|rpc_admin_xoa_tk/.test(source), 'F55-F67 obsolete account RPCs removed');
+assert(!/from\('(hoc_sinh|giao_vien|truong_hoc|mon_hoc)'\)\.(insert|update|delete|upsert)/.test(source), 'F68 protected direct writes removed');
+assert.strictEqual(changed, '', 'F70 P0 files untouched');
 
-console.log('admin_frontend_session_simulation: F1-F43 passed');
+console.log('admin_frontend_session_simulation: F1-F70 passed');

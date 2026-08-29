@@ -141,7 +141,7 @@ create or replace function public.rpc_admin_control(
   p_admin_token text, p_action text, p_payload jsonb default '{}'::jsonb
 ) returns jsonb language plpgsql security definer set search_path = public as $function$
 declare
-  v_admin_id uuid; v_kind text; v_row jsonb; v_fields jsonb; v_target_gv_id uuid; v_count integer := 0;
+  v_admin_id uuid; v_kind text; v_row jsonb; v_fields jsonb; v_target_gv_id uuid; v_changed_gv_ids uuid[]; v_count integer := 0;
   v_default_hash constant text := '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92';
 begin
   v_admin_id := public._admin_session_admin_id(p_admin_token);
@@ -150,7 +150,7 @@ begin
   case p_action
     when 'accounts_upsert' then
       v_kind := p_payload->>'kind';
-      if v_kind not in ('HS', 'GV') or jsonb_typeof(p_payload->'rows') <> 'array' then raise exception 'Invalid account payload'; end if;
+      if v_kind is null or v_kind not in ('HS', 'GV') or jsonb_typeof(p_payload->'rows') <> 'array' then raise exception 'Invalid account payload'; end if;
       for v_row in select value from jsonb_array_elements(p_payload->'rows') loop
         if v_kind = 'HS' then
           insert into public.hoc_sinh(truong_id, ma_hs, ho_ten, lop, mat_khau, quyen)
@@ -165,6 +165,13 @@ begin
           update public.admin_sessions set revoked_at=coalesce(revoked_at, now()) where admin_id=v_target_gv_id;
         end if; v_count := v_count + 1;
       end loop;
+    when 'accounts_list' then
+      v_kind := p_payload->>'kind';
+      if v_kind is null or v_kind not in ('HS','GV') then raise exception 'Invalid account kind'; end if;
+      if v_kind = 'HS' then
+        return jsonb_build_object('status','success','action',p_action,'rows',coalesce((select jsonb_agg(jsonb_build_object('id',hs.id,'truong_id',hs.truong_id,'ma_hs',hs.ma_hs,'ho_ten',hs.ho_ten,'lop',hs.lop,'quyen',hs.quyen,'ten_truong',th.ten_truong,'must_change_password',hs.mat_khau in (v_default_hash,'123456')) order by hs.ma_hs) from public.hoc_sinh hs left join public.truong_hoc th on th.id=hs.truong_id where nullif(p_payload->>'truong_id','') is null or hs.truong_id=(p_payload->>'truong_id')::uuid),'[]'::jsonb));
+      end if;
+      return jsonb_build_object('status','success','action',p_action,'rows',coalesce((select jsonb_agg(jsonb_build_object('id',gv.id,'truong_id',gv.truong_id,'ma_gv',gv.ma_gv,'ho_ten',gv.ho_ten,'quyen',gv.quyen,'mon_id',gv.mon_id,'ten_truong',th.ten_truong,'must_change_password',gv.mat_khau in (v_default_hash,'123456')) order by gv.ma_gv) from public.giao_vien gv left join public.truong_hoc th on th.id=gv.truong_id where nullif(p_payload->>'truong_id','') is null or gv.truong_id=(p_payload->>'truong_id')::uuid),'[]'::jsonb));
     when 'accounts_delete' then
       v_kind := p_payload->>'kind';
       if v_kind = 'HS' then delete from public.hoc_sinh where id in (select value::uuid from jsonb_array_elements_text(p_payload->'ids') as t(value));
@@ -189,7 +196,12 @@ begin
     when 'normalize_legacy_passwords' then
       v_kind := p_payload->>'kind';
       if v_kind = 'HS' then update public.hoc_sinh set mat_khau=encode(extensions.digest(mat_khau, 'sha256'), 'hex') where mat_khau !~ '^[0-9a-fA-F]{64}$' and ((p_payload->>'truong_id') is null or truong_id=(p_payload->>'truong_id')::uuid);
-      elsif v_kind = 'GV' then update public.giao_vien set mat_khau=encode(extensions.digest(mat_khau, 'sha256'), 'hex') where mat_khau !~ '^[0-9a-fA-F]{64}$' and ((p_payload->>'truong_id') is null or truong_id=(p_payload->>'truong_id')::uuid);
+      elsif v_kind = 'GV' then
+        select array_agg(id) into v_changed_gv_ids from public.giao_vien where mat_khau !~ '^[0-9a-fA-F]{64}$' and (nullif(p_payload->>'truong_id','') is null or truong_id=(p_payload->>'truong_id')::uuid);
+        update public.giao_vien set mat_khau=encode(extensions.digest(mat_khau, 'sha256'), 'hex') where id=any(coalesce(v_changed_gv_ids,'{}'::uuid[])); get diagnostics v_count=row_count;
+        update public.staff_sessions set revoked_at=coalesce(revoked_at,now()) where gv_id=any(coalesce(v_changed_gv_ids,'{}'::uuid[]));
+        update public.admin_sessions set revoked_at=coalesce(revoked_at,now()) where admin_id=any(coalesce(v_changed_gv_ids,'{}'::uuid[]));
+        return jsonb_build_object('status','success','action',p_action,'count',v_count);
       else raise exception 'Invalid account kind'; end if;
       get diagnostics v_count = row_count;
     when 'bank_insert' then

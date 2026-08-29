@@ -1706,6 +1706,7 @@ function changeWorkspaceSchool(truongId) {
     localStorage.setItem('damSan_WorkspaceSchool', truongId);
     danhSachDeThi = new Array(); danhSachThuCong = new Array();
     if(document.getElementById('dashBody')) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu...</td></tr>';
+    loadMetaData();
     taiDanhSachPhong();
     fetchRadar();
 }
@@ -2107,8 +2108,10 @@ async function saveEditedQuestion() {
 /* =======================================================
    ĐIỀU HÀNH & QUẢN LÝ PHÒNG THI
 ======================================================= */
-async function loadMetaData() { 
-    let {data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', gvData.truong_id);
+async function loadMetaData() {
+    const targetSchoolId = getActiveTargetSchoolId();
+    let data = null;
+    if (targetSchoolId) ({data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', targetSchoolId));
     let sel = document.getElementById('ctrlDoiTuong'); let html = '<option value="TatCa">🌎 Tất cả (Mặc định)</option>'; 
     if(data) {
         let lops = Array.from(new Set(data.map(d=>d.lop))).filter(Boolean).sort();
@@ -2534,6 +2537,7 @@ async function taiDanhSachPhong() {
             selectBoxTab2.onchange = function() {
                 let r = getSelectedRoom(this);
                 if(r) {
+                    loadMetaData();
                     document.getElementById('ctrlTenDot').value = r.TenDotKiemTra || "";
                     document.getElementById('ctrlThoiGian').value = r.ThoiGian || 45;
                     setTimeout(() => {
@@ -2567,8 +2571,7 @@ async function fetchDashboard(isAuto = false) {
         pArr.push(sb.from('ket_qua').select('*, hoc_sinh(ma_hs, ho_ten, lop)').eq('phong_id', currentRoom.id).neq('chi_tiet', dummyCacheBuster));
         
         if(allStudents.length === 0 || !isAuto) {
-             let qHS = sb.from('hoc_sinh').select('*');
-             if (gvData.quyen !== 'Admin') qHS = qHS.eq('truong_id', gvData.truong_id);
+             let qHS = sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', currentRoom.truong_id);
              pArr.push(qHS);
         }
         
@@ -2582,7 +2585,7 @@ async function fetchDashboard(isAuto = false) {
         if (results.length > 1) {
             let resHS = results[1];
             if (resHS.error) throw resHS.error;
-            allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', Quyen: d.quyen, id: d.id }));
+            allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, Quyen: d.quyen, id: d.id }));
         }
 
         duLieuBangDiem = (resKQ.data || new Array()).map(r => ({ 
@@ -2636,6 +2639,11 @@ async function xoaDiemPhong() {
     
     btn.innerText = oldText; btn.disabled = false;
     fetchDashboard();
+}
+
+function getActiveTargetSchoolId() {
+    if (gvData.quyen !== 'Admin') return gvData.truong_id;
+    return getSelectedRoom('ctrlMaPhong')?.truong_id || (activeWorkspaceTruongId !== 'ALL' ? activeWorkspaceTruongId : null);
 }
 
 async function khoiPhucChamDiemPhong() {
@@ -2873,7 +2881,8 @@ async function docFileExcelVaNap(loai) {
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
                     // Ưu tiên dùng truong_id từ file Excel, nếu không có thì dùng của người nạp
-                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : gvData.truong_id;
+                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
 
                     if (ma_hs && ho_ten) {
                         rowsToInsert.push({ ma_hs: ma_hs, ho_ten: ho_ten, lop: lop, mat_khau: defaultPass, truong_id: t_id });
@@ -2884,7 +2893,8 @@ async function docFileExcelVaNap(loai) {
                     let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
-                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : gvData.truong_id;
+                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
                     
                     if (ma_gv && ho_ten) {
                         rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: t_id });
@@ -2895,11 +2905,8 @@ async function docFileExcelVaNap(loai) {
 
         if (rowsToInsert.length === 0) throw new Error("Không tìm thấy dữ liệu hợp lệ!");
 
-        let tableName = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-        // Nâng cấp: Dùng upsert thay cho insert để ghi đè nếu trùng mã
-let conflictCols = loai === 'HS' ? 'truong_id, ma_hs' : 'truong_id, ma_gv';
-let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conflictCols });
-        if (error) throw error;
+        if (gvData.quyen !== 'Admin') throw new Error('Chỉ Admin được phép nạp tài khoản.');
+        await adminRpc('accounts_upsert', { kind: loai, rows: rowsToInsert });
 
         // Báo cáo đối chiếu số lượng quét được với số STT trong danh sách
         alert(`✅ Nạp thành công: ${rowsToInsert.length} tài khoản.\n📊 Kiểm tra chéo: Số thứ tự (STT) lớn nhất ghi nhận trong file Excel là ${maxStt}.`);
@@ -2925,18 +2932,19 @@ async function fetchStudents(forceReload = false) {
         if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); return;
     }
     
-    let query = sb.from('hoc_sinh').select('*, truong_hoc(ten_truong)').order('ma_hs', { ascending: true });
-    // Chỉ lọc theo trường nếu không phải Admin
-    if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
-    
-    let {data} = await query;
+    let data;
+    if (gvData.quyen === 'Admin') data = (await adminRpc('accounts_list', { kind: 'HS', truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId })).rows;
+    else {
+        const response = await sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', gvData.truong_id).order('ma_hs', { ascending: true });
+        data = response.data;
+    }
     if(data) {
         allStudents = data.map(d => ({ 
             MaHS: d.ma_hs, 
             HoTen: d.ho_ten, 
             Lop: d.lop, 
-            TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
-            TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
+            TenTruong: d.ten_truong || 'Hệ thống',
+            TrangThai: d.must_change_password ? 'MacDinh' : 'DaDoi',
             Quyen: d.quyen, 
             id: d.id 
         }));
@@ -2990,12 +2998,13 @@ async function fetchTeachers(forceReload = false) {
         g_sysMonList = resArr[0].data || new Array();
         if (resArr.length > 1) g_sysTruongList = resArr[1].data || new Array();
 
-        let query = sb.from('giao_vien').select('*, truong_hoc(ten_truong)').order('ma_gv', {ascending: true});
-        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
-        
-        let {data, error} = await query;
-        
-        if (error) throw error;
+        let data;
+        if (gvData.quyen === 'Admin') data = (await adminRpc('accounts_list', { kind: 'GV', truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId })).rows;
+        else {
+            const response = await sb.from('giao_vien').select('id, truong_id, ma_gv, ho_ten, quyen, mon_id').eq('truong_id', gvData.truong_id).order('ma_gv', {ascending: true});
+            if (response.error) throw response.error;
+            data = response.data;
+        }
 
         if(data) {
             allTeachers = data.map(d => {
@@ -3006,8 +3015,8 @@ async function fetchTeachers(forceReload = false) {
                     MonId: d.mon_id,
                     TruongId: d.truong_id,
                     TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
-                    TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
-                    TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
+                    TenTruong: d.ten_truong || 'Hệ thống',
+                    TrangThai: d.must_change_password ? 'MacDinh' : 'DaDoi',
                     Quyen: d.quyen, 
                     id: d.id 
                 };
@@ -3075,21 +3084,19 @@ function renderTeacherTable() {
 
 async function capNhatTruongGiaoVien(gvId, truongId) {
     if(!confirm("Xác nhận chuyển giáo viên này sang trường mới?")) return fetchTeachers();
-    let {error} = await sb.from('giao_vien').update({truong_id: truongId}).eq('id', gvId);
-    if(error) {
-        alert("❌ Lỗi cập nhật trường học: " + error.message);
-        fetchTeachers(); 
-    } else {
+    try { await adminRpc('teacher_update_school', { id: gvId, truong_id: truongId });
         alert("✅ Đã chuyển trường thành công!");
+        fetchTeachers();
+    } catch(error) {
+        alert("❌ Lỗi cập nhật trường học: " + error.message);
         fetchTeachers();
     }
 }
 
 async function capNhatMonGiaoVien(gvId, monId) {
     let valToUpdate = monId ? monId : null;
-    let {error} = await sb.from('giao_vien').update({mon_id: valToUpdate}).eq('id', gvId);
-    
-    if(error) {
+    try { await adminRpc('teacher_update_subject', { id: gvId, mon_id: valToUpdate });
+    } catch(error) {
         alert("❌ Lỗi cập nhật phân công bộ môn trên máy chủ: " + error.message);
         fetchTeachers(); 
     } 
@@ -3106,30 +3113,19 @@ async function resetSelectedPass(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`Khôi phục mật khẩu mặc định cho ${checkedBoxes.length} tài khoản đã chọn?`)) return;
 
-    let pass = prompt("Hành động nhạy cảm! Vui lòng nhập mật khẩu Admin của bạn để xác nhận:");
-    if(!pass) return;
-
-    let hashedPass = await hashPassword(pass);
     let idsToUpdate = Array.from(checkedBoxes).map(cb => cb.value);
     
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xử lý..."; btn.disabled = true;
 
-    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: idsToUpdate,
-        p_default_hash: DEFAULT_PASS_HASH
-    });
+    let data = await adminRpc('accounts_reset_password', { kind: loai, ids: idsToUpdate });
     
     btn.innerText = oldText; btn.disabled = false;
     
-    if(error) return alert("❌ Lỗi máy chủ: " + error.message);
     if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã khôi phục mật khẩu thành công!`);
+    if (loai === 'GV' && idsToUpdate.includes(gvData.id)) return clearGvSessionAndReturnToLogin('Tài khoản quản trị hiện tại đã được đưa về mật khẩu mặc định. Vui lòng đăng nhập lại.');
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
@@ -3139,29 +3135,19 @@ async function deleteSelectedAccounts(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`XÓA VĨNH VIỄN ${checkedBoxes.length} tài khoản đã chọn khỏi hệ thống?`)) return;
 
-    let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
-    if(!pass) return;
-
-    let hashedPass = await hashPassword(pass);
     let idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
     
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xóa..."; btn.disabled = true;
 
-    let {data, error} = await sb.rpc('rpc_admin_xoa_tk', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: idsToDelete
-    });
+    let data = await adminRpc('accounts_delete', { kind: loai, ids: idsToDelete });
     
     btn.innerText = oldText; btn.disabled = false;
     
-    if(error) return alert("❌ Lỗi máy chủ: " + error.message);
     if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã xóa tài khoản thành công!`);
+    if (loai === 'GV' && idsToDelete.includes(gvData.id)) return clearGvSessionAndReturnToLogin('Tài khoản quản trị hiện tại đã bị xóa. Vui lòng đăng nhập lại.');
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
@@ -3276,7 +3262,7 @@ async function themTruongMoi() {
     if(!ma || !ten) return alert("Vui lòng nhập đủ Mã và Tên trường!");
     let btn = document.getElementById('btnThemTruong');
     btn.innerText = "..."; btn.disabled = true;
-    let { error } = await sb.from('truong_hoc').insert([{ ma_truong: ma, ten_truong: ten }]);
+    let error = null; try { await adminRpc('school_create', { ma_truong: ma, ten_truong: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
     else { document.getElementById('newMaTruong').value = ''; document.getElementById('newTenTruong').value = ''; loadSysData(); }
@@ -3284,7 +3270,7 @@ async function themTruongMoi() {
 
 async function xoaTruong(id) {
     if(!confirm("Xóa trường này?")) return;
-    let { error } = await sb.from('truong_hoc').delete().eq('id', id);
+    let error = null; try { await adminRpc('school_delete', { id }); } catch (e) { error = e; }
     if(error) alert("Lỗi: " + error.message); else loadSysData();
 }
 
@@ -3293,7 +3279,7 @@ async function themMonMoi() {
     if(!ten) return alert("Vui lòng nhập tên môn!");
     let btn = document.getElementById('btnThemMon');
     btn.innerText = "..."; btn.disabled = true;
-    let { error } = await sb.from('mon_hoc').insert([{ ten_mon: ten }]);
+    let error = null; try { await adminRpc('subject_create', { ten_mon: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
     else { document.getElementById('newTenMon').value = ''; loadSysData(); }
@@ -3301,62 +3287,26 @@ async function themMonMoi() {
 
 async function xoaMon(id) {
     if(!confirm("Xóa môn này?")) return;
-    let { error } = await sb.from('mon_hoc').delete().eq('id', id);
+    let error = null; try { await adminRpc('subject_delete', { id }); } catch (e) { error = e; }
     if(error) alert("Lỗi: " + error.message); else loadSysData();
 }
 
-async function resetPass(ma, uid, loai) { 
-    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
-    let pass = prompt("Hanh dong nhay cam! Vui long nhap mat khau Admin cua ban de xac nhan:");
-    if(!pass) return;
-    let hashedPass = await hashPassword(pass);
-    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: [uid],
-        p_default_hash: DEFAULT_PASS_HASH
-    });
-    if(error) return alert("Loi may chu: " + error.message);
+async function resetPass(ma, uid, loai) {
+    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return;
+    let data = await adminRpc('accounts_reset_password', { kind: loai, ids: [uid] });
     if(data && data.status === 'error') return alert(data.message);
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
 
 async function migrateLegacyPasswords(loai, btnElement) {
     if (gvData.quyen !== 'Admin') return alert("Chỉ Admin mới có quyền thực hiện chuẩn hóa hàng loạt.");
-    if (!confirm(`Chuẩn hóa mật khẩu legacy cho toàn bộ tài khoản ${loai} trong trường hiện tại?\n\nHệ thống sẽ băm SHA-256 các mật khẩu còn dạng plain text.`)) return;
-
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    const codeField = loai === 'HS' ? 'ma_hs' : 'ma_gv';
+    if (!confirm(`Chuẩn hóa mật khẩu legacy cho tài khoản ${loai} trong phạm vi trường đang chọn?`)) return;
     const oldText = btnElement ? btnElement.innerText : "";
     if (btnElement) { btnElement.innerText = "⏳ Đang chuẩn hóa..."; btnElement.disabled = true; }
 
     try {
-        const { data, error } = await sb.from(table).select(`id, ${codeField}, mat_khau`).eq('truong_id', gvData.truong_id);
-        if (error) throw error;
-
-        const all = data || new Array();
-        const legacy = all.filter((x) => isLegacyPlainPassword(x.mat_khau));
-        if (legacy.length === 0) {
-            alert(`✅ Không phát hiện tài khoản ${loai} nào còn mật khẩu plain text.`);
-            return;
-        }
-
-        let success = 0;
-        let failed = new Array();
-        for (const acc of legacy) {
-            const hashed = await hashPassword(acc.mat_khau);
-            const { error: upErr } = await sb.from(table).update({ mat_khau: hashed }).eq('id', acc.id);
-            if (upErr) failed.push(acc[codeField] || acc.id);
-            else success++;
-        }
-
-        let msg = `✅ Đã chuẩn hóa ${success}/${legacy.length} tài khoản ${loai}.`;
-        if (failed.length > 0) {
-            msg += `\n⚠️ Thất bại: ${failed.length} tài khoản (${failed.slice(0, 10).join(", ")}${failed.length > 10 ? ", ..." : ""}).`;
-        }
-        alert(msg);
+        const data = await adminRpc('normalize_legacy_passwords', { kind: loai, truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId });
+        alert(`✅ Đã chuẩn hóa ${data.count || 0} tài khoản ${loai}.`);
         if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
     } catch (e) {
         alert("❌ Lỗi khi chuẩn hóa mật khẩu legacy: " + e.message);
