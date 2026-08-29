@@ -438,7 +438,7 @@ function dinhDangThoiGianVN(ts) {
         const parts = formatter.formatToParts(d);
         const p = {};
         parts.forEach(({ type, value }) => { p[type] = value; });
-        return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second} (Giờ VN)`;
+        return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second}`;
     } catch (e) { return String(ts); }
 }
 function dinhDangThoiDiem(ts) {
