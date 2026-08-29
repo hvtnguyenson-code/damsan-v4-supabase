@@ -233,7 +233,12 @@ begin
       delete from public.ngan_hang where truong_id=(p_payload->>'truong_id')::uuid
         and (nullif(p_payload->>'mon_id', '') is null or mon_id=(p_payload->>'mon_id')::uuid) and (nullif(btrim(p_payload->>'bai_hoc'), '') is null or bai_hoc=p_payload->>'bai_hoc')
         and (nullif(btrim(p_payload->>'phan'), '') is null or phan=p_payload->>'phan') and (nullif(btrim(p_payload->>'muc_do'), '') is null or muc_do=p_payload->>'muc_do'); get diagnostics v_count = row_count;
-    when 'bank_delete_all' then delete from public.ngan_hang where truong_id=(p_payload->>'truong_id')::uuid; get diagnostics v_count = row_count;
+    when 'bank_delete_all' then
+      if not (p_payload ? 'truong_id') or nullif(p_payload->>'truong_id', '') is null then
+        raise exception 'bank_delete_all requires truong_id';
+      end if;
+      delete from public.ngan_hang where truong_id=(p_payload->>'truong_id')::uuid;
+      get diagnostics v_count = row_count;
     when 'exam_delete_only' then delete from public.de_thi where phong_id=(p_payload->>'phong_id')::uuid; get diagnostics v_count = row_count;
     when 'school_create' then insert into public.truong_hoc(ma_truong,ten_truong) values (upper(trim(p_payload->>'ma_truong')),trim(p_payload->>'ten_truong')); get diagnostics v_count = row_count;
     when 'school_delete' then delete from public.truong_hoc where id=(p_payload->>'id')::uuid; get diagnostics v_count = row_count;
@@ -275,6 +280,73 @@ begin
     else raise exception 'Unsupported teacher bank action';
   end case;
   return jsonb_build_object('status','success','action',p_action,'count',v_count);
+end;
+$function$;
+
+create or replace function public.rpc_giao_vien_bank_read(
+  p_staff_token text,
+  p_ma_gv text,
+  p_truong_id uuid,
+  p_mon_id uuid
+)
+returns jsonb language plpgsql security definer set search_path = public as $function$
+declare
+  v_gv_id uuid;
+  v_teacher_ma_gv text;
+  v_teacher_truong_id uuid;
+  v_teacher_mon_id uuid;
+  v_quyen text;
+  v_effective_truong_id uuid;
+  v_effective_mon_id uuid;
+  v_rows jsonb;
+begin
+  v_gv_id := public._staff_session_gv_id(p_staff_token);
+  if v_gv_id is null then
+    return jsonb_build_object('status','error','code','staff_session_invalid','message','Phiên làm việc không hợp lệ hoặc đã hết hạn.');
+  end if;
+  select ma_gv, truong_id, mon_id, quyen
+  into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien
+  where id = v_gv_id
+  limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) then
+    return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc môn học.');
+  end if;
+  if v_quyen = 'Admin' then
+    if p_truong_id is null or p_mon_id is null then
+      return jsonb_build_object('status','error','message','Admin phải chọn trường và môn học đích.');
+    end if;
+    v_effective_truong_id := p_truong_id;
+    v_effective_mon_id := p_mon_id;
+  else
+    if p_truong_id is distinct from v_teacher_truong_id or v_teacher_mon_id is null
+       or p_mon_id is distinct from v_teacher_mon_id then
+      return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc môn học.');
+    end if;
+    v_effective_truong_id := v_teacher_truong_id;
+    v_effective_mon_id := v_teacher_mon_id;
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', nh.id,
+    'truong_id', nh.truong_id,
+    'mon_id', nh.mon_id,
+    'ma_cau_hoi', nh.ma_cau_hoi,
+    'bai_hoc', nh.bai_hoc,
+    'phan', nh.phan,
+    'muc_do', nh.muc_do,
+    'noi_dung', nh.noi_dung,
+    'a', nh.a,
+    'b', nh.b,
+    'c', nh.c,
+    'd', nh.d,
+    'dap_an_dung', nh.dap_an_dung,
+    'loi_giai', nh.loi_giai
+  ) order by nh.created_at asc, nh.id asc), '[]'::jsonb)
+  into v_rows
+  from public.ngan_hang nh
+  where nh.truong_id = v_effective_truong_id
+    and nh.mon_id = v_effective_mon_id;
+  return jsonb_build_object('status','success','rows',v_rows);
 end;
 $function$;
 
@@ -470,6 +542,8 @@ $block$;
 
 revoke insert, update, delete on public.truong_hoc from anon, authenticated;
 revoke insert, update, delete on public.mon_hoc from anon, authenticated;
+revoke insert, update, delete, truncate on table public.hoc_sinh, public.giao_vien, public.truong_hoc, public.mon_hoc, public.ngan_hang, public.phong_thi, public.de_thi from anon, authenticated;
+revoke select on table public.ngan_hang from anon, authenticated;
 revoke update on public.phong_thi from anon, authenticated;
 drop policy if exists room_update_minimal on public.phong_thi;
 revoke select on table public.giao_vien from anon, authenticated;
@@ -509,6 +583,7 @@ revoke all on function public.rpc_admin_logout(text) from public;
 revoke all on function public.rpc_staff_logout(text) from public;
 revoke all on function public.rpc_change_giao_vien_password(uuid, uuid, text, text) from public;
 revoke all on function public.rpc_admin_control(text, text, jsonb) from public;
+revoke all on function public.rpc_giao_vien_bank_read(text, text, uuid, uuid) from public;
 revoke all on function public.rpc_dieu_khien_phong_thi(text, uuid, uuid, text, text, text, int, boolean) from public, anon, authenticated;
 revoke all on function public.rpc_xoa_phong_thi(text, uuid, uuid) from public, anon, authenticated;
 revoke all on function public.rpc_reset_room_results(text, uuid, uuid) from public, anon, authenticated;
@@ -527,6 +602,15 @@ begin
   if to_regprocedure('public.rpc_luu_de_thi_len_phong(text,uuid,uuid,text,jsonb)') is not null then
     execute 'revoke all on function public.rpc_luu_de_thi_len_phong(text, uuid, uuid, text, jsonb) from public, anon, authenticated';
   end if;
+  if to_regprocedure('public.rpc_admin_reset_pass(text,text,uuid,text,uuid[],text)') is not null then
+    execute 'revoke all on function public.rpc_admin_reset_pass(text, text, uuid, text, uuid[], text) from public, anon, authenticated';
+  end if;
+  if to_regprocedure('public.rpc_admin_xoa_tk(text,text,uuid,text,uuid[])') is not null then
+    execute 'revoke all on function public.rpc_admin_xoa_tk(text, text, uuid, text, uuid[]) from public, anon, authenticated';
+  end if;
+  if to_regprocedure('public.rpc_admin_xoa_kho(text,text,uuid)') is not null then
+    execute 'revoke all on function public.rpc_admin_xoa_kho(text, text, uuid) from public, anon, authenticated';
+  end if;
 end;
 $block$;
-grant execute on function public.rpc_login_giao_vien(text, text), public.rpc_admin_logout(text), public.rpc_staff_logout(text), public.rpc_change_giao_vien_password(uuid, uuid, text, text), public.rpc_admin_control(text, text, jsonb), public.rpc_giao_vien_bank_write(text, text, uuid, text, jsonb), public.rpc_xoa_de_trong_phong(text, text, uuid, uuid), public.rpc_dieu_khien_phong_thi(text, text, uuid, uuid, text, text, text, int, boolean), public.rpc_xoa_phong_thi(text, text, uuid, uuid), public.rpc_reset_room_results(text, text, uuid, uuid), public.rpc_grade_pending_room(text, text, uuid, uuid), public.rpc_luu_de_thi_len_phong(text, text, uuid, uuid, text, jsonb), public.rpc_lay_danh_sach_phong_thi_gv(text, text, uuid, uuid, boolean) to anon, authenticated;
+grant execute on function public.rpc_login_giao_vien(text, text), public.rpc_admin_logout(text), public.rpc_staff_logout(text), public.rpc_change_giao_vien_password(uuid, uuid, text, text), public.rpc_admin_control(text, text, jsonb), public.rpc_giao_vien_bank_read(text, text, uuid, uuid), public.rpc_giao_vien_bank_write(text, text, uuid, text, jsonb), public.rpc_xoa_de_trong_phong(text, text, uuid, uuid), public.rpc_dieu_khien_phong_thi(text, text, uuid, uuid, text, text, text, int, boolean), public.rpc_xoa_phong_thi(text, text, uuid, uuid), public.rpc_reset_room_results(text, text, uuid, uuid), public.rpc_grade_pending_room(text, text, uuid, uuid), public.rpc_luu_de_thi_len_phong(text, text, uuid, uuid, text, jsonb), public.rpc_lay_danh_sach_phong_thi_gv(text, text, uuid, uuid, boolean) to anon, authenticated;

@@ -166,7 +166,7 @@ assert(/v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id[
 assert(/v_quyen = 'Admin' and p_xem_toan_bo = true/i.test(roomListBody), 'S80 Admin global list path');
 mustMatch(/to_regprocedure\('public\.rpc_lay_danh_sach_phong_thi_gv\(text,uuid,uuid,boolean\)'\)[\s\S]*?revoke all on function public\.rpc_lay_danh_sach_phong_thi_gv\(text, uuid, uuid, boolean\)/i, 'S81 legacy room-list revoke guarded');
 mustMatch(/grant execute[\s\S]*?rpc_lay_danh_sach_phong_thi_gv\(text, text, uuid, uuid, boolean\) to anon, authenticated/i, 'S82 secure room-list grant');
-for (const name of ['rpc_giao_vien_bank_write', 'rpc_xoa_de_trong_phong', 'rpc_dieu_khien_phong_thi', 'rpc_xoa_phong_thi', 'rpc_reset_room_results', 'rpc_grade_pending_room', 'rpc_luu_de_thi_len_phong', 'rpc_lay_danh_sach_phong_thi_gv']) {
+for (const name of ['rpc_giao_vien_bank_write', 'rpc_xoa_de_trong_phong', 'rpc_dieu_khien_phong_thi', 'rpc_xoa_phong_thi', 'rpc_reset_room_results', 'rpc_grade_pending_room', 'rpc_luu_de_thi_len_phong', 'rpc_lay_danh_sach_phong_thi_gv', 'rpc_giao_vien_bank_read']) {
   const secureBody = functionBody(name);
   assert(/v_gv_id := public\._staff_session_gv_id\(p_staff_token\);[\s\S]*?if v_gv_id is null then[\s\S]*?'code','staff_session_invalid'/i.test(secureBody), `S83 ${name} invalid session contract`);
 }
@@ -193,4 +193,93 @@ for (const action of ['teacher_update_school','teacher_update_subject']) {
 assert(/v_kind <> 'Admin'/i.test(adminBody), 'S102 Admin assignment avoids needless session revoke');
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S103 P0 paths untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S103 passed');
+// ==========================================================
+// S104-S121: Bank Control Plane & Direct Access Closure
+// ==========================================================
+const b2ServerCoverage = {};
+const recordS = (id) => { b2ServerCoverage[id] = true; };
+
+// S104: rpc_giao_vien_bank_read exists with p_staff_token
+const bankReadBody = functionBody('rpc_giao_vien_bank_read');
+assert(/p_staff_token text,\s*p_ma_gv text,\s*p_truong_id uuid,\s*p_mon_id uuid/i.test(bankReadBody), 'S104 rpc_giao_vien_bank_read tồn tại với p_staff_token');
+recordS('S104');
+
+// S105: invalid token returns staff_session_invalid
+assert(/v_gv_id := public\._staff_session_gv_id\(p_staff_token\);[\s\S]*?if v_gv_id is null then[\s\S]*?'code',\s*'staff_session_invalid'/i.test(bankReadBody), 'S105 invalid token trả staff_session_invalid');
+recordS('S105');
+
+// S106: teacher read own school only
+assert(/p_truong_id is distinct from v_teacher_truong_id/i.test(bankReadBody), 'S106 teacher read own school only');
+recordS('S106');
+
+// S107: teacher read assigned subject only
+assert(/v_teacher_mon_id is null[\s\S]*?p_mon_id is distinct from v_teacher_mon_id/i.test(bankReadBody), 'S107 teacher read assigned subject only');
+recordS('S107');
+
+// S108: Admin bank read nhận explicit target school
+assert(/v_quyen = 'Admin' then[\s\S]*?p_truong_id is null[\s\S]*?v_effective_truong_id := p_truong_id;/i.test(bankReadBody), 'S108 Admin bank read nhận explicit target school');
+recordS('S108');
+
+// S109: Admin bank read nhận explicit target subject
+assert(/v_quyen = 'Admin' then[\s\S]*?p_mon_id is null[\s\S]*?v_effective_mon_id := p_mon_id;/i.test(bankReadBody), 'S109 Admin bank read nhận explicit target subject');
+recordS('S109');
+
+// S110: bank read query scope cả truong_id + mon_id
+assert(/where nh\.truong_id = v_effective_truong_id[\s\S]*?and nh\.mon_id = v_effective_mon_id/i.test(bankReadBody), 'S110 bank read query scope cả truong_id + mon_id');
+recordS('S110');
+
+// S111: ngan_hang SELECT bị revoke anon/authenticated
+mustMatch(/revoke select on table public\.ngan_hang from anon, authenticated/i, 'S111 ngan_hang SELECT bị revoke anon/authenticated');
+recordS('S111');
+
+// S112: browser mutation privileges INSERT/UPDATE/DELETE/TRUNCATE bị revoke trên toàn protected table set
+const protectedTableList = ['hoc_sinh', 'giao_vien', 'truong_hoc', 'mon_hoc', 'ngan_hang', 'phong_thi', 'de_thi'];
+for (const tbl of protectedTableList) {
+  assert(new RegExp(`revoke insert, update, delete, truncate on table public\\.[^;]*?\\b${tbl}\\b[^;]*?from anon, authenticated`, 'i').test(migration), `S112 ${tbl} mutations revoked`);
+}
+recordS('S112');
+
+// S113: legacy rpc_admin_reset_pass exact signature revoke guarded
+mustMatch(/to_regprocedure\('public\.rpc_admin_reset_pass\(text,text,uuid,text,uuid\[\],text\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_admin_reset_pass\(text, text, uuid, text, uuid\[\], text\) from public, anon, authenticated'/i, 'S113 legacy rpc_admin_reset_pass exact signature revoke guarded');
+recordS('S113');
+
+// S114: legacy rpc_admin_xoa_tk exact signature revoke guarded
+mustMatch(/to_regprocedure\('public\.rpc_admin_xoa_tk\(text,text,uuid,text,uuid\[\]\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_admin_xoa_tk\(text, text, uuid, text, uuid\[\]\) from public, anon, authenticated'/i, 'S114 legacy rpc_admin_xoa_tk exact signature revoke guarded');
+recordS('S114');
+
+// S115: legacy rpc_admin_xoa_kho exact signature revoke guarded
+mustMatch(/to_regprocedure\('public\.rpc_admin_xoa_kho\(text,text,uuid\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_admin_xoa_kho\(text, text, uuid\) from public, anon, authenticated'/i, 'S115 legacy rpc_admin_xoa_kho exact signature revoke guarded');
+recordS('S115');
+
+// S116: bank_delete_all requires explicit truong_id
+assert(/when 'bank_delete_all' then[\s\S]*?bank_delete_all requires truong_id/i.test(adminBody), 'S116 bank_delete_all requires explicit truong_id');
+recordS('S116');
+
+// S117: teacher bank insert uses server v_mon_id/p_truong_id, không trust row scope
+const teacherBankBody = functionBody('rpc_giao_vien_bank_write');
+assert(/when 'insert' then[\s\S]*?insert into public\.ngan_hang\(truong_id,mon_id,ma_cau_hoi[\s\S]*?values \(p_truong_id,v_mon_id,/i.test(teacherBankBody), 'S117 teacher bank insert uses server v_mon_id/p_truong_id');
+recordS('S117');
+
+// S118: teacher update scoped by id + school + subject
+assert(/when 'update' then[\s\S]*?where id=\(p_payload->>'id'\)::uuid and truong_id=p_truong_id and mon_id=v_mon_id/i.test(teacherBankBody), 'S118 teacher update scoped by id + school + subject');
+recordS('S118');
+
+// S119: teacher delete_ids scoped school + subject
+assert(/when 'delete_ids' then[\s\S]*?delete from public\.ngan_hang where id in \([\s\S]*?\) and truong_id=p_truong_id and mon_id=v_mon_id/i.test(teacherBankBody), 'S119 teacher delete_ids scoped school + subject');
+recordS('S119');
+
+// S120: teacher delete_filter scoped school + subject
+assert(/when 'delete_filter' then[\s\S]*?delete from public\.ngan_hang where truong_id=p_truong_id and mon_id=v_mon_id/i.test(teacherBankBody), 'S120 teacher delete_filter scoped school + subject');
+recordS('S120');
+
+// S121: P0 receive/grade/recovery untouched
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S121 P0 receive/grade/recovery untouched');
+recordS('S121');
+
+// Verification gate for S104-S121
+for (let i = 104; i <= 121; i += 1) {
+  const label = `S${i}`;
+  assert.strictEqual(b2ServerCoverage[label], true, `Thiếu coverage assertion cho ${label}`);
+}
+
+console.log('admin_control_plane_server_simulation: S1-S121 passed');

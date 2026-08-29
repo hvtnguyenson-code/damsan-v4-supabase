@@ -1503,8 +1503,6 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
 
             logEl.innerText = "Đang lưu trữ vào Ngân hàng...";
             let dataToInsert = cauHoiGoc.map(q => ({
-                truong_id: gvData.truong_id,
-                mon_id: activeWorkspaceMonId !== "ALL" ? activeWorkspaceMonId : null,
                 bai_hoc: params.baiHoc,
                 phan: String(q.Phan),
                 muc_do: q.MucDo,
@@ -1514,8 +1512,7 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
                 loi_giai: ""
             }));
 
-            let { error } = await sb.from('ngan_hang').insert(dataToInsert);
-            if (error) throw error;
+            await bankWrite('insert', { rows: dataToInsert });
 
             logEl.innerText = `✅ HOÀN TẤT! Đã nạp thành công ${cauHoiGoc.length} câu hỏi vào Ngân hàng.`;
             fetchFullBank(true); loadBankMeta();
@@ -1751,6 +1748,8 @@ function changeWorkspaceSchool(truongId) {
     loadMetaData();
     taiDanhSachPhong();
     fetchRadar();
+    loadBankMeta(true);
+    fetchFullBank(true);
     if (document.getElementById('quanLyTK')?.classList.contains('active')) { fetchStudents(true); fetchTeachers(true); }
 }
 
@@ -2076,13 +2075,115 @@ async function generateFromMatrix() {
     }
 }
 
-async function loadBankMeta() { 
-    let query = sb.from('ngan_hang').select('bai_hoc').eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    let {data} = await query;
-    if(data) {
-        let uniqueBaiHoc = Array.from(new Set(data.map(d=>d.bai_hoc)));
-        processBankMeta({baiHocs: uniqueBaiHoc});
+function getBankWorkspaceContext(options) {
+    const opts = options || {};
+    if (gvData.quyen !== 'Admin') {
+        if (!gvData.mon_id) {
+            throw new Error("Giáo viên chưa được phân công bộ môn. Vui lòng liên hệ Admin để được gán môn.");
+        }
+        return {
+            schoolId: gvData.truong_id,
+            monId: gvData.mon_id
+        };
+    }
+
+    const schoolId = activeWorkspaceTruongId;
+    const monId = activeWorkspaceMonId;
+
+    if (opts.isWrite) {
+        if (!schoolId || schoolId === 'ALL') {
+            throw new Error("Vui lòng chọn TRƯỜNG ĐÍCH cụ thể để quản lý ngân hàng câu hỏi.");
+        }
+        if (!opts.allowAllSubjects && (!monId || monId === 'ALL')) {
+            throw new Error("Vui lòng chọn BỘ MÔN cụ thể để quản lý ngân hàng câu hỏi.");
+        }
+    } else {
+        if (!schoolId || schoolId === 'ALL' || !monId || monId === 'ALL') {
+            return null;
+        }
+    }
+
+    return { schoolId, monId };
+}
+
+async function bankRead() {
+    const context = getBankWorkspaceContext({ isWrite: false });
+    if (!context || !context.schoolId || !context.monId || context.schoolId === 'ALL' || context.monId === 'ALL') {
+        fullBankData = [];
+        availableBaiHocs = [];
+        if (document.getElementById("matrixBody")) document.getElementById("matrixBody").innerHTML = '';
+        if (document.getElementById("filterBaiHoc")) document.getElementById("filterBaiHoc").innerHTML = '<option value="">Tất cả</option>';
+        if (document.getElementById("bankTableBody")) document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">Vui lòng chọn trường và môn học cụ thể để xem ngân hàng câu hỏi.</td></tr>';
+        return [];
+    }
+
+    const data = await staffRpc('rpc_giao_vien_bank_read', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: context.schoolId,
+        p_mon_id: context.monId
+    });
+
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || 'Không thể tải ngân hàng câu hỏi');
+    }
+
+    return data.rows || [];
+}
+
+async function bankWrite(action, payload = {}) {
+    if (gvData.quyen === 'Admin') {
+        if (action === 'delete_all') {
+            const context = getBankWorkspaceContext({ isWrite: true, allowAllSubjects: true });
+            return await adminRpc('bank_delete_all', { truong_id: context.schoolId });
+        }
+        const context = getBankWorkspaceContext({ isWrite: true });
+        if (action === 'insert') {
+            const rows = (payload.rows || []).map(r => ({
+                ...r,
+                truong_id: context.schoolId,
+                mon_id: context.monId
+            }));
+            return await adminRpc('bank_insert', { rows });
+        }
+        if (action === 'update') {
+            return await adminRpc('bank_update', payload);
+        }
+        if (action === 'delete_ids') {
+            return await adminRpc('bank_delete_ids', payload);
+        }
+        if (action === 'delete_filter') {
+            return await adminRpc('bank_delete_filter', {
+                ...payload,
+                truong_id: context.schoolId,
+                mon_id: context.monId
+            });
+        }
+        throw new Error("Hành động ngân hàng không hợp lệ: " + action);
+    }
+
+    if (action === 'delete_all') {
+        throw new Error("Chỉ Admin mới có quyền xóa toàn bộ ngân hàng câu hỏi của trường.");
+    }
+    const context = getBankWorkspaceContext({ isWrite: true });
+    const data = await staffRpc('rpc_giao_vien_bank_write', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: context.schoolId,
+        p_action: action,
+        p_payload: payload
+    });
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || 'Lỗi thao tác ngân hàng câu hỏi');
+    }
+    return data;
+}
+
+async function loadBankMeta() {
+    try {
+        const rows = await bankRead();
+        const uniqueBaiHoc = Array.from(new Set((rows || []).map(d => d.bai_hoc).filter(Boolean)));
+        processBankMeta({ baiHocs: uniqueBaiHoc });
+    } catch (err) {
+        console.error("loadBankMeta error:", err);
     }
 }
 function processBankMeta(data) {
@@ -2101,15 +2202,15 @@ function addMatrixRow() {
     tbody.appendChild(tr); 
 }
 
-async function fetchFullBank(forceReload = false) { 
+async function fetchFullBank(forceReload = false) {
     if(!document.getElementById("bankTableBody")) return;
-    document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">⏳ Đang tải kho dữ liệu...</td></tr>'; 
-    let query = sb.from('ngan_hang').select('*').eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    let {data} = await query;
-    if(data) {
-        fullBankData = data.map(q => ({ id: q.id, baiHoc: q.bai_hoc, phan: q.phan, mucDo: q.muc_do, noiDung: q.noi_dung, A: q.a, B: q.b, C: q.c, D: q.d, dapAnDung: q.dap_an_dung, LoiGiai: q.loi_giai }));
-        renderBankTable(); 
+    document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">⏳ Đang tải kho dữ liệu...</td></tr>';
+    try {
+        const rows = await bankRead();
+        fullBankData = (rows || []).map(q => ({ id: q.id, baiHoc: q.bai_hoc, phan: q.phan, mucDo: q.muc_do, noiDung: q.noi_dung, A: q.a, B: q.b, C: q.c, D: q.d, dapAnDung: q.dap_an_dung, LoiGiai: q.loi_giai }));
+        renderBankTable();
+    } catch (err) {
+        document.getElementById("bankTableBody").innerHTML = `<tr><td colspan="7">❌ Lỗi: ${err.message}</td></tr>`;
     }
 }
 
@@ -2120,11 +2221,17 @@ function renderBankTable() {
     let html = ""; if(filtered.length === 0) html = '<tr><td colspan="7">Trống.</td></tr>'; else { filtered.forEach(q => { let snippet = q.noiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 80) + "..."; html += `<tr><td><input type="checkbox" class="chk-Bank" value="${q.id}"></td><td style="font-size:11px; color:#7f8c8d;">${String(q.id).split('-')[0]}</td><td><b>${q.baiHoc}</b></td><td>P.${q.phan}</td><td><b>${q.mucDo}</b></td><td style="text-align:left;">${snippet}</td><td><button style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-bottom:5px; width:100%;" onclick="editBankQuestion('${q.id}')">Sửa</button><br><button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; width:100%;" onclick="deleteBankQuestion('${q.id}', this)">Xóa</button></td></tr>`; }); } document.getElementById("bankTableBody").innerHTML = html; 
 }
 
-async function deleteBankQuestion(id, btnElement) { 
-    if(!confirm("Xóa câu này?")) return; 
+async function deleteBankQuestion(id, btnElement) {
+    if(!confirm("Xóa câu này?")) return;
     btnElement.innerText = "⏳..."; btnElement.disabled = true;
-    let {error} = await sb.from('ngan_hang').delete().eq('id', id);
-    if(!error) fetchFullBank(true); else alert("Lỗi Supabase");
+    try {
+        await bankWrite('delete_ids', { ids: [id] });
+        fetchFullBank(true);
+    } catch (e) {
+        alert("Lỗi: " + e.message);
+        btnElement.innerText = "Xóa";
+        btnElement.disabled = false;
+    }
 }
 
 async function editBankQuestion(id) { 
@@ -2135,17 +2242,24 @@ async function editBankQuestion(id) {
     document.getElementById("editDapAnDung").value = dapAnHienThi; document.getElementById("editModal").style.display = "flex"; 
 }
 
-async function saveEditedQuestion() { 
+async function saveEditedQuestion() {
     let btn = document.querySelector("#editModal button");
-    let phan = document.getElementById("editPhan").value; let dapAn = safeHTML(document.getElementById("editDapAnDung").value.trim().toUpperCase()); 
-    if (phan === "3" && !dapAn.startsWith("'")) { dapAn = "'" + dapAn; } 
+    let phan = document.getElementById("editPhan").value; let dapAn = safeHTML(document.getElementById("editDapAnDung").value.trim().toUpperCase());
+    if (phan === "3" && !dapAn.startsWith("'")) { dapAn = "'" + dapAn; }
     btn.innerText = "⏳..."; btn.disabled = true;
-    
-    let updateData = { bai_hoc: safeHTML(document.getElementById("editBaiHoc").value.trim()), phan: phan, muc_do: document.getElementById("editMucDo").value, noi_dung: safeHTML(document.getElementById("editNoiDung").innerHTML), a: safeHTML(document.getElementById("editA").value), b: safeHTML(document.getElementById("editB").value), c: safeHTML(document.getElementById("editC").value), d: safeHTML(document.getElementById("editD").value), dap_an_dung: dapAn };
-    let {error} = await sb.from('ngan_hang').update(updateData).eq('id', document.getElementById("editID").value);
 
-    btn.innerText = "💾 Lưu Thay Đổi"; btn.disabled = false;
-    if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); } else alert("Lỗi");
+    let updateData = { bai_hoc: safeHTML(document.getElementById("editBaiHoc").value.trim()), phan: phan, muc_do: document.getElementById("editMucDo").value, noi_dung: safeHTML(document.getElementById("editNoiDung").innerHTML), a: safeHTML(document.getElementById("editA").value), b: safeHTML(document.getElementById("editB").value), c: safeHTML(document.getElementById("editC").value), d: safeHTML(document.getElementById("editD").value), dap_an_dung: dapAn };
+
+    try {
+        await bankWrite('update', { id: document.getElementById("editID").value, fields: updateData });
+        document.getElementById("editModal").style.display = "none";
+        fetchFullBank(true);
+    } catch (e) {
+        alert("Lỗi: " + e.message);
+    } finally {
+        btn.innerText = "💾 Lưu Thay Đổi";
+        btn.disabled = false;
+    }
 }
 
 /* =======================================================
@@ -3202,59 +3316,71 @@ async function deleteSelectedBank(btnElement) {
     let oldText = btnElement.innerText;
     btnElement.innerText = "⏳ Đang xóa..."; btnElement.disabled = true;
 
-    let {error} = await sb.from('ngan_hang').delete().in('id', idsToDelete);
-    
-    btnElement.innerText = oldText; btnElement.disabled = false;
-    if(!error) { document.getElementById('chkAllBank').checked = false; fetchFullBank(true); }
-    else alert("❌ Lỗi kết nối khi xóa dữ liệu!");
+    try {
+        await bankWrite('delete_ids', { ids: idsToDelete });
+        document.getElementById('chkAllBank').checked = false;
+        fetchFullBank(true);
+    } catch (e) {
+        alert("❌ Lỗi khi xóa dữ liệu: " + e.message);
+    } finally {
+        btnElement.innerText = oldText;
+        btnElement.disabled = false;
+    }
 }
 
-async function deleteBankBatch(deleteAll, btnElement) { 
-    if(deleteAll) { 
-        if(!confirm("🚨 BẠN ĐANG CHỌN XÓA SẠCH TOÀN BỘ KHO ĐỀ CỦA TRƯỜNG?\nBạn chắc chắn chứ?")) return; 
-        
-        let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
-        if(!pass) return;
+async function deleteBankBatch(deleteAll, btnElement) {
+    if(deleteAll) {
+        if (gvData.quyen !== 'Admin') return alert("Chỉ Admin mới có quyền xóa toàn bộ ngân hàng câu hỏi.");
+        if (!activeWorkspaceTruongId || activeWorkspaceTruongId === 'ALL') {
+            return alert("Vui lòng chọn TRƯỜNG ĐÍCH cụ thể để quản lý ngân hàng câu hỏi.");
+        }
+        let tenTruong = "trường đang chọn";
+        let tr = (g_sysTruongList || []).find(t => String(t.id) === String(activeWorkspaceTruongId));
+        if (tr) tenTruong = tr.ten_truong;
 
-        let hashedPass = await hashPassword(pass);
-        let oldText = btnElement.innerText; 
+        if(!confirm(`🚨 BẠN ĐANG CHỌN XÓA SẠCH TOÀN BỘ KHO ĐỀ CỦA [${tenTruong}] TRÊN TẤT CẢ BỘ MÔN?\nBạn chắc chắn chứ?`)) return;
+
+        let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ Đang càn quét..."; btnElement.disabled = true; btnElement.style.background = "#7f8c8d";
-        
-        let {data, error} = await sb.rpc('rpc_admin_xoa_kho', {
-            p_ma_gv: gvData.ma_gv,
-            p_mat_khau: hashedPass,
-            p_truong_id: gvData.truong_id
-        });
 
-        btnElement.innerText = oldText; btnElement.disabled = false; btnElement.style.background = "#c0392b";
-        
-        if(error) return alert("❌ Lỗi máy chủ: " + error.message);
-        if(data && data.status === 'error') return alert(data.message);
-        
-        alert("✅ " + data.message);
-        fetchFullBank(true); loadBankMeta(true);
+        try {
+            await bankWrite('delete_all', {});
+            alert("✅ Đã xóa sạch toàn bộ kho đề của trường thành công!");
+            fetchFullBank(true);
+            loadBankMeta(true);
+        } catch (error) {
+            alert("❌ Lỗi máy chủ: " + error.message);
+        } finally {
+            btnElement.innerText = oldText;
+            btnElement.disabled = false;
+            btnElement.style.background = "#c0392b";
+        }
         return;
-    } 
-    else { 
-        let bH = document.getElementById("filterBaiHoc").value; let p = document.getElementById("filterPhan").value; let m = document.getElementById("filterMucDo").value; 
-        if(!bH && !p && !m) return alert("⚠️ Vui lòng chọn ít nhất 1 bộ lọc (Bài Học / Phần / Mức Độ) để xác định mảng câu hỏi cần xóa!"); 
-        if(!confirm("Xóa toàn bộ các câu hỏi đang được lọc hiển thị trên màn hình?")) return; 
-        
+    }
+    else {
+        let bH = document.getElementById("filterBaiHoc").value; let p = document.getElementById("filterPhan").value; let m = document.getElementById("filterMucDo").value;
+        if(!bH && !p && !m) return alert("⚠️ Vui lòng chọn ít nhất 1 bộ lọc (Bài Học / Phần / Mức Độ) để xác định mảng câu hỏi cần xóa!");
+        if(!confirm("Xóa toàn bộ các câu hỏi đang được lọc hiển thị trên màn hình?")) return;
+
         let oldText = btnElement.innerText; btnElement.innerText = "⏳ Đang càn quét..."; btnElement.disabled = true; btnElement.style.background = "#7f8c8d";
-        
-        let query = sb.from('ngan_hang').delete().eq('truong_id', gvData.truong_id);
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        
-        let filter_bH = document.getElementById("filterBaiHoc").value; let filter_p = document.getElementById("filterPhan").value; let filter_m = document.getElementById("filterMucDo").value;
-        if(filter_bH) query = query.eq('bai_hoc', filter_bH);
-        if(filter_p) query = query.eq('phan', filter_p);
-        if(filter_m) query = query.eq('muc_do', filter_m);
-        
-        let {error} = await query;
-        btnElement.innerText = oldText; btnElement.disabled = false;
-        btnElement.style.background = "#e67e22";
-        if(!error) { fetchFullBank(true); loadBankMeta(true); } else alert("Lỗi kết nối");
-    } 
+
+        let filterPayload = {};
+        if(bH) filterPayload.bai_hoc = bH;
+        if(p) filterPayload.phan = p;
+        if(m) filterPayload.muc_do = m;
+
+        try {
+            await bankWrite('delete_filter', filterPayload);
+            fetchFullBank(true);
+            loadBankMeta(true);
+        } catch (error) {
+            alert("❌ Lỗi kết nối khi xóa: " + error.message);
+        } finally {
+            btnElement.innerText = oldText;
+            btnElement.disabled = false;
+            btnElement.style.background = "#e67e22";
+        }
+    }
 }
 
 /* =======================================================

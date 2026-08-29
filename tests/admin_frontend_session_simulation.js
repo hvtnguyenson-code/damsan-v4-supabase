@@ -4,9 +4,10 @@ const childProcess = require('child_process');
 
 const source = fs.readFileSync('giaovien.js', 'utf8');
 const body = (name) => {
-  const start = source.search(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{`));
+  const start = source.search(new RegExp(`(?:async )?function ${name}\\([^)]*\\)\\s*\\{`));
   assert(start >= 0, `Không tìm thấy hàm ${name}`);
-  const opening = source.indexOf('{', start);
+  const match = source.slice(start).match(new RegExp(`(?:async )?function ${name}\\([^)]*\\)\\s*\\{`));
+  const opening = start + match[0].length - 1;
   let depth = 0;
   for (let index = opening; index < source.length; index += 1) {
     if (source[index] === '{') depth += 1;
@@ -254,12 +255,8 @@ recordF('F88');
 assert(!/from\(['"](hoc_sinh|giao_vien|truong_hoc|mon_hoc|phong_thi|de_thi)['"]\)\s*\.\s*(insert|update|delete|upsert)/.test(source), 'F89 Không có direct write vào các bảng được bảo vệ');
 recordF('F89');
 
-// F90: Direct browser writes còn lại phải chỉ thuộc ngan_hang
-const directWriteMatches = [...source.matchAll(/from\(['"]([^'"]+)['"]\)\s*\.\s*(insert|update|delete|upsert)/g)];
-assert(directWriteMatches.length > 0, 'F90 Phải tìm thấy direct write statements');
-for (const match of directWriteMatches) {
-  assert.strictEqual(match[1], 'ngan_hang', `F90 Direct write vào ${match[1]} không được phép ngoài ngan_hang`);
-}
+// F90: Direct browser writes còn lại không được tồn tại trên client
+assert(!/from\(['"]ngan_hang['"]\)/.test(source), 'F90 Không có direct access vào ngan_hang');
 recordF('F90');
 
 // F91: hoc_sinh.js, sw.js và P0 files không thay đổi so với baseline
@@ -272,4 +269,177 @@ for (let i = 71; i <= 91; i += 1) {
   assert.strictEqual(b1Coverage[label], true, `Thiếu coverage assertion cho ${label}`);
 }
 
-console.log('admin_frontend_session_simulation: F1-F91 passed');
+// ==========================================================
+// F92-F119: Bank Control Plane & Direct Access Closure
+// ==========================================================
+const b2Coverage = {};
+const recordB2 = (id) => { b2Coverage[id] = true; };
+
+// F92: bankRead uses staffRpc rpc_giao_vien_bank_read
+const bankReadCode = body('bankRead');
+assert(
+  bankReadCode.includes("staffRpc('rpc_giao_vien_bank_read'") ||
+  bankReadCode.includes('staffRpc("rpc_giao_vien_bank_read"'),
+  'F92 bankRead uses staffRpc rpc_giao_vien_bank_read'
+);
+recordB2('F92');
+
+// F93: loadBankMeta no direct ngan_hang SELECT
+const loadBankMetaCode = body('loadBankMeta');
+assert(!/from\(['"]ngan_hang['"]\)/.test(loadBankMetaCode) && loadBankMetaCode.includes('bankRead()'), 'F93 loadBankMeta no direct ngan_hang SELECT');
+recordB2('F93');
+
+// F94: fetchFullBank no direct ngan_hang SELECT
+const fetchFullBankCode = body('fetchFullBank');
+assert(!/from\(['"]ngan_hang['"]\)/.test(fetchFullBankCode) && fetchFullBankCode.includes('bankRead()'), 'F94 fetchFullBank no direct ngan_hang SELECT');
+recordB2('F94');
+
+// F95: Admin bank context requires concrete school
+const bankContextCode = body('getBankWorkspaceContext');
+assert(
+  bankContextCode.includes("!schoolId || schoolId === 'ALL'") &&
+  bankContextCode.includes('TRƯỜNG ĐÍCH'),
+  'F95 Admin bank context requires concrete school'
+);
+recordB2('F95');
+
+// F96: Admin bank context requires concrete subject
+assert(
+  bankContextCode.includes("!monId || monId === 'ALL'") &&
+  bankContextCode.includes('BỘ MÔN'),
+  'F96 Admin bank context requires concrete subject'
+);
+recordB2('F96');
+
+// F97: teacher bank context own school + own subject
+assert(
+  bankContextCode.includes('schoolId: gvData.truong_id') &&
+  bankContextCode.includes('monId: gvData.mon_id'),
+  'F97 teacher bank context own school + own subject'
+);
+recordB2('F97');
+
+// F98: changeWorkspaceSchool refreshes bank metadata/list
+const changeSchoolCode = body('changeWorkspaceSchool');
+assert(
+  changeSchoolCode.includes('loadBankMeta(true)') &&
+  changeSchoolCode.includes('fetchFullBank(true)'),
+  'F98 changeWorkspaceSchool refreshes bank metadata and list'
+);
+recordB2('F98');
+
+// F99: bankWrite Admin maps insert -> bank_insert
+const bankWriteCode = body('bankWrite');
+assert(bankWriteCode.includes("adminRpc('bank_insert'"), 'F99 bankWrite Admin maps insert -> bank_insert');
+recordB2('F99');
+
+// F100: bankWrite Admin maps update -> bank_update
+assert(bankWriteCode.includes("adminRpc('bank_update'"), 'F100 bankWrite Admin maps update -> bank_update');
+recordB2('F100');
+
+// F101: bankWrite Admin maps delete_ids -> bank_delete_ids
+assert(bankWriteCode.includes("adminRpc('bank_delete_ids'"), 'F101 bankWrite Admin maps delete_ids -> bank_delete_ids');
+recordB2('F101');
+
+// F102: bankWrite Admin maps delete_filter -> bank_delete_filter
+assert(bankWriteCode.includes("adminRpc('bank_delete_filter'"), 'F102 bankWrite Admin maps delete_filter -> bank_delete_filter');
+recordB2('F102');
+
+// F103: bankWrite Admin maps delete_all -> bank_delete_all
+assert(bankWriteCode.includes("adminRpc('bank_delete_all'"), 'F103 bankWrite Admin maps delete_all -> bank_delete_all');
+recordB2('F103');
+
+// F104: Admin insert enriches selected truong_id + mon_id
+assert(
+  bankWriteCode.includes('truong_id: context.schoolId') &&
+  bankWriteCode.includes('mon_id: context.monId'),
+  'F104 Admin insert enriches selected truong_id + mon_id'
+);
+recordB2('F104');
+
+// F105: teacher bankWrite uses rpc_giao_vien_bank_write staffRpc
+assert(
+  bankWriteCode.includes("staffRpc('rpc_giao_vien_bank_write'") ||
+  bankWriteCode.includes('staffRpc("rpc_giao_vien_bank_write"'),
+  'F105 teacher bankWrite uses rpc_giao_vien_bank_write staffRpc'
+);
+recordB2('F105');
+
+// F106: teacher delete_all blocked
+assert(
+  bankWriteCode.includes("action === 'delete_all'") &&
+  /throw new Error\(/.test(bankWriteCode),
+  'F106 teacher delete_all blocked'
+);
+recordB2('F106');
+
+// F107: mode bank insertion no direct DB write
+assert(!/from\(['"]ngan_hang['"]\)\.insert/.test(source), 'F107 mode bank insertion no direct DB write');
+recordB2('F107');
+
+// F108: saveEditedQuestion uses bankWrite update
+const saveEditedCode = body('saveEditedQuestion');
+assert(saveEditedCode.includes("bankWrite('update'"), 'F108 saveEditedQuestion uses bankWrite update');
+recordB2('F108');
+
+// F109: deleteBankQuestion uses bankWrite delete_ids
+const deleteQCode = body('deleteBankQuestion');
+assert(deleteQCode.includes("bankWrite('delete_ids'"), 'F109 deleteBankQuestion uses bankWrite delete_ids');
+recordB2('F109');
+
+// F110: deleteSelectedBank uses bankWrite delete_ids
+const deleteSelBankCode = body('deleteSelectedBank');
+assert(deleteSelBankCode.includes("bankWrite('delete_ids'"), 'F110 deleteSelectedBank uses bankWrite delete_ids');
+recordB2('F110');
+
+// F111: deleteBankBatch filter uses bankWrite delete_filter
+const deleteBatchCode = body('deleteBankBatch');
+assert(deleteBatchCode.includes("bankWrite('delete_filter'"), 'F111 deleteBankBatch filter uses bankWrite delete_filter');
+recordB2('F111');
+
+// F112: deleteBankBatch all uses bankWrite delete_all
+assert(deleteBatchCode.includes("bankWrite('delete_all'"), 'F112 deleteBankBatch all uses bankWrite delete_all');
+recordB2('F112');
+
+// F113: deleteBankBatch contains no prompt(password)
+assert(!/prompt\(/.test(deleteBatchCode), 'F113 deleteBankBatch contains no prompt');
+recordB2('F113');
+
+// F114: rpc_admin_xoa_kho absent frontend
+assert(!/rpc_admin_xoa_kho/.test(source), 'F114 rpc_admin_xoa_kho absent frontend');
+recordB2('F114');
+
+// F115: ZERO from('ngan_hang') in giaovien.js
+assert(!/from\(['"]ngan_hang['"]\)/.test(source), 'F115 ZERO from(ngan_hang) in giaovien.js');
+recordB2('F115');
+
+// F116: ZERO direct browser writes on all protected tables
+const allProtectedTables = ['hoc_sinh', 'giao_vien', 'truong_hoc', 'mon_hoc', 'ngan_hang', 'phong_thi', 'de_thi'];
+for (const tbl of allProtectedTables) {
+  assert(!new RegExp(`from\\(['"]${tbl}['"]\\)\\s*\\.\\s*(insert|update|delete|upsert)`).test(source), `F116 direct write on ${tbl} forbidden`);
+}
+recordB2('F116');
+
+// F117: existing F1-F91 still valid
+for (let i = 71; i <= 91; i += 1) {
+  const label = `F${i}`;
+  assert.strictEqual(b1Coverage[label], true, `F1-F91 regression: ${label}`);
+}
+recordB2('F117');
+
+// F118: hoc_sinh.js/sw.js unchanged
+assert.strictEqual(changed, '', 'F118 hoc_sinh.js/sw.js unchanged');
+recordB2('F118');
+
+// F119: P0 files untouched
+const p0Changed = childProcess.execSync('git diff --name-only 990aee4f0280e762e94ab2334940b57b1b5befe7 -- hoc_sinh.js sw.js', { encoding: 'utf8' }).trim();
+assert.strictEqual(p0Changed, '', 'F119 P0 files untouched');
+recordB2('F119');
+
+// Test Label Coverage Gate: F92-F119
+for (let i = 92; i <= 119; i += 1) {
+  const label = `F${i}`;
+  assert.strictEqual(b2Coverage[label], true, `Thiếu coverage assertion cho ${label}`);
+}
+
+console.log('admin_frontend_session_simulation: F1-F119 passed');
