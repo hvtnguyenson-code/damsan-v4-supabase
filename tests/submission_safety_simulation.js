@@ -166,6 +166,206 @@ assert.strictEqual(resetCleanup.action, 'reset_cleaned'); assert.deepStrictEqual
 const test05 = offlineF5Recovery(new Map(offlineStorage), offlineIdentity, { phong_id: null, room_opened_at: null, ma_de: '' });
 assert.strictEqual(test05.state.phong_id, 'ROOM'); assert.deepStrictEqual(test05.sent, [{ attempt_id: 'attempt-original', raw_answers: [{ chon: 'IDENTIFIABLE' }] }]); // R24
 
+// ==========================================================
+// R25-R44: P0-006 Extended Recovery Lifecycle Semantic Invariants
+// ==========================================================
+const rCoverage = {};
+const recordR = (id) => { rCoverage[id] = true; };
+
+// R25: FINAL_PENDING created offline with fixed durable attempt_id
+const sampleAttemptId = '550e8400-e29b-41d4-a716-446655440000';
+const sampleFinal = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: sampleAttemptId,
+  truong_id: 'school-1',
+  phong_id: 'room-101',
+  hs_id: 'hs-100403',
+  ma_de: '101',
+  room_opened_at: 1724920000000,
+  raw_answers: [{ chon: 'A' }, { chon: 'Đ-S-Đ-S' }],
+  client_submitted_at: '2026-08-29T13:11:46.713300Z',
+  auto_submit: false
+};
+assert.strictEqual(sampleFinal.state, 'FINAL_PENDING');
+assert.strictEqual(sampleFinal.attempt_id, sampleAttemptId);
+recordR('R25');
+
+// R26: F5 / offline reload locates candidate snapshot by hs_id + truong_id + phong_id
+const simLocalStorage = new Map();
+simLocalStorage.set('final_damsan_room-101_hs-100403', sampleFinal);
+const foundCandidates = discoverFinals(simLocalStorage, { hs_id: 'hs-100403', truong_id: 'school-1' });
+assert.strictEqual(foundCandidates.length, 1);
+assert.strictEqual(foundCandidates[0].phong_id, 'room-101');
+assert.strictEqual(foundCandidates[0].hs_id, 'hs-100403');
+recordR('R26');
+
+// R27: Context hydration recovers phong_id, room_opened_at, ma_de, attempt_id preserved
+const emptyState = { phong_id: null, room_opened_at: null, ma_de: '' };
+const hydratedState = {
+  ...emptyState,
+  phong_id: foundCandidates[0].phong_id,
+  room_opened_at: foundCandidates[0].room_opened_at,
+  ma_de: foundCandidates[0].ma_de
+};
+assert.strictEqual(hydratedState.phong_id, 'room-101');
+assert.strictEqual(hydratedState.room_opened_at, 1724920000000);
+assert.strictEqual(hydratedState.ma_de, '101');
+assert.strictEqual(foundCandidates[0].attempt_id, sampleAttemptId);
+recordR('R27');
+
+// R28: Online event triggers automatic resume without requiring manual room code
+function simulateOnlineResume(isOffline, candidateSnapshot, reconcileResult) {
+  if (isOffline || !candidateSnapshot) return { action: 'wait' };
+  if (reconcileResult.reset_confirmed) return { action: 'archived_and_cleared' };
+  return { action: 'send_exact_snapshot', payload: candidateSnapshot };
+}
+const onlineResumeAction = simulateOnlineResume(false, foundCandidates[0], { reset_confirmed: false });
+assert.strictEqual(onlineResumeAction.action, 'send_exact_snapshot');
+recordR('R28');
+
+// R29: receive uses the exact original immutable attempt_id
+assert.strictEqual(onlineResumeAction.payload.attempt_id, sampleAttemptId);
+recordR('R29');
+
+// R30: receive uses the exact original immutable raw_answers
+assert.deepStrictEqual(onlineResumeAction.payload.raw_answers, sampleFinal.raw_answers);
+recordR('R30');
+
+// R31: createAttemptId is not invoked for an existing recovery snapshot
+let attemptIdCallCount = 0;
+function createAttemptIdWrapper() { attemptIdCallCount++; return 'new-id'; }
+if (!sampleFinal.attempt_id) {
+  sampleFinal.attempt_id = createAttemptIdWrapper();
+}
+assert.strictEqual(attemptIdCallCount, 0, 'createAttemptId must not be called when attempt_id already exists');
+recordR('R31');
+
+// R32: Multiple retry / reconnect attempts produce single receipt
+const retryStore = new SubmissionStore();
+const r1 = retryStore.receive(sampleFinal.attempt_id, sampleFinal.phong_id, sampleFinal.hs_id, sampleFinal.raw_answers);
+const r2 = retryStore.receive(sampleFinal.attempt_id, sampleFinal.phong_id, sampleFinal.hs_id, sampleFinal.raw_answers);
+const r3 = retryStore.receive(sampleFinal.attempt_id, sampleFinal.phong_id, sampleFinal.hs_id, sampleFinal.raw_answers);
+assert.strictEqual(r1.id, r2.id);
+assert.strictEqual(r2.id, r3.id);
+assert.strictEqual(retryStore.rows.size, 1);
+recordR('R32');
+
+// R33: Network failure during receipt check keeps snapshot in localStorage
+const simStoreNetErr = new Map(simLocalStorage);
+const netErrRecovery = recoveryModel(sampleFinal, null, { error: true });
+assert.strictEqual(netErrRecovery.action, 'receive');
+assert.strictEqual(simStoreNetErr.has('final_damsan_room-101_hs-100403'), true);
+recordR('R33');
+
+// R34: Missing receipt with reset_confirmed !== true retains snapshot
+const unconfirmedReset = recoveryModel(sampleFinal, null, { status: 'missing', reset_confirmed: false, room_exists: true });
+assert.strictEqual(unconfirmedReset.action, 'receive');
+assert.strictEqual(simStoreNetErr.has('final_damsan_room-101_hs-100403'), true);
+recordR('R34');
+
+// R35: reset_confirmed === true archives snapshot and clears active keys
+const archiveStore = new Map();
+const confirmedReset = recoveryModel(sampleFinal, null, { status: 'missing', reset_confirmed: true, room_exists: true }, archiveStore);
+assert.strictEqual(confirmedReset.action, 'new_attempt');
+assert.strictEqual(archiveStore.has(`recovery_${sampleAttemptId}`), true);
+assert.deepStrictEqual(confirmedReset.active, {});
+recordR('R35');
+
+// R36: Room generation changed (room_attempt_changed) rejects old generation snapshot
+const changedGenStore = new Map();
+const genChanged = receiveRoomChangedModel(sampleFinal, null, {}, changedGenStore);
+assert.strictEqual(genChanged.action, 'new_attempt');
+assert.strictEqual(changedGenStore.get(`recovery_${sampleAttemptId}`).reason, 'room_attempt_changed');
+recordR('R36');
+
+// R37: Room deleted archives old snapshot with room_deleted reason
+const roomDeletedStore = new Map();
+const roomDeleted = recoveryModel(sampleFinal, null, { status: 'missing', reset_confirmed: true, room_exists: false }, roomDeletedStore);
+assert.strictEqual(roomDeleted.action, 'new_attempt');
+assert.strictEqual(roomDeletedStore.get(`recovery_${sampleAttemptId}`).reason, 'room_deleted');
+recordR('R37');
+
+// R38: A newly opened generation (MO_PHONG with new room_opened_at) enables fresh attempt
+const newGenerationDb = new SubmissionStore();
+newGenerationDb.reset('room-101');
+const freshAttempt = newGenerationDb.receive('new-attempt-guid-2', 'room-101', 'hs-100403', [{ chon: 'C' }]);
+assert.strictEqual(freshAttempt.attempt, 'new-attempt-guid-2');
+assert.strictEqual(freshAttempt.status, 'received');
+recordR('R38');
+
+// R39: New attempt creates a distinct attempt_id different from old attempt_id
+assert.notStrictEqual('new-attempt-guid-2', sampleAttemptId);
+recordR('R39');
+
+// R40: Old answers do not populate into the new attempt
+assert.deepStrictEqual(freshAttempt.answers, [{ chon: 'C' }]);
+assert.notDeepStrictEqual(freshAttempt.answers, sampleFinal.raw_answers);
+recordR('R40');
+
+// R41: Result screen automatically transitions away upon authoritative server reset without F5
+function simulateResultScreenSync(roomStatus, roomOpenedAt, studentOpenedAt, isReset) {
+  if (isReset || roomStatus === 'CHO_THI' || (roomOpenedAt && roomOpenedAt !== studentOpenedAt)) {
+    return { shouldExitResultScreen: true, nextSection: 'room-section' };
+  }
+  return { shouldExitResultScreen: false, nextSection: 'result-section' };
+}
+const resetSync = simulateResultScreenSync('CHO_THI', null, 1724920000000, true);
+assert.strictEqual(resetSync.shouldExitResultScreen, true);
+assert.strictEqual(resetSync.nextSection, 'room-section');
+recordR('R41');
+
+// R42: Online reconnect while at room scanner with pending final snapshot triggers recovery
+function simulateRoomScannerReconnect(hasPendingFinal, isOffline) {
+  if (hasPendingFinal && !isOffline) return 'execute_recovery';
+  return 'fetch_rooms';
+}
+assert.strictEqual(simulateRoomScannerReconnect(true, false), 'execute_recovery');
+assert.strictEqual(simulateRoomScannerReconnect(false, false), 'fetch_rooms');
+recordR('R42');
+
+// R43: Room list scan is bypassed when a durable final snapshot is pending recovery
+function shouldScanRoomListOnLoad(hasPendingFinal) {
+  return !hasPendingFinal;
+}
+assert.strictEqual(shouldScanRoomListOnLoad(true), false);
+assert.strictEqual(shouldScanRoomListOnLoad(false), true);
+recordR('R43');
+
+// R44: Timezone formatting converts UTC timestamp sample 2026-08-29T13:11:46.7133+00:00 to Vietnam time
+function dinhDangThoiGianVN(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return String(ts);
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(d);
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+    return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second}`;
+  } catch (e) {
+    return String(ts);
+  }
+}
+const sampleUtcTime = '2026-08-29T13:11:46.7133+00:00';
+const formattedVnTime = dinhDangThoiGianVN(sampleUtcTime);
+assert.strictEqual(formattedVnTime, '29/08/2026 20:11:46');
+recordR('R44');
+
+// Verify all R25-R44 assertions passed
+for (let i = 25; i <= 44; i++) {
+  assert.strictEqual(rCoverage[`R${i}`], true, `Missing coverage for R${i}`);
+}
+
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 assert(!client.includes('result-watch-'));
@@ -190,16 +390,24 @@ assert(client.includes('snapshot = await reconcileSavedSubmission(snapshot);'));
 assert(client.includes('snapshot.recovery_archive_failed === true'));
 assert(client.includes('recoveryArchiveFailureNoticeShown'));
 assert(client.includes('void resumeSavedSubmission()'));
+assert(client.includes('function dinhDangThoiGianVN'));
+assert(client.includes('dinhDangThoiGianVN(receipt.received_at)'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
-assert(!migration.includes('v_legacy := public.nop_bai_va_cham_diem'));
-assert(migration.includes('rpc_reset_room_results') && migration.includes('rpc_grade_pending_room'));
-assert(migration.includes("'room_attempt_changed'"));
-assert(migration.includes('string_to_array(v_answer') && migration.includes('for v_part2_index in 1..4'));
-assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
-assert(migration.includes('for share') && migration.includes('for update'));
-assert(migration.includes('references public.phong_thi(id) on delete cascade'));
-assert(migration.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration.includes("'reset_confirmed', false"));
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R24; not a Supabase load test)');
+assert.strictEqual(clientVersion, '20260829-recovery-lifecycle-p0-006');
+const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
+assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
+assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
+assert(migration01.includes("'room_attempt_changed'"));
+assert(migration01.includes('string_to_array(v_answer') && migration01.includes('for v_part2_index in 1..4'));
+assert(migration01.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
+assert(migration01.includes('for share') && migration01.includes('for update'));
+assert(migration01.includes('references public.phong_thi(id) on delete cascade'));
+assert(migration01.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration01.includes("'reset_confirmed', false"));
+
+const migration03 = fs.readFileSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql', 'utf8').replace(/\r\n/g, '\n');
+assert(migration03.includes('create or replace function public.rpc_reset_room_results'));
+assert(migration03.includes("set trang_thai = 'CHO_THI', thoi_gian_mo = null"));
+
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R44; not a Supabase load test)');

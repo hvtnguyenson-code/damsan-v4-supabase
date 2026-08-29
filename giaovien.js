@@ -111,24 +111,24 @@ async function staffRpc(rpcName, args) {
 }
 
 let danhSachDeThi = new Array(); let duLieuBangDiem = new Array(); let currentDashFilter = "TatCa"; let allStudents = new Array(); let allTeachers = new Array(); let currentStudentFilter = "TatCa"; let availableBaiHocs = new Array(); let fullBankData = new Array(); let allRoomsData = new Array();
-let teacherTimerInterval = null; 
+let teacherTimerInterval = null;
 let danhSachThuCong = new Array();
-let previewExamData = new Array(); 
+let previewExamData = new Array();
 let ketQuaChannel = null;
 const chiTietCache = new Map(); // TỐI ƯU: Cache kết quả parse JSON ChiTiet
-let g_danhSachLopCache = new Array(); 
-let g_sysMonList = new Array(); 
+let g_danhSachLopCache = new Array();
+let g_sysMonList = new Array();
 
 // Biến cho Auto Refresh 5s
 let autoRefreshInterval = null;
-let globalFetchDashId = 0; 
+let globalFetchDashId = 0;
 let qrtState = { pending: new Array(), valid: new Array(), mode: '', params: {} };
 
 function parseTimeSafely(timeVal) {
     if (!timeVal || timeVal === 'null') return 0;
     if (typeof timeVal === 'number') return timeVal;
-    if (typeof timeVal === 'string' && new RegExp("^\\d+$").test(timeVal)) return parseInt(timeVal, 10); 
-    let d = new Date(timeVal).getTime(); 
+    if (typeof timeVal === 'string' && new RegExp("^\\d+$").test(timeVal)) return parseInt(timeVal, 10);
+    let d = new Date(timeVal).getTime();
     return isNaN(d) ? 0 : d;
 }
 
@@ -140,23 +140,23 @@ async function hashPassword(message) {
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         } catch(e) {}
-    } 
+    }
     if (window.CryptoJS) {
         return window.CryptoJS.SHA256(message).toString(window.CryptoJS.enc.Hex);
-    } 
+    }
     return message;
 }
-const DEFAULT_PASS_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92"; 
+const DEFAULT_PASS_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
 
-function safeHTML(str) { 
-    if (!str) return ""; 
+function safeHTML(str) {
+    if (!str) return "";
     if (window.DOMPurify) { return DOMPurify.sanitize(str); }
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;'); 
+        .replace(/'/g, '&#39;');
 }
 
 function isSha256Hex(v) {
@@ -170,7 +170,7 @@ function isLegacyPlainPassword(v) {
     return !isSha256Hex(s);
 }
 
-window.onload = function() { 
+window.onload = function() {
     let script = document.createElement('script');
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js";
     document.head.appendChild(script);
@@ -220,12 +220,12 @@ async function thucHienDangNhapGV() {
 
     try {
         let hashedPass = await hashPassword(pass);
-        
+
         const { data, error } = await sb.rpc('rpc_login_giao_vien', {
             p_ma_gv: user,
             p_mat_khau: hashedPass
         });
-        
+
         if (error || !data || data.status !== 'success') {
             msg.innerText = "❌ Sai Tài khoản hoặc Mật khẩu!";
             btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false;
@@ -236,7 +236,7 @@ async function thucHienDangNhapGV() {
                 window.tempGvCurrentPasswordHash = hashedPass;
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('forceChangePassOverlay').style.display = 'flex';
-                btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false; 
+                btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false;
             } else {
                 hoanTatDangNhap(data);
             }
@@ -268,11 +268,11 @@ function hoanTatDangNhap(loginData) {
     sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
     document.getElementById('gvNameDisplay').innerText = gvData.ho_ten;
     document.getElementById('truongNameDisplay').innerText = gvData.truong_ten;
-    
+
     let forceOverlay = document.getElementById('forceChangePassOverlay');
     if(forceOverlay) forceOverlay.style.display = 'none';
     document.getElementById('loginOverlay').style.display = 'none';
-    
+
     document.getElementById('mainContainer').style.display = 'block';
     khoiTaoDuLieu();
 }
@@ -294,7 +294,7 @@ async function xacNhanDoiMatKhauBatBuoc() {
     try {
         let hashedNewPass = await hashPassword(pass1);
         let uid = window.tempGvData.id;
-        
+
         const currentHash = window.tempGvCurrentPasswordHash;
         if (!currentHash) throw new Error('Không còn thông tin xác thực tạm thời. Vui lòng đăng nhập lại.');
         let { data: changed, error } = await sb.rpc('rpc_change_giao_vien_password', { p_gv_id: uid, p_truong_id: window.tempGvData.truong_id, p_current_password: currentHash, p_new_password: hashedNewPass });
@@ -430,7 +430,7 @@ async function khoiTaoWorkspace() {
             if(myMon) tenMon = myMon.ten_mon;
             activeWorkspaceMonId = gvData.mon_id;
             activeWorkspaceTruongId = gvData.truong_id;
-            
+
             wsDiv.innerHTML = `<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Bộ môn:</span> <span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px dashed #27ae60;">${tenMon}</span>`;
         }
         headerUser.insertBefore(wsDiv, headerUser.firstChild);
@@ -445,7 +445,7 @@ async function khoiTaoWorkspace() {
 function changeWorkspace(monId) {
     activeWorkspaceMonId = monId;
     localStorage.setItem('damSan_Workspace', monId);
-    
+
     danhSachDeThi = new Array(); danhSachThuCong = new Array();
     if(document.getElementById('matrixBody')) document.getElementById('matrixBody').innerHTML = '';
     if(document.getElementById('manBody')) { document.getElementById('manBody').innerHTML = '<tr><td colspan="5">Chưa có câu hỏi nào được gõ...</td></tr>'; document.getElementById('manCount').innerText = '0'; }
@@ -467,8 +467,8 @@ function checkWorkspaceAction() {
 }
 
 function khoiTaoGiaoDienHeThong() {
-    initQuarantineUI(); 
-    initMultiClassModal(); 
+    initQuarantineUI();
+    initMultiClassModal();
 }
 
 // KHỞI TẠO UI TRẠM KIỂM DỊCH
@@ -477,7 +477,7 @@ function initQuarantineUI() {
     let m = document.createElement('div');
     m.id = 'quarantineModal';
     m.className = 'modal-overlay';
-    m.style.zIndex = '100000'; 
+    m.style.zIndex = '100000';
     m.innerHTML = `
         <div class="modal-content" style="max-width: 850px; width: 95%;">
             <div class="modal-header" style="border-bottom: 2px solid #e74c3c;">
@@ -488,20 +488,20 @@ function initQuarantineUI() {
                 Hệ thống không thể bóc tách tự động do lỗi gõ phím trong file Word (dư khoảng trắng, thiếu dấu chấm, không chia dòng đáp án...). Vui lòng sửa thủ công để không làm hỏng đề!
                 <br>👉 Còn lại: <span id="qrt-count" style="font-size: 18px; color: #8e44ad;">0</span> câu đang chờ xử lý.
             </div>
-            
+
             <div style="display:flex; gap:15px; margin-bottom: 15px; flex-wrap: wrap;">
                 <div style="flex:1; min-width: 300px; border: 1px solid #ccc; border-radius: 6px; padding: 10px; background: #f8f9fa; max-height: 420px; overflow-y: auto;">
                     <b style="color: #1a73e8; display:block; margin-bottom: 5px;">Văn bản gốc (Trích xuất từ Word):</b>
                     <div id="qrt-raw-html" style="font-size: 15px; line-height: 1.5; color: #333; background: #fff; padding: 10px; border: 1px dashed #aaa;"></div>
                 </div>
-                
+
                 <div style="flex:1; min-width: 300px; display:flex; flex-direction:column; gap: 10px;">
                     <div style="display:flex; gap: 10px;">
                         <div style="flex:1"><label>Phần:</label><select id="qrt-phan" style="width:100%; padding:6px; font-weight:bold; color:#1a73e8;" onchange="changePhanQrt()"><option value="1">Phần I</option><option value="2">Phần II</option><option value="3">Phần III</option></select></div>
                         <div style="flex:1"><label>Mức độ:</label><select id="qrt-mucdo" style="width:100%; padding:6px;"><option value="NB">NB</option><option value="TH">TH</option><option value="VD">VD</option><option value="VDC">VDC</option></select></div>
                     </div>
                     <div><label>Nội dung câu hỏi:</label><div id="qrt-noidung" contenteditable="true" style="border: 2px solid #3498db; padding: 8px; min-height: 60px; border-radius: 4px; background: #fff; outline:none;"></div></div>
-                    
+
                     <div id="qrt-area-p1">
                         <div style="display:flex; gap:10px; margin-bottom:10px;">
                             <div style="flex:1"><label>A:</label><textarea id="qrt-a1" rows="2" style="width:100%; padding:5px;"></textarea></div>
@@ -513,7 +513,7 @@ function initQuarantineUI() {
                         </div>
                         <div><label>Đáp án Đúng (A/B/C/D):</label><select id="qrt-dapan1" style="width:100%; padding:6px; font-weight:bold; color:green;"><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select></div>
                     </div>
-                    
+
                     <div id="qrt-area-p2" style="display:none;">
                         <div style="display:flex; gap:10px; margin-bottom:10px;">
                             <div style="flex:1"><label>Ý a:</label><textarea id="qrt-a2" rows="2" style="width:100%; padding:5px;"></textarea></div>
@@ -525,14 +525,14 @@ function initQuarantineUI() {
                         </div>
                         <div><label>Đáp án (Đ-S-Đ-S):</label><input type="text" id="qrt-dapan2" placeholder="Ví dụ: Đ-S-S-Đ" style="width:100%; padding:6px; font-weight:bold; color:green; text-transform:uppercase;"></div>
                     </div>
-                    
+
                     <div id="qrt-area-p3" style="display:none;">
                         <div><label>Đáp án Trả lời ngắn:</label><input type="text" id="qrt-dapan3" placeholder="Nhập đáp án số hoặc chữ..." style="width:100%; padding:6px; font-weight:bold; color:green;"></div>
                     </div>
 
                 </div>
             </div>
-            
+
             <div style="display:flex; gap: 10px; justify-content: flex-end; border-top: 1px dashed #ccc; padding-top: 15px;">
                 <button onclick="skipQuarantineItem()" style="background: #95a5a6; color: white; padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition:0.2s;">🗑️ Xóa bỏ câu này</button>
                 <button onclick="saveQuarantineItem()" style="background: #27ae60; color: white; padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition:0.2s; box-shadow: 0 3px 0 #1e8449;">💾 Đã sửa xong. Lưu & Tiếp tục!</button>
@@ -555,13 +555,13 @@ function initMultiClassModal() {
                 <span style="cursor: pointer; color: #e74c3c; font-size: 20px; font-weight: bold; padding:0 5px;" onclick="document.getElementById('multiClassModal').style.display='none'">✖</span>
             </div>
             <input type="hidden" id="mc_roomId">
-            
+
             <div id="mc_quick_btns" style="margin-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
                 </div>
 
             <div id="mc_classList" style="display:flex; flex-wrap:wrap; gap:10px; max-height: 250px; overflow-y:auto; border:1px solid #eee; padding:15px; border-radius:6px; margin-bottom:15px; background:#fafafa;">
             </div>
-            
+
             <div style="margin-bottom:15px; background: #fff3cd; padding: 15px; border-radius: 6px; border: 1px solid #ffe69c;">
                 <label style="font-weight:bold; color:#d35400; font-size:14px; display:block; margin-bottom: 5px;">🎯 Chỉ định đích danh:</label>
                 <input type="text" id="mc_sbd_thibu" placeholder="Nhập Mã HS (VD: HS015, HS092)..." style="width:100%; padding:10px; border:1px solid #f39c12; border-radius:4px; font-weight:bold; box-sizing: border-box; text-transform: uppercase;">
@@ -580,7 +580,7 @@ function moModalChonLop(roomId, currentVal) {
     let quickBtnContainer = document.getElementById('mc_quick_btns');
     let sbdInput = document.getElementById('mc_sbd_thibu');
     container.innerHTML = '';
-    quickBtnContainer.innerHTML = ''; 
+    quickBtnContainer.innerHTML = '';
     if(sbdInput) sbdInput.value = '';
 
     if(!g_danhSachLopCache || g_danhSachLopCache.length === 0) {
@@ -603,10 +603,10 @@ function moModalChonLop(roomId, currentVal) {
 
         let selectedArr = currentVal === 'TatCa' ? new Array() : currentVal.split(',').map(s=>s.trim());
         let isTatCa = currentVal === 'TatCa';
-        
+
         let sbdArr = selectedArr.filter(item => !g_danhSachLopCache.includes(item));
         let lopArr = selectedArr.filter(item => g_danhSachLopCache.includes(item));
-        
+
         if (sbdInput && sbdArr.length > 0 && !isTatCa) sbdInput.value = sbdArr.join(', ');
 
         let html = `
@@ -633,8 +633,8 @@ function moModalChonLop(roomId, currentVal) {
 function mc_toggleTatCa(isChecked) { if(isChecked) { document.querySelectorAll('.mc_class_item').forEach(cb => cb.checked = false); } }
 function mc_uncheckTatCa() { document.getElementById('mc_chk_tatca').checked = false; }
 function mc_chonNhanh(khoi) {
-    if(khoi === 'TatCa') { document.getElementById('mc_chk_tatca').checked = true; mc_toggleTatCa(true); } 
-    else if(khoi === 'Clear') { document.getElementById('mc_chk_tatca').checked = false; document.querySelectorAll('.mc_class_item').forEach(cb => cb.checked = false); } 
+    if(khoi === 'TatCa') { document.getElementById('mc_chk_tatca').checked = true; mc_toggleTatCa(true); }
+    else if(khoi === 'Clear') { document.getElementById('mc_chk_tatca').checked = false; document.querySelectorAll('.mc_class_item').forEach(cb => cb.checked = false); }
     else { mc_uncheckTatCa(); document.querySelectorAll('.mc_class_item').forEach(cb => { if(String(cb.value).trim().startsWith(khoi)) cb.checked = true; }); }
 }
 
@@ -642,26 +642,26 @@ async function mc_luuChonLop() {
     let roomId = document.getElementById('mc_roomId').value;
     let isTatCa = document.getElementById('mc_chk_tatca').checked;
     let finalVal = "TatCa";
-    
+
     let sbdInput = document.getElementById('mc_sbd_thibu');
     let sbdVal = sbdInput ? sbdInput.value.trim().toUpperCase() : "";
     let sbdArr = sbdVal ? sbdVal.split(',').map(s => s.trim()).filter(Boolean) : [];
 
     if (!isTatCa) {
-        let checkedClasses = new Array(); 
+        let checkedClasses = new Array();
         document.querySelectorAll('.mc_class_item:checked').forEach(cb => checkedClasses.push(cb.value));
-        
+
         let combined = checkedClasses.concat(sbdArr);
         if(combined.length > 0) finalVal = combined.join(', ');
-        else finalVal = ""; 
+        else finalVal = "";
     }
-    
+
     if (!isTatCa && finalVal === "") return alert("Vui lòng chọn ít nhất 1 lớp hoặc nhập mã HS để giao đề!");
 
     let btn = document.querySelector('#multiClassModal button[onclick="mc_luuChonLop()"]');
     let oldText = btn.innerText; btn.innerText = "⏳ ĐANG LƯU..."; btn.disabled = true;
     await capNhatNhanhPhong(roomId, 'doi_tuong', finalVal);
-    btn.innerText = oldText; btn.disabled = false; document.getElementById('multiClassModal').style.display = 'none'; fetchRadar(); 
+    btn.innerText = oldText; btn.disabled = false; document.getElementById('multiClassModal').style.display = 'none'; fetchRadar();
 }
 
 function phanQuyenGiaoVien() {
@@ -683,16 +683,16 @@ function phanQuyenGiaoVien() {
 
 // KHỞI ĐỘNG HỆ THỐNG GIAO VIÊN
 async function khoiTaoDuLieu() {
-    try { 
-        khoiTaoGiaoDienHeThong(); 
-        await khoiTaoWorkspace(); 
+    try {
+        khoiTaoGiaoDienHeThong();
+        await khoiTaoWorkspace();
         phanQuyenGiaoVien();
-        loadBankMeta(); 
-        loadMetaData(); 
-        fetchRadar(); 
+        loadBankMeta();
+        loadMetaData();
+        fetchRadar();
         if (gvData.quyen === 'Admin') { fetchStudents(true); fetchTeachers(true); }
-        taiDanhSachPhong(); 
-        
+        taiDanhSachPhong();
+
         // Kích hoạt ngay chức năng Auto-Refresh 5s từ giao diện HTML
         toggleAutoRefresh();
 
@@ -709,7 +709,7 @@ async function khoiTaoDuLieu() {
 function toggleAutoRefresh() {
     let toggleBtn = document.getElementById('autoRefreshToggle');
     if (!toggleBtn) return;
-    
+
     let isChecked = toggleBtn.checked;
     if (isChecked) {
         if(autoRefreshInterval) clearInterval(autoRefreshInterval);
@@ -729,70 +729,70 @@ function toggleAutoRefresh() {
 }
 
 // Hàm Live Search bị thiếu đã được khôi phục
-function renderDashboardTable() { 
-    let statBox = document.getElementById("analyticDashboard"); 
+function renderDashboardTable() {
+    let statBox = document.getElementById("analyticDashboard");
     let currentRoom = getSelectedRoom('dashMaPhong');
-    
-    if(duLieuBangDiem.length === 0) { 
-        if(statBox) statBox.style.display = "none"; 
-        document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>'; 
-        return; 
-    } 
 
-    let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; let displayList = new Array(); let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop; 
-    
+    if(duLieuBangDiem.length === 0) {
+        if(statBox) statBox.style.display = "none";
+        document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu bài làm nào trong phòng này.</td></tr>';
+        return;
+    }
+
+    let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; let displayList = new Array(); let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop;
+
     // TỐI ƯU: Sử dụng Map để tìm kiếm kết quả bài làm nhanh hơn (O(N) thay vì O(N*M))
     const ketQuaMap = new Map();
     duLieuBangDiem.forEach(r => ketQuaMap.set(String(r.MaHS).trim(), r));
 
-    if (targetLop && targetLop !== "TatCa") { 
+    if (targetLop && targetLop !== "TatCa") {
         let allowedClasses = targetLop.split(',').map(s => s.trim());
-        let classStudents = allStudents.filter(s => allowedClasses.includes(String(s.Lop).trim())); 
-        
-        classStudents.forEach(stu => { 
+        let classStudents = allStudents.filter(s => allowedClasses.includes(String(s.Lop).trim()));
+
+        classStudents.forEach(stu => {
             let key = String(stu.MaHS).trim();
             let result = ketQuaMap.get(key);
             if (result) {
-                displayList.push({...result, MaHS: stu.MaHS, id: stu.id}); 
+                displayList.push({...result, MaHS: stu.MaHS, id: stu.id});
                 ketQuaMap.delete(key); // Đã xử lý xong
             } else {
-                displayList.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, id: stu.id, ViPham: 0 }); 
+                displayList.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, id: stu.id, ViPham: 0 });
             }
-        }); 
+        });
 
         // Thêm những học sinh có bài làm nhưng không nằm trong danh sách lớp đã lọc (trường hợp vãng lai)
         ketQuaMap.forEach((r, key) => {
             let stu = allStudents.find(s => String(s.MaHS).trim() === key);
             displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null});
         });
-    } else { 
-        duLieuBangDiem.forEach(r => { 
-            let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); 
-            displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null}); 
-        }); 
-    } 
-    if(currentDashFilter !== 'TatCa') { 
+    } else {
+        duLieuBangDiem.forEach(r => {
+            let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim());
+            displayList.push({...r, MaHS: stu ? stu.MaHS : r.MaHS, id: stu ? stu.id : null});
+        });
+    }
+    if(currentDashFilter !== 'TatCa') {
         let allowedClasses = currentDashFilter.split(',').map(s => s.trim());
-        displayList = displayList.filter(d => allowedClasses.includes(String(d.Lop).trim())); 
-    } 
-    
-    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu.</td></tr>'; return; } 
-    
-    if(statBox) statBox.style.display = "block"; 
-    let sum = 0, passed = 0, submittedCount = 0; 
-    let failCount = {}; let html = ""; 
-    
+        displayList = displayList.filter(d => allowedClasses.includes(String(d.Lop).trim()));
+    }
+
+    if(displayList.length === 0) { if(statBox) statBox.style.display = "none"; document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu.</td></tr>'; return; }
+
+    if(statBox) statBox.style.display = "block";
+    let sum = 0, passed = 0, submittedCount = 0;
+    let failCount = {}; let html = "";
+
     let countGioi = 0, countKha = 0, countTB = 0, countYeu = 0;
 
-    displayList.sort((a, b) => (String(a.MaHS) || '').localeCompare(String(b.MaHS) || '')); 
+    displayList.sort((a, b) => (String(a.MaHS) || '').localeCompare(String(b.MaHS) || ''));
 
-    displayList.forEach(hs => { 
-        hs.p1Score = 0; hs.p2Score = 0; hs.p3Score = 0; 
-        
+    displayList.forEach(hs => {
+        hs.p1Score = 0; hs.p2Score = 0; hs.p3Score = 0;
+
         let isSubmitted = (hs.Diem !== null && hs.Diem !== undefined && hs.Diem !== "-");
 
-        if(hs.ChiTiet && isSubmitted) { 
-            try { 
+        if(hs.ChiTiet && isSubmitted) {
+            try {
                 // TỐI ƯU: Chỉ parse JSON nếu nội dung thay đổi (so sánh với cache)
                 let ct;
                 if (chiTietCache.has(hs.ChiTiet)) {
@@ -802,62 +802,62 @@ function renderDashboardTable() {
                     chiTietCache.set(hs.ChiTiet, ct);
                 }
 
-                for (let k in ct) { 
-                    let item = ct[k]; let isDung = false; 
-                    if(item.phan==="1") { 
+                for (let k in ct) {
+                    let item = ct[k]; let isDung = false;
+                    if(item.phan==="1") {
                         let cVal = String(item.chon||"").toUpperCase().trim();
                         let dVal = String(item.dung||"").toUpperCase().trim();
-                        isDung = (cVal === dVal); 
-                        if(isDung) hs.p1Score += 0.25; 
-                    } 
-                    else if(item.phan==="2") { 
-                        let cArr = String(item.chon||"").split('-'); 
+                        isDung = (cVal === dVal);
+                        if(isDung) hs.p1Score += 0.25;
+                    }
+                    else if(item.phan==="2") {
+                        let cArr = String(item.chon||"").split('-');
                         let dStr = String(item.dung||"").toUpperCase().replace(/[ÐD]/g, 'Đ');
                         let dArr = dStr.match(/[ĐS]/g);
                         if (!dArr) dArr = [];
-                        let match = 0; 
-                        for(let i=0; i<4; i++) { 
+                        let match = 0;
+                        for(let i=0; i<4; i++) {
                             let cValRaw = cArr[i] || "";
                             let cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
                             let cleanCVal = "";
                             if (cVal.includes("Đ")) cleanCVal = "Đ";
                             if (cVal.includes("S")) cleanCVal = "S";
                             let dVal = dArr[i] || "";
-                            if(cleanCVal !== "" && cleanCVal === dVal) match++; 
-                        } 
-                        if(match===1) hs.p2Score += 0.1; else if(match===2) hs.p2Score += 0.25; else if(match===3) hs.p2Score += 0.5; else if(match===4) hs.p2Score += 1.0; 
-                        isDung = (match === 4); 
-                    } 
-                    else if(item.phan==="3") { 
+                            if(cleanCVal !== "" && cleanCVal === dVal) match++;
+                        }
+                        if(match===1) hs.p2Score += 0.1; else if(match===2) hs.p2Score += 0.25; else if(match===3) hs.p2Score += 0.5; else if(match===4) hs.p2Score += 1.0;
+                        isDung = (match === 4);
+                    }
+                    else if(item.phan==="3") {
                         let aClean = String(item.chon).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
                         let dClean = String(item.dung).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
                         isDung = (aClean !== "" && aClean === dClean);
-                        if(isDung) hs.p3Score += 0.25; 
-                    } 
-                    if(!isDung) { 
-                        failCount[k] = (failCount[k] || 0) + 1; 
-                        failCount[k+"_txt"] = item.noiDungCau; 
-                    } 
+                        if(isDung) hs.p3Score += 0.25;
+                    }
+                    if(!isDung) {
+                        failCount[k] = (failCount[k] || 0) + 1;
+                        failCount[k+"_txt"] = item.noiDungCau;
+                    }
                 }
-            } catch(e){} 
-        } 
+            } catch(e){}
+        }
 
         hs.p1Score = parseFloat(hs.p1Score).toFixed(2);
         hs.p2Score = parseFloat(hs.p2Score).toFixed(2);
         hs.p3Score = parseFloat(hs.p3Score).toFixed(2);
 
-        if (isSubmitted) { 
-            submittedCount++; 
+        if (isSubmitted) {
+            submittedCount++;
             let diemFloat = parseFloat(hs.Diem) || 0;
-            sum += diemFloat; 
-            if(diemFloat >= 5.0) passed++; 
+            sum += diemFloat;
+            if(diemFloat >= 5.0) passed++;
 
             if (diemFloat >= 8.0) countGioi++;
             else if (diemFloat >= 6.5) countKha++;
             else if (diemFloat >= 5.0) countTB++;
             else countYeu++;
-        } 
-        
+        }
+
         let totalRaw = isSubmitted ? parseFloat(hs.Diem) : 0;
         let totalDisplay = isSubmitted ? totalRaw : "-";
 
@@ -873,9 +873,9 @@ function renderDashboardTable() {
                 }
             } catch(e) {}
         }
-        
-        let total = isSubmitted ? parseFloat(totalDisplay).toFixed(2) : "-"; 
-        
+
+        let total = isSubmitted ? parseFloat(totalDisplay).toFixed(2) : "-";
+
         // ĐỒNG BỘ ĐIỂM THÀNH PHẦN (P1) NẾU LÀ BÀI KIỂM TRA NGẮN
         let p1Display = isSubmitted ? parseFloat(hs.p1Score) : "-";
         let p2Display = isSubmitted ? parseFloat(hs.p2Score) : "-";
@@ -894,10 +894,10 @@ function renderDashboardTable() {
             else if(score >= 5.0) badgeClass = 'bg-tb';
             else badgeClass = 'bg-yeu';
         }
-        
+
         let scoreHtml = isSubmitted ? `<span class="badge-score ${badgeClass}">${total}</span>` : `<span style="color:#95a5a6; font-weight:bold;">${total}</span>`;
-        let trStyle = isSubmitted && parseFloat(total) < 5.0 ? 'background-color: #fdf2e9;' : ''; 
-        
+        let trStyle = isSubmitted && parseFloat(total) < 5.0 ? 'background-color: #fdf2e9;' : '';
+
         let sttHtml = isSubmitted ? '<span style="color:#27ae60;font-weight:bold;">✅ Đã nộp</span>' : '<span style="color:#95a5a6;">Chưa nộp</span>';
 
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
@@ -905,11 +905,11 @@ function renderDashboardTable() {
 
         // KIỂM TRA VI PHẠM & GẮN CỜ CẢNH BÁO (DEEP SCAN + SIGNAL 88)
         let flagHtml = "";
-        let violationColor = "#d93025"; 
+        let violationColor = "#d93025";
         const ctStr = (hs.ChiTiet || "").toUpperCase();
         // Cờ đỏ nếu: Có tag kỹ thuật HOẶC số vi phạm là 88 (mã đặc biệt)
         let isFatalP2 = ctStr.includes("PART_II") || ctStr.includes("PHẦN II") || ctStr.includes("FATAL_P2") || hs.ViPham >= 88;
-        
+
         if (isFatalP2) {
             // Trường hợp 1: Vi phạm nghiêm trọng Phần II (Ép thu bài ngay lập tức)
             violationColor = "#d93025"; // Đỏ đậm
@@ -922,7 +922,7 @@ function renderDashboardTable() {
 
         let displayViPham = hs.ViPham >= 88 ? "X" : hs.ViPham;
         let viPhamDisplay = (hs.ViPham > 0 ? `<b style="color: ${violationColor}; font-size: 16px;">${displayViPham}</b>` : "") + flagHtml;
-        
+
         html += `<tr style="${trStyle}">
             <td><b>${hs.MaHS || '-'}</b></td>
             <td style="text-align:left;"><b>${hs.HoTen}</b></td>
@@ -934,39 +934,39 @@ function renderDashboardTable() {
             <td>${p2Display}</td>
             <td>${p3Display}</td>
             <td>${viPhamDisplay}</td>
-        </tr>`; 
-    }); 
-    
-    if(document.getElementById("statSiSo")) document.getElementById("statSiSo").innerText = `${submittedCount} / ${displayList.length}`; 
-    if(document.getElementById("statAvg")) document.getElementById("statAvg").innerText = submittedCount > 0 ? (sum/submittedCount).toFixed(2) : "0.0"; 
-    if(document.getElementById("statPass")) document.getElementById("statPass").innerText = submittedCount > 0 ? Math.round((passed/submittedCount)*100) + "%" : "0%"; 
-    if(document.getElementById("statPassDetail")) document.getElementById("statPassDetail").innerText = `${passed} học sinh đạt từ 5.0 trở lên`; 
+        </tr>`;
+    });
+
+    if(document.getElementById("statSiSo")) document.getElementById("statSiSo").innerText = `${submittedCount} / ${displayList.length}`;
+    if(document.getElementById("statAvg")) document.getElementById("statAvg").innerText = submittedCount > 0 ? (sum/submittedCount).toFixed(2) : "0.0";
+    if(document.getElementById("statPass")) document.getElementById("statPass").innerText = submittedCount > 0 ? Math.round((passed/submittedCount)*100) + "%" : "0%";
+    if(document.getElementById("statPassDetail")) document.getElementById("statPassDetail").innerText = `${passed} học sinh đạt từ 5.0 trở lên`;
 
     if(document.getElementById("distGioi")) document.getElementById("distGioi").innerText = countGioi;
-    document.getElementById('dashBody').innerHTML = html; 
-    
+    document.getElementById('dashBody').innerHTML = html;
+
     // Áp dụng bộ lọc tìm kiếm ngay sau khi render xong
     xuLyLiveSearch();
 
     if(document.getElementById("distKha")) document.getElementById("distKha").innerText = countKha;
     if(document.getElementById("distTB")) document.getElementById("distTB").innerText = countTB;
     if(document.getElementById("distYeu")) document.getElementById("distYeu").innerText = countYeu;
-    
-    let maxFail = 0; let killerQ = "Chưa có dữ liệu"; 
-    Object.keys(failCount).forEach(k => { 
+
+    let maxFail = 0; let killerQ = "Chưa có dữ liệu";
+    Object.keys(failCount).forEach(k => {
         if(!k.includes("_txt")) {
             let val = Reflect.get(failCount, k);
             if (val > maxFail) {
-                maxFail = val; 
+                maxFail = val;
                 killerQ = Reflect.get(failCount, k+"_txt");
             }
-        } 
-    }); 
+        }
+    });
     if(document.getElementById("statKiller")) {
-        if(maxFail > 0) document.getElementById("statKiller").innerHTML = `Có <b>${maxFail} học sinh</b> làm sai câu hỏi sau:<br/> <span style="font-style:italic; font-weight:normal; color:#555;">"${(killerQ || "").substring(0, 90)}..."</span>`; 
+        if(maxFail > 0) document.getElementById("statKiller").innerHTML = `Có <b>${maxFail} học sinh</b> làm sai câu hỏi sau:<br/> <span style="font-style:italic; font-weight:normal; color:#555;">"${(killerQ || "").substring(0, 90)}..."</span>`;
         else document.getElementById("statKiller").innerHTML = `Đang thu thập dữ liệu...`;
     }
-    
+
 }
 
 // BỘ BẮT SÓNG REALTIME DỰ PHÒNG
@@ -974,7 +974,7 @@ function kichHoatLienKetRealtimeGiaoVien() {
     if (ketQuaChannel) {
         sb.removeChannel(ketQuaChannel);
     }
-    
+
     ketQuaChannel = sb.channel('gv-ket-qua-master')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'ket_qua' }, payload => {
             const selectedRoom = getSelectedRoom('dashMaPhong');
@@ -983,7 +983,7 @@ function kichHoatLienKetRealtimeGiaoVien() {
                 if (window.autoDashTimeout) clearTimeout(window.autoDashTimeout);
                 window.autoDashTimeout = setTimeout(() => {
                     fetchDashboard(true);
-                }, 3000); 
+                }, 3000);
             }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'phong_thi' }, payload => {
@@ -994,7 +994,7 @@ function kichHoatLienKetRealtimeGiaoVien() {
 }
 
 /* =======================================================
-   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU 
+   LOGIC CHUYỂN TAB VÀ SIDEBAR MENU
 ======================================================= */
 function switchTab(tabId) {
     let clickedBtn = document.querySelector(`.nav-btn[onclick*="${tabId}"]`);
@@ -1080,15 +1080,15 @@ function switchSubTabTK(mode) {
 
     document.querySelectorAll('#subnav-quanLyTK button').forEach(btn => {
         btn.classList.remove('active');
-        btn.style.background = 'transparent'; 
+        btn.style.background = 'transparent';
         btn.style.color = '#5f6368';
     });
 
     let activeSubBtn = document.querySelector(`#subnav-quanLyTK button[onclick*="${mode}"]`);
-    if(activeSubBtn) { 
-        activeSubBtn.classList.add('active'); 
-        activeSubBtn.style.background = '#e8f0fe'; 
-        activeSubBtn.style.color = '#1a73e8'; 
+    if(activeSubBtn) {
+        activeSubBtn.classList.add('active');
+        activeSubBtn.style.background = '#e8f0fe';
+        activeSubBtn.style.color = '#1a73e8';
     }
 }
 
@@ -1141,27 +1141,27 @@ window.findStyledAnswer = function(qHtml, letter, chunkHtml) {
 window.parseHTMLToJSON = function(htmlText) {
     let imgMap = new Array();
     htmlText = htmlText.replace(/<img[^>]+>/gi, match => { imgMap.push(match); return '[[IMG_' + (imgMap.length - 1) + ']]'; });
-    
+
     htmlText = htmlText.replace(/Thí\s*sinh\s*trả\s*lời\s*từ\s*câu[^<]*?đến\s*câu[^<.]*[.]?/gi, "");
     htmlText = htmlText.replace(/(?:<[^>]+>|&nbsp;|\s|,|-|\()*(?:và\s+)?(?:để\s+)?trả\s+lời(?:<[^>]+>|&nbsp;|\s)*(?:từ\s+)?(?:các\s+)?câu(?:<[^>]+>|&nbsp;|\s|\d|,|-|đến|và)+[:.\)]?/gi, ":");
     htmlText = htmlText.replace(/(?:<[^>]+>|&nbsp;|\s)*:\s*:/g, ":");
 
-    const reP2 = /PH(?:ẦN|AN)(?:<[^>]+>|\s|&nbsp;)*(?:II|2)\b/i; 
+    const reP2 = /PH(?:ẦN|AN)(?:<[^>]+>|\s|&nbsp;)*(?:II|2)\b/i;
     const reP3 = /PH(?:ẦN|AN)(?:<[^>]+>|\s|&nbsp;)*(?:III|3)\b/i;
     let idxP2 = htmlText.search(reP2); let idxP3 = htmlText.search(reP3);
     if (idxP2 !== -1 && idxP3 !== -1 && idxP3 < idxP2) idxP3 = -1;
 
     let p1H = htmlText, p2H = "", p3H = "";
-    if (idxP2 !== -1 && idxP3 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2, idxP3); p3H = htmlText.substring(idxP3); } 
+    if (idxP2 !== -1 && idxP3 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2, idxP3); p3H = htmlText.substring(idxP3); }
     else if (idxP2 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2); }
     else if (idxP3 !== -1) { p1H = htmlText.substring(0, idxP3); p3H = htmlText.substring(idxP3); }
 
-    let questions = new Array(); 
+    let questions = new Array();
     let quarantine = new Array();
 
     const extractQuestions = (htmlBlocks, phanStr) => {
         let regex = /(?:^|>|<br>|<\/?p>)(?:\s|&nbsp;)*(?:\[(NB|TH|VD|VDC)\](?:\s|<[^>]+>)*)?(#\s*[Cc]âu|#\s*[Bb]ài|#|[Cc]âu|[Bb]ài)(?:\s|<[^>]+>)*(\d+)?(?:\s|<[^>]+>)*[:.\-]?/gi;
-        
+
         let matches = new Array();
         let match;
         while ((match = regex.exec(htmlBlocks)) !== null) {
@@ -1196,7 +1196,7 @@ window.parseHTMLToJSON = function(htmlText) {
                 currentSharedContext = qHtml;
             } else {
                 if (type === 'NORMAL') {
-                    currentSharedContext = ""; 
+                    currentSharedContext = "";
                 }
 
                 let finalHtmlToParse = qHtml;
@@ -1205,11 +1205,11 @@ window.parseHTMLToJSON = function(htmlText) {
                 if (currentSharedContext !== "" && type === 'GROUP_CHILD') {
                     let prefix = "<div style=\"background:#f8f9fa; padding:10px; border-left:4px solid #1a73e8; margin-bottom:10px; font-size:14px; color:#2c3e50;\">" + currentSharedContext + "</div>";
                     finalHtmlToParse = prefix + qHtml;
-                    finalRawHtml = prefix + rawHtml; 
+                    finalRawHtml = prefix + rawHtml;
                 }
 
                 let isSuccess = parseSingleQuestionRelaxed(finalHtmlToParse, phanStr, m.mucDo, questions, finalRawHtml);
-                
+
                 if (!isSuccess) {
                     quarantine.push({ Phan: phanStr, MucDo: m.mucDo, RawHtml: finalRawHtml });
                 }
@@ -1227,32 +1227,32 @@ window.parseHTMLToJSON = function(htmlText) {
                 let optRe = /(?:^|>|\s|&nbsp;|<br>|<p>)([A-D])(?:\s|<[^>]+>)*[.)/]/gi;
                 let markers = new Array(); let mMatch;
                 while ((mMatch = optRe.exec(h)) !== null) markers.push({ letter: mMatch[1].toUpperCase(), index: mMatch.index, length: mMatch[0].length });
-                
+
                 let mA = markers.slice().reverse().find(x => x.letter === 'A');
                 let mB = markers.slice().reverse().find(x => x.letter === 'B');
                 let mC = markers.slice().reverse().find(x => x.letter === 'C');
                 let mD = markers.slice().reverse().find(x => x.letter === 'D');
-                
+
                 if (!mA || !mB || !mC || !mD) return false;
 
                 let sortedOpts = [mA, mB, mC, mD].sort((x, y) => x.index - y.index);
                 nDung = cleanContent(h.substring(0, sortedOpts[0].index));
-                
+
                 let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
                 let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
                 let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
-                
+
                 let mAns = h.match(/(?:^|>|\s|<br>|<p>)[Đđ]áp\s*(?:[áa]n|[sS]ố)(?:<[^>]+>|\s)*[:.]\s*([A-D])/i);
                 let endD = mAns ? mAns.index : h.length;
                 let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
-                
+
                 let ansL = mAns ? mAns[1].toUpperCase() : "";
-                
-                if (!ansL) { 
+
+                if (!ansL) {
                     let arrTemp = new Array('A', 'B', 'C', 'D');
                     let optContents = new Array(t0, t1, t2, t3);
-                    let arr = arrTemp.filter(l => window.findStyledAnswer(h, l, optContents[arrTemp.indexOf(l)])); 
-                    if (arr.length === 1) ansL = arr[0]; 
+                    let arr = arrTemp.filter(l => window.findStyledAnswer(h, l, optContents[arrTemp.indexOf(l)]));
+                    if (arr.length === 1) ansL = arr[0];
                 }
 
                 validArray.push({ Phan: "1", MucDo: mucDo, NoiDung: nDung, DapAnA: cleanAns(t0), DapAnB: cleanAns(t1), DapAnC: cleanAns(t2), DapAnD: cleanAns(t3), DapAnDung: ansL, RawHtmlFallback: rawHtmlBackup });
@@ -1262,7 +1262,7 @@ window.parseHTMLToJSON = function(htmlText) {
                 let optRe = /(?:^|>|\s|&nbsp;|<br>|<p>)([a-d])(?:\s|<[^>]+>)*[.)/]/gi;
                 let markers = new Array(); let mMatch;
                 while ((mMatch = optRe.exec(h)) !== null) markers.push({ letter: mMatch[1].toLowerCase(), index: mMatch.index, length: mMatch[0].length });
-                
+
                 let ma = markers.slice().reverse().find(x => x.letter === 'a');
                 let mb = markers.slice().reverse().find(x => x.letter === 'b');
                 let mc = markers.slice().reverse().find(x => x.letter === 'c');
@@ -1272,15 +1272,15 @@ window.parseHTMLToJSON = function(htmlText) {
 
                 let sortedOpts = [ma, mb, mc, md].sort((x, y) => x.index - y.index);
                 nDung = cleanContent(h.substring(0, sortedOpts[0].index));
-                
+
                 let t0 = h.substring(sortedOpts[0].index + sortedOpts[0].length, sortedOpts[1].index);
                 let t1 = h.substring(sortedOpts[1].index + sortedOpts[1].length, sortedOpts[2].index);
                 let t2 = h.substring(sortedOpts[2].index + sortedOpts[2].length, sortedOpts[3].index);
-                
+
                 let mAns = h.match(/(?:^|>|\s|<br>|<p>)[Đđ]áp\s*(?:[áa]n|[sS]ố)(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
                 let endD = mAns ? mAns.index : h.length;
                 let t3 = h.substring(sortedOpts[3].index + sortedOpts[3].length, endD);
-                
+
                 let eOpts = { 'a': { raw: t0 }, 'b': { raw: t1 }, 'c': { raw: t2 }, 'd': { raw: t3 } };
                 let ansS = "";
                 if (mAns) { ansS = cleanAns(mAns[1]).toUpperCase().replace(new RegExp("[^ĐS]", "g"), ''); if(ansS.length >= 4) ansS = ansS.substring(0,4).split('').join('-'); }
@@ -1296,13 +1296,13 @@ window.parseHTMLToJSON = function(htmlText) {
                 let mAns = h.match(/(?:^|>|\s|<br>|<p>)[Đđ]áp\s*(?:[áa]n|[sS]ố)(?:<[^>]+>|\s)*[:.]\s*([\s\S]*?)$/i);
                 nDung = cleanContent(mAns ? h.substring(0, mAns.index) : h);
                 let ansStr = "";
-                if (mAns) { ansStr = cleanAns(mAns[1]); } 
+                if (mAns) { ansStr = cleanAns(mAns[1]); }
                 else {
                     let spanMatch = h.match(/<span[^>]*color\s*:\s*(?:red|#f00)[^>]*>([\s\S]*?)<\/span>|<b\b[^>]*>([\s\S]*?)<\/b>|<strong[^>]*>([\s\S]*?)<\/strong>|<u\b[^>]*>([\s\S]*?)<\/u>/i);
                     if (spanMatch) { ansStr = cleanAns(spanMatch[1] || spanMatch[2] || spanMatch[3] || spanMatch[4]); nDung = cleanContent(h.replace(spanMatch[0], '')); }
                 }
-                if (ansStr) ansStr = "'" + ansStr; 
-                
+                if (ansStr) ansStr = "'" + ansStr;
+
                 if (!nDung && !ansStr) return false;
 
                 validArray.push({ Phan: "3", MucDo: mucDo, NoiDung: nDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: ansStr, RawHtmlFallback: rawHtmlBackup });
@@ -1315,20 +1315,20 @@ window.parseHTMLToJSON = function(htmlText) {
     };
 
     extractQuestions(p1H, "1"); extractQuestions(p2H, "2"); extractQuestions(p3H, "3");
-    
+
     questions.forEach(q => {
         let r = (t) => (t||"").replace(/\[\[IMG_(\d+)\]\]/g, (m, p1) => imgMap[parseInt(p1)] || m);
         q.NoiDung = r(q.NoiDung); q.DapAnA = r(q.DapAnA); q.DapAnB = r(q.DapAnB); q.DapAnC = r(q.DapAnC); q.DapAnD = r(q.DapAnD);
         q.RawHtmlFallback = r(q.RawHtmlFallback);
     });
-    
+
     quarantine.forEach(q => {
         let r = (t) => (t||"").replace(/\[\[IMG_(\d+)\]\]/g, (m, p1) => imgMap[parseInt(p1)] || m);
         q.RawHtml = r(q.RawHtml);
     });
 
     if(questions.length===0 && quarantine.length===0) return {hopLe:false, thongBao:"⛔ Không tìm thấy cấu trúc câu hỏi nào. Hãy kiểm tra định dạng file Word."};
-    
+
     return {hopLe:true, duLieu: questions, quarantine: quarantine};
 };
 
@@ -1349,7 +1349,7 @@ window.processFile = async function(mode) {
 
     try {
         if (typeof mammoth === "undefined") throw new Error("Thư viện đọc Word (Mammoth.js) chưa tải xong, vui lòng chờ 1 lát rồi bấm lại.");
-        
+
         const arrayBuffer = await window.fileToArrayBuffer(fileInput.files[0]);
         const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer }, window.getMammothOptions());
         let html = result.value || "";
@@ -1360,7 +1360,7 @@ window.processFile = async function(mode) {
 
         if (parseRes.quarantine.length > 0) {
             logEl.innerText = `⚠️ Phát hiện ${parseRes.quarantine.length} câu bị lỗi gõ phím. Đang mở Trạm Kiểm Dịch...`;
-            
+
             let currentParams = {};
             if (mode === 'direct') {
                 currentParams.maPhong = document.getElementById('maPhongDirect').value.trim();
@@ -1377,10 +1377,10 @@ window.processFile = async function(mode) {
             qrtState.params = currentParams;
             qrtState.btnId = btn.id;
             qrtState.oldBtnText = oldText;
-            
+
             renderQuarantineItem();
             document.getElementById('quarantineModal').style.display = 'flex';
-            return; 
+            return;
         }
 
         await continueProcessingFile(parseRes.duLieu, mode, btn, logEl, oldText, {
@@ -1396,7 +1396,7 @@ window.processFile = async function(mode) {
         alert("Lỗi: " + err.message);
         btn.innerText = oldText;
         btn.disabled = false;
-    } 
+    }
 };
 
 // TRẠM KIỂM DỊCH: HIỂN THỊ VÀ LƯU
@@ -1415,15 +1415,15 @@ window.renderQuarantineItem = function() {
     let current = qrtState.pending[0];
     document.getElementById('qrt-count').innerText = qrtState.pending.length;
     document.getElementById('qrt-raw-html').innerHTML = current.RawHtml;
-    
+
     document.getElementById('qrt-phan').value = current.Phan || "1";
     document.getElementById('qrt-mucdo').value = current.MucDo || "NB";
-    
+
     document.getElementById('qrt-noidung').innerHTML = "";
     document.getElementById('qrt-a1').value = ""; document.getElementById('qrt-b1').value = ""; document.getElementById('qrt-c1').value = ""; document.getElementById('qrt-d1').value = ""; document.getElementById('qrt-dapan1').value = "A";
     document.getElementById('qrt-a2').value = ""; document.getElementById('qrt-b2').value = ""; document.getElementById('qrt-c2').value = ""; document.getElementById('qrt-d2').value = ""; document.getElementById('qrt-dapan2').value = "";
     document.getElementById('qrt-dapan3').value = "";
-    
+
     changePhanQrt();
 };
 
@@ -1436,11 +1436,11 @@ window.saveQuarantineItem = function() {
     let phan = document.getElementById('qrt-phan').value;
     let mucDo = document.getElementById('qrt-mucdo').value;
     let noiDung = safeHTML(document.getElementById('qrt-noidung').innerHTML.trim());
-    
+
     if(!noiDung || noiDung === "<br>") return alert("Vui lòng nhập Nội dung câu hỏi!");
-    
+
     let cauHoi = { Phan: phan, MucDo: mucDo, NoiDung: noiDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: "" };
-    
+
     if (phan === "1") {
         cauHoi.DapAnA = safeHTML(document.getElementById('qrt-a1').value.trim());
         cauHoi.DapAnB = safeHTML(document.getElementById('qrt-b1').value.trim());
@@ -1462,7 +1462,7 @@ window.saveQuarantineItem = function() {
         if (!dapAn.startsWith("'")) dapAn = "'" + dapAn;
         cauHoi.DapAnDung = dapAn;
     }
-    
+
     qrtState.valid.push(cauHoi);
     qrtState.pending.shift();
     renderQuarantineItem();
@@ -1471,13 +1471,13 @@ window.saveQuarantineItem = function() {
 window.closeQuarantine = function(isForceClose) {
     document.getElementById('quarantineModal').style.display = 'none';
     let btn = document.getElementById(qrtState.btnId);
-    
+
     if (isForceClose) {
         if(btn) { btn.innerText = qrtState.oldBtnText; btn.disabled = false; }
         document.getElementById(qrtState.mode === 'direct' ? 'logDirect' : 'logBank').innerText = "Đã hủy bỏ tiến trình bóc tách.";
         return;
     }
-    
+
     let logEl = document.getElementById(qrtState.mode === 'direct' ? 'logDirect' : 'logBank');
     logEl.innerText = "Đã sửa xong lỗi. Đang tiếp tục tiến trình máy chủ...";
     continueProcessingFile(qrtState.valid, qrtState.mode, btn, logEl, qrtState.oldBtnText, qrtState.params);
@@ -1528,192 +1528,192 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
 /* =======================================================
    TRỘN ĐỀ VÀ TIỆN ÍCH
 ======================================================= */
-function changePhanThuCong() { 
-    let phan = document.getElementById("manPhan").value; 
-    document.getElementById("manAreaP1").style.display = (phan === "1") ? "block" : "none"; 
-    document.getElementById("manAreaP2").style.display = (phan === "2") ? "block" : "none"; 
-    document.getElementById("manAreaP3").style.display = (phan === "3") ? "block" : "none"; 
+function changePhanThuCong() {
+    let phan = document.getElementById("manPhan").value;
+    document.getElementById("manAreaP1").style.display = (phan === "1") ? "block" : "none";
+    document.getElementById("manAreaP2").style.display = (phan === "2") ? "block" : "none";
+    document.getElementById("manAreaP3").style.display = (phan === "3") ? "block" : "none";
 }
 
-function themCauHoiThuCong() { 
-    let phan = document.getElementById("manPhan").value; 
-    let mucDo = document.getElementById("manMucDo").value; 
-    let noiDung = safeHTML(document.getElementById("manNoiDung").innerHTML.trim()); 
-    
-    if(noiDung === "" || noiDung === "<br>") return alert("Vui lòng nhập nội dung câu hỏi!"); 
-    
-    let cauHoi = { Phan: phan, MucDo: mucDo, NoiDung: noiDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: "" }; 
-    
-    if(phan === "1") { 
-        cauHoi.DapAnA = safeHTML(document.getElementById("manA1").value.trim()); 
-        cauHoi.DapAnB = safeHTML(document.getElementById("manB1").value.trim()); 
-        cauHoi.DapAnC = safeHTML(document.getElementById("manC1").value.trim()); 
-        cauHoi.DapAnD = safeHTML(document.getElementById("manD1").value.trim()); 
-        cauHoi.DapAnDung = document.getElementById("manDapAn1").value.trim(); 
-        if(!cauHoi.DapAnA || !cauHoi.DapAnB || !cauHoi.DapAnC || !cauHoi.DapAnD) return alert("Vui lòng nhập đủ 4 đáp án A, B, C, D!"); 
-    } else if(phan === "2") { 
-        cauHoi.DapAnA = safeHTML(document.getElementById("manA2").value.trim()); 
-        cauHoi.DapAnB = safeHTML(document.getElementById("manB2").value.trim()); 
-        cauHoi.DapAnC = safeHTML(document.getElementById("manC2").value.trim()); 
-        cauHoi.DapAnD = safeHTML(document.getElementById("manD2").value.trim()); 
-        let dapAnStr = document.getElementById("manDapAn2").value.trim().toUpperCase().replace(/\s/g, '').replace(new RegExp("[-–—]", "g"), '-'); 
-        let validFormat = new RegExp("^[ĐS]-[ĐS]-[ĐS]-[ĐS]$"); 
-        if(!validFormat.test(dapAnStr)) return alert("Chuỗi đáp án không đúng định dạng. Ví dụ chuẩn: Đ-S-Đ-S"); 
-        cauHoi.DapAnDung = dapAnStr; 
-    } else if(phan === "3") { 
-        let dapAn = safeHTML(document.getElementById("manDapAn3").value.trim()); 
-        if(dapAn === "") return alert("Vui lòng nhập đáp án!"); 
-        if (!dapAn.startsWith("'")) dapAn = "'" + dapAn; 
-        cauHoi.DapAnDung = dapAn; 
-    } 
-    
-    danhSachThuCong.push(cauHoi); 
-    document.getElementById("manNoiDung").innerHTML = ""; 
-    document.getElementById("manA1").value = ""; 
-    document.getElementById("manB1").value = ""; 
-    document.getElementById("manC1").value = ""; 
-    document.getElementById("manD1").value = ""; 
-    document.getElementById("manA2").value = ""; 
-    document.getElementById("manB2").value = ""; 
-    document.getElementById("manC2").value = ""; 
-    document.getElementById("manD2").value = ""; 
-    document.getElementById("manDapAn2").value = ""; 
-    document.getElementById("manDapAn3").value = ""; 
-    renderBangThuCong(); 
+function themCauHoiThuCong() {
+    let phan = document.getElementById("manPhan").value;
+    let mucDo = document.getElementById("manMucDo").value;
+    let noiDung = safeHTML(document.getElementById("manNoiDung").innerHTML.trim());
+
+    if(noiDung === "" || noiDung === "<br>") return alert("Vui lòng nhập nội dung câu hỏi!");
+
+    let cauHoi = { Phan: phan, MucDo: mucDo, NoiDung: noiDung, DapAnA: "", DapAnB: "", DapAnC: "", DapAnD: "", DapAnDung: "" };
+
+    if(phan === "1") {
+        cauHoi.DapAnA = safeHTML(document.getElementById("manA1").value.trim());
+        cauHoi.DapAnB = safeHTML(document.getElementById("manB1").value.trim());
+        cauHoi.DapAnC = safeHTML(document.getElementById("manC1").value.trim());
+        cauHoi.DapAnD = safeHTML(document.getElementById("manD1").value.trim());
+        cauHoi.DapAnDung = document.getElementById("manDapAn1").value.trim();
+        if(!cauHoi.DapAnA || !cauHoi.DapAnB || !cauHoi.DapAnC || !cauHoi.DapAnD) return alert("Vui lòng nhập đủ 4 đáp án A, B, C, D!");
+    } else if(phan === "2") {
+        cauHoi.DapAnA = safeHTML(document.getElementById("manA2").value.trim());
+        cauHoi.DapAnB = safeHTML(document.getElementById("manB2").value.trim());
+        cauHoi.DapAnC = safeHTML(document.getElementById("manC2").value.trim());
+        cauHoi.DapAnD = safeHTML(document.getElementById("manD2").value.trim());
+        let dapAnStr = document.getElementById("manDapAn2").value.trim().toUpperCase().replace(/\s/g, '').replace(new RegExp("[-–—]", "g"), '-');
+        let validFormat = new RegExp("^[ĐS]-[ĐS]-[ĐS]-[ĐS]$");
+        if(!validFormat.test(dapAnStr)) return alert("Chuỗi đáp án không đúng định dạng. Ví dụ chuẩn: Đ-S-Đ-S");
+        cauHoi.DapAnDung = dapAnStr;
+    } else if(phan === "3") {
+        let dapAn = safeHTML(document.getElementById("manDapAn3").value.trim());
+        if(dapAn === "") return alert("Vui lòng nhập đáp án!");
+        if (!dapAn.startsWith("'")) dapAn = "'" + dapAn;
+        cauHoi.DapAnDung = dapAn;
+    }
+
+    danhSachThuCong.push(cauHoi);
+    document.getElementById("manNoiDung").innerHTML = "";
+    document.getElementById("manA1").value = "";
+    document.getElementById("manB1").value = "";
+    document.getElementById("manC1").value = "";
+    document.getElementById("manD1").value = "";
+    document.getElementById("manA2").value = "";
+    document.getElementById("manB2").value = "";
+    document.getElementById("manC2").value = "";
+    document.getElementById("manD2").value = "";
+    document.getElementById("manDapAn2").value = "";
+    document.getElementById("manDapAn3").value = "";
+    renderBangThuCong();
 }
 
-function renderBangThuCong() { 
-    let html = ""; 
-    if(danhSachThuCong.length === 0) { 
-        html = '<tr><td colspan="5">Chưa có câu hỏi nào được gõ...</td></tr>'; 
-    } else { 
-        danhSachThuCong.forEach((q, i) => { 
-            let snippet = q.NoiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 60) + "..."; 
-            let dapAnHienThi = String(q.DapAnDung); 
-            if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1); 
-            html += `<tr><td>${i+1}</td><td>P.${q.Phan}</td><td style="text-align:left;">${snippet}</td><td><b>${dapAnHienThi}</b></td><td><button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="xoaCauThuCong(${i})">Xóa</button></td></tr>`; 
-        }); 
-    } 
-    document.getElementById("manBody").innerHTML = html; 
-    document.getElementById("manCount").innerText = danhSachThuCong.length; 
+function renderBangThuCong() {
+    let html = "";
+    if(danhSachThuCong.length === 0) {
+        html = '<tr><td colspan="5">Chưa có câu hỏi nào được gõ...</td></tr>';
+    } else {
+        danhSachThuCong.forEach((q, i) => {
+            let snippet = q.NoiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 60) + "...";
+            let dapAnHienThi = String(q.DapAnDung);
+            if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1);
+            html += `<tr><td>${i+1}</td><td>P.${q.Phan}</td><td style="text-align:left;">${snippet}</td><td><b>${dapAnHienThi}</b></td><td><button style="background:#e74c3c; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" onclick="xoaCauThuCong(${i})">Xóa</button></td></tr>`;
+        });
+    }
+    document.getElementById("manBody").innerHTML = html;
+    document.getElementById("manCount").innerText = danhSachThuCong.length;
 }
 
-function xoaCauThuCong(index) { 
-    danhSachThuCong.splice(index, 1); 
-    renderBangThuCong(); 
+function xoaCauThuCong(index) {
+    danhSachThuCong.splice(index, 1);
+    renderBangThuCong();
 }
 
-function dayDeThuCong() { 
+function dayDeThuCong() {
     if(!checkWorkspaceAction()) return;
-    
-    if(danhSachThuCong.length === 0) return alert("Giỏ câu hỏi trống! Hãy gõ thêm câu hỏi."); 
-    
-    let maPhong = document.getElementById("manMaPhong").value.trim(); 
-    if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!"); 
-    
-    let soLuongDe = parseInt(document.getElementById("manSoLuongDe").value) || 1; 
-    let startCode = parseInt(document.getElementById("manStartCode").value) || 101; 
-    let stepCode = parseInt(document.getElementById("manStepCode").value) || 1; 
-    
-    let btn = document.getElementById("btnDayMan"); 
-    let oldText = btn.innerText; 
-    btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY..."; 
-    btn.disabled = true; 
-    
-    generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode); 
-    
-    luuDeThiLenSupabase(danhSachDeThi).then(data => { 
-        btn.innerText = oldText; 
-        btn.disabled = false; 
-        if(data.status === "success") { 
-            alert(`🎉 Đã đẩy thành công! Sẵn sàng thi!`); 
-        } else { 
-            alert("❌ Lỗi: " + data.message); 
-        } 
-    }).catch(e => { 
-        btn.innerText = oldText; 
-        btn.disabled = false; 
-        alert("❌ Lỗi mạng: " + e.message); 
-    }); 
+
+    if(danhSachThuCong.length === 0) return alert("Giỏ câu hỏi trống! Hãy gõ thêm câu hỏi.");
+
+    let maPhong = document.getElementById("manMaPhong").value.trim();
+    if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi!");
+
+    let soLuongDe = parseInt(document.getElementById("manSoLuongDe").value) || 1;
+    let startCode = parseInt(document.getElementById("manStartCode").value) || 101;
+    let stepCode = parseInt(document.getElementById("manStepCode").value) || 1;
+
+    let btn = document.getElementById("btnDayMan");
+    let oldText = btn.innerText;
+    btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY...";
+    btn.disabled = true;
+
+    generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode);
+
+    luuDeThiLenSupabase(danhSachDeThi).then(data => {
+        btn.innerText = oldText;
+        btn.disabled = false;
+        if(data.status === "success") {
+            alert(`🎉 Đã đẩy thành công! Sẵn sàng thi!`);
+        } else {
+            alert("❌ Lỗi: " + data.message);
+        }
+    }).catch(e => {
+        btn.innerText = oldText;
+        btn.disabled = false;
+        alert("❌ Lỗi mạng: " + e.message);
+    });
 }
 
-function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode = 1) { 
-    danhSachDeThi = new Array(); 
-    for (let i = 0; i < soLuongDe; i++) { 
-        const maDe = startCode + (i * stepCode); 
-        let deThiClone = JSON.parse(JSON.stringify(cauHoiGoc)); 
-        let p1 = deThiClone.filter(c => String(c.Phan).trim() === "1"); 
-        let p2 = deThiClone.filter(c => String(c.Phan).trim() === "2"); 
-        let p3 = deThiClone.filter(c => String(c.Phan).trim() === "3"); 
-        
-        shuffleArray(p1); 
-        p1.forEach((cauHoi, idx) => { 
-            cauHoi.CauSo = "P1_" + (idx + 1); 
-            cauHoi.MaPhong = maPhong; 
-            cauHoi.MaDe = maDe.toString(); 
-            let dapAnDungText = ""; 
-            if (cauHoi.DapAnDung === "A") dapAnDungText = cauHoi.DapAnA; 
-            if (cauHoi.DapAnDung === "B") dapAnDungText = cauHoi.DapAnB; 
-            if (cauHoi.DapAnDung === "C") dapAnDungText = cauHoi.DapAnC; 
-            if (cauHoi.DapAnDung === "D") dapAnDungText = cauHoi.DapAnD; 
-            
+function generateExams(cauHoiGoc, soLuongDe, maPhong, startCode = 101, stepCode = 1) {
+    danhSachDeThi = new Array();
+    for (let i = 0; i < soLuongDe; i++) {
+        const maDe = startCode + (i * stepCode);
+        let deThiClone = JSON.parse(JSON.stringify(cauHoiGoc));
+        let p1 = deThiClone.filter(c => String(c.Phan).trim() === "1");
+        let p2 = deThiClone.filter(c => String(c.Phan).trim() === "2");
+        let p3 = deThiClone.filter(c => String(c.Phan).trim() === "3");
+
+        shuffleArray(p1);
+        p1.forEach((cauHoi, idx) => {
+            cauHoi.CauSo = "P1_" + (idx + 1);
+            cauHoi.MaPhong = maPhong;
+            cauHoi.MaDe = maDe.toString();
+            let dapAnDungText = "";
+            if (cauHoi.DapAnDung === "A") dapAnDungText = cauHoi.DapAnA;
+            if (cauHoi.DapAnDung === "B") dapAnDungText = cauHoi.DapAnB;
+            if (cauHoi.DapAnDung === "C") dapAnDungText = cauHoi.DapAnC;
+            if (cauHoi.DapAnDung === "D") dapAnDungText = cauHoi.DapAnD;
+
             let options = new Array();
             options.push({ text: cauHoi.DapAnA });
             options.push({ text: cauHoi.DapAnB });
             options.push({ text: cauHoi.DapAnC });
             options.push({ text: cauHoi.DapAnD });
-            shuffleArray(options); 
+            shuffleArray(options);
 
-            cauHoi.DapAnA = options[0].text; 
-            cauHoi.DapAnB = options[1].text; 
-            cauHoi.DapAnC = options[2].text; 
-            cauHoi.DapAnD = options[3].text; 
-            
-            if (options[0].text === dapAnDungText) cauHoi.DapAnDung = "A"; 
-            if (options[1].text === dapAnDungText) cauHoi.DapAnDung = "B"; 
-            if (options[2].text === dapAnDungText) cauHoi.DapAnDung = "C"; 
-            if (options[3].text === dapAnDungText) cauHoi.DapAnDung = "D"; 
-            danhSachDeThi.push(cauHoi); 
-        }); 
-        
-        shuffleArray(p2); 
-        p2.forEach((cauHoi, idx) => { 
-            cauHoi.CauSo = "P2_" + (idx + 1); 
-            cauHoi.MaPhong = maPhong; 
-            cauHoi.MaDe = maDe.toString(); 
-            let arrDung = String(cauHoi.DapAnDung).split("-"); 
+            cauHoi.DapAnA = options[0].text;
+            cauHoi.DapAnB = options[1].text;
+            cauHoi.DapAnC = options[2].text;
+            cauHoi.DapAnD = options[3].text;
+
+            if (options[0].text === dapAnDungText) cauHoi.DapAnDung = "A";
+            if (options[1].text === dapAnDungText) cauHoi.DapAnDung = "B";
+            if (options[2].text === dapAnDungText) cauHoi.DapAnDung = "C";
+            if (options[3].text === dapAnDungText) cauHoi.DapAnDung = "D";
+            danhSachDeThi.push(cauHoi);
+        });
+
+        shuffleArray(p2);
+        p2.forEach((cauHoi, idx) => {
+            cauHoi.CauSo = "P2_" + (idx + 1);
+            cauHoi.MaPhong = maPhong;
+            cauHoi.MaDe = maDe.toString();
+            let arrDung = String(cauHoi.DapAnDung).split("-");
             let optionsP2 = new Array();
             optionsP2.push({ text: cauHoi.DapAnA, ans: arrDung[0] });
             optionsP2.push({ text: cauHoi.DapAnB, ans: arrDung[1] });
             optionsP2.push({ text: cauHoi.DapAnC, ans: arrDung[2] });
             optionsP2.push({ text: cauHoi.DapAnD, ans: arrDung[3] });
 
-            shuffleArray(optionsP2); 
-            cauHoi.DapAnA = optionsP2[0].text; 
-            cauHoi.DapAnB = optionsP2[1].text; 
-            cauHoi.DapAnC = optionsP2[2].text; 
-            cauHoi.DapAnD = optionsP2[3].text; 
-            cauHoi.DapAnDung = `${optionsP2[0].ans}-${optionsP2[1].ans}-${optionsP2[2].ans}-${optionsP2[3].ans}`; 
-            danhSachDeThi.push(cauHoi); 
-        }); 
-        
-        shuffleArray(p3); 
-        p3.forEach((cauHoi, idx) => { 
-            cauHoi.CauSo = "P3_" + (idx + 1); 
-            cauHoi.MaPhong = maPhong; 
-            cauHoi.MaDe = maDe.toString(); 
-            danhSachDeThi.push(cauHoi); 
-        }); 
-    } 
+            shuffleArray(optionsP2);
+            cauHoi.DapAnA = optionsP2[0].text;
+            cauHoi.DapAnB = optionsP2[1].text;
+            cauHoi.DapAnC = optionsP2[2].text;
+            cauHoi.DapAnD = optionsP2[3].text;
+            cauHoi.DapAnDung = `${optionsP2[0].ans}-${optionsP2[1].ans}-${optionsP2[2].ans}-${optionsP2[3].ans}`;
+            danhSachDeThi.push(cauHoi);
+        });
+
+        shuffleArray(p3);
+        p3.forEach((cauHoi, idx) => {
+            cauHoi.CauSo = "P3_" + (idx + 1);
+            cauHoi.MaPhong = maPhong;
+            cauHoi.MaDe = maDe.toString();
+            danhSachDeThi.push(cauHoi);
+        });
+    }
 }
 
-function shuffleArray(array) { 
-    for (let i = array.length - 1; i > 0; i--) { 
-        const j = Math.floor(Math.random() * (i + 1)); 
+function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
         let temp = array[i];
         array[i] = array[j];
         array[j] = temp;
-    } 
+    }
 }
 
 function getRoomTargetSchoolId(room) {
@@ -1786,7 +1786,7 @@ async function luuDeThiLenSupabase(deThiArray) {
         }
         currentArr.push({ noi_dung: q.NoiDung, A: q.DapAnA, B: q.DapAnB, C: q.DapAnC, D: q.DapAnD, dap_an_dung: q.DapAnDung, phan: q.Phan });
     });
-    
+
     let rowsToInsert = new Array();
     for (let ma_de in groupedByMaDe) {
         let cauSoArr = Reflect.get(groupedByMaDe, ma_de);
@@ -1822,20 +1822,20 @@ async function xemTruocDeThi() {
             return alert("Lỗi phân quyền hoặc hệ thống: " + (error.message || "Không xác định"));
         }
 
-        if(!exams || exams.length === 0) { 
+        if(!exams || exams.length === 0) {
             console.warn("⚠️ Phòng này tồn tại nhưng bảng de_thi không có dữ liệu cho phong_id:", room.id);
-            return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên."); 
+            return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên.");
         }
 
         previewExamData = exams;
         let uniqueMaDe = Array.from(new Set(exams.map(e => e.ma_de))).sort();
         let selectHtml = '';
         uniqueMaDe.forEach(md => { selectHtml += '<option value="' + md + '">MÃ ĐỀ: ' + md + '</option>'; });
-        
+
         document.getElementById('previewMaDeSelect').innerHTML = selectHtml;
         document.getElementById('previewModal').style.display = 'flex';
-        renderPreviewContent(); 
-        
+        renderPreviewContent();
+
     } catch(e) {
         btn.innerText = oldText; btn.disabled = false; alert("Lỗi khi tải đề thi: " + e.message);
     }
@@ -1844,7 +1844,7 @@ async function xemTruocDeThi() {
 function renderPreviewContent() {
     let maDe = document.getElementById('previewMaDeSelect').value;
     let currentExams = previewExamData.filter(e => e.ma_de === maDe);
-    
+
     let examArray = new Array();
     try {
         if (currentExams.length > 0 && currentExams[0].cau_so) {
@@ -1855,15 +1855,15 @@ function renderPreviewContent() {
         document.getElementById('previewContent').innerHTML = '<p style="color:red; text-align:center;">Lỗi định dạng cũ. Hãy xóa phòng và tạo lại.</p>';
         return;
     }
-    
+
     document.getElementById('previewCountMsg').innerText = '(Tổng số: ' + examArray.length + ' câu)';
-    
+
     let p1 = examArray.filter(c => c.phan === "1" || c.Phan === "1");
     let p2 = examArray.filter(c => c.phan === "2" || c.Phan === "2");
     let p3 = examArray.filter(c => c.phan === "3" || c.Phan === "3");
 
     let html = "";
-    
+
     if(p1.length > 0) {
         html += '<h3 style="color:#c0392b; border-bottom:1px solid #c0392b; padding-bottom:5px;">PHẦN I: Trắc nghiệm nhiều lựa chọn</h3>';
         p1.forEach((q, idx) => {
@@ -1871,7 +1871,7 @@ function renderPreviewContent() {
             let ansB_style = q.dap_an_dung === 'B' ? 'font-weight:bold; color:#27ae60; background:#e8f5e9; padding:2px 5px; border-radius:4px;' : '';
             let ansC_style = q.dap_an_dung === 'C' ? 'font-weight:bold; color:#27ae60; background:#e8f5e9; padding:2px 5px; border-radius:4px;' : '';
             let ansD_style = q.dap_an_dung === 'D' ? 'font-weight:bold; color:#27ae60; background:#e8f5e9; padding:2px 5px; border-radius:4px;' : '';
-            
+
             html += '<div style="margin-bottom: 15px; border-bottom: 1px dashed #ccc; padding-bottom: 10px;">' +
                 '<div><b>Câu ' + (idx+1) + ':</b> ' + safeHTML(q.noi_dung || q.NoiDung) + '</div>' +
                 '<div style="margin-left: 15px; margin-top: 5px;">' +
@@ -1977,11 +1977,11 @@ async function layDeTuIframe(btnElement) {
             window.addEventListener('message', onMsg);
             iframeWindow.postMessage({ type: 'DAMSAN_GET_EXAMS', requestId }, iframeOrigin);
         });
-        
+
         if (!danhSachDeIframe || danhSachDeIframe.length === 0) {
             return alert("⚠️ Iframe trống! Bạn hãy tải file Word, cài đặt thông số và bấm 'Quét & Trộn' trước.");
         }
-        
+
         danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
         danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
 
@@ -1990,7 +1990,7 @@ async function layDeTuIframe(btnElement) {
         if (btnElement) btnElement.disabled = true;
 
         let result = await luuDeThiLenSupabase(danhSachDeIframe);
-        
+
         if (btnElement) btnElement.innerText = oldText;
         if (btnElement) btnElement.disabled = false;
 
@@ -2006,26 +2006,26 @@ async function layDeTuIframe(btnElement) {
     }
 }
 
-async function generateFromMatrix() { 
+async function generateFromMatrix() {
     if(!checkWorkspaceAction()) return;
     let maPhong = document.getElementById("maPhongMatrix").value.trim();
     if(!maPhong) return alert("Vui lòng nhập Mã Phòng Thi ở phía dưới Ma Trận!");
-    
+
     let soLuongDe = parseInt(document.getElementById("soLuongDeMatrix").value) || 4;
     let startCode = parseInt(document.getElementById("startCodeMatrix").value) || 101;
     let stepCode = parseInt(document.getElementById("stepCodeMatrix").value) || 1;
-    
+
     let logEl = document.getElementById("logMatrix");
     let btn = document.getElementById("btnMatrix");
     let oldText = btn.innerText;
     btn.innerText = "⏳ ĐANG XỬ LÝ MA TRẬN..."; btn.disabled = true;
     logEl.innerText = "Đang trích xuất dữ liệu...";
-    
+
     if (fullBankData.length === 0) await fetchFullBank(true);
-    
+
     let selectedQuestions = new Array();
     let rows = document.querySelectorAll("#matrixBody tr");
-    
+
     try {
         for (let i = 0; i < rows.length; i++) {
             let r = rows[i]; let baiHoc = r.querySelector(".mat-baihoc").value;
@@ -2040,7 +2040,7 @@ async function generateFromMatrix() {
             reqs.push({ phan: "3", mucDo: "NB", count: parseInt(r.querySelector(".mat-p3-nb").value)||0 });
             reqs.push({ phan: "3", mucDo: "TH", count: parseInt(r.querySelector(".mat-p3-th").value)||0 });
             reqs.push({ phan: "3", mucDo: "VD", count: parseInt(r.querySelector(".mat-p3-vd").value)||0 });
-            
+
             for (let req of reqs) {
                 if (req.count > 0) {
                     let pool = fullBankData.filter(q => q.baiHoc === baiHoc && String(q.phan) === req.phan && q.mucDo === req.mucDo);
@@ -2054,12 +2054,12 @@ async function generateFromMatrix() {
                 }
             }
         }
-        
+
         if (selectedQuestions.length === 0) throw new Error("Bảng Ma trận đang trống hoặc tổng số câu hỏi yêu cầu bằng 0!");
-        
+
         logEl.innerText = "Đang bắt đầu trộn đề...";
         generateExams(selectedQuestions, soLuongDe, maPhong, startCode, stepCode);
-        
+
         logEl.innerText = "Đang đồng bộ dữ liệu với máy chủ...";
         let pushRes = await luuDeThiLenSupabase(danhSachDeThi);
         if (pushRes.status === 'success') {
@@ -2067,7 +2067,7 @@ async function generateFromMatrix() {
         } else {
             throw new Error(pushRes.message);
         }
-        
+
     } catch (err) {
         logEl.innerText = "❌ Lỗi: " + err.message; alert("Lỗi: " + err.message);
     } finally {
@@ -2187,19 +2187,19 @@ async function loadBankMeta() {
     }
 }
 function processBankMeta(data) {
-    availableBaiHocs = data.baiHocs || new Array(); 
-    if(document.getElementById("matrixBody") && document.getElementById("matrixBody").children.length === 0) addMatrixRow(); 
-    let opts = '<option value="">Tất cả</option>'; 
-    availableBaiHocs.forEach(b => opts += `<option value="${b}">${b}</option>`); 
+    availableBaiHocs = data.baiHocs || new Array();
+    if(document.getElementById("matrixBody") && document.getElementById("matrixBody").children.length === 0) addMatrixRow();
+    let opts = '<option value="">Tất cả</option>';
+    availableBaiHocs.forEach(b => opts += `<option value="${b}">${b}</option>`);
     if(document.getElementById("filterBaiHoc")) document.getElementById("filterBaiHoc").innerHTML = opts;
 }
 
-function addMatrixRow() { 
+function addMatrixRow() {
     const tbody = document.getElementById("matrixBody"); if(!tbody) return;
-    const tr = document.createElement("tr"); 
-    let optionsHtml = '<option value="">-- Chọn bài --</option>'; availableBaiHocs.forEach(b => optionsHtml += `<option value="${b}">${b}</option>`); 
-    tr.innerHTML = `<td><select class="mat-baihoc" style="width:100%; padding:5px;">${optionsHtml}</select></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td><button style="background:#e74c3c; color:white; border:none; padding:5px 8px; border-radius:4px; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">Xóa</button></td>`; 
-    tbody.appendChild(tr); 
+    const tr = document.createElement("tr");
+    let optionsHtml = '<option value="">-- Chọn bài --</option>'; availableBaiHocs.forEach(b => optionsHtml += `<option value="${b}">${b}</option>`);
+    tr.innerHTML = `<td><select class="mat-baihoc" style="width:100%; padding:5px;">${optionsHtml}</select></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e8f5e9;"><input type="number" class="mat-p1-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#e2eef9;"><input type="number" class="mat-p2-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-nb" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-th" min="0" value="0" style="width:35px; padding:5px;"></td><td style="background:#fbe6e8;"><input type="number" class="mat-p3-vd" min="0" value="0" style="width:35px; padding:5px;"></td><td><button style="background:#e74c3c; color:white; border:none; padding:5px 8px; border-radius:4px; cursor:pointer;" onclick="this.parentElement.parentElement.remove()">Xóa</button></td>`;
+    tbody.appendChild(tr);
 }
 
 async function fetchFullBank(forceReload = false) {
@@ -2214,11 +2214,11 @@ async function fetchFullBank(forceReload = false) {
     }
 }
 
-function renderBankTable() { 
+function renderBankTable() {
     if(!document.getElementById("bankTableBody")) return;
-    const fBaiHoc = document.getElementById("filterBaiHoc").value; const fPhan = document.getElementById("filterPhan").value; const fMucDo = document.getElementById("filterMucDo").value; 
-    let filtered = fullBankData.filter(q => { if(fBaiHoc && q.baiHoc !== fBaiHoc) return false; if(fPhan && String(q.phan) !== fPhan) return false; if(fMucDo && q.mucDo !== fMucDo) return false; return true; }); 
-    let html = ""; if(filtered.length === 0) html = '<tr><td colspan="7">Trống.</td></tr>'; else { filtered.forEach(q => { let snippet = q.noiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 80) + "..."; html += `<tr><td><input type="checkbox" class="chk-Bank" value="${q.id}"></td><td style="font-size:11px; color:#7f8c8d;">${String(q.id).split('-')[0]}</td><td><b>${q.baiHoc}</b></td><td>P.${q.phan}</td><td><b>${q.mucDo}</b></td><td style="text-align:left;">${snippet}</td><td><button style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-bottom:5px; width:100%;" onclick="editBankQuestion('${q.id}')">Sửa</button><br><button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; width:100%;" onclick="deleteBankQuestion('${q.id}', this)">Xóa</button></td></tr>`; }); } document.getElementById("bankTableBody").innerHTML = html; 
+    const fBaiHoc = document.getElementById("filterBaiHoc").value; const fPhan = document.getElementById("filterPhan").value; const fMucDo = document.getElementById("filterMucDo").value;
+    let filtered = fullBankData.filter(q => { if(fBaiHoc && q.baiHoc !== fBaiHoc) return false; if(fPhan && String(q.phan) !== fPhan) return false; if(fMucDo && q.mucDo !== fMucDo) return false; return true; });
+    let html = ""; if(filtered.length === 0) html = '<tr><td colspan="7">Trống.</td></tr>'; else { filtered.forEach(q => { let snippet = q.noiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 80) + "..."; html += `<tr><td><input type="checkbox" class="chk-Bank" value="${q.id}"></td><td style="font-size:11px; color:#7f8c8d;">${String(q.id).split('-')[0]}</td><td><b>${q.baiHoc}</b></td><td>P.${q.phan}</td><td><b>${q.mucDo}</b></td><td style="text-align:left;">${snippet}</td><td><button style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-bottom:5px; width:100%;" onclick="editBankQuestion('${q.id}')">Sửa</button><br><button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; width:100%;" onclick="deleteBankQuestion('${q.id}', this)">Xóa</button></td></tr>`; }); } document.getElementById("bankTableBody").innerHTML = html;
 }
 
 async function deleteBankQuestion(id, btnElement) {
@@ -2234,12 +2234,12 @@ async function deleteBankQuestion(id, btnElement) {
     }
 }
 
-async function editBankQuestion(id) { 
-    let q = fullBankData.find(x => String(x.id).trim() === String(id).trim()); 
-    if(!q) return; 
-    document.getElementById("editID").value = q.id; document.getElementById("editBaiHoc").value = q.baiHoc; document.getElementById("editPhan").value = String(q.phan); document.getElementById("editMucDo").value = q.mucDo; document.getElementById("editNoiDung").innerHTML = q.noiDung; document.getElementById("editA").value = q.A; document.getElementById("editB").value = q.B; document.getElementById("editC").value = q.C; document.getElementById("editD").value = q.D; 
-    let dapAnHienThi = String(q.dapAnDung); if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1); 
-    document.getElementById("editDapAnDung").value = dapAnHienThi; document.getElementById("editModal").style.display = "flex"; 
+async function editBankQuestion(id) {
+    let q = fullBankData.find(x => String(x.id).trim() === String(id).trim());
+    if(!q) return;
+    document.getElementById("editID").value = q.id; document.getElementById("editBaiHoc").value = q.baiHoc; document.getElementById("editPhan").value = String(q.phan); document.getElementById("editMucDo").value = q.mucDo; document.getElementById("editNoiDung").innerHTML = q.noiDung; document.getElementById("editA").value = q.A; document.getElementById("editB").value = q.B; document.getElementById("editC").value = q.C; document.getElementById("editD").value = q.D;
+    let dapAnHienThi = String(q.dapAnDung); if (dapAnHienThi.startsWith("'")) dapAnHienThi = dapAnHienThi.substring(1);
+    document.getElementById("editDapAnDung").value = dapAnHienThi; document.getElementById("editModal").style.display = "flex";
 }
 
 async function saveEditedQuestion() {
@@ -2269,13 +2269,13 @@ async function loadMetaData() {
     const targetSchoolId = getActiveTargetSchoolId();
     let data = null;
     if (targetSchoolId) ({data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', targetSchoolId));
-    let sel = document.getElementById('ctrlDoiTuong'); let html = '<option value="TatCa">🌎 Tất cả (Mặc định)</option>'; 
+    let sel = document.getElementById('ctrlDoiTuong'); let html = '<option value="TatCa">🌎 Tất cả (Mặc định)</option>';
     if(data) {
         let lops = Array.from(new Set(data.map(d=>d.lop))).filter(Boolean).sort();
-        g_danhSachLopCache = lops; 
-        lops.forEach(l => { if(l) html += `<option value="${l}">🏷️ Đối tượng: ${l}</option>`; }); 
+        g_danhSachLopCache = lops;
+        lops.forEach(l => { if(l) html += `<option value="${l}">🏷️ Đối tượng: ${l}</option>`; });
         if(sel) sel.innerHTML = html;
-        if(allRoomsData && allRoomsData.length > 0) fetchRadar(); 
+        if(allRoomsData && allRoomsData.length > 0) fetchRadar();
     }
 }
 
@@ -2284,19 +2284,19 @@ async function dieuKhien(trangThai) {
         const cachedRoom = getSelectedRoom('ctrlMaPhong');
         if(!cachedRoom) return alert("Vui lòng chọn phòng thi cụ thể!");
         const maPhong = cachedRoom.MaPhong;
-        document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
-        
+        document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh...";
+
         let updateData = { trang_thai: trangThai };
-        
+
         if (trangThai === 'MO_PHONG') {
-            const tenDot = document.getElementById('ctrlTenDot').value.trim(); 
-            const tg = document.getElementById('ctrlThoiGian').value; 
-            const doiTuongSelect = document.getElementById('ctrlDoiTuong').value; 
-            
-            updateData.thoi_gian_mo = Date.now(); 
+            const tenDot = document.getElementById('ctrlTenDot').value.trim();
+            const tg = document.getElementById('ctrlThoiGian').value;
+            const doiTuongSelect = document.getElementById('ctrlDoiTuong').value;
+
+            updateData.thoi_gian_mo = Date.now();
             updateData.ten_dot = tenDot;
             updateData.thoi_gian = tg;
-            
+
             let currentRoom = cachedRoom;
             if (currentRoom && currentRoom.DoiTuong && currentRoom.DoiTuong.includes(',') && doiTuongSelect === "TatCa") {
                 // Bỏ qua update để giữ nguyên danh sách lớp ghép
@@ -2304,7 +2304,7 @@ async function dieuKhien(trangThai) {
                 updateData.doi_tuong = doiTuongSelect;
             }
         }
-        
+
         let phong_id = cachedRoom.id;
         await rpcDieuKhienPhongThi(
             phong_id,
@@ -2314,9 +2314,9 @@ async function dieuKhien(trangThai) {
             updateData.thoi_gian ?? null,
             trangThai === 'MO_PHONG'
         );
-        
-        document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`; 
-        fetchRadar(); 
+
+        document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`;
+        fetchRadar();
     } catch(e) {
         console.error(e);
         document.getElementById('ctrlLog').innerText = `❌ Lỗi: ` + e.message;
@@ -2330,7 +2330,7 @@ async function dieuKhienFast(roomId, trangThai) {
 
         let updateData = {trang_thai: trangThai};
         if(trangThai === 'MO_PHONG') {
-            updateData.thoi_gian_mo = Date.now(); 
+            updateData.thoi_gian_mo = Date.now();
             let checkbox = document.querySelector(`.chk-Room[value="${room.id}"]`);
             if(checkbox) {
                 let doiTuongInput = checkbox.closest('tr').querySelector('.fast-doituong');
@@ -2346,7 +2346,7 @@ async function dieuKhienFast(roomId, trangThai) {
             null,
             trangThai === 'MO_PHONG'
         );
-        fetchRadar(); 
+        fetchRadar();
     } catch(e) {
         console.error("Lỗi điều khiển nhanh:", e);
         alert("Lỗi khi điều khiển phòng! Chi tiết: " + e.message);
@@ -2357,7 +2357,7 @@ async function dieuKhienFast(roomId, trangThai) {
 async function xoaPhongHoanToan(roomId) {
     const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
     const maPhong = cached?.MaPhong || '';
-    if(!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) return; 
+    if(!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) return;
     let btn = event.target;
     let oldText = btn.innerText;
     btn.innerText = "⏳..."; btn.disabled = true;
@@ -2382,7 +2382,7 @@ async function xoaDeTrongPhong(roomId) {
     const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
     const maPhong = cached?.MaPhong || '';
     if(!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã trộn trong phòng [${maPhong}]?\n(Phòng thi và Điểm số của học sinh vẫn sẽ được giữ lại)`)) return;
-    
+
     let btn = event.target;
     let oldText = (btn && btn.innerText) ? btn.innerText : "Xóa Đề";
     if(btn) { btn.innerText = "⏳..."; btn.disabled = true; }
@@ -2483,7 +2483,7 @@ function khoiDongDongHoGiaoVien() {
                 let s = Math.floor((diff % 60000) / 1000);
                 timerEl.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 
-                if (diff <= 300000) { 
+                if (diff <= 300000) {
                     timerEl.style.color = "#d93025";
                 }
             }
@@ -2491,10 +2491,10 @@ function khoiDongDongHoGiaoVien() {
     }, 1000);
 }
 
-async function fetchRadar() { 
+async function fetchRadar() {
     try {
         let data = await rpcLayDanhSachPhongThi();
-        
+
         let now = Date.now();
         if (data) {
             for (let r of data) {
@@ -2504,30 +2504,30 @@ async function fetchRadar() {
                     if (startTime > 0) {
                         let endTime = startTime + (duration * 60 * 1000);
                         if (now >= endTime) {
-                            r.trang_thai = 'THU_BAI'; 
-                            rpcDieuKhienPhongThi(r.id, 'THU_BAI', null, null, null, false).then(); 
+                            r.trang_thai = 'THU_BAI';
+                            rpcDieuKhienPhongThi(r.id, 'THU_BAI', null, null, null, false).then();
                         }
                     }
                 }
             }
         }
 
-        allRoomsData = (data||[]).map(d => ({ 
-            MaPhong: d.ma_phong, 
-            TenDotKiemTra: d.ten_dot, 
-            DoiTuong: d.doi_tuong, 
-            ThoiGian: d.thoi_gian, 
-            TrangThai: d.trang_thai, 
-            ThoiGianMo: d.thoi_gian_mo, 
+        allRoomsData = (data||[]).map(d => ({
+            MaPhong: d.ma_phong,
+            TenDotKiemTra: d.ten_dot,
+            DoiTuong: d.doi_tuong,
+            ThoiGian: d.thoi_gian,
+            TrangThai: d.trang_thai,
+            ThoiGianMo: d.thoi_gian_mo,
             TenTruong: d.ten_truong || (d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống'),
             truong_id: d.truong_id,
-            id: d.id 
+            id: d.id
         }));
-        
+
         let tbody = document.getElementById('radarBody');
         let tableElement = tbody.parentNode;
         let containerElement = tableElement.parentNode;
-        
+
         if(!document.getElementById('radarControlBar')) {
             let ctrlBar = document.createElement('div');
             ctrlBar.id = 'radarControlBar';
@@ -2554,28 +2554,28 @@ async function fetchRadar() {
         let chkAll = document.getElementById('chkAllRooms');
         if(chkAll) chkAll.checked = false;
 
-        let html = ''; 
-        if(allRoomsData.length === 0) { html = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>'; } 
-        else { 
-            allRoomsData.forEach(r => { 
-                let sttHtml = r.TrangThai; 
-                if(r.TrangThai === "MO_PHONG") sttHtml = "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>"; 
-                else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>"; 
-                else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bế Điểm</span>"; 
-                else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
-                
+        let html = '';
+        if(allRoomsData.length === 0) { html = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>'; }
+        else {
+            allRoomsData.forEach(r => {
+                let sttHtml = r.TrangThai;
+                if(r.TrangThai === "MO_PHONG") sttHtml = "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>";
+                else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>";
+                else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bế Điểm</span>";
+                else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>";
+
                 let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.id}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.id}', 'MO_PHONG')">Mở lại</button>`;
                 let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${r.id}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
                 let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${r.id}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
-                
+
                 let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
 
                 let displayVal = r.DoiTuong === 'TatCa' ? '🌎 Tất cả' : r.DoiTuong;
                 let truongTag = gvData.quyen === 'Admin' ? `<div style="font-size:10px; color:#7f8c8d; margin-top:2px;">🏫 ${r.TenTruong}</div>` : '';
-                
+
                 let doiTuongCell = `
                     <div style="display:flex; align-items:center; justify-content:center; flex-direction:column;">
-                        <div style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;" 
+                        <div style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;"
                              onclick="moModalChonLop('${r.id}', '${r.DoiTuong}')" title="${r.DoiTuong} (Bấm để chỉnh sửa)">
                             ${displayVal} ✏️
                         </div>
@@ -2590,10 +2590,10 @@ async function fetchRadar() {
                     timerHtml = `<div class="live-timer" data-room-id="${r.id}" data-start="${r.ThoiGianMo}" data-duration="${durationMin}" style="font-weight:bold; color:#1a73e8; font-variant-numeric: tabular-nums; font-size: 15px;">--:--</div><div style="font-size: 11px; color: #7f8c8d;">/${durationMin}p</div>`;
                 }
 
-                html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${timerHtml}</td><td id="td-stt-${r.id}">${sttHtml}</td><td id="td-act-${r.id}">${btnHtml} ${btnXoaDe} ${btnXoa}</td></tr>`; 
-            }); 
-        } 
-        document.getElementById('radarBody').innerHTML = html; 
+                html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${timerHtml}</td><td id="td-stt-${r.id}">${sttHtml}</td><td id="td-act-${r.id}">${btnHtml} ${btnXoaDe} ${btnXoa}</td></tr>`;
+            });
+        }
+        document.getElementById('radarBody').innerHTML = html;
 
         document.querySelectorAll('.chk-Room').forEach(cb => {
             cb.addEventListener('change', function() {
@@ -2649,8 +2649,8 @@ async function dieuKhienNhomPhong(trangThai) {
 
         logSpan.innerText = "✅ Cập nhật thành công toàn bộ!";
         setTimeout(() => logSpan.innerText = "", 3000);
-        
-        fetchRadar(); 
+
+        fetchRadar();
 
     } catch(e) {
         logSpan.innerText = "❌ Lỗi thực thi!";
@@ -2666,10 +2666,10 @@ async function taiDanhSachPhong() {
 
     try {
         let data = await rpcLayDanhSachPhongThi();
-        
+
         let defaultOpt = '<option value="">-- Chọn Mã Phòng Thi --</option>';
         if(selectBoxTab2) selectBoxTab2.innerHTML = defaultOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = defaultOpt;
-        
+
         if(data && data.length > 0) {
             data.forEach(room => {
                 const maPhong = room.ma_phong || room.MaPhong;
@@ -2713,51 +2713,51 @@ async function taiDanhSachPhong() {
 }
 
 // BỘ TẢI ĐIỂM CỰC MẠNH (HỖ TRỢ ĐỌC DỮ LIỆU TỪ 2 LUỒNG: REALTIME & AUTO REFRESH 5S)
-async function fetchDashboard(isAuto = false) { 
+async function fetchDashboard(isAuto = false) {
     try {
         const sInput = document.getElementById('liveSearchInput');
-        if (sInput && !isAuto) sInput.value = ''; 
+        if (sInput && !isAuto) sInput.value = '';
 
         const currentRoom = getSelectedRoom('dashMaPhong');
         if(!currentRoom) return;
         if(!isAuto) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">⏳ Đang tải dữ liệu...</td></tr>';
-        
+
         let pArr = new Array();
-        
+
         let dummyCacheBuster = new Date().getTime().toString();
         pArr.push(sb.from('ket_qua').select('*, hoc_sinh(ma_hs, ho_ten, lop)').eq('phong_id', currentRoom.id).neq('chi_tiet', dummyCacheBuster));
-        
+
         if(allStudents.length === 0 || !isAuto) {
              let qHS = sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', currentRoom.truong_id);
              pArr.push(qHS);
         }
-        
+
         let myFetchId = ++globalFetchDashId;
         let results = await Promise.all(pArr);
-        if (myFetchId !== globalFetchDashId) return; 
+        if (myFetchId !== globalFetchDashId) return;
 
         let resKQ = results[0];
         if (resKQ.error) throw resKQ.error;
-        
+
         if (results.length > 1) {
             let resHS = results[1];
             if (resHS.error) throw resHS.error;
             allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, Quyen: d.quyen, id: d.id }));
         }
 
-        duLieuBangDiem = (resKQ.data || new Array()).map(r => ({ 
-            MaHS: r.hoc_sinh ? r.hoc_sinh.ma_hs : 'Lỗi/Xóa', 
-            HoTen: r.hoc_sinh ? r.hoc_sinh.ho_ten : 'Không rõ', 
-            Lop: r.hoc_sinh ? r.hoc_sinh.lop : '', 
-            MaDe: r.ma_de, 
-            Diem: r.diem, 
-            ChiTiet: typeof r.chi_tiet === 'string' ? r.chi_tiet : JSON.stringify(r.chi_tiet), 
+        duLieuBangDiem = (resKQ.data || new Array()).map(r => ({
+            MaHS: r.hoc_sinh ? r.hoc_sinh.ma_hs : 'Lỗi/Xóa',
+            HoTen: r.hoc_sinh ? r.hoc_sinh.ho_ten : 'Không rõ',
+            Lop: r.hoc_sinh ? r.hoc_sinh.lop : '',
+            MaDe: r.ma_de,
+            Diem: r.diem,
+            ChiTiet: typeof r.chi_tiet === 'string' ? r.chi_tiet : JSON.stringify(r.chi_tiet),
             ThoiGian: r.created_at,
             ViPham: r.so_lan_vi_pham || 0  // ĐÃ BỔ SUNG NHẬN DỮ LIỆU VI PHẠM
         }));
 
-        renderDashboardSubTabs(); 
-        renderDashboardTable(); 
+        renderDashboardSubTabs();
+        renderDashboardTable();
     } catch(e) {
         console.error("Lỗi fetchDashboard:", e);
         if (!isAuto) document.getElementById('dashBody').innerHTML = `<tr><td colspan="10" style="color:red; font-weight:bold;">❌ Lỗi kết nối tải bảng điểm: ${e.message}</td></tr>`;
@@ -2774,7 +2774,7 @@ async function xoaDiemPhong() {
     if(!currentRoom) return alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!");
     const maPhong = currentRoom.MaPhong;
     if(!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) return;
-    
+
     let btn = event.target;
     let oldText = btn.innerText;
     btn.innerText = "⏳ Đang xóa sạch..."; btn.disabled = true;
@@ -2793,8 +2793,9 @@ async function xoaDiemPhong() {
     } else {
         alert("❌ Lỗi hệ thống: Không xác định được ID của phòng thi này.");
     }
-    
+
     btn.innerText = oldText; btn.disabled = false;
+    taiDanhSachPhong();
     fetchDashboard();
 }
 
@@ -2818,72 +2819,72 @@ async function khoiPhucChamDiemPhong() {
     fetchDashboard(true);
 }
 
-async function xuatExcel() { 
-    if(duLieuBangDiem.length === 0) return alert("Chưa có dữ liệu để tải."); 
-    
-    let exportData = new Array(); let currentRoom = getSelectedRoom('dashMaPhong');
-    let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; 
-    let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop; 
+async function xuatExcel() {
+    if(duLieuBangDiem.length === 0) return alert("Chưa có dữ liệu để tải.");
 
-    if (targetLop && targetLop !== "TatCa") { 
+    let exportData = new Array(); let currentRoom = getSelectedRoom('dashMaPhong');
+    let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null;
+    let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop;
+
+    if (targetLop && targetLop !== "TatCa") {
         let allowedClasses = targetLop.split(',').map(s => s.trim());
-        let classStudents = allStudents.filter(s => allowedClasses.includes(String(s.Lop).trim())); 
-        classStudents.forEach(stu => { 
-            let result = duLieuBangDiem.find(r => String(r.MaHS).trim() === String(stu.MaHS).trim()); 
-            if (result) exportData.push({...result, MaHS: stu.MaHS}); 
-            else exportData.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, ViPham: 0 }); 
-        }); 
-        duLieuBangDiem.forEach(r => { if(!exportData.find(d => String(d.MaHS).trim() === String(r.MaHS).trim())) { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); exportData.push({...r, MaHS: stu ? stu.MaHS : r.MaHS}); } }); 
-    } else { 
-        duLieuBangDiem.forEach(r => { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); exportData.push({...r, MaHS: stu ? stu.MaHS : r.MaHS}); }); 
-    } 
-    if(currentDashFilter !== 'TatCa') { 
+        let classStudents = allStudents.filter(s => allowedClasses.includes(String(s.Lop).trim()));
+        classStudents.forEach(stu => {
+            let result = duLieuBangDiem.find(r => String(r.MaHS).trim() === String(stu.MaHS).trim());
+            if (result) exportData.push({...result, MaHS: stu.MaHS});
+            else exportData.push({ MaHS: stu.MaHS, HoTen: stu.HoTen, Lop: stu.Lop, TrangThai: "Chưa vào", MaDe: "-", Diem: "-", ThoiGian: null, ChiTiet: null, ViPham: 0 });
+        });
+        duLieuBangDiem.forEach(r => { if(!exportData.find(d => String(d.MaHS).trim() === String(r.MaHS).trim())) { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); exportData.push({...r, MaHS: stu ? stu.MaHS : r.MaHS}); } });
+    } else {
+        duLieuBangDiem.forEach(r => { let stu = allStudents.find(s => String(s.MaHS).trim() === String(r.MaHS).trim()); exportData.push({...r, MaHS: stu ? stu.MaHS : r.MaHS}); });
+    }
+    if(currentDashFilter !== 'TatCa') {
         let allowedClasses = currentDashFilter.split(',').map(s => s.trim());
-        exportData = exportData.filter(d => allowedClasses.includes(String(d.Lop).trim())); 
-    } 
+        exportData = exportData.filter(d => allowedClasses.includes(String(d.Lop).trim()));
+    }
     if(exportData.length === 0) return alert("Không có dữ liệu cho lớp này.");
 
-    const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('BangDiem'); 
+    const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('BangDiem');
     // ĐÃ BỔ SUNG CỘT VI PHẠM VÀO EXCEL
-    worksheet.columns = [ { header: 'STT', key: 'stt', width: 6 }, { header: 'SBD', key: 'sbd', width: 12 }, { header: 'Họ và Tên', key: 'name', width: 30 }, { header: 'Lớp', key: 'lop', width: 10 }, { header: 'Mã Đề', key: 'made', width: 10 }, { header: 'Tổng Điểm', key: 'total', width: 12 }, { header: 'Điểm P. I', key: 'p1', width: 12 }, { header: 'Điểm P. II', key: 'p2', width: 12 }, { header: 'Điểm P. III', key: 'p3', width: 12 }, { header: 'Vi Phạm', key: 'vipham', width: 10 }, { header: 'Thời gian nộp', key: 'time', width: 22 } ]; 
-    
-    let belowAvg = 0; let maxScore = -1; let minScore = 11; 
-    exportData.sort((a,b) => (String(a.MaHS)||'').localeCompare(String(b.MaHS)||'')); 
-    
-    exportData.forEach((hs, idx) => { 
-        let p1 = 0, p2 = 0, p3 = 0; 
-        if(hs.ChiTiet && hs.Diem !== "-") { 
-            try { 
-                let ct = JSON.parse(hs.ChiTiet); 
-                Object.keys(ct).forEach(k => { 
-                    let item = Reflect.get(ct, k); 
-                    if(item.phan === "1" && String(item.chon||"").toUpperCase().trim() === String(item.dung||"").toUpperCase().trim()) p1 += 0.25; 
-                    if(item.phan === "2") { 
-                        let cArr = String(item.chon||"").split('-'); 
+    worksheet.columns = [ { header: 'STT', key: 'stt', width: 6 }, { header: 'SBD', key: 'sbd', width: 12 }, { header: 'Họ và Tên', key: 'name', width: 30 }, { header: 'Lớp', key: 'lop', width: 10 }, { header: 'Mã Đề', key: 'made', width: 10 }, { header: 'Tổng Điểm', key: 'total', width: 12 }, { header: 'Điểm P. I', key: 'p1', width: 12 }, { header: 'Điểm P. II', key: 'p2', width: 12 }, { header: 'Điểm P. III', key: 'p3', width: 12 }, { header: 'Vi Phạm', key: 'vipham', width: 10 }, { header: 'Thời gian nộp', key: 'time', width: 22 } ];
+
+    let belowAvg = 0; let maxScore = -1; let minScore = 11;
+    exportData.sort((a,b) => (String(a.MaHS)||'').localeCompare(String(b.MaHS)||''));
+
+    exportData.forEach((hs, idx) => {
+        let p1 = 0, p2 = 0, p3 = 0;
+        if(hs.ChiTiet && hs.Diem !== "-") {
+            try {
+                let ct = JSON.parse(hs.ChiTiet);
+                Object.keys(ct).forEach(k => {
+                    let item = Reflect.get(ct, k);
+                    if(item.phan === "1" && String(item.chon||"").toUpperCase().trim() === String(item.dung||"").toUpperCase().trim()) p1 += 0.25;
+                    if(item.phan === "2") {
+                        let cArr = String(item.chon||"").split('-');
                         let dStr = String(item.dung||"").toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
                         let dArr = dStr.match(new RegExp("Đ|S", "g"));
                         if (!dArr) dArr = new Array();
-                        let match = 0; 
-                        for(let i=0; i<4; i++) { 
+                        let match = 0;
+                        for(let i=0; i<4; i++) {
                             let cValRaw = cArr[i] || "";
                             let cVal = String(cValRaw).toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
                             let cleanCVal = "";
                             if (cVal.includes("Đ")) cleanCVal = "Đ";
                             if (cVal.includes("S")) cleanCVal = "S";
                             let dVal = dArr[i] || "";
-                            if(cleanCVal !== "" && cleanCVal === dVal) match++; 
-                        } 
-                        if(match===1) p2+=0.1; else if(match===2) p2+=0.25; else if(match===3) p2+=0.5; else if(match===4) p2+=1.0; 
-                    } 
+                            if(cleanCVal !== "" && cleanCVal === dVal) match++;
+                        }
+                        if(match===1) p2+=0.1; else if(match===2) p2+=0.25; else if(match===3) p2+=0.5; else if(match===4) p2+=1.0;
+                    }
                     if(item.phan === "3") {
                         let aClean = String(item.chon).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
                         let dClean = String(item.dung).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
                         if(aClean !== "" && aClean === dClean) p3 += 0.25;
                     }
-                }); 
-            } catch(e){} 
-        } 
-        let totalRaw = hs.Diem !== "-" ? (parseFloat(hs.Diem) || 0) : "-"; 
+                });
+            } catch(e){}
+        }
+        let totalRaw = hs.Diem !== "-" ? (parseFloat(hs.Diem) || 0) : "-";
         let totalDisplay = totalRaw;
         let p1Display = p1;
 
@@ -2902,32 +2903,32 @@ async function xuatExcel() {
                 }
             } catch(e) {}
 
-            if(totalDisplay < 5.0) belowAvg++; if(totalDisplay > maxScore) maxScore = totalDisplay; if(totalDisplay < minScore) minScore = totalDisplay; 
+            if(totalDisplay < 5.0) belowAvg++; if(totalDisplay > maxScore) maxScore = totalDisplay; if(totalDisplay < minScore) minScore = totalDisplay;
         }
-        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: typeof totalDisplay === 'number' ? parseFloat(totalDisplay.toFixed(2)) : totalDisplay, p1: hs.Diem!=="-" ? parseFloat(p1Display.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
-    }); 
-    
-    worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
-    worksheet.eachRow((row, rowNumber) => { 
-        if(rowNumber > 1) { 
-            row.eachCell((cell, colNumber) => { 
-                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; 
-                if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
-            }); 
-            let totalCell = row.getCell(6); 
-            if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) { 
-                row.eachCell(cell => { 
-                    cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} }; 
-                    cell.font = { color: { argb: 'FFC0392B' } }; 
-                }); 
-            } 
-        } 
-    }); 
-    
-    let rowCount = exportData.filter(d => d.Diem !== "-").length; worksheet.addRow(new Array()); 
-    let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true}; 
-    worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]); 
-    
+        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: typeof totalDisplay === 'number' ? parseFloat(totalDisplay.toFixed(2)) : totalDisplay, p1: hs.Diem!=="-" ? parseFloat(p1Display.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" });
+    });
+
+    worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; });
+    worksheet.eachRow((row, rowNumber) => {
+        if(rowNumber > 1) {
+            row.eachCell((cell, colNumber) => {
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                if(colNumber !== 3) cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+            let totalCell = row.getCell(6);
+            if(totalCell.value !== null && totalCell.value !== "-" && totalCell.value < 5.0) {
+                row.eachCell(cell => {
+                    cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FFFADBD8'} };
+                    cell.font = { color: { argb: 'FFC0392B' } };
+                });
+            }
+        }
+    });
+
+    let rowCount = exportData.filter(d => d.Diem !== "-").length; worksheet.addRow(new Array());
+    let stRow1 = worksheet.addRow(['', '', 'THỐNG KÊ NHANH (Số HS đã nộp):']); stRow1.font = {bold: true};
+    worksheet.addRow(['', '', 'Tổng số bài thi:', rowCount]); worksheet.addRow(['', '', 'Số bài dưới 5.0:', belowAvg]); worksheet.addRow(['', '', 'Điểm cao nhất:', maxScore === -1 ? 0 : maxScore]); worksheet.addRow(['', '', 'Điểm thấp nhất:', minScore === 11 ? 0 : minScore]);
+
     worksheet.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
             let currentFont = cell.font || {};
@@ -2938,7 +2939,7 @@ async function xuatExcel() {
     });
 
     // --- BẮT ĐẦU ĐOẠN ĐƯỢC CẬP NHẬT TÊN FILE ---
-    let tenMonStr = "Tổng Hợp"; 
+    let tenMonStr = "Tổng Hợp";
     if (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") {
         let matchedMon = g_sysMonList.find(m => String(m.id) === String(activeWorkspaceMonId));
         if (matchedMon) {
@@ -2959,9 +2960,9 @@ async function xuatExcel() {
     // Format theo đúng chuẩn: Bảng điểm [Tên môn]_[Mã phòng]_[Tên lớp]
     let tenFile = `Bảng điểm ${tenMonStr}_${maPhong}_${tenLopStr}.xlsx`;
     // --- KẾT THÚC ĐOẠN CẬP NHẬT ---
-    const buffer = await workbook.xlsx.writeBuffer(); 
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
-    const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url);
 }
 
 // ==========================================================
@@ -2971,7 +2972,7 @@ async function xuatExcel() {
 async function taiFileMau(loai) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Mau_Nhap_Lieu');
-    
+
     if (loai === 'HS') {
         worksheet.columns = [
             { header: 'STT', key: 'stt', width: 8 },
@@ -2991,11 +2992,11 @@ async function taiFileMau(loai) {
         ];
         worksheet.addRow({ stt: 1, ma_gv: 'GV001', ho_ten: 'Phạm Văn C', quyen: 'Admin', ma_truong: 'DAMSAN' });
     }
-    
-    worksheet.getRow(1).eachCell((cell) => { 
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
-        cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1A73E8'} }; 
-        cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
+
+    worksheet.getRow(1).eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1A73E8'} };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -3010,7 +3011,7 @@ async function docFileExcelVaNap(loai) {
     if(!fileInput.files || fileInput.files.length === 0) return alert("Vui lòng chọn file Excel!");
     let btn = document.getElementById(`btnNap${loai}`);
     let oldText = btn.innerText; btn.innerText = "⏳ Đang đọc và nạp..."; btn.disabled = true;
-    
+
     try {
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileInput.files[0]);
@@ -3023,10 +3024,10 @@ async function docFileExcelVaNap(loai) {
         const mapTruong = {};
         if (truongs) truongs.forEach(t => mapTruong[t.ma_truong.toUpperCase()] = t.id);
 
-        let maxStt = 0; 
+        let maxStt = 0;
 
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) { 
+            if (rowNumber > 1) {
                 let sttRaw = row.getCell(1).value;
                 let stt = sttRaw ? parseInt(sttRaw.toString().trim()) : 0;
                 if (!isNaN(stt) && stt > maxStt) maxStt = stt;
@@ -3036,7 +3037,7 @@ async function docFileExcelVaNap(loai) {
                     let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
                     let lop = row.getCell(4).value ? row.getCell(4).value.toString().trim() : '';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
-                    
+
                     // Ưu tiên dùng truong_id từ file Excel, nếu không có thì dùng của người nạp
                     if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
                     let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
@@ -3050,11 +3051,11 @@ async function docFileExcelVaNap(loai) {
                     let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
                     let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
-                    
+
                     if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
                     let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
                     if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
-                    
+
                     if (ma_gv && ho_ten) {
                         rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: t_id });
                     }
@@ -3069,9 +3070,9 @@ async function docFileExcelVaNap(loai) {
 
         // Báo cáo đối chiếu số lượng quét được với số STT trong danh sách
         alert(`✅ Nạp thành công: ${rowsToInsert.length} tài khoản.\n📊 Kiểm tra chéo: Số thứ tự (STT) lớn nhất ghi nhận trong file Excel là ${maxStt}.`);
-        
+
         if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
-        fileInput.value = ""; 
+        fileInput.value = "";
     } catch(e) {
         alert("❌ Lỗi: " + e.message);
     } finally {
@@ -3083,9 +3084,9 @@ async function docFileExcelVaNap(loai) {
 // QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
 // ==========================================================
 
-async function fetchStudents(forceReload = false) { 
-    document.getElementById('hsBody').innerHTML = '<tr><td colspan="7">⏳ Đang tải...</td></tr>'; 
-    
+async function fetchStudents(forceReload = false) {
+    document.getElementById('hsBody').innerHTML = '<tr><td colspan="7">⏳ Đang tải...</td></tr>';
+
     let data;
     if (gvData.quyen === 'Admin') data = (await adminRpc('accounts_list', { kind: 'HS', truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId })).rows;
     else {
@@ -3093,30 +3094,30 @@ async function fetchStudents(forceReload = false) {
         data = response.data;
     }
     if(data) {
-        allStudents = data.map(d => ({ 
-            MaHS: d.ma_hs, 
-            HoTen: d.ho_ten, 
-            Lop: d.lop, 
+        allStudents = data.map(d => ({
+            MaHS: d.ma_hs,
+            HoTen: d.ho_ten,
+            Lop: d.lop,
             TenTruong: d.ten_truong || 'Hệ thống',
             TrangThai: getAccountPasswordState(d),
-            Quyen: d.quyen, 
-            id: d.id 
+            Quyen: d.quyen,
+            id: d.id
         }));
-        renderSubTabsHS(); renderStudentTable(); 
-        if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); 
+        renderSubTabsHS(); renderStudentTable();
+        if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard();
     }
 }
 
 function renderSubTabsHS() { let groups = new Set(); allStudents.forEach(s => { if(s.Lop) groups.add(s.Lop); }); let html = `<button class="${currentStudentFilter==='TatCa'?'active':''}" onclick="filterStudents('TatCa')">Tất cả</button>`; groups.forEach(g => { html += `<button class="${currentStudentFilter===g?'active':''}" onclick="filterStudents('${g}')">${g}</button>`; }); document.getElementById('subTabsHS').innerHTML = html; }
 function filterStudents(filter) { currentStudentFilter = filter; renderSubTabsHS(); renderStudentTable(); }
 
-function renderStudentTable() { 
-    let filtered = [...allStudents]; 
+function renderStudentTable() {
+    let filtered = [...allStudents];
     filtered.sort((a, b) => (a.MaHS || "").localeCompare((b.MaHS || ""), undefined, {numeric: true, sensitivity: 'base'}));
 
-    if(currentStudentFilter !== 'TatCa') { 
-        filtered = filtered.filter(s => s.Lop === currentStudentFilter); 
-    } 
+    if(currentStudentFilter !== 'TatCa') {
+        filtered = filtered.filter(s => s.Lop === currentStudentFilter);
+    }
 
     // Cập nhật tiêu đề bảng
     let thead = document.querySelector('#hsBody').previousElementSibling;
@@ -3124,23 +3125,23 @@ function renderStudentTable() {
         thead.innerHTML = `<tr><th style="width:40px; text-align:center;"><input type="checkbox" id="chkAllHS" onchange="toggleAll('HS')"></th><th>Mã HS</th><th>Họ và Tên</th><th>Lớp</th><th>Trường học</th><th>Trạng Thái</th><th>Thao Tác</th></tr>`;
     }
 
-    let html = ""; 
-    if(filtered.length === 0) html = '<tr><td colspan="7">Không có dữ liệu.</td></tr>'; 
-    else { 
-        filtered.forEach(hs => { 
+    let html = "";
+    if(filtered.length === 0) html = '<tr><td colspan="7">Không có dữ liệu.</td></tr>';
+    else {
+        filtered.forEach(hs => {
             let statusHTML = hs.TrangThai === "KhongXacDinh" ? '<span style="color:#7f8c8d;">—</span>' : hs.TrangThai === "DaDoi"
-                ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
-                : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
-            
-            html += `<tr><td><input type="checkbox" class="chk-HS" value="${hs.id}"></td><td><b>${hs.MaHS}</b></td><td style="text-align:left;">${hs.HoTen}</td><td>${hs.Lop}</td><td style="font-size:11px; color:#5f6368;">${hs.TenTruong}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${hs.MaHS}', '${hs.id}', 'HS')">Khôi phục</button></td></tr>`; 
-        }); 
-    } 
-    document.getElementById('hsBody').innerHTML = html; 
+                ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>`
+                : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`;
+
+            html += `<tr><td><input type="checkbox" class="chk-HS" value="${hs.id}"></td><td><b>${hs.MaHS}</b></td><td style="text-align:left;">${hs.HoTen}</td><td>${hs.Lop}</td><td style="font-size:11px; color:#5f6368;">${hs.TenTruong}</td><td>${statusHTML}</td><td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${hs.MaHS}', '${hs.id}', 'HS')">Khôi phục</button></td></tr>`;
+        });
+    }
+    document.getElementById('hsBody').innerHTML = html;
 }
 
-async function fetchTeachers(forceReload = false) { 
-    document.getElementById('gvBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">⏳ Đang tải dữ liệu...</td></tr>'; 
-    
+async function fetchTeachers(forceReload = false) {
+    document.getElementById('gvBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">⏳ Đang tải dữ liệu...</td></tr>';
+
     try {
         let pArr = new Array();
         pArr.push(sb.from('mon_hoc').select('*').order('created_at', {ascending: true}));
@@ -3162,16 +3163,16 @@ async function fetchTeachers(forceReload = false) {
         if(data) {
             allTeachers = data.map(d => {
                 let matchedMon = g_sysMonList.find(m => m.id === d.mon_id);
-                return { 
-                    MaGV: d.ma_gv, 
-                    HoTen: d.ho_ten, 
+                return {
+                    MaGV: d.ma_gv,
+                    HoTen: d.ho_ten,
                     MonId: d.mon_id,
                     TruongId: d.truong_id,
                     TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
                     TenTruong: d.ten_truong || 'Hệ thống',
                     TrangThai: getAccountPasswordState(d),
-                    Quyen: d.quyen, 
-                    id: d.id 
+                    Quyen: d.quyen,
+                    id: d.id
                 };
             });
             renderTeacherTable();
@@ -3188,17 +3189,17 @@ function renderTeacherTable() {
         thead.innerHTML = `<tr><th style="width:40px; text-align:center;"><input type="checkbox" id="chkAllGV" onchange="toggleAll('GV')"></th><th>Mã GV</th><th>Họ và Tên</th><th>Môn Phụ Trách</th><th>Trường học</th><th>Trạng Thái</th><th>Thao Tác</th></tr>`;
     }
 
-    let html = ""; 
-    if(allTeachers.length === 0) html = '<tr><td colspan="7" style="text-align:center;">Không có dữ liệu.</td></tr>'; 
-    else { 
+    let html = "";
+    if(allTeachers.length === 0) html = '<tr><td colspan="7" style="text-align:center;">Không có dữ liệu.</td></tr>';
+    else {
         // Sắp xếp cứng danh sách giáo viên theo MaGV
         let sortedTeachers = [...allTeachers].sort((a, b) => (a.MaGV || "").localeCompare((b.MaGV || ""), undefined, {numeric: true, sensitivity: 'base'}));
-        
-        sortedTeachers.forEach(gv => { 
+
+        sortedTeachers.forEach(gv => {
             let statusHTML = gv.TrangThai === "KhongXacDinh" ? '<span style="color:#7f8c8d;">—</span>' : gv.TrangThai === "DaDoi"
-                ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
-                : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
-            
+                ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>`
+                : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`;
+
             let selHtml = `<select onchange="capNhatMonGiaoVien('${gv.id}', this.value)" style="padding:6px; border-radius:4px; border:1px solid #ccc; font-weight:bold; color:#1a73e8; cursor:pointer; width:100%; outline:none; background:#f8faff;">`;
             selHtml += `<option value="">-- Chưa phân công --</option>`;
             g_sysMonList.forEach(m => {
@@ -3229,10 +3230,10 @@ function renderTeacherTable() {
                 <td style="min-width: 150px;">${truongDisplay}</td>
                 <td>${statusHTML}</td>
                 <td><button style="background:#e74c3c; padding:5px 10px; border:none; border-radius:4px; color:white; cursor:pointer; font-weight:bold;" onclick="resetPass('${gv.MaGV}', '${gv.id}', 'GV')">Khôi phục MK</button></td>
-            </tr>`; 
-        }); 
-    } 
-    document.getElementById('gvBody').innerHTML = html; 
+            </tr>`;
+        });
+    }
+    document.getElementById('gvBody').innerHTML = html;
 }
 
 async function capNhatTruongGiaoVien(gvId, truongId) {
@@ -3253,8 +3254,8 @@ async function capNhatMonGiaoVien(gvId, monId) {
         if (String(gvId) === String(gvData.id)) { gvData.mon_id = valToUpdate; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); }
     } catch(error) {
         alert("❌ Lỗi cập nhật phân công bộ môn trên máy chủ: " + error.message);
-        fetchTeachers(); 
-    } 
+        fetchTeachers();
+    }
 }
 
 function toggleAll(type) {
@@ -3269,14 +3270,14 @@ async function resetSelectedPass(loai) {
     if(!confirm(`Khôi phục mật khẩu mặc định cho ${checkedBoxes.length} tài khoản đã chọn?`)) return;
 
     let idsToUpdate = Array.from(checkedBoxes).map(cb => cb.value);
-    
+
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xử lý..."; btn.disabled = true;
 
     let data = await adminRpc('accounts_reset_password', { kind: loai, ids: idsToUpdate });
-    
+
     btn.innerText = oldText; btn.disabled = false;
-    
+
     if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã khôi phục mật khẩu thành công!`);
@@ -3291,14 +3292,14 @@ async function deleteSelectedAccounts(loai) {
     if(!confirm(`XÓA VĨNH VIỄN ${checkedBoxes.length} tài khoản đã chọn khỏi hệ thống?`)) return;
 
     let idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
-    
+
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xóa..."; btn.disabled = true;
 
     let data = await adminRpc('accounts_delete', { kind: loai, ids: idsToDelete });
-    
+
     btn.innerText = oldText; btn.disabled = false;
-    
+
     if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã xóa tài khoản thành công!`);
@@ -3540,24 +3541,24 @@ function removeVietnameseTones(str) {
 function xuLyLiveSearch() {
     const sInput = document.getElementById("liveSearchInput");
     if (!sInput) return;
-    
+
     // Chuẩn hóa input: Chuyển hoa và chuẩn hóa cả 2 phiên bản (có dấu & không dấu)
     const filterRaw = sInput.value.toUpperCase().trim();
     const filterNoTone = removeVietnameseTones(filterRaw);
-    
+
     const rows = document.querySelectorAll("#dashBody tr");
     let matchCount = 0;
-    
+
     rows.forEach(row => {
         // Bỏ qua dòng thông báo lỗi hoặc rỗng
         if (row.cells.length < 2) return;
-        
+
         const sbd = (row.cells[0].textContent || "").toUpperCase();
         const name = (row.cells[1].textContent || "").toUpperCase();
-        
+
         const sbdNoTone = removeVietnameseTones(sbd);
         const nameNoTone = removeVietnameseTones(name);
-        
+
         // Thuật toán so khớp thông minh:
         // 1. Nếu người dùng nhập có dấu (raw != noTone), ưu tiên so khớp chính xác từng chữ cái có dấu
         // 2. Nếu người dùng nhập không dấu, so khớp linh hoạt với cả bản gốc và bản bỏ dấu
@@ -3566,12 +3567,12 @@ function xuLyLiveSearch() {
             isMatch = true;
         } else {
             // Kiểm tra khớp SBD hoặc Tên (cả 2 phương thức: chính xác và bỏ dấu)
-            isMatch = sbd.includes(filterRaw) || 
-                      name.includes(filterRaw) || 
-                      sbdNoTone.includes(filterNoTone) || 
+            isMatch = sbd.includes(filterRaw) ||
+                      name.includes(filterRaw) ||
+                      sbdNoTone.includes(filterNoTone) ||
                       nameNoTone.includes(filterNoTone);
         }
-        
+
         if (isMatch) {
             row.style.display = "";
             matchCount++;

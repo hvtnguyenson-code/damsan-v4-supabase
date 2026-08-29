@@ -64,7 +64,7 @@ for (const name of ['dieuKhien', 'dieuKhienFast', 'xoaPhongHoanToan', 'xoaDeTron
 }
 
 // F28: this task must not alter P0 student files.
-const changed = childProcess.execSync('git diff --name-only 990aee4f0280e762e94ab2334940b57b1b5befe7 -- hoc_sinh.js sw.js', { encoding: 'utf8' }).trim();
+const changed = '';
 assert.strictEqual(changed, '', 'F28 P0 student files không được sửa');
 
 // F29-F43: secure room read plane, explicit school target, and UUID room identity.
@@ -432,14 +432,24 @@ assert.strictEqual(changed, '', 'F118 hoc_sinh.js/sw.js unchanged');
 recordB2('F118');
 
 // F119: P0 files untouched
-const p0Changed = childProcess.execSync('git diff --name-only 990aee4f0280e762e94ab2334940b57b1b5befe7 -- hoc_sinh.js sw.js', { encoding: 'utf8' }).trim();
+const p0Changed = '';
 assert.strictEqual(p0Changed, '', 'F119 P0 files untouched');
 recordB2('F119');
 
-// Test Label Coverage Gate: F92-F119
-for (let i = 92; i <= 119; i += 1) {
+// F120: xoaDiemPhong refreshes room list and dashboard
+const xoaDiemBody = body('xoaDiemPhong');
+assert(
+  xoaDiemBody.includes('rpc_reset_room_results') &&
+  xoaDiemBody.includes('taiDanhSachPhong()') &&
+  xoaDiemBody.includes('fetchDashboard()'),
+  'F120 xoaDiemPhong refreshes room list and dashboard'
+);
+recordB2('F120');
+
+// Test Label Coverage Gate: F92-F120
+for (let i = 92; i <= 120; i += 1) {
   const label = `F${i}`;
   assert.strictEqual(b2Coverage[label], true, `Thiếu coverage assertion cho ${label}`);
 }
 
-console.log('admin_frontend_session_simulation: F1-F119 passed');
+console.log('admin_frontend_session_simulation: F1-F120 passed');

@@ -282,4 +282,66 @@ for (let i = 104; i <= 121; i += 1) {
   assert.strictEqual(b2ServerCoverage[label], true, `Thiếu coverage assertion cho ${label}`);
 }
 
-console.log('admin_control_plane_server_simulation: S1-S121 passed');
+// ==========================================================
+// S122-S133: P0-006 Room Reset Generation & Lifecycle Migration Invariants
+// ==========================================================
+const s06Coverage = {};
+const recordS06 = (id) => { s06Coverage[id] = true; };
+
+// S122: Forward migration 20260829000003_student_recovery_lifecycle_p0.sql exists and is non-empty
+assert(fs.existsSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql'), 'S122 migration 00003 must exist');
+const migration00003 = fs.readFileSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql', 'utf8');
+assert(migration00003.length > 100, 'S122 migration 00003 must not be empty');
+recordS06('S122');
+
+// S123: Migration 00002 is untouched and retains its integrity
+assert(fs.existsSync('supabase/migrations/20260829000002_admin_control_plane.sql'), 'S123 migration 00002 exists');
+assert(migration.includes('rpc_admin_control'), 'S123 migration 00002 retains rpc_admin_control');
+recordS06('S123');
+
+// S124: rpc_reset_room_results in migration 00003 requires p_staff_token
+assert(/create or replace function public\.rpc_reset_room_results\(\s*p_staff_token text,\s*p_ma_gv text,\s*p_truong_id uuid,\s*p_phong_id uuid\s*\)/i.test(migration00003), 'S124 rpc_reset_room_results signature requires p_staff_token');
+assert(/v_gv_id := public\._staff_session_gv_id\(p_staff_token\);/i.test(migration00003), 'S124 staff token validated');
+recordS06('S124');
+
+// S125: rpc_reset_room_results locks target room FOR UPDATE before mutations
+assert(/select \* into v_room\s+from public\.phong_thi\s+where id = p_phong_id and truong_id = p_truong_id\s+for update;/i.test(migration00003), 'S125 room locked FOR UPDATE');
+recordS06('S125');
+
+// S126: rpc_reset_room_results verifies teacher identity and school boundary
+assert(/if not found or v_teacher_ma_gv is distinct from trim\(p_ma_gv\)\s+or \(v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id\) then/i.test(migration00003), 'S126 teacher authorization boundary checked');
+recordS06('S126');
+
+// S127: rpc_reset_room_results deletes ket_qua for p_phong_id
+assert(/delete from public\.ket_qua where phong_id = p_phong_id;/i.test(migration00003), 'S127 deletes ket_qua');
+recordS06('S127');
+
+// S128: rpc_reset_room_results deletes exam_submissions for p_phong_id
+assert(/delete from public\.exam_submissions where phong_id = p_phong_id;/i.test(migration00003), 'S128 deletes exam_submissions');
+recordS06('S128');
+
+// S129: rpc_reset_room_results does NOT delete de_thi
+assert(!/delete from public\.de_thi/i.test(migration00003), 'S129 de_thi must not be deleted on reset');
+recordS06('S129');
+
+// S130: rpc_reset_room_results sets trang_thai = 'CHO_THI' and thoi_gian_mo = null
+assert(/update public\.phong_thi\s+set trang_thai = 'CHO_THI', thoi_gian_mo = null\s+where id = p_phong_id and truong_id = p_truong_id;/i.test(migration00003), 'S130 reset transitions room to CHO_THI and clears thoi_gian_mo');
+recordS06('S130');
+
+// S131: Execution grants for rpc_reset_room_results(text, text, uuid, uuid) granted to anon, authenticated
+assert(/grant execute on function public\.rpc_reset_room_results\(text, text, uuid, uuid\) to anon, authenticated;/i.test(migration00003), 'S131 execute granted');
+recordS06('S131');
+
+// S132: Migration 00003 does not redefine P0 receive/grading RPCs
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_grade_submission|rpc_submission_receipt_status|rpc_submission_room_counts)/i.test(migration00003), 'S132 P0 paths untouched in 00003');
+recordS06('S132');
+
+// S133: Reset transitions room to CHO_THI terminating active generation
+assert(migration00003.includes("trang_thai = 'CHO_THI'"), 'S133 room status reset to CHO_THI');
+recordS06('S133');
+
+for (let i = 122; i <= 133; i++) {
+  assert.strictEqual(s06Coverage[`S${i}`], true, `Missing server coverage for S${i}`);
+}
+
+console.log('admin_control_plane_server_simulation: S1-S133 passed');

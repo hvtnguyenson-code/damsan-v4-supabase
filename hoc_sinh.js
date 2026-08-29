@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260829-offline-f5-recovery-p0';
+const VERSION = '20260829-recovery-lifecycle-p0-006';
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -13,7 +13,7 @@ let pendingStudentPasswordProof = null;
 
 let currentQuestionIndex = 0;
 let cheatCount = 0;
-const MAX_CHEATS = 3; 
+const MAX_CHEATS = 3;
 let isExamActive = false;
 let isSubmitting = false;
 let isCheckingCommand = false; // Guard tránh concurrent checkTeacherCommand gây race condition
@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.serviceWorker.register('./sw.js?v=' + VERSION, { updateViaCache: 'none' })
             .then(reg => {
                 console.log('SW Registered', reg);
-                
+
                 // Lắng nghe sự kiện tìm thấy bản cập nhật mới
                 reg.onupdatefound = () => {
                     const installingWorker = reg.installing;
@@ -145,10 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
-    
+
     if (!isStandalone && !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1')) {
         showSection('pwa-install-section');
-        
+
         // KIỂM TRA NỀN TẢNG ĐỂ HIỂN THỊ UI PHÙ HỢP
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         if (isIOS) {
@@ -157,7 +157,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Chrome/Android/Desktop: Chờ deferredPrompt để hiện nút
             checkAndShowInstallButton();
         }
-        return; 
+        return;
     }
 
     // 2. KHÔI PHỤC DANH SÁCH TÀI KHOẢN ĐÃ LƯU (NẾU CÓ)
@@ -237,7 +237,7 @@ function renderSavedAccounts() {
     const accounts = getSavedAccounts();
     const container = document.getElementById('saved-accounts-container');
     const list = document.getElementById('saved-accounts-list');
-    
+
     if (!container || !list) return;
 
     if (accounts.length === 0) {
@@ -262,15 +262,15 @@ function chonTaiKhoan(maHs) {
     const acc = accounts.find(a => a.ma_hs === maHs);
     if (acc) {
         document.getElementById('ma_hs').value = acc.ma_hs;
-        
+
         // BẢO MẬT: Chỉ lưu định danh, không lưu hash mật khẩu như token đăng nhập.
         const passInput = document.getElementById('mat_khau');
         passInput.value = '';
         passInput.dataset.savedHash = '';
-        
+
         passInput.placeholder = 'Mat khau';
         passInput.focus();
-        
+
         document.getElementById('ghi_nho_dn').checked = true;
     }
 }
@@ -280,14 +280,14 @@ function xoaTaiKhoan(maHs) {
         let accounts = getSavedAccounts();
         accounts = accounts.filter(a => a.ma_hs !== maHs);
         localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
-        
+
         // Xóa dấu vết nếu tài khoản đang chọn bị xóa
         const passInput = document.getElementById('mat_khau');
         if (document.getElementById('ma_hs').value === maHs) {
             passInput.dataset.savedHash = '';
             passInput.placeholder = 'Mật khẩu';
         }
-        
+
         renderSavedAccounts();
     }
 }
@@ -296,16 +296,16 @@ function luuTaiKhoan(maHs, hoTen, lop) {
     let accounts = getSavedAccounts();
     const index = accounts.findIndex(a => a.ma_hs === maHs);
     const newAcc = { ma_hs: maHs, ho_ten: hoTen, lop };
-    
+
     if (index > -1) {
         accounts[index] = newAcc;
     } else {
         accounts.push(newAcc);
     }
-    
+
     // Giới hạn lưu tối đa 5 tài khoản để tránh rác
     if (accounts.length > 5) accounts.shift();
-    
+
     localStorage.setItem('damsan_saved_accounts', JSON.stringify(accounts));
     renderSavedAccounts();
 }
@@ -342,11 +342,11 @@ styleCustom.innerHTML = `
 
     #sync-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1e8e3e; color: #fff; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-size: 14px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: 0.3s; opacity: 0; pointer-events: none; z-index: 99999; display: flex; align-items: center; gap: 8px;}
     #sync-toast.show { opacity: 1; bottom: 30px; }
-    
+
     .flag-btn { background: #f8f9fa; border: 1px solid #dadce0; color: #5f6368; padding: 5px 12px; border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 5px; transition: 0.2s; font-weight: 500;}
     .flag-btn.active { background: #fff4e5; border-color: #f39c12; color: #d35400; box-shadow: 0 2px 5px rgba(243, 156, 18, 0.2); }
     .flag-btn:hover { background: #e8eaed; }
-    
+
     .q-btn.is-flagged::after { content: "🚩"; position: absolute; top: -8px; right: -8px; font-size: 12px; }
     .q-btn.is-flagged { border: 2px solid #f39c12 !important; background-color: #fffcf5 !important; }
     #network-banner { position: fixed; top: 0; left: 0; width: 100%; padding: 12px; text-align: center; font-weight: bold; color: white; z-index: 100000; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform: translateY(-100%); display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);}
@@ -424,6 +424,29 @@ function ghiNhanNghiVan(reason) {
     if (antiCheatRuntime.reasons.length > 50) antiCheatRuntime.reasons.shift();
 }
 
+function dinhDangThoiGianVN(ts) {
+    if (!ts) return '';
+    try {
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return String(ts);
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(d);
+        const p = {};
+        parts.forEach(({ type, value }) => { p[type] = value; });
+        return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second}`;
+    } catch (e) {
+        return String(ts);
+    }
+}
 function dinhDangThoiDiem(ts) {
     try {
         return new Date(ts).toLocaleTimeString('vi-VN', { hour12: false });
@@ -624,10 +647,10 @@ function phatHienOverlayNghiVan() {
     // Hàm kiểm tra một node có nghi vấn không
     const checkNode = (el) => {
         if (!el || detected) return;
-        if (el.nodeType !== 1) return; 
+        if (el.nodeType !== 1) return;
 
         if (el.id && whiteList.has(el.id)) return;
-        
+
         // Tối ưu: Kiểm tra cơ bản trước khi gọi getComputedStyle (rất tốn kém)
         if (el.id === 'cheat-warning' || el.id === 'network-banner' || el.classList.contains('sync-toast')) return;
 
@@ -636,7 +659,7 @@ function phatHienOverlayNghiVan() {
         if (st.position !== 'fixed' && st.position !== 'sticky' && st.position !== 'absolute') return;
 
         const z = parseInt(st.zIndex || '0', 10);
-        if (isNaN(z) || z < 400) return; 
+        if (isNaN(z) || z < 400) return;
 
         const rect = el.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) return;
@@ -648,13 +671,13 @@ function phatHienOverlayNghiVan() {
         const aiKeywords = ['chatgpt', 'meta', 'gemini', 'copilot', 'assistant', 'sider', 'monica', 'harpa', 'claud', 'perplexity', 'chụp màn hình', 'screenshot', 'giải bài'];
         const hasAIKeyword = aiKeywords.some(k => text.includes(k));
 
-        if (hasAIKeyword && area > 400) { 
+        if (hasAIKeyword && area > 400) {
             detected = true;
             return;
         }
 
         // 2. Phát hiện dựa trên diện tích lớn và giao diện mờ/trong suốt
-        const coversScreen = area >= vpArea * 0.10; 
+        const coversScreen = area >= vpArea * 0.10;
         const hasOverlayAppearance = st.backgroundColor.includes('rgba') || st.backdropFilter !== 'none' || st.filter !== 'none';
 
         if (coversScreen && hasOverlayAppearance) {
@@ -663,7 +686,7 @@ function phatHienOverlayNghiVan() {
         }
 
         // 3. Phát hiện dựa trên diện tích trung bình và từ khóa gợi ý
-        if (area >= vpArea * 0.03) { 
+        if (area >= vpArea * 0.03) {
             const suggestKeywords = ['ai', 'gợi ý', 'hint', 'gợi', 'trợ giúp', 'answer', 'explanation'];
             if (suggestKeywords.some(k => text.includes(k))) {
                 detected = true;
@@ -1046,7 +1069,7 @@ async function joinRoom(maPhongAuto = null) {
         kichHoatLienKetRealtime();
 
         const { data: res } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
-        
+
         // LOGIC KHÔI PHỤC QUYỀN THI (CLEAR LOCKOUT) KHI GIÁO VIÊN RESET
         // Nếu không tìm thấy kết quả trên server (đã bị xóa) hoặc số lần vi phạm đã được reset về 0
         if (!res || (res && (res.so_lan_vi_pham || 0) === 0)) {
@@ -1134,8 +1157,14 @@ function kichHoatLienKetRealtime() {
     realtimeChannel = _supabase.channel('room-updates')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'phong_thi', filter: `id=eq.${state.phong_id}` }, payload => {
             const newStatus = payload.new.trang_thai;
+            const newOpenedAt = payload.new.thoi_gian_mo;
+            if (newOpenedAt !== state.room_opened_at || newStatus === 'CHO_THI') {
+                if (document.getElementById('result-section').classList.contains('active') || document.getElementById('exam-section').classList.contains('active')) {
+                    checkTeacherCommand(true);
+                }
+                return;
+            }
             if ((newStatus === 'THU_BAI' || newStatus === 'XEM_DAP_AN') && document.getElementById('exam-section').classList.contains('active')) {
-                // [Fix B] XEM_DAP_AN cũng trigger nộp bài — học sinh chưa nộp khi GV công bố đáp án sẽ được thu bài tự động
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
                 gradeAndSubmit(true);
             }
@@ -1318,7 +1347,7 @@ function batDauAntiCheat(initialCheatCount = 0) {
     window.onbeforeunload = xacNhanThoatTrang;
     document.addEventListener('fullscreenchange', handleFullScreenChange);
     document.addEventListener('pagehide', handlePageHide);
-    
+
     // TỐI ƯU: Debounce resize để tránh quá tải CPU khi co giãn cửa sổ
     let resizeTimer;
     antiCheatResizeHandler = () => {
@@ -1326,7 +1355,7 @@ function batDauAntiCheat(initialCheatCount = 0) {
         resizeTimer = setTimeout(handleResize, 250);
     };
     window.addEventListener('resize', antiCheatResizeHandler);
-    
+
     document.addEventListener('focusin', handleFocusIn);
 
     batDauGiamSatNangCao();
@@ -1449,7 +1478,7 @@ function chanPhimTat(e) {
     if (forbidden.some(Boolean)) {
         e.preventDefault();
         xuLyGianLan('Phát hiện phím tắt bị vô hiệu hóa');
-        
+
         isInternalAction = true;
         alert("Lệnh đã bị vô hiệu hóa trong phòng thi!");
         setTimeout(() => { isInternalAction = false; }, 2000);
@@ -1459,17 +1488,17 @@ function chanPhimTat(e) {
 function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     if (!isExamActive || isInternalAction) return;
     const now = Date.now();
-    if (now - antiCheatLastViolationTs < 2000) return; 
+    if (now - antiCheatLastViolationTs < 2000) return;
     antiCheatLastViolationTs = now;
 
     // TỐI ƯU: Xác định Phần II bằng cách kiểm tra trực tiếp khối câu hỏi đang hiển thị trên màn hình
     let isPhan2 = false;
     const activeBlock = document.querySelector('.question-block.active-q');
-    
+
     // Nếu khối câu hỏi đang hiện có chứa bảng Đúng/Sai (tf-table), chắc chắn là Phần II
     if (activeBlock && activeBlock.querySelector('.tf-table')) {
         isPhan2 = true;
-    } 
+    }
     // Dự phòng: Kiểm tra qua chỉ số câu hỏi nếu DOM chưa kịp cập nhật
     else {
         let currentQ = state.cau_hoi[currentQuestionIndex];
@@ -1532,7 +1561,7 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         msgEl.innerText = `Hệ thống phát hiện vi phạm: ${reason}. Nếu tiếp tục, bài thi sẽ bị thu tự động.`;
     }
     document.getElementById('cheat-warning').style.display = 'block';
-    
+
     if (cheatCount >= MAX_CHEATS) {
         localStorage.setItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id, 'true');
         const warningEl = document.getElementById('cheat-warning');
@@ -1556,7 +1585,7 @@ function xacNhanNopBai() {
     let msg = chuaLam > 0
         ? `⚠️ CẢNH BÁO: Bạn còn ${chuaLam} câu chưa hoàn thành!\nBạn có CHẮC CHẮN muốn nộp bài lúc này không?`
         : `Bạn đã hoàn thành 100% câu hỏi.\nXác nhận NỘP BÀI lên máy chủ?`;
-    
+
     isInternalAction = true; // Bật cờ để tạm dừng anti-cheat
     if (confirm(msg)) {
         gradeAndSubmit(false);
@@ -1712,13 +1741,22 @@ async function resumeSavedSubmission() {
         }
     }
     if (!snapshot || snapshot.state === SUBMISSION_STATE.GRADED) return false;
+    const autoArea = document.getElementById('auto-room-area');
+    if (autoArea) {
+        autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">⏳ Bài đã chốt đang được lưu an toàn trên thiết bị. ' + (state.isOffline ? 'Hệ thống sẽ tự gửi khi có kết nối mạng.' : 'Đang tự động đồng bộ lên máy chủ...') + '</p>';
+    }
     if (state.isOffline) {
-        const autoArea = document.getElementById('auto-room-area');
-        if (autoArea) autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">⏳ Bài đã chốt đang được lưu an toàn trên thiết bị. Hệ thống sẽ tự gửi khi có mạng.</p>';
         return true;
     }
     snapshot = await reconcileSavedSubmission(snapshot);
-    if (!snapshot) return false;
+    if (!snapshot) {
+        state.phong_id = null;
+        state.room_opened_at = null;
+        state.ma_de = '';
+        showSection('room-section');
+        timPhongThiTuDong();
+        return false;
+    }
     if (snapshot.recovery_archive_failed === true) {
         if (!recoveryArchiveFailureNoticeShown) {
             recoveryArchiveFailureNoticeShown = true;
@@ -1727,8 +1765,13 @@ async function resumeSavedSubmission() {
         return true;
     }
     const receipt = getSubmissionReceipt();
-    if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && receipt?.submission_id) requestGrading(receipt.submission_id);
-    else receiveFinalSubmission();
+    if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && receipt?.submission_id) {
+        dongTatCaRealtimeHocSinh();
+        showReceivedState(receipt);
+        requestGrading(receipt.submission_id);
+    } else {
+        receiveFinalSubmission();
+    }
     return true;
 }
 
@@ -1788,7 +1831,7 @@ function showReceivedState(receipt) {
     document.getElementById('finish_name').innerText = state.ho_ten;
     showSection('result-section');
     document.getElementById('score-display-area').style.display = 'none';
-    document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(receipt.received_at)}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
+    document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(dinhDangThoiGianVN(receipt.received_at))}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
     try { document.exitFullscreen(); } catch (e) { }
 }
 
@@ -1829,7 +1872,15 @@ async function receiveFinalSubmission() {
                 return;
             }
             clearActiveSubmissionKeys();
+            state.phong_id = null;
+            state.room_opened_at = null;
+            state.ma_de = '';
+            state.cau_hoi = [];
+            state.user_result = null;
+            cheatCount = 0;
             alert('Lượt thi này đã được giáo viên reset. Bản chốt cũ không được gửi lại; hãy vào lượt thi mới khi phòng được mở.');
+            showSection('room-section');
+            timPhongThiTuDong();
             return;
         }
         lastError = error?.message || data?.message || 'Không nhận được receipt từ máy chủ';
@@ -1838,6 +1889,10 @@ async function receiveFinalSubmission() {
     isSubmitting = false;
     const retryMsg = document.getElementById('retry-status-msg');
     if (retryMsg) { retryMsg.style.display = ''; retryMsg.innerText = '⚠️ Bài đã chốt vẫn được lưu trên thiết bị. Hệ thống sẽ thử gửi lại khi có mạng; không tạo bài mới.'; }
+    const autoArea = document.getElementById('auto-room-area');
+    if (autoArea && document.getElementById('room-section')?.classList.contains('active')) {
+        autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">⚠️ Bài đã chốt đang được lưu an toàn trên thiết bị. Sẽ tự động gửi khi kết nối ổn định.</p>';
+    }
     console.error('Receive submission pending:', lastError);
 }
 
@@ -1862,19 +1917,40 @@ async function requestGrading(submissionId) {
 }
 async function checkTeacherCommand(isAuto = false) {
     if (state.isOffline) return alert("Không thể tải kết quả vì bạn đang mất mạng!");
-    // [Fix C] Guard tránh race condition: nếu đã có lần gọi đang chạy, bỏ qua lần sau
     if (isCheckingCommand) { console.log('[checkCmd] skipped — đang xử lý lần trước, isAuto=', isAuto); return; }
     isCheckingCommand = true;
 
     try {
-        const { data: phong } = await _supabase.from('phong_thi').select('trang_thai').eq('id', state.phong_id).single();
-        const { data: kq } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
-        // [Fix D] Diagnostic log — xem nguồn gọi, trạng thái phòng, và độ sẵn sàng của dữ liệu
+        const { data: phong } = await _supabase.from('phong_thi').select('id, trang_thai, thoi_gian_mo').eq('id', state.phong_id).maybeSingle();
+        const { data: kq } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).maybeSingle();
         console.log('[checkCmd] isAuto=', isAuto, '| trang_thai=', phong?.trang_thai, '| cau_hoi.length=', state.cau_hoi?.length, '| ma_de=', kq?.ma_de);
+
+        // Defect C: Lifecycle synchronization when room is reset, generation changed, or deleted
+        const snapshot = getFinalSnapshot();
+        const isRoomResetOrChanged = !phong || (phong.thoi_gian_mo !== null && state.room_opened_at !== null && phong.thoi_gian_mo !== state.room_opened_at) || (!kq && phong.trang_thai === 'CHO_THI');
+
+        if (isRoomResetOrChanged) {
+            if (snapshot?.attempt_id) {
+                await reconcileSavedSubmission(snapshot);
+            } else {
+                clearActiveSubmissionKeys();
+            }
+            state.user_result = null;
+            state.cau_hoi = [];
+            state.phong_id = null;
+            state.room_opened_at = null;
+            state.ma_de = '';
+            cheatCount = 0;
+            dongTatCaRealtimeHocSinh();
+            showSection('room-section');
+            timPhongThiTuDong();
+            if (!isAuto) alert("Phòng thi đã được giáo viên reset hoặc kết thúc lượt thi cũ.");
+            return;
+        }
+
         state.user_result = kq;
         if (!kq) {
             let receipt = getSubmissionReceipt();
-            const snapshot = getFinalSnapshot();
             if (!receipt?.submission_id && snapshot?.attempt_id) {
                 await reconcileSavedSubmission(snapshot);
                 receipt = getSubmissionReceipt();
@@ -1890,7 +1966,6 @@ async function checkTeacherCommand(isAuto = false) {
         }
         renderForensicPanel();
 
-        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT (DISPLAY-ONLY)
         let displayScore = kq.diem;
         const questions = state.cau_hoi || [];
         if (questions.length > 0) {
@@ -1898,7 +1973,6 @@ async function checkTeacherCommand(isAuto = false) {
                 let p = String(q.phan || q.Phan);
                 return p === "2" || p === "3";
             });
-            // Nếu chỉ có Phần I, tự động quy đổi về thang 10 dựa trên tổng số câu
             if (!hasPart2Or3) {
                 const maxRaw = questions.length * 0.25;
                 if (maxRaw > 0) displayScore = (kq.diem / maxRaw) * 10;
@@ -1922,8 +1996,6 @@ async function checkTeacherCommand(isAuto = false) {
 
         if (phong.trang_thai === 'XEM_DAP_AN') {
             let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : kq.chi_tiet;
-            // [Fix 1A] Bỏ gate !chiTiet[0].A — luôn enrich khi có ma_de để tránh bỏ sót câu hỏi
-            // || ct.X bảo toàn giá trị hiện có trong chi_tiet nếu de_thi không có trường tương ứng
             if (chiTiet.length > 0 && kq.ma_de) {
                 const { data: deData } = await _supabase.from('de_thi').select('cau_so').eq('phong_id', state.phong_id).eq('ma_de', kq.ma_de).single();
                 if (deData) {
@@ -1937,8 +2009,6 @@ async function checkTeacherCommand(isAuto = false) {
                             D: cauGoc.D || cauGoc.DapAnD || ct.D
                         };
                     });
-                    // [Fix 1C] Nếu state.cau_hoi trống (học sinh re-login/F5), populate từ de_thi
-                    // để renderReview có nguồn fallback qua qData cho cả nội dung câu hỏi
                     if (!state.cau_hoi || state.cau_hoi.length === 0) {
                         state.cau_hoi = cauHois;
                     }
@@ -1948,8 +2018,13 @@ async function checkTeacherCommand(isAuto = false) {
         } else {
             document.getElementById('review-content').innerHTML = '';
         }
-    } catch (e) { console.error(e); }
-    finally { isCheckingCommand = false; } // [Fix C] reset guard dù thành công hay lỗi
+
+    } catch (e) {
+        console.error("Lỗi kiểm tra lệnh GV:", e);
+        if (!isAuto) alert("Lỗi kết nối máy chủ: " + e.message);
+    } finally {
+        isCheckingCommand = false;
+    }
 }
 
 function renderReview(chiTietData) {
