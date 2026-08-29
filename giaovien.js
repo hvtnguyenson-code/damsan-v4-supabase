@@ -7,6 +7,11 @@ let gvData = null;
 let activeWorkspaceMonId = null;
 let activeWorkspaceTruongId = null;
 
+function getAccountPasswordState(row) {
+    if (typeof row?.must_change_password !== 'boolean') return 'KhongXacDinh';
+    return row.must_change_password ? 'MacDinh' : 'DaDoi';
+}
+
 const GV_SESSION_FIELDS = ['id', 'ma_gv', 'ho_ten', 'quyen', 'truong_id', 'truong_ten', 'mon_id'];
 
 function safeGvProfile(source) {
@@ -407,7 +412,9 @@ async function khoiTaoWorkspace() {
             schoolSel += `</select>`;
             wsDiv.innerHTML = `<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Trường:</span> ${schoolSel}<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Môn:</span> ${sel}`;
 
-            activeWorkspaceMonId = localStorage.getItem('damSan_Workspace') || "ALL";
+            const storedMon = localStorage.getItem('damSan_Workspace');
+            activeWorkspaceMonId = sysMonList.some((m) => m.id === storedMon) ? storedMon : 'ALL';
+            if (activeWorkspaceMonId === 'ALL' && storedMon && storedMon !== 'ALL') localStorage.setItem('damSan_Workspace', 'ALL');
             const storedSchool = localStorage.getItem('damSan_WorkspaceSchool');
             activeWorkspaceTruongId = sysTruongList.some((t) => t.id === storedSchool) ? storedSchool : (sysTruongList.some((t) => t.id === gvData.truong_id) ? gvData.truong_id : 'ALL');
         } else {
@@ -1710,6 +1717,24 @@ function getRoomTargetSchoolId(room) {
     return gvData.truong_id;
 }
 
+async function refreshWorkspaceSelectors() {
+    const [monsResult, schoolsResult] = await Promise.all([
+        sb.from('mon_hoc').select('id, ten_mon, created_at').order('created_at', {ascending: true}),
+        sb.from('truong_hoc').select('id, ma_truong, ten_truong, created_at').order('ten_truong', {ascending: true})
+    ]);
+    g_sysMonList = monsResult.data || [];
+    g_sysTruongList = schoolsResult.data || [];
+    if (activeWorkspaceTruongId !== 'ALL' && !g_sysTruongList.some((t) => t.id === activeWorkspaceTruongId)) { activeWorkspaceTruongId = 'ALL'; localStorage.setItem('damSan_WorkspaceSchool', 'ALL'); clearAccountRuntimeState(); }
+    if (activeWorkspaceMonId !== 'ALL' && !g_sysMonList.some((m) => m.id === activeWorkspaceMonId)) { activeWorkspaceMonId = 'ALL'; localStorage.setItem('damSan_Workspace', 'ALL'); }
+    const schoolSelect = document.getElementById('workspaceSchoolSelector');
+    const monSelect = document.getElementById('workspaceSelector');
+    if (gvData?.quyen === 'Admin' && schoolSelect && monSelect) {
+        schoolSelect.innerHTML = `<option value="ALL">🌎 TẤT CẢ TRƯỜNG</option>${g_sysTruongList.map((t) => `<option value="${t.id}">🏫 ${t.ten_truong}</option>`).join('')}`;
+        monSelect.innerHTML = `<option value="ALL">🌎 TỔNG QUAN TẤT CẢ CÁC MÔN</option>${g_sysMonList.map((m) => `<option value="${m.id}">📚 Môn: ${m.ten_mon}</option>`).join('')}`;
+        schoolSelect.value = activeWorkspaceTruongId; monSelect.value = activeWorkspaceMonId;
+    }
+}
+
 function changeWorkspaceSchool(truongId) {
     activeWorkspaceTruongId = truongId;
     localStorage.setItem('damSan_WorkspaceSchool', truongId);
@@ -2952,7 +2977,7 @@ async function fetchStudents(forceReload = false) {
             HoTen: d.ho_ten, 
             Lop: d.lop, 
             TenTruong: d.ten_truong || 'Hệ thống',
-            TrangThai: d.must_change_password ? 'MacDinh' : 'DaDoi',
+            TrangThai: getAccountPasswordState(d),
             Quyen: d.quyen, 
             id: d.id 
         }));
@@ -2982,7 +3007,7 @@ function renderStudentTable() {
     if(filtered.length === 0) html = '<tr><td colspan="7">Không có dữ liệu.</td></tr>'; 
     else { 
         filtered.forEach(hs => { 
-            let statusHTML = hs.TrangThai === "DaDoi" 
+            let statusHTML = hs.TrangThai === "KhongXacDinh" ? '<span style="color:#7f8c8d;">—</span>' : hs.TrangThai === "DaDoi"
                 ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
                 : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
             
@@ -3023,7 +3048,7 @@ async function fetchTeachers(forceReload = false) {
                     TruongId: d.truong_id,
                     TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
                     TenTruong: d.ten_truong || 'Hệ thống',
-                    TrangThai: d.must_change_password ? 'MacDinh' : 'DaDoi',
+                    TrangThai: getAccountPasswordState(d),
                     Quyen: d.quyen, 
                     id: d.id 
                 };
@@ -3049,7 +3074,7 @@ function renderTeacherTable() {
         let sortedTeachers = [...allTeachers].sort((a, b) => (a.MaGV || "").localeCompare((b.MaGV || ""), undefined, {numeric: true, sensitivity: 'base'}));
         
         sortedTeachers.forEach(gv => { 
-            let statusHTML = gv.TrangThai === "DaDoi" 
+            let statusHTML = gv.TrangThai === "KhongXacDinh" ? '<span style="color:#7f8c8d;">—</span>' : gv.TrangThai === "DaDoi"
                 ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
                 : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
             
@@ -3274,13 +3299,16 @@ async function themTruongMoi() {
     let error = null; try { await adminRpc('school_create', { ma_truong: ma, ten_truong: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
-    else { document.getElementById('newMaTruong').value = ''; document.getElementById('newTenTruong').value = ''; loadSysData(); }
+    else { document.getElementById('newMaTruong').value = ''; document.getElementById('newTenTruong').value = ''; await loadSysData(); await refreshWorkspaceSelectors(); }
 }
 
 async function xoaTruong(id) {
     if(!confirm("Xóa trường này?")) return;
     let error = null; try { await adminRpc('school_delete', { id }); } catch (e) { error = e; }
-    if(error) alert("Lỗi: " + error.message); else loadSysData();
+    if(error) return alert("Lỗi: " + error.message);
+    if (String(id) === String(gvData.truong_id)) return clearGvSessionAndReturnToLogin('Trường chứa tài khoản quản trị hiện tại đã bị xóa. Phiên đăng nhập đã kết thúc.');
+    if (String(id) === String(activeWorkspaceTruongId)) { activeWorkspaceTruongId = 'ALL'; localStorage.setItem('damSan_WorkspaceSchool', 'ALL'); }
+    clearAccountRuntimeState(); await loadSysData(); await refreshWorkspaceSelectors(); loadMetaData(); taiDanhSachPhong(); fetchRadar();
 }
 
 async function themMonMoi() {
@@ -3291,13 +3319,16 @@ async function themMonMoi() {
     let error = null; try { await adminRpc('subject_create', { ten_mon: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
-    else { document.getElementById('newTenMon').value = ''; loadSysData(); }
+    else { document.getElementById('newTenMon').value = ''; await loadSysData(); await refreshWorkspaceSelectors(); loadBankMeta(true); }
 }
 
 async function xoaMon(id) {
     if(!confirm("Xóa môn này?")) return;
     let error = null; try { await adminRpc('subject_delete', { id }); } catch (e) { error = e; }
-    if(error) alert("Lỗi: " + error.message); else loadSysData();
+    if(error) return alert("Lỗi: " + error.message);
+    if (String(id) === String(activeWorkspaceMonId)) { activeWorkspaceMonId = 'ALL'; localStorage.setItem('damSan_Workspace', 'ALL'); }
+    if (String(id) === String(gvData.mon_id)) { gvData.mon_id = null; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); }
+    await loadSysData(); await refreshWorkspaceSelectors(); loadBankMeta(true); fetchFullBank(true); taiDanhSachPhong(); fetchRadar();
 }
 
 async function resetPass(ma, uid, loai) {

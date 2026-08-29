@@ -105,5 +105,14 @@ must(/changeWorkspaceSchool[\s\S]*clearAccountRuntimeState\(\)/, 'F76 school swi
 must(/Mã trường \[\$\{ma_truong\}\] không tồn tại/, 'F79 mã trường Excel sai bị chặn');
 must(/resetPass[\s\S]*clearGvSessionAndReturnToLogin/, 'F83 reset self Admin đăng xuất');
 assert.strictEqual(changed, '', 'F91 P0 files untouched');
+must(/function getAccountPasswordState[\s\S]*KhongXacDinh/, 'F78 unknown password state');
+assert(body('renderStudentTable').includes('KhongXacDinh') && body('renderTeacherTable').includes('KhongXacDinh'), 'F78 neutral render');
+for (const name of ['themTruongMoi','themMonMoi']) assert(body(name).includes('refreshWorkspaceSelectors'), `F84/F87 ${name} refreshes selectors`);
+const deleteSchool = body('xoaTruong');
+assert(deleteSchool.includes("activeWorkspaceTruongId = 'ALL'") && deleteSchool.includes('clearGvSessionAndReturnToLogin'), 'F85-F86 school delete lifecycle');
+const deleteSubject = body('xoaMon');
+assert(deleteSubject.includes("activeWorkspaceMonId = 'ALL'") && deleteSubject.includes('safeGvProfile(gvData)'), 'F88 subject delete lifecycle');
+assert(!/from\('(hoc_sinh|giao_vien|truong_hoc|mon_hoc|phong_thi|de_thi)'\)\.(insert|update|delete|upsert)/.test(source), 'F89 protected direct writes');
+assert(/from\('ngan_hang'\)\.(insert|update|delete)/.test(source), 'F90 remaining direct writes are bank scope');
 
 console.log('admin_frontend_session_simulation: F1-F91 passed');
