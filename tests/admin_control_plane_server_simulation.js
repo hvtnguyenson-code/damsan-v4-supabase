@@ -55,9 +55,9 @@ mustMatch(/staff_sessions[\s\S]*extensions\.gen_random_bytes\(32\)[\s\S]*extensi
 mustMatch(/create or replace function public\._staff_session_gv_id[\s\S]*s\.revoked_at is null[\s\S]*s\.expires_at > now\(\)/i, 'S36 staff validator revocation and expiry');
 // S37-S42: every teacher-side mutation accepts a session token and old browser entry points are revoked.
 mustMatch(/rpc_giao_vien_bank_write\(p_staff_token text, p_ma_gv text, p_truong_id uuid/i, 'S37 teacher bank requires staff token');
-mustMatch(/revoke all on function public\.rpc_giao_vien_bank_write\(text, uuid, text, jsonb\) from public, anon, authenticated/i, 'S38 old teacher bank revoked');
+mustMatch(/to_regprocedure\('public\.rpc_giao_vien_bank_write\(text,uuid,text,jsonb\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_giao_vien_bank_write\(text, uuid, text, jsonb\) from public, anon, authenticated'/i, 'S38 old teacher bank revoke is guarded');
 mustMatch(/rpc_xoa_de_trong_phong\(p_staff_token text, p_ma_gv text, p_truong_id uuid/i, 'S39 exam deletion requires staff token');
-mustMatch(/revoke all on function public\.rpc_xoa_de_trong_phong\(text, uuid, uuid\) from public, anon, authenticated/i, 'S40 old exam deletion revoked');
+mustMatch(/to_regprocedure\('public\.rpc_xoa_de_trong_phong\(text,uuid,uuid\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_xoa_de_trong_phong\(text, uuid, uuid\) from public, anon, authenticated'/i, 'S40 old exam deletion revoke is guarded');
 for (const name of ['rpc_luu_de_thi_len_phong', 'rpc_dieu_khien_phong_thi', 'rpc_xoa_phong_thi', 'rpc_reset_room_results', 'rpc_grade_pending_room']) {
   mustMatch(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?p_staff_token text`, 'i'), `S41 ${name} secure signature`);
 }
@@ -75,4 +75,44 @@ mustMatch(/bank_delete_filter requires truong_id/i, 'S46 bank delete filter requ
 mustMatch(/nullif\(p_payload->>'mon_id', ''\) is not null[\s\S]*nullif\(btrim\(p_payload->>'bai_hoc'\), ''\) is not null/i, 'S47 empty optional bank filters rejected');
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_grade_submission|rpc_submission_receipt_status)/i.test(migration), 'S48 P0 receive/grade/recovery untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S48 passed');
+// S49-S50: optional legacy signatures must not break a fresh production migration.
+const legacyBankRevoke = /to_regprocedure\('public\.rpc_giao_vien_bank_write\(text,uuid,text,jsonb\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_giao_vien_bank_write\(text, uuid, text, jsonb\) from public, anon, authenticated'/i;
+const legacyExamRevoke = /to_regprocedure\('public\.rpc_xoa_de_trong_phong\(text,uuid,uuid\)'\)[\s\S]*?execute 'revoke all on function public\.rpc_xoa_de_trong_phong\(text, uuid, uuid\) from public, anon, authenticated'/i;
+mustMatch(legacyBankRevoke, 'S49 legacy bank signature guarded by existence check');
+mustMatch(legacyExamRevoke, 'S50 legacy exam-delete signature guarded by existence check');
+assert(!/^\s*revoke all on function public\.rpc_giao_vien_bank_write\(text, uuid, text, jsonb\)/im.test(migration), 'S50 fresh apply has no direct legacy bank revoke');
+assert(!/^\s*revoke all on function public\.rpc_xoa_de_trong_phong\(text, uuid, uuid\)/im.test(migration), 'S50 fresh apply has no direct legacy exam-delete revoke');
+
+const functionBody = (name) => {
+  const found = migration.match(new RegExp(`create or replace function public\\.${name}\\([\\s\\S]*?\\$function\\$;`, 'i'));
+  assert(found, `missing secure function ${name}`);
+  return found[0];
+};
+const saveExamBody = functionBody('rpc_luu_de_thi_len_phong');
+
+// S51-S54: role is loaded from the staff-session account, with distinct admin and teacher subject paths.
+assert(/select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen[\s\S]*?where id=v_gv_id[\s\S]*?v_teacher_ma_gv is distinct from trim\(p_ma_gv\)/i.test(saveExamBody), 'S51 exam push loads Admin role from token identity');
+assert(/if v_quyen = 'Admin' then[\s\S]*?p_mon_id is null[\s\S]*?v_effective_mon_id := p_mon_id;/i.test(saveExamBody), 'S52-S53 Admin accepts null account mon_id and uses requested subject');
+assert(/else[\s\S]*?v_teacher_mon_id is null[\s\S]*?p_mon_id is not null and p_mon_id <> v_teacher_mon_id[\s\S]*?v_effective_mon_id := v_teacher_mon_id;/i.test(saveExamBody), 'S54 non-Admin remains bound to assigned subject');
+
+// S55-S58: secure exam push restores room creation and validates a meaningful payload.
+assert(/if v_phong_id is null then[\s\S]*?insert into public\.phong_thi\(ma_phong, truong_id, mon_id, ten_dot, doi_tuong, thoi_gian, trang_thai\)[\s\S]*?returning id into v_phong_id/i.test(saveExamBody), 'S55 exam push creates a missing room');
+assert(/if nullif\(trim\(p_ma_phong\), ''\) is null then/i.test(saveExamBody), 'S56 exam push rejects empty room code');
+assert(/if jsonb_typeof\(p_de_thi\) <> 'array' then[\s\S]*?if jsonb_array_length\(p_de_thi\) = 0 then/i.test(saveExamBody), 'S57 exam push rejects non-array and empty exam payloads');
+assert(/jsonb_build_object\('status','success','phong_id',v_phong_id,'count',v_count\)/i.test(saveExamBody), 'S58 exam push returns phong_id');
+
+// S59-S61: all room mutations use a staff token and preserve global Admin school authority.
+const roomMutations = ['rpc_dieu_khien_phong_thi', 'rpc_xoa_phong_thi', 'rpc_reset_room_results', 'rpc_grade_pending_room', 'rpc_xoa_de_trong_phong'];
+for (const name of roomMutations) {
+  const body = functionBody(name);
+  assert(/v_gv_id := public\._staff_session_gv_id\(p_staff_token\)/i.test(body), `S61 ${name} staff-token authenticated`);
+  assert(/where id=v_gv_id[\s\S]*?v_teacher_ma_gv is distinct from trim\(p_ma_gv\)/i.test(body), `S61 ${name} verifies supplied identity`);
+  assert(/v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id/i.test(body), `S59-S60 ${name} gives Admin global school authority but scopes teachers`);
+}
+assert(/if v_quyen = 'Admin' then[\s\S]*?v_effective_truong_id := p_truong_id;/i.test(saveExamBody), 'S59 Admin exam push may target another school');
+assert(/else[\s\S]*?p_truong_id is distinct from v_teacher_truong_id/i.test(saveExamBody), 'S60 non-Admin exam push must use own school');
+
+// S62: the P0 submission pipeline remains outside this migration.
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_grade_submission|rpc_submission_receipt_status|rpc_submission_room_counts)/i.test(migration), 'S62 P0 functions untouched');
+
+console.log('admin_control_plane_server_simulation: S1-S62 passed');

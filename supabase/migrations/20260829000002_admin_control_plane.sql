@@ -247,10 +247,12 @@ $function$;
 
 create or replace function public.rpc_xoa_de_trong_phong(p_staff_token text, p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid; v_count integer;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text; v_count integer;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
-  if not exists (select 1 from public.giao_vien where id=v_gv_id and ma_gv=trim(p_ma_gv) and truong_id=p_truong_id)
+  select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien where id=v_gv_id limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id)
      or not exists (select 1 from public.phong_thi where id=p_phong_id and truong_id=p_truong_id) then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
   end if;
@@ -265,10 +267,12 @@ create or replace function public.rpc_dieu_khien_phong_thi(
   p_trang_thai text default null, p_doi_tuong text default null, p_ten_dot text default null,
   p_thoi_gian int default null, p_set_open_time boolean default false
 ) returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
-  if not exists (select 1 from public.giao_vien where id=v_gv_id and ma_gv=trim(p_ma_gv) and truong_id=p_truong_id)
+  select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien where id=v_gv_id limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id)
      or not exists (select 1 from public.phong_thi where id=p_room_id and truong_id=p_truong_id) then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
   end if;
@@ -282,10 +286,12 @@ $function$;
 
 create or replace function public.rpc_xoa_phong_thi(p_staff_token text, p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
-  if not exists (select 1 from public.giao_vien where id=v_gv_id and ma_gv=trim(p_ma_gv) and truong_id=p_truong_id)
+  select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien where id=v_gv_id limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id)
      or not exists (select 1 from public.phong_thi where id=p_phong_id and truong_id=p_truong_id) then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
   end if;
@@ -299,10 +305,12 @@ $function$;
 
 create or replace function public.rpc_reset_room_results(p_staff_token text, p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid; v_ket_qua integer; v_submissions integer; v_room public.phong_thi%rowtype;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text; v_ket_qua integer; v_submissions integer; v_room public.phong_thi%rowtype;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
-  if not exists (select 1 from public.giao_vien where id=v_gv_id and ma_gv=trim(p_ma_gv) and truong_id=p_truong_id) then
+  select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien where id=v_gv_id limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id) then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
   end if;
   select * into v_room from public.phong_thi where id=p_phong_id and truong_id=p_truong_id for update;
@@ -316,10 +324,12 @@ $function$;
 
 create or replace function public.rpc_grade_pending_room(p_staff_token text, p_ma_gv text, p_truong_id uuid, p_phong_id uuid)
 returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid; v_submission_id uuid; v_response jsonb; v_attempted integer:=0; v_graded integer:=0; v_failed integer:=0;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text; v_submission_id uuid; v_response jsonb; v_attempted integer:=0; v_graded integer:=0; v_failed integer:=0;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
-  if not exists (select 1 from public.giao_vien where id=v_gv_id and ma_gv=trim(p_ma_gv) and truong_id=p_truong_id)
+  select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien where id=v_gv_id limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) or (v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id)
      or not exists (select 1 from public.phong_thi where id=p_phong_id and truong_id=p_truong_id) then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc phòng thi.');
   end if;
@@ -334,20 +344,52 @@ $function$;
 create or replace function public.rpc_luu_de_thi_len_phong(
   p_staff_token text, p_ma_gv text, p_truong_id uuid, p_mon_id uuid, p_ma_phong text, p_de_thi jsonb
 ) returns jsonb language plpgsql security definer set search_path = public as $function$
-declare v_gv_id uuid; v_teacher_mon_id uuid; v_phong_id uuid; v_exam jsonb; v_count integer:=0;
+declare v_gv_id uuid; v_teacher_ma_gv text; v_teacher_truong_id uuid; v_teacher_mon_id uuid; v_quyen text; v_effective_truong_id uuid; v_effective_mon_id uuid; v_phong_id uuid; v_room_mon_id uuid; v_exam jsonb; v_count integer:=0;
 begin
   v_gv_id := public._staff_session_gv_id(p_staff_token);
-  select mon_id into v_teacher_mon_id from public.giao_vien where id=v_gv_id and ma_gv=trim(p_ma_gv) and truong_id=p_truong_id limit 1;
-  if v_teacher_mon_id is null or (p_mon_id is not null and p_mon_id <> v_teacher_mon_id) then
+  if nullif(trim(p_ma_phong), '') is null then
+    return jsonb_build_object('status','error','message','Mã phòng không được để trống.');
+  end if;
+  if jsonb_typeof(p_de_thi) <> 'array' then
+    return jsonb_build_object('status','error','message','Đề thi phải là một mảng JSON.');
+  end if;
+  if jsonb_array_length(p_de_thi) = 0 then
+    return jsonb_build_object('status','error','message','Đề thi không được để trống.');
+  end if;
+  select ma_gv, truong_id, mon_id, quyen into v_teacher_ma_gv, v_teacher_truong_id, v_teacher_mon_id, v_quyen
+  from public.giao_vien where id=v_gv_id limit 1;
+  if not found or v_teacher_ma_gv is distinct from trim(p_ma_gv) then
     return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc môn học.');
   end if;
-  select id into v_phong_id from public.phong_thi where ma_phong=trim(p_ma_phong) and truong_id=p_truong_id and mon_id=v_teacher_mon_id limit 1;
-  if v_phong_id is null or jsonb_typeof(p_de_thi) <> 'array' then return jsonb_build_object('status','error','message','Phòng thi hoặc đề thi không hợp lệ.'); end if;
+  if v_quyen = 'Admin' then
+    if p_truong_id is null or p_mon_id is null then
+      return jsonb_build_object('status','error','message','Admin phải chọn trường và môn học đích.');
+    end if;
+    v_effective_truong_id := p_truong_id;
+    v_effective_mon_id := p_mon_id;
+  else
+    if p_truong_id is distinct from v_teacher_truong_id or v_teacher_mon_id is null
+       or (p_mon_id is not null and p_mon_id <> v_teacher_mon_id) then
+      return jsonb_build_object('status','error','message','Không xác thực được giáo viên hoặc môn học.');
+    end if;
+    v_effective_truong_id := v_teacher_truong_id;
+    v_effective_mon_id := v_teacher_mon_id;
+  end if;
+  select id, mon_id into v_phong_id, v_room_mon_id from public.phong_thi
+  where ma_phong=trim(p_ma_phong) and truong_id=v_effective_truong_id limit 1;
+  if found and v_room_mon_id <> v_effective_mon_id then
+    return jsonb_build_object('status','error','message','Mã phòng đã thuộc một môn học khác.');
+  end if;
+  if v_phong_id is null then
+    insert into public.phong_thi(ma_phong, truong_id, mon_id, ten_dot, doi_tuong, thoi_gian, trang_thai)
+    values (trim(p_ma_phong), v_effective_truong_id, v_effective_mon_id, 'Bai kiem tra', 'TatCa', 45, 'CHO_THI')
+    returning id into v_phong_id;
+  end if;
   delete from public.de_thi where phong_id=v_phong_id;
   for v_exam in select value from jsonb_array_elements(p_de_thi) loop
     insert into public.de_thi(phong_id,ma_de,cau_so) values (v_phong_id,v_exam->>'ma_de',v_exam->'cau_so'); v_count:=v_count+1;
   end loop;
-  return jsonb_build_object('status','success','count',v_count);
+  return jsonb_build_object('status','success','phong_id',v_phong_id,'count',v_count);
 end;
 $function$;
 
@@ -376,14 +418,18 @@ revoke all on function public.rpc_admin_logout(text) from public;
 revoke all on function public.rpc_staff_logout(text) from public;
 revoke all on function public.rpc_change_giao_vien_password(uuid, uuid, text, text) from public;
 revoke all on function public.rpc_admin_control(text, text, jsonb) from public;
-revoke all on function public.rpc_giao_vien_bank_write(text, uuid, text, jsonb) from public, anon, authenticated;
-revoke all on function public.rpc_xoa_de_trong_phong(text, uuid, uuid) from public, anon, authenticated;
 revoke all on function public.rpc_dieu_khien_phong_thi(text, uuid, uuid, text, text, text, int, boolean) from public, anon, authenticated;
 revoke all on function public.rpc_xoa_phong_thi(text, uuid, uuid) from public, anon, authenticated;
 revoke all on function public.rpc_reset_room_results(text, uuid, uuid) from public, anon, authenticated;
 revoke all on function public.rpc_grade_pending_room(text, uuid, uuid) from public, anon, authenticated;
 do $block$
 begin
+  if to_regprocedure('public.rpc_giao_vien_bank_write(text,uuid,text,jsonb)') is not null then
+    execute 'revoke all on function public.rpc_giao_vien_bank_write(text, uuid, text, jsonb) from public, anon, authenticated';
+  end if;
+  if to_regprocedure('public.rpc_xoa_de_trong_phong(text,uuid,uuid)') is not null then
+    execute 'revoke all on function public.rpc_xoa_de_trong_phong(text, uuid, uuid) from public, anon, authenticated';
+  end if;
   if to_regprocedure('public.rpc_luu_de_thi_len_phong(text,uuid,uuid,text,jsonb)') is not null then
     execute 'revoke all on function public.rpc_luu_de_thi_len_phong(text, uuid, uuid, text, jsonb) from public, anon, authenticated';
   end if;
