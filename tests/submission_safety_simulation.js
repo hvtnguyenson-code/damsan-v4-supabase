@@ -124,10 +124,15 @@ function discoverFinals(storage, identity) {
 }
 function offlineF5Recovery(storage, identity, state, reconcile = 'missing') {
   const candidates = discoverFinals(storage, identity);
-  if (candidates.length !== 1) return { state, action: candidates.length > 1 ? 'ambiguous' : 'none', sent: [] };
+  if (candidates.length !== 1) return { state, action: candidates.length > 1 ? 'ambiguous' : 'none', sent: [], allowRoomRefresh: candidates.length > 1, visibleWarning: candidates.length > 1 };
   const snapshot = candidates[0];
   const hydrated = { ...state, phong_id: snapshot.phong_id, room_opened_at: snapshot.room_opened_at, ma_de: snapshot.ma_de || state.ma_de };
   if (reconcile === 'network_error') return { state: hydrated, action: 'retain', sent: [] };
+  if (reconcile === 'reset_archive_failed') return { state: hydrated, action: 'blocked', sent: [], allowRoomRefresh: false, visibleWarning: true };
+  if (reconcile === 'reset_cleaned') {
+    for (const [key, value] of storage) if (value === snapshot) storage.delete(key);
+    return { state: hydrated, action: 'reset_cleaned', sent: [], allowRoomRefresh: true };
+  }
   return { state: hydrated, action: 'receive', sent: [{ attempt_id: snapshot.attempt_id, raw_answers: snapshot.raw_answers }] };
 }
 const offlineStorage = new Map();
@@ -148,10 +153,18 @@ const graded = new Map([['final_damsan_ROOM_HS', { ...offlineFinal, state: 'GRAD
 assert.strictEqual(offlineF5Recovery(graded, offlineIdentity, { phong_id: null }).action, 'none'); // R16
 const ambiguous = new Map(offlineStorage); ambiguous.set('final_damsan_ROOM2_HS', { ...offlineFinal, phong_id: 'ROOM2', attempt_id: 'attempt-two' });
 const ambiguousResult = offlineF5Recovery(ambiguous, offlineIdentity, { phong_id: null });
-assert.strictEqual(ambiguousResult.action, 'ambiguous'); assert.deepStrictEqual(ambiguousResult.sent, []); assert.strictEqual(ambiguous.size, 2); // R17
+assert.strictEqual(ambiguousResult.action, 'ambiguous'); assert.deepStrictEqual(ambiguousResult.sent, []); assert.strictEqual(ambiguous.size, 2); assert.strictEqual(ambiguousResult.visibleWarning, true); assert.strictEqual(ambiguousResult.allowRoomRefresh, true); // R17/R23
 const networkFailure = offlineF5Recovery(offlineStorage, offlineIdentity, { phong_id: null }, 'network_error');
 assert.strictEqual(networkFailure.action, 'retain'); assert.deepStrictEqual(offlineStorage.get('final_damsan_ROOM_HS'), offlineFinal); // R18
 assert.strictEqual(offlineF5Recovery(offlineStorage, offlineIdentity, { phong_id: 'ROOM', room_opened_at: 456 }).action, 'receive'); // R20
+const archiveFailureStorage = new Map(offlineStorage);
+const archiveFailure = offlineF5Recovery(archiveFailureStorage, offlineIdentity, { phong_id: null }, 'reset_archive_failed');
+assert.strictEqual(archiveFailure.action, 'blocked'); assert.deepStrictEqual(archiveFailure.sent, []); assert.strictEqual(archiveFailure.visibleWarning, true); assert.strictEqual(archiveFailureStorage.has('final_damsan_ROOM_HS'), true); // R21
+const resetCleanupStorage = new Map(offlineStorage);
+const resetCleanup = offlineF5Recovery(resetCleanupStorage, offlineIdentity, { phong_id: null }, 'reset_cleaned');
+assert.strictEqual(resetCleanup.action, 'reset_cleaned'); assert.deepStrictEqual(resetCleanup.sent, []); assert.strictEqual(resetCleanup.allowRoomRefresh, true); assert.strictEqual(resetCleanupStorage.has('final_damsan_ROOM_HS'), false); // R22
+const test05 = offlineF5Recovery(new Map(offlineStorage), offlineIdentity, { phong_id: null, room_opened_at: null, ma_de: '' });
+assert.strictEqual(test05.state.phong_id, 'ROOM'); assert.deepStrictEqual(test05.sent, [{ attempt_id: 'attempt-original', raw_answers: [{ chon: 'IDENTIFIABLE' }] }]); // R24
 
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 const serviceWorker = fs.readFileSync('sw.js', 'utf8');
@@ -171,7 +184,11 @@ assert(client.includes('function findRecoverableFinalSnapshotsForCurrentStudent(
 assert(client.includes('hydrateSubmissionContext(snapshot);'));
 assert(client.includes("key.startsWith('final_damsan_')"));
 assert(client.includes("if (candidates.length > 1)"));
+assert(client.includes('recoveryAmbiguityNoticeShown'));
+assert(client.includes('return false;'));
 assert(client.includes('snapshot = await reconcileSavedSubmission(snapshot);'));
+assert(client.includes('snapshot.recovery_archive_failed === true'));
+assert(client.includes('recoveryArchiveFailureNoticeShown'));
 assert(client.includes('void resumeSavedSubmission()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
@@ -185,4 +202,4 @@ assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_i
 assert(migration.includes('for share') && migration.includes('for update'));
 assert(migration.includes('references public.phong_thi(id) on delete cascade'));
 assert(migration.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration.includes("'reset_confirmed', false"));
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R20; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R24; not a Supabase load test)');

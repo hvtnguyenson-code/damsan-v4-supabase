@@ -19,6 +19,8 @@ let isSubmitting = false;
 let isCheckingCommand = false; // Guard tránh concurrent checkTeacherCommand gây race condition
 let isInternalAction = false; // Cờ đánh dấu đang thực hiện hành động hệ thống (hiện confirm/alert)
 let isGradingSubmission = false;
+let recoveryAmbiguityNoticeShown = false;
+let recoveryArchiveFailureNoticeShown = false;
 
 const SUBMISSION_STATE = Object.freeze({
     DRAFT: 'DRAFT',
@@ -1698,7 +1700,11 @@ async function resumeSavedSubmission() {
         const candidates = findRecoverableFinalSnapshotsForCurrentStudent();
         if (candidates.length > 1) {
             console.warn('Recovery ambiguity: multiple active final snapshots found; no snapshot was sent.', candidates.map(item => item.phong_id));
-            return true;
+            if (!recoveryAmbiguityNoticeShown) {
+                recoveryAmbiguityNoticeShown = true;
+                alert('Có nhiều bài đã chốt đang chờ khôi phục trên thiết bị. Hệ thống sẽ không tự gửi để tránh nhầm phòng; vui lòng chọn đúng phòng thi để tiếp tục.');
+            }
+            return false;
         }
         if (candidates.length === 1) {
             snapshot = candidates[0];
@@ -1712,7 +1718,14 @@ async function resumeSavedSubmission() {
         return true;
     }
     snapshot = await reconcileSavedSubmission(snapshot);
-    if (!snapshot) return true;
+    if (!snapshot) return false;
+    if (snapshot.recovery_archive_failed === true) {
+        if (!recoveryArchiveFailureNoticeShown) {
+            recoveryArchiveFailureNoticeShown = true;
+            alert('Bài đã chốt vẫn được giữ an toàn trên thiết bị nhưng chưa thể lưu bản khôi phục sau khi phòng được reset. Vui lòng báo giám thị; hệ thống sẽ không tự gửi lại bài này.');
+        }
+        return true;
+    }
     const receipt = getSubmissionReceipt();
     if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && receipt?.submission_id) requestGrading(receipt.submission_id);
     else receiveFinalSubmission();
