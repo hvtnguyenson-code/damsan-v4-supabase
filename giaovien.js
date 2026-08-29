@@ -51,6 +51,13 @@ function clearControlSessions() {
     clearStaffSession();
 }
 
+function isAccountManagementActive() {
+    return Boolean(
+        document.getElementById('quanLyTK')
+            ?.classList.contains('active')
+    );
+}
+
 function clearAccountRuntimeState() {
     sessionStorage.removeItem('cache_students');
     allStudents = [];
@@ -3299,7 +3306,17 @@ async function themTruongMoi() {
     let error = null; try { await adminRpc('school_create', { ma_truong: ma, ten_truong: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
-    else { document.getElementById('newMaTruong').value = ''; document.getElementById('newTenTruong').value = ''; await loadSysData(); await refreshWorkspaceSelectors(); }
+    else {
+        document.getElementById('newMaTruong').value = '';
+        document.getElementById('newTenTruong').value = '';
+        await loadSysData();
+        await refreshWorkspaceSelectors();
+        if (isAccountManagementActive()) {
+            clearAccountRuntimeState();
+            await fetchStudents(true);
+            await fetchTeachers(true);
+        }
+    }
 }
 
 async function xoaTruong(id) {
@@ -3309,6 +3326,10 @@ async function xoaTruong(id) {
     if (String(id) === String(gvData.truong_id)) return clearGvSessionAndReturnToLogin('Trường chứa tài khoản quản trị hiện tại đã bị xóa. Phiên đăng nhập đã kết thúc.');
     if (String(id) === String(activeWorkspaceTruongId)) { activeWorkspaceTruongId = 'ALL'; localStorage.setItem('damSan_WorkspaceSchool', 'ALL'); }
     clearAccountRuntimeState(); await loadSysData(); await refreshWorkspaceSelectors(); loadMetaData(); taiDanhSachPhong(); fetchRadar();
+    if (isAccountManagementActive()) {
+        await fetchStudents(true);
+        await fetchTeachers(true);
+    }
 }
 
 async function themMonMoi() {
@@ -3319,7 +3340,15 @@ async function themMonMoi() {
     let error = null; try { await adminRpc('subject_create', { ten_mon: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
-    else { document.getElementById('newTenMon').value = ''; await loadSysData(); await refreshWorkspaceSelectors(); loadBankMeta(true); }
+    else {
+        document.getElementById('newTenMon').value = '';
+        await loadSysData();
+        await refreshWorkspaceSelectors();
+        loadBankMeta(true);
+        if (isAccountManagementActive()) {
+            await fetchTeachers(true);
+        }
+    }
 }
 
 async function xoaMon(id) {
@@ -3329,6 +3358,9 @@ async function xoaMon(id) {
     if (String(id) === String(activeWorkspaceMonId)) { activeWorkspaceMonId = 'ALL'; localStorage.setItem('damSan_Workspace', 'ALL'); }
     if (String(id) === String(gvData.mon_id)) { gvData.mon_id = null; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); }
     await loadSysData(); await refreshWorkspaceSelectors(); loadBankMeta(true); fetchFullBank(true); taiDanhSachPhong(); fetchRadar();
+    if (isAccountManagementActive()) {
+        await fetchTeachers(true);
+    }
 }
 
 async function resetPass(ma, uid, loai) {

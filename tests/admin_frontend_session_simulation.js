@@ -98,21 +98,178 @@ for (const [name, action] of [['resetSelectedPass','accounts_reset_password'],['
 assert(!/rpc_admin_reset_pass|rpc_admin_xoa_tk/.test(source), 'F55-F67 obsolete account RPCs removed');
 assert(!/from\('(hoc_sinh|giao_vien|truong_hoc|mon_hoc)'\)\.(insert|update|delete|upsert)/.test(source), 'F68 protected direct writes removed');
 assert.strictEqual(changed, '', 'F70 P0 files untouched');
-assert(!/cache_students/.test(body('fetchStudents')), 'F71 fetchStudents không dùng cache');
-for (const name of ['clearGvSessionAndReturnToLogin','dangXuatGV','hoanTatDangNhap']) assert(body(name).includes('clearAccountRuntimeState'), `F72-F74 ${name} dọn runtime account`);
-must(/if \(gvData\.quyen === 'Admin'\) \{ fetchStudents\(true\); fetchTeachers\(true\); \}/, 'F75 chỉ Admin prefetch accounts');
-must(/changeWorkspaceSchool[\s\S]*clearAccountRuntimeState\(\)/, 'F76 school switch invalidates account state');
-must(/Mã trường \[\$\{ma_truong\}\] không tồn tại/, 'F79 mã trường Excel sai bị chặn');
-must(/resetPass[\s\S]*clearGvSessionAndReturnToLogin/, 'F83 reset self Admin đăng xuất');
-assert.strictEqual(changed, '', 'F91 P0 files untouched');
-must(/function getAccountPasswordState[\s\S]*KhongXacDinh/, 'F78 unknown password state');
-assert(body('renderStudentTable').includes('KhongXacDinh') && body('renderTeacherTable').includes('KhongXacDinh'), 'F78 neutral render');
-for (const name of ['themTruongMoi','themMonMoi']) assert(body(name).includes('refreshWorkspaceSelectors'), `F84/F87 ${name} refreshes selectors`);
-const deleteSchool = body('xoaTruong');
-assert(deleteSchool.includes("activeWorkspaceTruongId = 'ALL'") && deleteSchool.includes('clearGvSessionAndReturnToLogin'), 'F85-F86 school delete lifecycle');
-const deleteSubject = body('xoaMon');
-assert(deleteSubject.includes("activeWorkspaceMonId = 'ALL'") && deleteSubject.includes('safeGvProfile(gvData)'), 'F88 subject delete lifecycle');
-assert(!/from\('(hoc_sinh|giao_vien|truong_hoc|mon_hoc|phong_thi|de_thi)'\)\.(insert|update|delete|upsert)/.test(source), 'F89 protected direct writes');
-assert(/from\('ngan_hang'\)\.(insert|update|delete)/.test(source), 'F90 remaining direct writes are bank scope');
+
+// ==========================================================
+// F71-F91: Complete, explicit, individual semantic coverage
+// ==========================================================
+const b1Coverage = {};
+const recordF = (id) => { b1Coverage[id] = true; };
+
+// F71: fetchStudents không đọc/reuse cache_students
+assert(!/cache_students/.test(body('fetchStudents')), 'F71 fetchStudents không đọc/reuse cache_students');
+recordF('F71');
+
+// F72: clearGvSessionAndReturnToLogin gọi clearAccountRuntimeState
+assert(body('clearGvSessionAndReturnToLogin').includes('clearAccountRuntimeState'), 'F72 clearGvSessionAndReturnToLogin dọn runtime account');
+recordF('F72');
+
+// F73: dangXuatGV gọi clearAccountRuntimeState
+assert(body('dangXuatGV').includes('clearAccountRuntimeState'), 'F73 dangXuatGV dọn runtime account');
+recordF('F73');
+
+// F74: hoanTatDangNhap gọi clearAccountRuntimeState trước khởi tạo dữ liệu mới
+const hoanTatBody = body('hoanTatDangNhap');
+const clearIdx = hoanTatBody.indexOf('clearAccountRuntimeState');
+const initIdx = hoanTatBody.indexOf('khoiTaoDuLieu');
+assert(clearIdx >= 0 && initIdx > clearIdx, 'F74 hoanTatDangNhap dọn runtime account trước khi khởi tạo dữ liệu');
+recordF('F74');
+
+// F75: khoiTaoDuLieu chỉ prefetch accounts khi gvData.quyen === 'Admin'
+must(/if\s*\(gvData\.quyen === 'Admin'\)\s*\{\s*fetchStudents\(true\);\s*fetchTeachers\(true\);\s*\}/, 'F75 chỉ Admin prefetch accounts');
+recordF('F75');
+
+// F76: changeWorkspaceSchool gọi clearAccountRuntimeState
+assert(body('changeWorkspaceSchool').includes('clearAccountRuntimeState'), 'F76 changeWorkspaceSchool dọn runtime account');
+recordF('F76');
+
+// F77: changeWorkspaceSchool: nếu quanLyTK active phải gọi fetchStudents(true), fetchTeachers(true)
+const changeSchoolBody = body('changeWorkspaceSchool');
+assert(
+  (/document\.getElementById\('quanLyTK'\)\?\.classList\.contains\('active'\)/.test(changeSchoolBody) || changeSchoolBody.includes('isAccountManagementActive')) &&
+  changeSchoolBody.includes('fetchStudents(true)') &&
+  changeSchoolBody.includes('fetchTeachers(true)'),
+  'F77 changeWorkspaceSchool refresh accounts khi tab quanLyTK active'
+);
+recordF('F77');
+
+// F78: getAccountPasswordState missing/non-boolean => KhongXacDinh, và renderStudentTable + renderTeacherTable render trung tính
+const getPassState = body('getAccountPasswordState');
+assert(
+  getPassState.includes('KhongXacDinh') &&
+  getPassState.includes("typeof row?.must_change_password !== 'boolean'"),
+  'F78 getAccountPasswordState trả về KhongXacDinh khi thiếu must_change_password'
+);
+assert(
+  body('renderStudentTable').includes('KhongXacDinh') &&
+  body('renderTeacherTable').includes('KhongXacDinh'),
+  'F78 renderStudentTable và renderTeacherTable có neutral rendering cho KhongXacDinh'
+);
+recordF('F78');
+
+// F79: docFileExcelVaNap: ma_truong không rỗng nhưng không tồn tại => throw lỗi chứa rowNumber và mã trường
+const docExcelBody = body('docFileExcelVaNap');
+assert(
+  /ma_truong && !mapTruong\[ma_truong\]/.test(docExcelBody) &&
+  /throw new Error\(`Dòng \$\{rowNumber\}: Mã trường \[\$\{ma_truong\}\] không tồn tại/.test(docExcelBody),
+  'F79 docFileExcelVaNap throw lỗi có rowNumber và mã trường khi mã không tồn tại'
+);
+recordF('F79');
+
+// F80: docFileExcelVaNap: ma_truong rỗng AND activeWorkspaceTruongId null/ALL => throw lỗi trước khi gọi adminRpc('accounts_upsert')
+const guardIdx = docExcelBody.indexOf('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích');
+const upsertIdx = docExcelBody.indexOf("adminRpc('accounts_upsert'");
+assert(guardIdx >= 0 && upsertIdx > guardIdx, 'F80 docFileExcelVaNap kiểm tra trường đích trước adminRpc accounts_upsert');
+recordF('F80');
+
+// F81: capNhatTruongGiaoVien self Admin: cập nhật gvData.truong_id và persist safe session
+const updateSchoolBody = body('capNhatTruongGiaoVien');
+assert(
+  updateSchoolBody.includes('gvData.truong_id = truongId') &&
+  updateSchoolBody.includes("sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData)))"),
+  'F81 capNhatTruongGiaoVien self Admin cập nhật truong_id và persist session an toàn'
+);
+recordF('F81');
+
+// F82: capNhatMonGiaoVien self Admin: cập nhật gvData.mon_id và persist safe session
+const updateMonBody = body('capNhatMonGiaoVien');
+assert(
+  updateMonBody.includes('gvData.mon_id = valToUpdate') &&
+  updateMonBody.includes("sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData)))"),
+  'F82 capNhatMonGiaoVien self Admin cập nhật mon_id và persist session an toàn'
+);
+recordF('F82');
+
+// F83: resetPass: nếu target GV là gvData.id => clearGvSessionAndReturnToLogin
+const resetPassBody = body('resetPass');
+assert(
+  resetPassBody.includes("loai === 'GV' && String(uid) === String(gvData.id)") &&
+  resetPassBody.includes('clearGvSessionAndReturnToLogin'),
+  'F83 resetPass tự reset Admin hiện tại sẽ đăng xuất về login'
+);
+recordF('F83');
+
+// F84: themTruongMoi: refreshWorkspaceSelectors, nếu account tab active thì clearAccountRuntimeState + fetchStudents(true) + fetchTeachers(true)
+const themTruongBody = body('themTruongMoi');
+assert(
+  themTruongBody.includes('refreshWorkspaceSelectors') &&
+  (themTruongBody.includes('isAccountManagementActive') || themTruongBody.includes('quanLyTK')) &&
+  themTruongBody.includes('clearAccountRuntimeState') &&
+  themTruongBody.includes('fetchStudents(true)') &&
+  themTruongBody.includes('fetchTeachers(true)'),
+  'F84 themTruongMoi làm mới selectors và account views'
+);
+recordF('F84');
+
+// F85: xoaTruong: nếu deleted id === activeWorkspaceTruongId => activeWorkspaceTruongId = 'ALL' và persist localStorage
+const xoaTruongBody = body('xoaTruong');
+assert(
+  xoaTruongBody.includes("activeWorkspaceTruongId = 'ALL'") &&
+  xoaTruongBody.includes("localStorage.setItem('damSan_WorkspaceSchool', 'ALL')"),
+  'F85 xoaTruong reset activeWorkspaceTruongId về ALL khi trường active bị xóa'
+);
+recordF('F85');
+
+// F86: xoaTruong: nếu deleted id === gvData.truong_id => clearGvSessionAndReturnToLogin
+assert(
+  xoaTruongBody.includes("String(id) === String(gvData.truong_id)") &&
+  xoaTruongBody.includes('clearGvSessionAndReturnToLogin'),
+  'F86 xoaTruong đăng xuất khi trường của Admin hiện tại bị xóa'
+);
+recordF('F86');
+
+// F87: themMonMoi: refreshWorkspaceSelectors, nếu account tab active thì fetchTeachers(true)
+const themMonBody = body('themMonMoi');
+assert(
+  themMonBody.includes('refreshWorkspaceSelectors') &&
+  (themMonBody.includes('isAccountManagementActive') || themMonBody.includes('quanLyTK')) &&
+  themMonBody.includes('fetchTeachers(true)'),
+  'F87 themMonMoi làm mới selectors và bảng giáo viên'
+);
+recordF('F87');
+
+// F88: xoaMon: activeWorkspaceMonId = 'ALL', damSan_Workspace = 'ALL', self gvData.mon_id = null, safe session persist, nếu account tab active gọi fetchTeachers(true)
+const xoaMonBody = body('xoaMon');
+assert(
+  xoaMonBody.includes("activeWorkspaceMonId = 'ALL'") &&
+  xoaMonBody.includes("localStorage.setItem('damSan_Workspace', 'ALL')") &&
+  xoaMonBody.includes("gvData.mon_id = null") &&
+  xoaMonBody.includes("sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData)))") &&
+  (xoaMonBody.includes('isAccountManagementActive') || xoaMonBody.includes('quanLyTK')) &&
+  xoaMonBody.includes('fetchTeachers(true)'),
+  'F88 xoaMon dọn dẹp workspace môn, session và làm mới bảng giáo viên'
+);
+recordF('F88');
+
+// F89: Không direct browser write vào: hoc_sinh, giao_vien, truong_hoc, mon_hoc, phong_thi, de_thi với insert, update, delete, upsert
+assert(!/from\(['"](hoc_sinh|giao_vien|truong_hoc|mon_hoc|phong_thi|de_thi)['"]\)\s*\.\s*(insert|update|delete|upsert)/.test(source), 'F89 Không có direct write vào các bảng được bảo vệ');
+recordF('F89');
+
+// F90: Direct browser writes còn lại phải chỉ thuộc ngan_hang
+const directWriteMatches = [...source.matchAll(/from\(['"]([^'"]+)['"]\)\s*\.\s*(insert|update|delete|upsert)/g)];
+assert(directWriteMatches.length > 0, 'F90 Phải tìm thấy direct write statements');
+for (const match of directWriteMatches) {
+  assert.strictEqual(match[1], 'ngan_hang', `F90 Direct write vào ${match[1]} không được phép ngoài ngan_hang`);
+}
+recordF('F90');
+
+// F91: hoc_sinh.js, sw.js và P0 files không thay đổi so với baseline
+assert.strictEqual(changed, '', 'F91 hoc_sinh.js và sw.js không được thay đổi');
+recordF('F91');
+
+// Test Label Coverage Gate: đảm bảo mọi label từ F71 tới F91 đều được assert
+for (let i = 71; i <= 91; i += 1) {
+  const label = `F${i}`;
+  assert.strictEqual(b1Coverage[label], true, `Thiếu coverage assertion cho ${label}`);
+}
 
 console.log('admin_frontend_session_simulation: F1-F91 passed');
