@@ -64,7 +64,7 @@ for (const name of ['dieuKhien', 'dieuKhienFast', 'xoaPhongHoanToan', 'xoaDeTron
 }
 
 // F28: this task must not alter P0 student files.
-const changed = '';
+const changed = childProcess.execSync('git diff --name-only 990aee4f0280e762e94ab2334940b57b1b5befe7..2ab261b426affa43bfe071c95d0902deb549719a -- hoc_sinh.js sw.js', { encoding: 'utf8' }).trim();
 assert.strictEqual(changed, '', 'F28 P0 student files không được sửa');
 
 // F29-F43: secure room read plane, explicit school target, and UUID room identity.
@@ -432,7 +432,7 @@ assert.strictEqual(changed, '', 'F118 hoc_sinh.js/sw.js unchanged');
 recordB2('F118');
 
 // F119: P0 files untouched
-const p0Changed = '';
+const p0Changed = childProcess.execSync('git diff --name-only 990aee4f0280e762e94ab2334940b57b1b5befe7..2ab261b426affa43bfe071c95d0902deb549719a -- hoc_sinh.js sw.js', { encoding: 'utf8' }).trim();
 assert.strictEqual(p0Changed, '', 'F119 P0 files untouched');
 recordB2('F119');
 
