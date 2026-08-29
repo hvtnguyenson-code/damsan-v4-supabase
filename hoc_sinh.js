@@ -1928,11 +1928,13 @@ async function checkTeacherCommand(isAuto = false) {
             const _snapshot = getFinalSnapshot();
             if (_snapshot?.attempt_id) {
                 const reconciled = await reconcileSavedSubmission(_snapshot);
-                if (reconciled !== null && reconciled.recovery_archive_failed) {
-                    // Archive failed: keep all evidence, block teardown.
-                    if (!recoveryArchiveFailureNoticeShown) {
-                        recoveryArchiveFailureNoticeShown = true;
-                        alert('Bài đã chốt vẫn được giữ an toàn trên thiết bị nhưng chưa thể lưu bản khôi phục. Vui lòng báo giám thị.');
+                if (reconciled !== null) {
+                    if (reconciled.recovery_archive_failed) {
+                        // Archive failed: keep all evidence, block teardown.
+                        if (!recoveryArchiveFailureNoticeShown) {
+                            recoveryArchiveFailureNoticeShown = true;
+                            alert('Bài đã chốt vẫn được giữ an toàn trên thiết bị nhưng chưa thể lưu bản khôi phục. Vui lòng báo giám thị.');
+                        }
                     }
                     return;
                 }

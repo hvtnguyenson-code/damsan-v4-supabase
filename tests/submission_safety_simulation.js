@@ -465,7 +465,7 @@ assert.deepStrictEqual(freshAttempt.answers, [{ chon: 'C' }]);
 assert.notDeepStrictEqual(freshAttempt.answers, sampleFinal.raw_answers);
 recordR('R40');
 
-// R41: Result screen sync & authoritative reset teardown vs CHO_THI same gen retention (tested on real hoc_sinh.js implementation)
+// R41: Result screen sync & authoritative reset teardown vs reconcile uncertainty retention (tested on real hoc_sinh.js implementation)
 // 41a: CHO_THI + same generation => NO teardown
 const envR41a = createStudentEnvironment();
 envR41a.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
@@ -485,7 +485,60 @@ await envR41a.api.checkTeacherCommand(true);
 assert.strictEqual(envR41a.localStore.has('final_damsan_room-101_hs-100403'), true, 'CHO_THI with same generation must not teardown active snapshot');
 assert.strictEqual(envR41a.api.getState().phong_id, 'room-101', 'phong_id must remain intact when same generation');
 
-// 41b: Generation change (thoi_gian_mo mismatch) => Authoritative teardown
+// 41b: Generation change (thoi_gian_mo mismatch) + receipt status network error => NO teardown (reconcile uncertainty)
+const envR41NetErr = createStudentEnvironment();
+envR41NetErr.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41NetErr.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41NetErr.mockSupabase._fromData = {
+  phong_thi: { id: 'room-101', trang_thai: 'CHO_THI', thoi_gian_mo: 1724930000000 },
+  ket_qua: null
+};
+envR41NetErr.mockSupabase._receiptStatusResult = { data: null, error: { message: '503 receipt-status offline' } };
+await envR41NetErr.api.checkTeacherCommand(true);
+assert.strictEqual(envR41NetErr.localStore.has('final_damsan_room-101_hs-100403'), true, 'FINAL must be preserved when receipt status fails');
+assert.strictEqual(envR41NetErr.localStore.has('recovery_damsan_room-101_hs-100403_' + sampleAttemptId), false, 'Must not create premature archive');
+assert.strictEqual(envR41NetErr.api.getState().phong_id, 'room-101', 'phong_id must remain intact on receipt status error');
+assert.strictEqual(envR41NetErr.api.getState().room_opened_at, 1724920000000, 'room_opened_at must remain intact');
+
+// 41c: Room deleted + receipt status network error => NO teardown
+const envR41DelErr = createStudentEnvironment();
+envR41DelErr.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41DelErr.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41DelErr.mockSupabase._fromData = { phong_thi: null, ket_qua: null };
+envR41DelErr.mockSupabase._receiptStatusResult = { data: null, error: { message: 'Network error' } };
+await envR41DelErr.api.checkTeacherCommand(true);
+assert.strictEqual(envR41DelErr.localStore.has('final_damsan_room-101_hs-100403'), true, 'FINAL must be preserved on room delete with receipt status error');
+assert.strictEqual(envR41DelErr.api.getState().phong_id, 'room-101', 'phong_id preserved on delete error');
+
+// 41d: Generation change + missing receipt + reset_confirmed=false => NO teardown
+const envR41Unconf = createStudentEnvironment();
+envR41Unconf.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41Unconf.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41Unconf.mockSupabase._fromData = {
+  phong_thi: { id: 'room-101', trang_thai: 'CHO_THI', thoi_gian_mo: 1724930000000 },
+  ket_qua: null
+};
+envR41Unconf.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+await envR41Unconf.api.checkTeacherCommand(true);
+assert.strictEqual(envR41Unconf.localStore.has('final_damsan_room-101_hs-100403'), true, 'FINAL preserved when reset_confirmed is false');
+assert.strictEqual(envR41Unconf.api.getState().phong_id, 'room-101', 'phong_id preserved when unconfirmed');
+
+// 41e: Generation change + reset_confirmed=true => Authoritative teardown
 const envR41b = createStudentEnvironment();
 envR41b.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
 envR41b.api.setState({
@@ -500,7 +553,7 @@ envR41b.mockSupabase._fromData = {
 };
 envR41b.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
 await envR41b.api.checkTeacherCommand(true);
-assert.strictEqual(envR41b.localStore.has('final_damsan_room-101_hs-100403'), false, 'Active snapshot cleared on new generation');
+assert.strictEqual(envR41b.localStore.has('final_damsan_room-101_hs-100403'), false, 'Active snapshot cleared on confirmed new generation');
 assert.strictEqual(envR41b.localStore.has('recovery_damsan_room-101_hs-100403_' + sampleAttemptId), true, 'Snapshot archived under recovery_ key');
 assert.strictEqual(envR41b.api.getState().phong_id, null, 'phong_id cleared on generation change');
 recordR('R41');
