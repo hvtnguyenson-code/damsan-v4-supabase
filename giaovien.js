@@ -2795,6 +2795,7 @@ async function xoaDiemPhong() {
     }
     
     btn.innerText = oldText; btn.disabled = false;
+    taiDanhSachPhong();
     fetchDashboard();
 }
 

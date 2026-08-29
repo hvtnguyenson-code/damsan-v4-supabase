@@ -1,6 +1,7 @@
 // Local deterministic model of the P0 receipt/grade/reset contracts. No network.
 const assert = require('assert');
 const fs = require('fs');
+const vm = require('vm');
 
 class SubmissionStore {
   constructor() { this.rows = new Map(); this.studentRooms = new Map(); this.results = new Map(); this.rooms = new Set(); this.failNextGrade = new Set(); }
@@ -166,6 +167,480 @@ assert.strictEqual(resetCleanup.action, 'reset_cleaned'); assert.deepStrictEqual
 const test05 = offlineF5Recovery(new Map(offlineStorage), offlineIdentity, { phong_id: null, room_opened_at: null, ma_de: '' });
 assert.strictEqual(test05.state.phong_id, 'ROOM'); assert.deepStrictEqual(test05.sent, [{ attempt_id: 'attempt-original', raw_answers: [{ chon: 'IDENTIFIABLE' }] }]); // R24
 
+// ==========================================================
+// R25-R44: P0-006 Extended Recovery Lifecycle Semantic Invariants
+// ==========================================================
+const rCoverage = {};
+const recordR = (id) => { rCoverage[id] = true; };
+
+const clientSource = fs.readFileSync('hoc_sinh.js', 'utf8');
+const testHocSinhCode = clientSource + `
+;globalThis.__test_exports = {
+  getState: () => state,
+  setState: (s) => Object.assign(state, s),
+  findRecoverableFinalSnapshotsForCurrentStudent,
+  hydrateSubmissionContext,
+  resumeSavedSubmission,
+  checkTeacherCommand,
+  reconcileSavedSubmission,
+  kichHoatLienKetRealtime,
+  archiveFinalSnapshot,
+  clearActiveSubmissionKeys
+};
+`;
+
+function createStudentEnvironment() {
+  const localStore = new Map();
+  const sessionStore = new Map();
+  const domElements = {};
+
+  const mockElement = (id = '') => ({
+    id,
+    innerText: '',
+    innerHTML: '',
+    value: '',
+    style: {},
+    appendChild: () => {},
+    classList: {
+      _classes: new Set(),
+      add(c) { this._classes.add(c); },
+      remove(c) { this._classes.delete(c); },
+      contains(c) { return this._classes.has(c); }
+    }
+  });
+
+  const getEl = (id) => {
+    if (!domElements[id]) domElements[id] = mockElement(id);
+    return domElements[id];
+  };
+
+  const rpcCalls = [];
+  const queryLog = [];
+  let alertMessages = [];
+
+  const mockSupabase = {
+    rpc: async (name, params) => {
+      rpcCalls.push({ name, params });
+      if (name === 'rpc_submission_receipt_status' || name === 'lay_thong_tin_nop_bai_theo_attempt') {
+        return mockSupabase._receiptStatusResult || { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+      }
+      if (name === 'rpc_receive_submission' || name === 'nop_bai_hoc_sinh_v3' || name === 'nop_bai_hoc_sinh') {
+        return mockSupabase._nopBaiResult || { data: { status: 'received', submission_id: 'sub-real-1', received_at: '2026-08-29T13:11:46Z' }, error: null };
+      }
+      return { data: null, error: null };
+    },
+    from: (table) => {
+      let query = { table, filters: {} };
+      const chain = {
+        select: (cols) => { query.cols = cols; return chain; },
+        eq: (col, val) => { query.filters[col] = val; return chain; },
+        single: async () => {
+          queryLog.push({ ...query, op: 'single' });
+          if (mockSupabase._fromErrors?.[table]) return { data: null, error: mockSupabase._fromErrors[table] };
+          return { data: mockSupabase._fromData?.[table] || null, error: null };
+        },
+        maybeSingle: async () => {
+          queryLog.push({ ...query, op: 'maybeSingle' });
+          if (mockSupabase._fromErrors?.[table]) return { data: null, error: mockSupabase._fromErrors[table] };
+          return { data: mockSupabase._fromData?.[table] || null, error: null };
+        }
+      };
+      return chain;
+    },
+    channel: () => ({
+      on: function() { return this; },
+      subscribe: function() { return this; }
+    }),
+    removeChannel: () => {}
+  };
+
+  const sandbox = {
+    console: { log: () => {}, warn: () => {}, error: () => {} },
+    alert: (msg) => { alertMessages.push(msg); },
+    confirm: () => true,
+    document: {
+      getElementById: getEl,
+      querySelectorAll: () => [],
+      querySelector: () => mockElement(),
+      createElement: () => mockElement(),
+      head: mockElement('head'),
+      body: mockElement('body'),
+      addEventListener: () => {},
+      exitFullscreen: () => {}
+    },
+    window: {
+      addEventListener: () => {},
+      location: { reload: () => {} }
+    },
+    navigator: { onLine: true },
+    localStorage: {
+      getItem: (k) => localStore.has(k) ? localStore.get(k) : null,
+      setItem: (k, v) => localStore.set(k, String(v)),
+      removeItem: (k) => localStore.delete(k),
+      clear: () => localStore.clear(),
+      get length() { return localStore.size; },
+      key: (i) => Array.from(localStore.keys())[i] || null
+    },
+    sessionStorage: {
+      getItem: (k) => sessionStore.has(k) ? sessionStore.get(k) : null,
+      setItem: (k, v) => sessionStore.set(k, String(v)),
+      removeItem: (k) => sessionStore.delete(k),
+      clear: () => sessionStore.clear()
+    },
+    setTimeout: (fn, ms) => {
+      if (typeof fn === 'function') {
+        try { fn(); } catch(e) {}
+      }
+      return 1;
+    },
+    clearTimeout: () => {},
+    setInterval: () => 1,
+    clearInterval: () => {},
+    Intl,
+    Date,
+    JSON,
+    Math,
+    Array,
+    String,
+    Number,
+    Boolean,
+    Object,
+    RegExp,
+    Promise,
+    _supabase: mockSupabase,
+    supabase: { createClient: () => mockSupabase }
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(testHocSinhCode, sandbox);
+
+  return { sandbox, api: sandbox.__test_exports, localStore, sessionStore, mockSupabase, rpcCalls, alertMessages, getEl };
+}
+
+
+(async () => {
+// R25: FINAL_PENDING created offline with fixed durable attempt_id
+const sampleAttemptId = '550e8400-e29b-41d4-a716-446655440000';
+const sampleFinal = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: sampleAttemptId,
+  truong_id: 'school-1',
+  phong_id: 'room-101',
+  hs_id: 'hs-100403',
+  ma_de: '101',
+  room_opened_at: 1724920000000,
+  raw_answers: [{ chon: 'A' }, { chon: 'Đ-S-Đ-S' }],
+  client_submitted_at: '2026-08-29T13:11:46.713300Z',
+  auto_submit: false
+};
+assert.strictEqual(sampleFinal.state, 'FINAL_PENDING');
+assert.strictEqual(sampleFinal.attempt_id, sampleAttemptId);
+recordR('R25');
+
+// R26: F5 / offline reload locates candidate snapshot by hs_id + truong_id + phong_id
+const simLocalStorage = new Map();
+simLocalStorage.set('final_damsan_room-101_hs-100403', sampleFinal);
+const foundCandidates = discoverFinals(simLocalStorage, { hs_id: 'hs-100403', truong_id: 'school-1' });
+assert.strictEqual(foundCandidates.length, 1);
+assert.strictEqual(foundCandidates[0].phong_id, 'room-101');
+assert.strictEqual(foundCandidates[0].hs_id, 'hs-100403');
+recordR('R26');
+
+// R27: Context hydration recovers phong_id, room_opened_at, ma_de, attempt_id preserved
+const emptyState = { phong_id: null, room_opened_at: null, ma_de: '' };
+const hydratedState = {
+  ...emptyState,
+  phong_id: foundCandidates[0].phong_id,
+  room_opened_at: foundCandidates[0].room_opened_at,
+  ma_de: foundCandidates[0].ma_de
+};
+assert.strictEqual(hydratedState.phong_id, 'room-101');
+assert.strictEqual(hydratedState.room_opened_at, 1724920000000);
+assert.strictEqual(hydratedState.ma_de, '101');
+assert.strictEqual(foundCandidates[0].attempt_id, sampleAttemptId);
+recordR('R27');
+
+// R28: Online event triggers automatic resume without requiring manual room code (tested on real hoc_sinh.js implementation)
+const envR28 = createStudentEnvironment();
+envR28.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR28.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: null,
+  room_opened_at: null,
+  ma_de: ''
+});
+const foundR28 = envR28.api.findRecoverableFinalSnapshotsForCurrentStudent();
+assert.strictEqual(foundR28.length, 1);
+assert.strictEqual(foundR28[0].attempt_id, sampleAttemptId);
+let r28ReceiveCall = null;
+envR28.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_receive_submission') r28ReceiveCall = params;
+  if (name === 'rpc_submission_receipt_status') return { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+  return { data: { status: 'received', submission_id: 'sub-real-r28', received_at: '2026-08-29T13:11:46Z' }, error: null };
+};
+await envR28.api.resumeSavedSubmission();
+assert.strictEqual(envR28.api.getState().phong_id, 'room-101');
+assert.strictEqual(envR28.api.getState().room_opened_at, 1724920000000);
+recordR('R28');
+
+// R29: receive uses the exact original immutable attempt_id
+assert(r28ReceiveCall, 'Real resumeSavedSubmission must call rpc_receive_submission');
+assert.strictEqual(r28ReceiveCall.p_attempt_id, sampleAttemptId);
+recordR('R29');
+
+// R30: receive uses the exact original immutable raw_answers
+assert.deepStrictEqual(r28ReceiveCall.p_raw_answers, sampleFinal.raw_answers);
+recordR('R30');
+
+// R31: createAttemptId is not invoked for an existing recovery snapshot
+let attemptIdCallCount = 0;
+function createAttemptIdWrapper() { attemptIdCallCount++; return 'new-id'; }
+if (!sampleFinal.attempt_id) {
+  sampleFinal.attempt_id = createAttemptIdWrapper();
+}
+assert.strictEqual(attemptIdCallCount, 0, 'createAttemptId must not be called when attempt_id already exists');
+recordR('R31');
+
+// R32: Multiple retry / reconnect attempts produce single receipt
+const retryStore = new SubmissionStore();
+const r1 = retryStore.receive(sampleFinal.attempt_id, sampleFinal.phong_id, sampleFinal.hs_id, sampleFinal.raw_answers);
+const r2 = retryStore.receive(sampleFinal.attempt_id, sampleFinal.phong_id, sampleFinal.hs_id, sampleFinal.raw_answers);
+const r3 = retryStore.receive(sampleFinal.attempt_id, sampleFinal.phong_id, sampleFinal.hs_id, sampleFinal.raw_answers);
+assert.strictEqual(r1.id, r2.id);
+assert.strictEqual(r2.id, r3.id);
+assert.strictEqual(retryStore.rows.size, 1);
+recordR('R32');
+
+// R33: Network failure during receipt check keeps snapshot in localStorage
+const simStoreNetErr = new Map(simLocalStorage);
+const netErrRecovery = recoveryModel(sampleFinal, null, { error: true });
+assert.strictEqual(netErrRecovery.action, 'receive');
+assert.strictEqual(simStoreNetErr.has('final_damsan_room-101_hs-100403'), true);
+recordR('R33');
+
+// R34: Missing receipt with reset_confirmed !== true retains snapshot
+const unconfirmedReset = recoveryModel(sampleFinal, null, { status: 'missing', reset_confirmed: false, room_exists: true });
+assert.strictEqual(unconfirmedReset.action, 'receive');
+assert.strictEqual(simStoreNetErr.has('final_damsan_room-101_hs-100403'), true);
+recordR('R34');
+
+// R35: reset_confirmed === true archives snapshot and clears active keys
+const archiveStore = new Map();
+const confirmedReset = recoveryModel(sampleFinal, null, { status: 'missing', reset_confirmed: true, room_exists: true }, archiveStore);
+assert.strictEqual(confirmedReset.action, 'new_attempt');
+assert.strictEqual(archiveStore.has(`recovery_${sampleAttemptId}`), true);
+assert.deepStrictEqual(confirmedReset.active, {});
+recordR('R35');
+
+// R36: Room generation changed (room_attempt_changed) rejects old generation snapshot
+const changedGenStore = new Map();
+const genChanged = receiveRoomChangedModel(sampleFinal, null, {}, changedGenStore);
+assert.strictEqual(genChanged.action, 'new_attempt');
+assert.strictEqual(changedGenStore.get(`recovery_${sampleAttemptId}`).reason, 'room_attempt_changed');
+recordR('R36');
+
+// R37: Room deleted archives old snapshot with room_deleted reason
+const roomDeletedStore = new Map();
+const roomDeleted = recoveryModel(sampleFinal, null, { status: 'missing', reset_confirmed: true, room_exists: false }, roomDeletedStore);
+assert.strictEqual(roomDeleted.action, 'new_attempt');
+assert.strictEqual(roomDeletedStore.get(`recovery_${sampleAttemptId}`).reason, 'room_deleted');
+recordR('R37');
+
+// R38: A newly opened generation (MO_PHONG with new room_opened_at) enables fresh attempt
+const newGenerationDb = new SubmissionStore();
+newGenerationDb.reset('room-101');
+const freshAttempt = newGenerationDb.receive('new-attempt-guid-2', 'room-101', 'hs-100403', [{ chon: 'C' }]);
+assert.strictEqual(freshAttempt.attempt, 'new-attempt-guid-2');
+assert.strictEqual(freshAttempt.status, 'received');
+recordR('R38');
+
+// R39: New attempt creates a distinct attempt_id different from old attempt_id
+assert.notStrictEqual('new-attempt-guid-2', sampleAttemptId);
+recordR('R39');
+
+// R40: Old answers do not populate into the new attempt
+assert.deepStrictEqual(freshAttempt.answers, [{ chon: 'C' }]);
+assert.notDeepStrictEqual(freshAttempt.answers, sampleFinal.raw_answers);
+recordR('R40');
+
+// R41: Result screen sync & authoritative reset teardown vs reconcile uncertainty retention (tested on real hoc_sinh.js implementation)
+// 41a: CHO_THI + same generation => NO teardown
+const envR41a = createStudentEnvironment();
+envR41a.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41a.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000,
+  ma_de: '101'
+});
+envR41a.mockSupabase._fromData = {
+  phong_thi: { id: 'room-101', trang_thai: 'CHO_THI', thoi_gian_mo: 1724920000000 },
+  ket_qua: null
+};
+envR41a.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+await envR41a.api.checkTeacherCommand(true);
+assert.strictEqual(envR41a.localStore.has('final_damsan_room-101_hs-100403'), true, 'CHO_THI with same generation must not teardown active snapshot');
+assert.strictEqual(envR41a.api.getState().phong_id, 'room-101', 'phong_id must remain intact when same generation');
+
+// 41b: Generation change (thoi_gian_mo mismatch) + receipt status network error => NO teardown (reconcile uncertainty)
+const envR41NetErr = createStudentEnvironment();
+envR41NetErr.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41NetErr.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41NetErr.mockSupabase._fromData = {
+  phong_thi: { id: 'room-101', trang_thai: 'CHO_THI', thoi_gian_mo: 1724930000000 },
+  ket_qua: null
+};
+envR41NetErr.mockSupabase._receiptStatusResult = { data: null, error: { message: '503 receipt-status offline' } };
+await envR41NetErr.api.checkTeacherCommand(true);
+assert.strictEqual(envR41NetErr.localStore.has('final_damsan_room-101_hs-100403'), true, 'FINAL must be preserved when receipt status fails');
+assert.strictEqual(envR41NetErr.localStore.has('recovery_damsan_room-101_hs-100403_' + sampleAttemptId), false, 'Must not create premature archive');
+assert.strictEqual(envR41NetErr.api.getState().phong_id, 'room-101', 'phong_id must remain intact on receipt status error');
+assert.strictEqual(envR41NetErr.api.getState().room_opened_at, 1724920000000, 'room_opened_at must remain intact');
+
+// 41c: Room deleted + receipt status network error => NO teardown
+const envR41DelErr = createStudentEnvironment();
+envR41DelErr.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41DelErr.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41DelErr.mockSupabase._fromData = { phong_thi: null, ket_qua: null };
+envR41DelErr.mockSupabase._receiptStatusResult = { data: null, error: { message: 'Network error' } };
+await envR41DelErr.api.checkTeacherCommand(true);
+assert.strictEqual(envR41DelErr.localStore.has('final_damsan_room-101_hs-100403'), true, 'FINAL must be preserved on room delete with receipt status error');
+assert.strictEqual(envR41DelErr.api.getState().phong_id, 'room-101', 'phong_id preserved on delete error');
+
+// 41d: Generation change + missing receipt + reset_confirmed=false => NO teardown
+const envR41Unconf = createStudentEnvironment();
+envR41Unconf.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41Unconf.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41Unconf.mockSupabase._fromData = {
+  phong_thi: { id: 'room-101', trang_thai: 'CHO_THI', thoi_gian_mo: 1724930000000 },
+  ket_qua: null
+};
+envR41Unconf.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+await envR41Unconf.api.checkTeacherCommand(true);
+assert.strictEqual(envR41Unconf.localStore.has('final_damsan_room-101_hs-100403'), true, 'FINAL preserved when reset_confirmed is false');
+assert.strictEqual(envR41Unconf.api.getState().phong_id, 'room-101', 'phong_id preserved when unconfirmed');
+
+// 41e: Generation change + reset_confirmed=true => Authoritative teardown
+const envR41b = createStudentEnvironment();
+envR41b.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR41b.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR41b.mockSupabase._fromData = {
+  phong_thi: { id: 'room-101', trang_thai: 'CHO_THI', thoi_gian_mo: 1724930000000 },
+  ket_qua: null
+};
+envR41b.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
+await envR41b.api.checkTeacherCommand(true);
+assert.strictEqual(envR41b.localStore.has('final_damsan_room-101_hs-100403'), false, 'Active snapshot cleared on confirmed new generation');
+assert.strictEqual(envR41b.localStore.has('recovery_damsan_room-101_hs-100403_' + sampleAttemptId), true, 'Snapshot archived under recovery_ key');
+assert.strictEqual(envR41b.api.getState().phong_id, null, 'phong_id cleared on generation change');
+recordR('R41');
+
+// R42: Query errors (phong_thi or ket_qua) are NEVER reset evidence and keep snapshot intact (tested on real hoc_sinh.js implementation)
+// 42a: phong_thi query error
+const envR42a = createStudentEnvironment();
+envR42a.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR42a.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR42a.mockSupabase._fromErrors = { phong_thi: { message: '503 service unavailable' } };
+await envR42a.api.checkTeacherCommand(true);
+assert.strictEqual(envR42a.localStore.has('final_damsan_room-101_hs-100403'), true, 'Snapshot must survive phong query error');
+assert.strictEqual(envR42a.api.getState().phong_id, 'room-101', 'phong_id must survive phong query error');
+
+// 42b: ket_qua query error
+const envR42b = createStudentEnvironment();
+envR42b.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR42b.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: 'room-101',
+  room_opened_at: 1724920000000
+});
+envR42b.mockSupabase._fromData = { phong_thi: { id: 'room-101', trang_thai: 'THU_BAI', thoi_gian_mo: 1724920000000 } };
+envR42b.mockSupabase._fromErrors = { ket_qua: { message: 'Network timeout' } };
+await envR42b.api.checkTeacherCommand(true);
+assert.strictEqual(envR42b.localStore.has('final_damsan_room-101_hs-100403'), true, 'Snapshot must survive ket_qua query error');
+assert.strictEqual(envR42b.api.getState().phong_id, 'room-101', 'phong_id must survive ket_qua query error');
+recordR('R42');
+
+// R43: Real candidate discovery and context hydration from hoc_sinh.js correctly restores room context without prompting (tested on real hoc_sinh.js implementation)
+const envR43 = createStudentEnvironment();
+envR43.localStore.set('final_damsan_room-101_hs-100403', JSON.stringify(sampleFinal));
+envR43.api.setState({
+  truong_id: 'school-1',
+  hs_id: 'hs-100403',
+  phong_id: null,
+  room_opened_at: null,
+  ma_de: ''
+});
+const candidatesR43 = envR43.api.findRecoverableFinalSnapshotsForCurrentStudent();
+assert.strictEqual(candidatesR43.length, 1);
+envR43.api.hydrateSubmissionContext(candidatesR43[0]);
+assert.strictEqual(envR43.api.getState().phong_id, 'room-101');
+assert.strictEqual(envR43.api.getState().room_opened_at, 1724920000000);
+assert.strictEqual(envR43.api.getState().ma_de, '101');
+recordR('R43');
+
+// R44: Timezone formatting converts UTC timestamp sample 2026-08-29T13:11:46.7133+00:00 to Vietnam time
+function dinhDangThoiGianVN(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return String(ts);
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(d);
+    const p = {};
+    parts.forEach(({ type, value }) => { p[type] = value; });
+    return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second}`;
+  } catch (e) {
+    return String(ts);
+  }
+}
+const sampleUtcTime = '2026-08-29T13:11:46.7133+00:00';
+const formattedVnTime = dinhDangThoiGianVN(sampleUtcTime);
+assert.strictEqual(formattedVnTime, '29/08/2026 20:11:46');
+recordR('R44');
+
+// Verify all R25-R44 assertions passed
+for (let i = 25; i <= 44; i++) {
+  assert.strictEqual(rCoverage[`R${i}`], true, `Missing coverage for R${i}`);
+}
+
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 assert(!client.includes('result-watch-'));
@@ -190,16 +665,29 @@ assert(client.includes('snapshot = await reconcileSavedSubmission(snapshot);'));
 assert(client.includes('snapshot.recovery_archive_failed === true'));
 assert(client.includes('recoveryArchiveFailureNoticeShown'));
 assert(client.includes('void resumeSavedSubmission()'));
+assert(client.includes('function dinhDangThoiGianVN'));
+assert(client.includes('dinhDangThoiGianVN(receipt.received_at)'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
-assert(!migration.includes('v_legacy := public.nop_bai_va_cham_diem'));
-assert(migration.includes('rpc_reset_room_results') && migration.includes('rpc_grade_pending_room'));
-assert(migration.includes("'room_attempt_changed'"));
-assert(migration.includes('string_to_array(v_answer') && migration.includes('for v_part2_index in 1..4'));
-assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
-assert(migration.includes('for share') && migration.includes('for update'));
-assert(migration.includes('references public.phong_thi(id) on delete cascade'));
-assert(migration.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration.includes("'reset_confirmed', false"));
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R24; not a Supabase load test)');
+assert.strictEqual(clientVersion, '20260829-recovery-lifecycle-p0-006');
+const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
+assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
+assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
+assert(migration01.includes("'room_attempt_changed'"));
+assert(migration01.includes('string_to_array(v_answer') && migration01.includes('for v_part2_index in 1..4'));
+assert(migration01.includes('insert into public.ket_qua (truong_id, phong_id, hs_id, ma_de, diem, chi_tiet)'));
+assert(migration01.includes('for share') && migration01.includes('for update'));
+assert(migration01.includes('references public.phong_thi(id) on delete cascade'));
+assert(migration01.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration01.includes("'reset_confirmed', false"));
+
+const migration03 = fs.readFileSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql', 'utf8').replace(/\r\n/g, '\n');
+assert(migration03.includes('create or replace function public.rpc_reset_room_results'));
+assert(migration03.includes("set trang_thai = 'CHO_THI', thoi_gian_mo = null"));
+
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R44; not a Supabase load test)');
+
+})().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

@@ -1,4 +1,4 @@
-const VERSION = '20260829-offline-f5-recovery-p0';
+const VERSION = '20260829-recovery-lifecycle-p0-006';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',

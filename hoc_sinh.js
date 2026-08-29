@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260829-offline-f5-recovery-p0';
+const VERSION = '20260829-recovery-lifecycle-p0-006';
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -424,6 +424,23 @@ function ghiNhanNghiVan(reason) {
     if (antiCheatRuntime.reasons.length > 50) antiCheatRuntime.reasons.shift();
 }
 
+function dinhDangThoiGianVN(ts) {
+    if (!ts) return '';
+    try {
+        const d = new Date(ts);
+        if (isNaN(d.getTime())) return String(ts);
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        });
+        const parts = formatter.formatToParts(d);
+        const p = {};
+        parts.forEach(({ type, value }) => { p[type] = value; });
+        return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second}`;
+    } catch (e) { return String(ts); }
+}
 function dinhDangThoiDiem(ts) {
     try {
         return new Date(ts).toLocaleTimeString('vi-VN', { hour12: false });
@@ -1134,6 +1151,13 @@ function kichHoatLienKetRealtime() {
     realtimeChannel = _supabase.channel('room-updates')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'phong_thi', filter: `id=eq.${state.phong_id}` }, payload => {
             const newStatus = payload.new.trang_thai;
+            const newOpenedAt = payload.new.thoi_gian_mo;
+            // P0-006: Generation change detection — authoritative reset evidence
+            const _normG = v => (v === null || v === undefined) ? null : String(v);
+            if (_normG(state.room_opened_at) !== null && _normG(newOpenedAt) !== _normG(state.room_opened_at)) {
+                checkTeacherCommand(true);
+                return;
+            }
             if ((newStatus === 'THU_BAI' || newStatus === 'XEM_DAP_AN') && document.getElementById('exam-section').classList.contains('active')) {
                 // [Fix B] XEM_DAP_AN cũng trigger nộp bài — học sinh chưa nộp khi GV công bố đáp án sẽ được thu bài tự động
                 alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
@@ -1712,11 +1736,13 @@ async function resumeSavedSubmission() {
         }
     }
     if (!snapshot || snapshot.state === SUBMISSION_STATE.GRADED) return false;
-    if (state.isOffline) {
-        const autoArea = document.getElementById('auto-room-area');
-        if (autoArea) autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">⏳ Bài đã chốt đang được lưu an toàn trên thiết bị. Hệ thống sẽ tự gửi khi có mạng.</p>';
-        return true;
+    // P0-006: Show pending banner both when offline and online
+    const _pendingArea = document.getElementById('auto-room-area');
+    if (_pendingArea) {
+        _pendingArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">⏳ Bài đã chốt đang được lưu an toàn trên thiết bị.' +
+            (state.isOffline ? ' Hệ thống sẽ tự gửi khi có mạng.' : ' Đang tự động đồng bộ lên máy chủ...') + '</p>';
     }
+    if (state.isOffline) { return true; }
     snapshot = await reconcileSavedSubmission(snapshot);
     if (!snapshot) return false;
     if (snapshot.recovery_archive_failed === true) {
@@ -1727,8 +1753,13 @@ async function resumeSavedSubmission() {
         return true;
     }
     const receipt = getSubmissionReceipt();
-    if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && receipt?.submission_id) requestGrading(receipt.submission_id);
-    else receiveFinalSubmission();
+    if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && receipt?.submission_id) {
+        dongTatCaRealtimeHocSinh();
+        showReceivedState(receipt);
+        requestGrading(receipt.submission_id);
+    } else {
+        receiveFinalSubmission();
+    }
     return true;
 }
 
@@ -1788,7 +1819,7 @@ function showReceivedState(receipt) {
     document.getElementById('finish_name').innerText = state.ho_ten;
     showSection('result-section');
     document.getElementById('score-display-area').style.display = 'none';
-    document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(receipt.received_at)}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
+    document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(dinhDangThoiGianVN(receipt.received_at))}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
     try { document.exitFullscreen(); } catch (e) { }
 }
 
@@ -1829,7 +1860,13 @@ async function receiveFinalSubmission() {
                 return;
             }
             clearActiveSubmissionKeys();
+            // P0-006: Reset lifecycle state so student can enter next attempt cleanly
+            state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
+            state.cau_hoi = []; state.user_result = null; cheatCount = 0;
+            dongTatCaRealtimeHocSinh();
             alert('Lượt thi này đã được giáo viên reset. Bản chốt cũ không được gửi lại; hãy vào lượt thi mới khi phòng được mở.');
+            showSection('room-section');
+            timPhongThiTuDong();
             return;
         }
         lastError = error?.message || data?.message || 'Không nhận được receipt từ máy chủ';
@@ -1867,10 +1904,53 @@ async function checkTeacherCommand(isAuto = false) {
     isCheckingCommand = true;
 
     try {
-        const { data: phong } = await _supabase.from('phong_thi').select('trang_thai').eq('id', state.phong_id).single();
-        const { data: kq } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
+        const { data: phong, error: phongError } = await _supabase.from('phong_thi').select('id, trang_thai, thoi_gian_mo').eq('id', state.phong_id).maybeSingle();
+        const { data: kq, error: kqError } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).maybeSingle();
         // [Fix D] Diagnostic log — xem nguồn gọi, trạng thái phòng, và độ sẵn sàng của dữ liệu
-        console.log('[checkCmd] isAuto=', isAuto, '| trang_thai=', phong?.trang_thai, '| cau_hoi.length=', state.cau_hoi?.length, '| ma_de=', kq?.ma_de);
+        console.log('[checkCmd] isAuto=', isAuto, '| trang_thai=', phong?.trang_thai, '| phongErr=', phongError?.message, '| kqErr=', kqError?.message, '| ma_de=', kq?.ma_de);
+
+        // P0-006: Network/RLS query failure is NEVER reset evidence — preserve all recovery state.
+        if (phongError || kqError) {
+            console.warn('[checkCmd] Query error — keeping recovery evidence:', phongError?.message || kqError?.message);
+            if (!isAuto) alert('Lỗi kết nối máy chủ khi kiểm tra trạng thái. Vui lòng thử lại sau.');
+            return;
+        }
+
+        // P0-006: Generation comparison — the ONLY authoritative reset evidence.
+        // CHO_THI alone is NOT sufficient; room_opened_at mismatch confirms a new attempt.
+        const _normGen = v => (v === null || v === undefined) ? null : String(v);
+        const serverGen = _normGen(phong?.thoi_gian_mo);
+        const localGen = _normGen(state.room_opened_at);
+        const roomDeleted = !phong; // server query ok + no error + data=null → room gone
+        const generationChanged = !roomDeleted && localGen !== null && serverGen !== localGen;
+
+        if (roomDeleted || generationChanged) {
+            const _snapshot = getFinalSnapshot();
+            if (_snapshot?.attempt_id) {
+                const reconciled = await reconcileSavedSubmission(_snapshot);
+                if (reconciled !== null) {
+                    if (reconciled.recovery_archive_failed) {
+                        // Archive failed: keep all evidence, block teardown.
+                        if (!recoveryArchiveFailureNoticeShown) {
+                            recoveryArchiveFailureNoticeShown = true;
+                            alert('Bài đã chốt vẫn được giữ an toàn trên thiết bị nhưng chưa thể lưu bản khôi phục. Vui lòng báo giám thị.');
+                        }
+                    }
+                    return;
+                }
+            }
+            clearActiveSubmissionKeys();
+            state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
+            state.cau_hoi = []; state.user_result = null; cheatCount = 0;
+            dongTatCaRealtimeHocSinh();
+            showSection('room-section');
+            timPhongThiTuDong();
+            if (!isAuto) alert(roomDeleted
+                ? 'Phòng thi đã bị xóa hoặc kết thúc lượt thi.'
+                : 'Phòng thi đã được giáo viên reset. Lượt thi cũ không thể gửi lại.');
+            return;
+        }
+
         state.user_result = kq;
         if (!kq) {
             let receipt = getSubmissionReceipt();
