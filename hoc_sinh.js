@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260828-submission-safety-p0';
+const VERSION = '20260829-offline-f5-recovery-p0';
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -19,6 +19,8 @@ let isSubmitting = false;
 let isCheckingCommand = false; // Guard tránh concurrent checkTeacherCommand gây race condition
 let isInternalAction = false; // Cờ đánh dấu đang thực hiện hành động hệ thống (hiện confirm/alert)
 let isGradingSubmission = false;
+let recoveryAmbiguityNoticeShown = false;
+let recoveryArchiveFailureNoticeShown = false;
 
 const SUBMISSION_STATE = Object.freeze({
     DRAFT: 'DRAFT',
@@ -173,7 +175,10 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('panel_lop_hs').innerText = state.lop;
 
         showSection('room-section');
-        timPhongThiTuDong();
+        // Durable FINAL recovery takes priority over a room-list request, which may fail offline.
+        void resumeSavedSubmission().then(recovered => {
+            if (!recovered) timPhongThiTuDong();
+        });
     }
 });
 
@@ -376,7 +381,9 @@ window.addEventListener('online', () => {
     let btnSubmit = document.getElementById('btn-submit-exam');
     if (btnSubmit) { btnSubmit.style.opacity = '1'; btnSubmit.style.cursor = 'pointer'; }
     setTimeout(() => { if (!state.isOffline && banner.className === 'online') { banner.className = ''; } }, 4000);
-    resumeSavedSubmission();
+    void resumeSavedSubmission().then(recovered => {
+        if (!recovered && state.hs_id) timPhongThiTuDong();
+    });
 });
 
 function hienThiThongBaoLuu() {
@@ -1562,9 +1569,13 @@ async function gradeAndSubmit(autoSubmit = false) {
     finalizeSubmissionOnce(autoSubmit);
 }
 
-function submissionKeys() {
-    const suffix = `${state.phong_id}_${state.hs_id}`;
+function submissionKeysFor(phongId, hsId) {
+    const suffix = `${phongId}_${hsId}`;
     return { draft: `nhap_damsan_${suffix}`, final: `final_damsan_${suffix}`, receipt: `receipt_damsan_${suffix}` };
+}
+
+function submissionKeys() {
+    return submissionKeysFor(state.phong_id, state.hs_id);
 }
 
 function createAttemptId() {
@@ -1582,6 +1593,41 @@ function getFinalSnapshot() {
 function getSubmissionReceipt() {
     try { return JSON.parse(localStorage.getItem(submissionKeys().receipt) || 'null'); }
     catch (e) { console.error('Submission receipt corrupt:', e); return null; }
+}
+
+function isRecoverableFinalSnapshot(snapshot) {
+    return snapshot
+        && typeof snapshot === 'object'
+        && snapshot.hs_id === state.hs_id
+        && snapshot.truong_id === state.truong_id
+        && typeof snapshot.phong_id === 'string' && snapshot.phong_id.trim() !== ''
+        && typeof snapshot.attempt_id === 'string' && snapshot.attempt_id.trim() !== ''
+        && snapshot.room_opened_at !== null && snapshot.room_opened_at !== undefined && snapshot.room_opened_at !== ''
+        && Array.isArray(snapshot.raw_answers)
+        && [SUBMISSION_STATE.FINAL_PENDING, SUBMISSION_STATE.SERVER_RECEIVED].includes(snapshot.state);
+}
+
+function findRecoverableFinalSnapshotsForCurrentStudent() {
+    if (!state.hs_id || !state.truong_id) return [];
+    const snapshots = [];
+    for (let index = 0; index < localStorage.length; index++) {
+        const key = localStorage.key(index);
+        if (!key || !key.startsWith('final_damsan_')) continue;
+        try {
+            const snapshot = JSON.parse(localStorage.getItem(key) || 'null');
+            if (isRecoverableFinalSnapshot(snapshot)) snapshots.push(snapshot);
+        } catch (e) {
+            // Malformed evidence is intentionally preserved for manual recovery.
+            console.warn('Ignoring malformed final snapshot during recovery discovery:', key);
+        }
+    }
+    return snapshots;
+}
+
+function hydrateSubmissionContext(snapshot) {
+    state.phong_id = snapshot.phong_id;
+    state.room_opened_at = snapshot.room_opened_at;
+    state.ma_de = snapshot.ma_de || state.ma_de;
 }
 
 function archiveFinalSnapshot(snapshot, reason) {
@@ -1648,12 +1694,42 @@ async function reconcileSavedSubmission(snapshot) {
     return snapshot;
 }
 
-function resumeSavedSubmission() {
-    const snapshot = getFinalSnapshot();
-    if (!snapshot || snapshot.state === SUBMISSION_STATE.GRADED || state.isOffline) return;
+async function resumeSavedSubmission() {
+    let snapshot = getFinalSnapshot();
+    if (!snapshot && state.hs_id && state.truong_id) {
+        const candidates = findRecoverableFinalSnapshotsForCurrentStudent();
+        if (candidates.length > 1) {
+            console.warn('Recovery ambiguity: multiple active final snapshots found; no snapshot was sent.', candidates.map(item => item.phong_id));
+            if (!recoveryAmbiguityNoticeShown) {
+                recoveryAmbiguityNoticeShown = true;
+                alert('Có nhiều bài đã chốt đang chờ khôi phục trên thiết bị. Hệ thống sẽ không tự gửi để tránh nhầm phòng; vui lòng chọn đúng phòng thi để tiếp tục.');
+            }
+            return false;
+        }
+        if (candidates.length === 1) {
+            snapshot = candidates[0];
+            hydrateSubmissionContext(snapshot);
+        }
+    }
+    if (!snapshot || snapshot.state === SUBMISSION_STATE.GRADED) return false;
+    if (state.isOffline) {
+        const autoArea = document.getElementById('auto-room-area');
+        if (autoArea) autoArea.innerHTML = '<p style="color: #d93025; font-weight: bold; margin: 0;">⏳ Bài đã chốt đang được lưu an toàn trên thiết bị. Hệ thống sẽ tự gửi khi có mạng.</p>';
+        return true;
+    }
+    snapshot = await reconcileSavedSubmission(snapshot);
+    if (!snapshot) return false;
+    if (snapshot.recovery_archive_failed === true) {
+        if (!recoveryArchiveFailureNoticeShown) {
+            recoveryArchiveFailureNoticeShown = true;
+            alert('Bài đã chốt vẫn được giữ an toàn trên thiết bị nhưng chưa thể lưu bản khôi phục sau khi phòng được reset. Vui lòng báo giám thị; hệ thống sẽ không tự gửi lại bài này.');
+        }
+        return true;
+    }
     const receipt = getSubmissionReceipt();
     if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && receipt?.submission_id) requestGrading(receipt.submission_id);
     else receiveFinalSubmission();
+    return true;
 }
 
 function collectAnswers() {

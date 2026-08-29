@@ -118,7 +118,56 @@ const validExisting = new Map(); assert.strictEqual(archiveModel(validExisting, 
 const malformedExisting = new Map([['recovery_attempt-recovery', { attempt_id: 'attempt-recovery', raw_answers: [] }]]);
 assert.strictEqual(receiveRoomChangedModel(finalEvidence, null, { answers: {} }, malformedExisting).action, 'blocked'); // R11
 
+// R12-R18: discovery after offline F5 uses durable FINAL evidence, never volatile room state.
+function discoverFinals(storage, identity) {
+  return [...storage.entries()].filter(([key, value]) => key.startsWith('final_damsan_') && value && value.hs_id === identity.hs_id && value.truong_id === identity.truong_id && value.phong_id && value.attempt_id && value.room_opened_at !== null && value.room_opened_at !== undefined && Array.isArray(value.raw_answers) && ['FINAL_PENDING', 'SERVER_RECEIVED'].includes(value.state)).map(([, value]) => value);
+}
+function offlineF5Recovery(storage, identity, state, reconcile = 'missing') {
+  const candidates = discoverFinals(storage, identity);
+  if (candidates.length !== 1) return { state, action: candidates.length > 1 ? 'ambiguous' : 'none', sent: [], allowRoomRefresh: candidates.length > 1, visibleWarning: candidates.length > 1 };
+  const snapshot = candidates[0];
+  const hydrated = { ...state, phong_id: snapshot.phong_id, room_opened_at: snapshot.room_opened_at, ma_de: snapshot.ma_de || state.ma_de };
+  if (reconcile === 'network_error') return { state: hydrated, action: 'retain', sent: [] };
+  if (reconcile === 'reset_archive_failed') return { state: hydrated, action: 'blocked', sent: [], allowRoomRefresh: false, visibleWarning: true };
+  if (reconcile === 'reset_cleaned') {
+    for (const [key, value] of storage) if (value === snapshot) storage.delete(key);
+    return { state: hydrated, action: 'reset_cleaned', sent: [], allowRoomRefresh: true };
+  }
+  return { state: hydrated, action: 'receive', sent: [{ attempt_id: snapshot.attempt_id, raw_answers: snapshot.raw_answers }] };
+}
+const offlineStorage = new Map();
+const offlineIdentity = { hs_id: 'HS', truong_id: 'SCHOOL' };
+const offlineFinal = { attempt_id: 'attempt-original', truong_id: 'SCHOOL', phong_id: 'ROOM', hs_id: 'HS', ma_de: 'DE-1', room_opened_at: 456, raw_answers: [{ chon: 'IDENTIFIABLE' }], state: 'FINAL_PENDING' };
+offlineStorage.set('final_damsan_ROOM_HS', offlineFinal);
+const afterOfflineF5 = offlineF5Recovery(offlineStorage, offlineIdentity, { phong_id: null, room_opened_at: null, ma_de: '' });
+assert.strictEqual(afterOfflineF5.state.phong_id, 'ROOM'); assert.strictEqual(afterOfflineF5.state.room_opened_at, 456); // R12
+assert.deepStrictEqual(afterOfflineF5.sent, [{ attempt_id: 'attempt-original', raw_answers: [{ chon: 'IDENTIFIABLE' }] }]);
+assert.strictEqual(offlineStorage.size, 1);
+const otherStudent = new Map(offlineStorage); otherStudent.set('final_damsan_OTHER_OTHER', { ...offlineFinal, hs_id: 'OTHER', phong_id: 'OTHER_ROOM' });
+assert.strictEqual(discoverFinals(otherStudent, offlineIdentity).length, 1); // R13
+const otherSchool = new Map(offlineStorage); otherSchool.set('final_damsan_OTHER_SCHOOL', { ...offlineFinal, truong_id: 'OTHER', phong_id: 'OTHER_ROOM' });
+assert.strictEqual(discoverFinals(otherSchool, offlineIdentity).length, 1); // R14
+const malformed = new Map(offlineStorage); malformed.set('final_damsan_BROKEN_HS', '{not-json}');
+assert.strictEqual(discoverFinals(malformed, offlineIdentity).length, 1); assert.strictEqual(malformed.has('final_damsan_BROKEN_HS'), true); // R15
+const graded = new Map([['final_damsan_ROOM_HS', { ...offlineFinal, state: 'GRADED' }]]);
+assert.strictEqual(offlineF5Recovery(graded, offlineIdentity, { phong_id: null }).action, 'none'); // R16
+const ambiguous = new Map(offlineStorage); ambiguous.set('final_damsan_ROOM2_HS', { ...offlineFinal, phong_id: 'ROOM2', attempt_id: 'attempt-two' });
+const ambiguousResult = offlineF5Recovery(ambiguous, offlineIdentity, { phong_id: null });
+assert.strictEqual(ambiguousResult.action, 'ambiguous'); assert.deepStrictEqual(ambiguousResult.sent, []); assert.strictEqual(ambiguous.size, 2); assert.strictEqual(ambiguousResult.visibleWarning, true); assert.strictEqual(ambiguousResult.allowRoomRefresh, true); // R17/R23
+const networkFailure = offlineF5Recovery(offlineStorage, offlineIdentity, { phong_id: null }, 'network_error');
+assert.strictEqual(networkFailure.action, 'retain'); assert.deepStrictEqual(offlineStorage.get('final_damsan_ROOM_HS'), offlineFinal); // R18
+assert.strictEqual(offlineF5Recovery(offlineStorage, offlineIdentity, { phong_id: 'ROOM', room_opened_at: 456 }).action, 'receive'); // R20
+const archiveFailureStorage = new Map(offlineStorage);
+const archiveFailure = offlineF5Recovery(archiveFailureStorage, offlineIdentity, { phong_id: null }, 'reset_archive_failed');
+assert.strictEqual(archiveFailure.action, 'blocked'); assert.deepStrictEqual(archiveFailure.sent, []); assert.strictEqual(archiveFailure.visibleWarning, true); assert.strictEqual(archiveFailureStorage.has('final_damsan_ROOM_HS'), true); // R21
+const resetCleanupStorage = new Map(offlineStorage);
+const resetCleanup = offlineF5Recovery(resetCleanupStorage, offlineIdentity, { phong_id: null }, 'reset_cleaned');
+assert.strictEqual(resetCleanup.action, 'reset_cleaned'); assert.deepStrictEqual(resetCleanup.sent, []); assert.strictEqual(resetCleanup.allowRoomRefresh, true); assert.strictEqual(resetCleanupStorage.has('final_damsan_ROOM_HS'), false); // R22
+const test05 = offlineF5Recovery(new Map(offlineStorage), offlineIdentity, { phong_id: null, room_opened_at: null, ma_de: '' });
+assert.strictEqual(test05.state.phong_id, 'ROOM'); assert.deepStrictEqual(test05.sent, [{ attempt_id: 'attempt-original', raw_answers: [{ chon: 'IDENTIFIABLE' }] }]); // R24
+
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
+const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 assert(!client.includes('result-watch-'));
 assert(client.includes('if (!kq) {'));
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
@@ -130,6 +179,20 @@ assert(client.includes('if (!archived) {'));
 assert(client.includes('p_truong_id: snapshot.truong_id') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
 assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
 assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));
+assert(client.includes('function submissionKeysFor(phongId, hsId)'));
+assert(client.includes('function findRecoverableFinalSnapshotsForCurrentStudent()'));
+assert(client.includes('hydrateSubmissionContext(snapshot);'));
+assert(client.includes("key.startsWith('final_damsan_')"));
+assert(client.includes("if (candidates.length > 1)"));
+assert(client.includes('recoveryAmbiguityNoticeShown'));
+assert(client.includes('return false;'));
+assert(client.includes('snapshot = await reconcileSavedSubmission(snapshot);'));
+assert(client.includes('snapshot.recovery_archive_failed === true'));
+assert(client.includes('recoveryArchiveFailureNoticeShown'));
+assert(client.includes('void resumeSavedSubmission()'));
+const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
+const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
+assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
 const migration = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration.includes('rpc_reset_room_results') && migration.includes('rpc_grade_pending_room'));
@@ -139,4 +202,4 @@ assert(migration.includes('insert into public.ket_qua (truong_id, phong_id, hs_i
 assert(migration.includes('for share') && migration.includes('for update'));
 assert(migration.includes('references public.phong_thi(id) on delete cascade'));
 assert(migration.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration.includes("'reset_confirmed', false"));
-console.log('PASS: deterministic P0 recovery simulation (C1-C12; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R24; not a Supabase load test)');
