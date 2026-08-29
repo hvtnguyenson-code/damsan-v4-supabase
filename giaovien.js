@@ -3,8 +3,112 @@ const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let gvData = null; 
-let activeWorkspaceMonId = null; 
+let gvData = null;
+let activeWorkspaceMonId = null;
+let activeWorkspaceTruongId = null;
+
+function getAccountPasswordState(row) {
+    if (typeof row?.must_change_password !== 'boolean') return 'KhongXacDinh';
+    return row.must_change_password ? 'MacDinh' : 'DaDoi';
+}
+
+const GV_SESSION_FIELDS = ['id', 'ma_gv', 'ho_ten', 'quyen', 'truong_id', 'truong_ten', 'mon_id'];
+
+function safeGvProfile(source) {
+    return GV_SESSION_FIELDS.reduce((profile, field) => {
+        if (source && Object.prototype.hasOwnProperty.call(source, field)) profile[field] = source[field];
+        return profile;
+    }, {});
+}
+
+function isStoredSessionExpired(expiry) {
+    const expiresAt = new Date(expiry).getTime();
+    return !expiry || Number.isNaN(expiresAt) || expiresAt <= Date.now();
+}
+
+function getAdminToken() {
+    const token = sessionStorage.getItem('damSan_AdminToken');
+    return token && !isStoredSessionExpired(sessionStorage.getItem('damSan_AdminExpiresAt')) ? token : null;
+}
+
+function getStaffToken() {
+    const token = sessionStorage.getItem('damSan_StaffToken');
+    return token && !isStoredSessionExpired(sessionStorage.getItem('damSan_StaffExpiresAt')) ? token : null;
+}
+
+function clearAdminSession() {
+    sessionStorage.removeItem('damSan_AdminToken');
+    sessionStorage.removeItem('damSan_AdminExpiresAt');
+}
+
+function clearStaffSession() {
+    sessionStorage.removeItem('damSan_StaffToken');
+    sessionStorage.removeItem('damSan_StaffExpiresAt');
+}
+
+function clearControlSessions() {
+    clearAdminSession();
+    clearStaffSession();
+}
+
+function isAccountManagementActive() {
+    return Boolean(
+        document.getElementById('quanLyTK')
+            ?.classList.contains('active')
+    );
+}
+
+function clearAccountRuntimeState() {
+    sessionStorage.removeItem('cache_students');
+    allStudents = [];
+    allTeachers = [];
+    currentStudentFilter = 'TatCa';
+}
+
+function clearGvSessionAndReturnToLogin(message) {
+    clearAccountRuntimeState();
+    clearControlSessions();
+    sessionStorage.removeItem('damSan_GVSession');
+    window.tempGvData = null;
+    window.tempGvCurrentPasswordHash = null;
+    if (message) alert(message);
+    location.reload();
+}
+
+function ensureControlSession(role) {
+    const message = role === 'admin'
+        ? 'Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.'
+        : 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.';
+    const token = role === 'admin' ? getAdminToken() : getStaffToken();
+    if (!token) {
+        clearGvSessionAndReturnToLogin(message);
+        throw new Error(message);
+    }
+    return token;
+}
+
+async function adminRpc(action, payload) {
+    const token = ensureControlSession('admin');
+    const { data, error } = await sb.rpc('rpc_admin_control', { p_admin_token: token, p_action: action, p_payload: payload || {} });
+    if (data?.code === 'admin_session_invalid') {
+        clearGvSessionAndReturnToLogin('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
+        throw new Error('admin_session_invalid');
+    }
+    if (error) throw error;
+    if (!data || data.status !== 'success') throw new Error(data?.message || 'Thao tác quản trị thất bại.');
+    return data;
+}
+
+async function staffRpc(rpcName, args) {
+    const token = ensureControlSession('staff');
+    const { data, error } = await sb.rpc(rpcName, { p_staff_token: token, ...args });
+    if (data?.code === 'staff_session_invalid') {
+        clearGvSessionAndReturnToLogin('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+        throw new Error('staff_session_invalid');
+    }
+    if (error) throw error;
+    return data;
+}
 
 let danhSachDeThi = new Array(); let duLieuBangDiem = new Array(); let currentDashFilter = "TatCa"; let allStudents = new Array(); let allTeachers = new Array(); let currentStudentFilter = "TatCa"; let availableBaiHocs = new Array(); let fullBankData = new Array(); let allRoomsData = new Array();
 let teacherTimerInterval = null; 
@@ -73,7 +177,23 @@ window.onload = function() {
 
     let gvSession = sessionStorage.getItem('damSan_GVSession');
     if (gvSession) {
-        gvData = JSON.parse(gvSession);
+        try {
+            gvData = safeGvProfile(JSON.parse(gvSession));
+            sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
+            const hasValidStaffSession = Boolean(getStaffToken());
+            const hasValidAdminSession = gvData.quyen !== 'Admin' || Boolean(getAdminToken());
+            if (!hasValidStaffSession || !hasValidAdminSession) {
+                clearControlSessions();
+                sessionStorage.removeItem('damSan_GVSession');
+                gvData = null;
+            }
+        } catch (e) {
+            clearControlSessions();
+            sessionStorage.removeItem('damSan_GVSession');
+            gvData = null;
+        }
+    }
+    if (gvData) {
         document.getElementById('gvNameDisplay').innerText = gvData.ho_ten || "Giáo viên";
         document.getElementById('truongNameDisplay').innerText = gvData.truong_ten || "HỆ THỐNG V4";
         document.getElementById('loginOverlay').style.display = 'none';
@@ -111,13 +231,14 @@ async function thucHienDangNhapGV() {
             btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false;
         } else {
             const userData = data.user;
-            if (userData.mat_khau === DEFAULT_PASS_HASH || userData.mat_khau === '123456') {
-                window.tempGvData = userData; 
+            if (data.must_change_password === true || userData.must_change_password === true) {
+                window.tempGvData = userData;
+                window.tempGvCurrentPasswordHash = hashedPass;
                 document.getElementById('loginOverlay').style.display = 'none';
                 document.getElementById('forceChangePassOverlay').style.display = 'flex';
                 btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false; 
             } else {
-                hoanTatDangNhap(userData);
+                hoanTatDangNhap(data);
             }
         }
     } catch (err) {
@@ -126,12 +247,24 @@ async function thucHienDangNhapGV() {
     }
 }
 
-function hoanTatDangNhap(data) {
-    gvData = { 
-        ma_gv: data.ma_gv, ho_ten: data.ho_ten, quyen: data.quyen, 
-        truong_id: data.truong_id, truong_ten: data.truong_ten,
-        mon_id: data.mon_id, id: data.id 
-    };
+function hoanTatDangNhap(loginData) {
+    const user = loginData.user || loginData;
+    if (!loginData.staff_token || isStoredSessionExpired(loginData.staff_expires_at)) {
+        clearControlSessions();
+        throw new Error('Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại.');
+    }
+    if (user.quyen === 'Admin' && (!loginData.admin_token || isStoredSessionExpired(loginData.admin_expires_at))) {
+        clearControlSessions();
+        throw new Error('Phiên quản trị không hợp lệ. Vui lòng đăng nhập lại.');
+    }
+    gvData = safeGvProfile(user);
+    clearAccountRuntimeState();
+    sessionStorage.setItem('damSan_StaffToken', loginData.staff_token);
+    sessionStorage.setItem('damSan_StaffExpiresAt', loginData.staff_expires_at);
+    if (user.quyen === 'Admin') {
+        sessionStorage.setItem('damSan_AdminToken', loginData.admin_token);
+        sessionStorage.setItem('damSan_AdminExpiresAt', loginData.admin_expires_at);
+    } else clearAdminSession();
     sessionStorage.setItem('damSan_GVSession', JSON.stringify(gvData));
     document.getElementById('gvNameDisplay').innerText = gvData.ho_ten;
     document.getElementById('truongNameDisplay').innerText = gvData.truong_ten;
@@ -157,19 +290,29 @@ async function xacNhanDoiMatKhauBatBuoc() {
 
     btn.innerText = "⏳ ĐANG LƯU..."; btn.disabled = true; msg.innerText = "";
 
+    let passwordChanged = false;
     try {
         let hashedNewPass = await hashPassword(pass1);
         let uid = window.tempGvData.id;
         
-        let { error } = await sb.from('giao_vien').update({ mat_khau: hashedNewPass }).eq('id', uid);
-        
-        if (error) throw error;
-        
+        const currentHash = window.tempGvCurrentPasswordHash;
+        if (!currentHash) throw new Error('Không còn thông tin xác thực tạm thời. Vui lòng đăng nhập lại.');
+        let { data: changed, error } = await sb.rpc('rpc_change_giao_vien_password', { p_gv_id: uid, p_truong_id: window.tempGvData.truong_id, p_current_password: currentHash, p_new_password: hashedNewPass });
+        if (error || changed?.status !== 'success') throw error || new Error(changed?.message || 'Không thể cập nhật mật khẩu.');
+        passwordChanged = true;
+
+        const { data: loginData, error: loginError } = await sb.rpc('rpc_login_giao_vien', { p_ma_gv: window.tempGvData.ma_gv, p_mat_khau: hashedNewPass });
+        if (loginError || loginData?.status !== 'success') throw loginError || new Error(loginData?.message || 'Không thể tạo phiên mới.');
+        hoanTatDangNhap(loginData);
+        window.tempGvCurrentPasswordHash = null;
+        window.tempGvData = null;
         alert("✅ Đổi mật khẩu thành công! Chào mừng bạn đến với hệ thống.");
-        hoanTatDangNhap(window.tempGvData);
-        window.tempGvData = null; 
-        
+
     } catch (err) {
+        if (passwordChanged) {
+            clearGvSessionAndReturnToLogin('Mật khẩu đã được đổi nhưng không thể tạo phiên mới. Vui lòng đăng nhập lại.');
+            return;
+        }
         btn.innerText = "💾 LƯU VÀ VÀO HỆ THỐNG"; btn.disabled = false;
         msg.innerText = "❌ Lỗi khi lưu mật khẩu: " + err.message;
     }
@@ -196,38 +339,49 @@ async function thucHienDoiMatKhau() {
     let oldBtnText = btn.innerText;
     btn.innerText = "⏳ ĐANG XỬ LÝ..."; btn.disabled = true;
 
+    let passwordChanged = false;
     try {
         let hashedOld = await hashPassword(oldPass);
         let hashedNew = await hashPassword(newPass);
 
-        let { data, error: errCheck } = await sb
-            .from('giao_vien')
-            .select('id')
-            .eq('id', gvData.id)
-            .eq('mat_khau', hashedOld)
-            .single();
-        
-        if (errCheck || !data) {
-            throw new Error("Mật khẩu hiện tại không đúng!");
-        }
+        let { data, error: errUpdate } = await sb.rpc('rpc_change_giao_vien_password', { p_gv_id: gvData.id, p_truong_id: gvData.truong_id, p_current_password: hashedOld, p_new_password: hashedNew });
+        if (errUpdate || data?.status !== 'success') throw errUpdate || new Error(data?.message || "Mật khẩu hiện tại không đúng!");
+        passwordChanged = true;
 
-        let { error: errUpdate } = await sb.from('giao_vien').update({ mat_khau: hashedNew }).eq('id', gvData.id);
-        if (errUpdate) throw errUpdate;
-
-        alert("✅ Đổi mật khẩu thành công! Vui lòng đăng nhập lại để hệ thống cập nhật kết nối bảo mật.");
-        dangXuatGV();
+        const { data: loginData, error: loginError } = await sb.rpc('rpc_login_giao_vien', { p_ma_gv: gvData.ma_gv, p_mat_khau: hashedNew });
+        if (loginError || loginData?.status !== 'success') throw loginError || new Error(loginData?.message || 'Không thể tạo phiên mới.');
+        hoanTatDangNhap(loginData);
+        document.getElementById('oldPassPro').value = '';
+        document.getElementById('newPassPro').value = '';
+        document.getElementById('confirmNewPassPro').value = '';
+        document.getElementById('changePassModal').style.display = 'none';
+        alert("✅ Đổi mật khẩu thành công! Phiên làm việc đã được cập nhật.");
 
     } catch (err) {
+        if (passwordChanged) {
+            clearGvSessionAndReturnToLogin('Mật khẩu đã được đổi nhưng không thể tạo phiên mới. Vui lòng đăng nhập lại.');
+            return;
+        }
         alert("❌ Lỗi: " + err.message);
         btn.innerText = oldBtnText; btn.disabled = false;
     }
 }
 
-function dangXuatGV() {
+async function dangXuatGV() {
     if(confirm("Bạn có chắc chắn muốn đăng xuất?")) {
+        const staffToken = sessionStorage.getItem('damSan_StaffToken');
+        const adminToken = sessionStorage.getItem('damSan_AdminToken');
+        const requests = [];
+        if (staffToken) requests.push(sb.rpc('rpc_staff_logout', { p_staff_token: staffToken }));
+        if (adminToken) requests.push(sb.rpc('rpc_admin_logout', { p_admin_token: adminToken }));
+        await Promise.allSettled(requests);
+        clearControlSessions();
+        clearAccountRuntimeState();
         sessionStorage.removeItem('damSan_GVSession');
         localStorage.removeItem('damSan_Workspace');
-        sessionStorage.clear(); 
+        localStorage.removeItem('damSan_WorkspaceSchool');
+        window.tempGvData = null;
+        window.tempGvCurrentPasswordHash = null;
         location.reload();
     }
 }
@@ -238,6 +392,8 @@ function dangXuatGV() {
 async function khoiTaoWorkspace() {
     let {data: mons} = await sb.from('mon_hoc').select('*').order('created_at', {ascending: true});
     let sysMonList = mons || new Array();
+    let {data: truongs} = await sb.from('truong_hoc').select('id, ten_truong').order('ten_truong', {ascending: true});
+    let sysTruongList = truongs || new Array();
 
     let headerUser = document.querySelector('.header-user');
     if(!document.getElementById('workspaceContainer')) {
@@ -257,14 +413,23 @@ async function khoiTaoWorkspace() {
             sel += `<option value="ALL">🌎 TỔNG QUAN TẤT CẢ CÁC MÔN</option>`;
             sysMonList.forEach(m => { sel += `<option value="${m.id}">📚 Môn: ${m.ten_mon}</option>`; });
             sel += `</select>`;
-            wsDiv.innerHTML = `<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Không gian:</span> ` + sel;
-            
-            activeWorkspaceMonId = localStorage.getItem('damSan_Workspace') || "ALL";
+            let schoolSel = `<select id="workspaceSchoolSelector" onchange="changeWorkspaceSchool(this.value)" style="padding: 6px; border-radius: 6px; border: 2px solid #27ae60; font-weight: bold; color: #196f3d; outline: none; background: #e8f5e9; cursor: pointer;">`;
+            schoolSel += `<option value="ALL">🌎 TẤT CẢ TRƯỜNG</option>`;
+            sysTruongList.forEach(t => { schoolSel += `<option value="${t.id}">🏫 ${t.ten_truong}</option>`; });
+            schoolSel += `</select>`;
+            wsDiv.innerHTML = `<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Trường:</span> ${schoolSel}<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Môn:</span> ${sel}`;
+
+            const storedMon = localStorage.getItem('damSan_Workspace');
+            activeWorkspaceMonId = sysMonList.some((m) => m.id === storedMon) ? storedMon : 'ALL';
+            if (activeWorkspaceMonId === 'ALL' && storedMon && storedMon !== 'ALL') localStorage.setItem('damSan_Workspace', 'ALL');
+            const storedSchool = localStorage.getItem('damSan_WorkspaceSchool');
+            activeWorkspaceTruongId = sysTruongList.some((t) => t.id === storedSchool) ? storedSchool : (sysTruongList.some((t) => t.id === gvData.truong_id) ? gvData.truong_id : 'ALL');
         } else {
             let tenMon = "Chưa phân công";
             let myMon = sysMonList.find(x => x.id === gvData.mon_id);
             if(myMon) tenMon = myMon.ten_mon;
             activeWorkspaceMonId = gvData.mon_id;
+            activeWorkspaceTruongId = gvData.truong_id;
             
             wsDiv.innerHTML = `<span style="font-size: 13px; color: #5f6368; font-weight: bold;">Bộ môn:</span> <span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px dashed #27ae60;">${tenMon}</span>`;
         }
@@ -272,6 +437,7 @@ async function khoiTaoWorkspace() {
 
         if(gvData.quyen === 'Admin') {
             document.getElementById('workspaceSelector').value = activeWorkspaceMonId;
+            document.getElementById('workspaceSchoolSelector').value = activeWorkspaceTruongId;
         }
     }
 }
@@ -524,8 +690,7 @@ async function khoiTaoDuLieu() {
         loadBankMeta(); 
         loadMetaData(); 
         fetchRadar(); 
-        fetchStudents(); 
-        fetchTeachers(); 
+        if (gvData.quyen === 'Admin') { fetchStudents(true); fetchTeachers(true); }
         taiDanhSachPhong(); 
         
         // Kích hoạt ngay chức năng Auto-Refresh 5s từ giao diện HTML
@@ -566,8 +731,7 @@ function toggleAutoRefresh() {
 // Hàm Live Search bị thiếu đã được khôi phục
 function renderDashboardTable() { 
     let statBox = document.getElementById("analyticDashboard"); 
-    const maPhong = document.getElementById('dashMaPhong').value.trim(); 
-    let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong); 
+    let currentRoom = getSelectedRoom('dashMaPhong');
     
     if(duLieuBangDiem.length === 0) { 
         if(statBox) statBox.style.display = "none"; 
@@ -813,8 +977,7 @@ function kichHoatLienKetRealtimeGiaoVien() {
     
     ketQuaChannel = sb.channel('gv-ket-qua-master')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'ket_qua' }, payload => {
-            const selectedRoomCode = document.getElementById('dashMaPhong') ? document.getElementById('dashMaPhong').value : "";
-            const selectedRoom = allRoomsData.find(r => String(r.MaPhong).trim() === String(selectedRoomCode).trim());
+            const selectedRoom = getSelectedRoom('dashMaPhong');
             const changedRoomId = payload.new?.phong_id || payload.old?.phong_id;
             if (selectedRoom && changedRoomId && String(selectedRoom.id) === String(changedRoomId)) {
                 if (window.autoDashTimeout) clearTimeout(window.autoDashTimeout);
@@ -1340,8 +1503,6 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
 
             logEl.innerText = "Đang lưu trữ vào Ngân hàng...";
             let dataToInsert = cauHoiGoc.map(q => ({
-                truong_id: gvData.truong_id,
-                mon_id: activeWorkspaceMonId !== "ALL" ? activeWorkspaceMonId : null,
                 bai_hoc: params.baiHoc,
                 phan: String(q.Phan),
                 muc_do: q.MucDo,
@@ -1351,8 +1512,7 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
                 loi_giai: ""
             }));
 
-            let { error } = await sb.from('ngan_hang').insert(dataToInsert);
-            if (error) throw error;
+            await bankWrite('insert', { rows: dataToInsert });
 
             logEl.innerText = `✅ HOÀN TẤT! Đã nạp thành công ${cauHoiGoc.length} câu hỏi vào Ngân hàng.`;
             fetchFullBank(true); loadBankMeta();
@@ -1556,27 +1716,60 @@ function shuffleArray(array) {
     } 
 }
 
-async function getOrCreateRoom(maPhong) {
-    let query = sb.from('phong_thi').select('id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    
-    let {data: room, error: roomErr} = await query.single();
-    if (roomErr && roomErr.code !== 'PGRST116') {
-        throw new Error("Khong tai duoc phong thi: " + roomErr.message);
+function getRoomTargetSchoolId(room) {
+    if (gvData.quyen === 'Admin' && room?.truong_id) return room.truong_id;
+    return gvData.truong_id;
+}
+
+async function refreshWorkspaceSelectors() {
+    const [monsResult, schoolsResult] = await Promise.all([
+        sb.from('mon_hoc').select('id, ten_mon, created_at').order('created_at', {ascending: true}),
+        sb.from('truong_hoc').select('id, ma_truong, ten_truong, created_at').order('ten_truong', {ascending: true})
+    ]);
+    g_sysMonList = monsResult.data || [];
+    g_sysTruongList = schoolsResult.data || [];
+    if (activeWorkspaceTruongId !== 'ALL' && !g_sysTruongList.some((t) => t.id === activeWorkspaceTruongId)) { activeWorkspaceTruongId = 'ALL'; localStorage.setItem('damSan_WorkspaceSchool', 'ALL'); clearAccountRuntimeState(); }
+    if (activeWorkspaceMonId !== 'ALL' && !g_sysMonList.some((m) => m.id === activeWorkspaceMonId)) { activeWorkspaceMonId = 'ALL'; localStorage.setItem('damSan_Workspace', 'ALL'); }
+    const schoolSelect = document.getElementById('workspaceSchoolSelector');
+    const monSelect = document.getElementById('workspaceSelector');
+    if (gvData?.quyen === 'Admin' && schoolSelect && monSelect) {
+        schoolSelect.innerHTML = `<option value="ALL">🌎 TẤT CẢ TRƯỜNG</option>${g_sysTruongList.map((t) => `<option value="${t.id}">🏫 ${t.ten_truong}</option>`).join('')}`;
+        monSelect.innerHTML = `<option value="ALL">🌎 TỔNG QUAN TẤT CẢ CÁC MÔN</option>${g_sysMonList.map((m) => `<option value="${m.id}">📚 Môn: ${m.ten_mon}</option>`).join('')}`;
+        schoolSelect.value = activeWorkspaceTruongId; monSelect.value = activeWorkspaceMonId;
     }
-    if(!room) {
-        if(gvData.quyen === 'Admin' && (!activeWorkspaceMonId || activeWorkspaceMonId === 'ALL')) {
-            throw new Error("⚠️ Admin chưa chọn bộ môn trên Header!");
-        }
-        let {data: newRoom, error: newRoomErr} = await sb.from('phong_thi').insert({
-            ma_phong: maPhong, truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId, ten_dot: 'Bài kiểm tra', doi_tuong: 'TatCa', thoi_gian: 45, trang_thai: 'CHO_THI'
-        }).select('id').single();
-        if (newRoomErr || !newRoom || !newRoom.id) {
-            throw new Error("Khong tao duoc phong thi: " + ((newRoomErr && newRoomErr.message) || "Du lieu tra ve khong hop le"));
-        }
-        return newRoom.id;
-    }
-    return room.id;
+}
+
+function changeWorkspaceSchool(truongId) {
+    activeWorkspaceTruongId = truongId;
+    localStorage.setItem('damSan_WorkspaceSchool', truongId);
+    danhSachDeThi = new Array(); danhSachThuCong = new Array();
+    clearAccountRuntimeState();
+    if(document.getElementById('dashBody')) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu...</td></tr>';
+    loadMetaData();
+    taiDanhSachPhong();
+    fetchRadar();
+    loadBankMeta(true);
+    fetchFullBank(true);
+    if (document.getElementById('quanLyTK')?.classList.contains('active')) { fetchStudents(true); fetchTeachers(true); }
+}
+
+function getExamTargetSchoolId(maPhong) {
+    if (gvData.quyen !== 'Admin') return gvData.truong_id;
+    const candidates = (allRoomsData || []).filter((room) => String(room.MaPhong).trim() === String(maPhong).trim());
+    const selectedRoom = getSelectedRoom('ctrlMaPhong');
+    if (selectedRoom && String(selectedRoom.MaPhong).trim() === String(maPhong).trim()) return selectedRoom.truong_id;
+    const scopedRoom = candidates.find((room) => room.truong_id === activeWorkspaceTruongId);
+    if (scopedRoom) return scopedRoom.truong_id;
+    if (candidates.length > 1) throw new Error('Có nhiều phòng cùng mã. Vui lòng chọn phòng cụ thể theo trường đích.');
+    if (candidates.length === 1) return candidates[0].truong_id;
+    if (!activeWorkspaceTruongId || activeWorkspaceTruongId === 'ALL') throw new Error('Vui lòng chọn TRƯỜNG ĐÍCH cụ thể trước khi tạo phòng thi mới.');
+    return activeWorkspaceTruongId;
+}
+
+function getSelectedRoom(selectElementOrId) {
+    const select = typeof selectElementOrId === 'string' ? document.getElementById(selectElementOrId) : selectElementOrId;
+    if (!select?.value) return null;
+    return (allRoomsData || []).find((room) => String(room.id) === String(select.value)) || null;
 }
 
 async function luuDeThiLenSupabase(deThiArray) {
@@ -1601,63 +1794,26 @@ async function luuDeThiLenSupabase(deThiArray) {
     }
 
     let rpcMonId = (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") ? activeWorkspaceMonId : null;
-    let { data: rpcData, error: rpcErr } = await sb.rpc('rpc_luu_de_thi_len_phong', {
+    let rpcData = await staffRpc('rpc_luu_de_thi_len_phong', {
         p_ma_gv: gvData.ma_gv,
-        p_truong_id: gvData.truong_id,
+        p_truong_id: getExamTargetSchoolId(maPhong),
         p_mon_id: rpcMonId,
         p_ma_phong: maPhong,
         p_de_thi: rowsToInsert
     });
 
-    if (!rpcErr) {
-        if (!rpcData || rpcData.status !== 'success') {
-            throw new Error(rpcData?.message || "Khong luu duoc de thi len phong");
-        }
-        return {status: 'success'};
-    }
-
-    // Fallback for databases that have not applied migration 004 yet.
-    if (!String(rpcErr.message || '').includes('rpc_luu_de_thi_len_phong')) {
-        throw new Error(rpcErr.message);
-    }
-
-    let phong_id = await getOrCreateRoom(maPhong);
-    await sb.from('de_thi').delete().eq('phong_id', phong_id);
-
-    let directRowsToInsert = rowsToInsert.map(row => ({
-        phong_id: phong_id,
-        ma_de: row.ma_de,
-        cau_so: JSON.stringify(row.cau_so)
-    }));
-
-    let { error } = await sb.from('de_thi').insert(directRowsToInsert);
-    if(error) {
-        throw new Error(error.message);
-    }
+    if (!rpcData || rpcData.status !== 'success') throw new Error(rpcData?.message || "Khong luu duoc de thi len phong");
     return {status: 'success'};
 }
 
 async function xemTruocDeThi() {
-    let maPhong = document.getElementById('ctrlMaPhong').value.trim();
-    if(!maPhong) return alert("⚠️ Vui lòng CHỌN M Mã Phòng Thi ở ô phía trên trước khi xem trước đề!");
+    const room = getSelectedRoom('ctrlMaPhong');
+    if(!room) return alert("⚠️ Vui lòng chọn phòng thi cụ thể trước khi xem trước đề!");
 
     let btn = document.querySelector('button[onclick="xemTruocDeThi()"]');
     let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
 
     try {
-        console.log("🔍 Đang tìm phòng thi:", { maPhong, truong_id: gvData.truong_id, mon_id: activeWorkspaceMonId });
-        let query = sb.from('phong_thi').select('id, mon_id').eq('ma_phong', maPhong).eq('truong_id', gvData.truong_id);
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        
-        let {data: room} = await query.single();
-        if(!room) { 
-            console.error("❌ Không tìm thấy phòng thi khớp với tiêu chí.");
-            alert("Phòng thi này chưa được tạo trên hệ thống hoặc không thuộc bộ môn bạn đang chọn!"); 
-            btn.innerText = oldText; btn.disabled = false; return; 
-        }
-
-        console.log("✅ Đã tìm thấy phòng:", room);
-
         let {data: exams, error} = await sb.from('de_thi').select('*').eq('phong_id', room.id);
         btn.innerText = oldText; btn.disabled = false;
 
@@ -1919,13 +2075,115 @@ async function generateFromMatrix() {
     }
 }
 
-async function loadBankMeta() { 
-    let query = sb.from('ngan_hang').select('bai_hoc').eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    let {data} = await query;
-    if(data) {
-        let uniqueBaiHoc = Array.from(new Set(data.map(d=>d.bai_hoc)));
-        processBankMeta({baiHocs: uniqueBaiHoc});
+function getBankWorkspaceContext(options) {
+    const opts = options || {};
+    if (gvData.quyen !== 'Admin') {
+        if (!gvData.mon_id) {
+            throw new Error("Giáo viên chưa được phân công bộ môn. Vui lòng liên hệ Admin để được gán môn.");
+        }
+        return {
+            schoolId: gvData.truong_id,
+            monId: gvData.mon_id
+        };
+    }
+
+    const schoolId = activeWorkspaceTruongId;
+    const monId = activeWorkspaceMonId;
+
+    if (opts.isWrite) {
+        if (!schoolId || schoolId === 'ALL') {
+            throw new Error("Vui lòng chọn TRƯỜNG ĐÍCH cụ thể để quản lý ngân hàng câu hỏi.");
+        }
+        if (!opts.allowAllSubjects && (!monId || monId === 'ALL')) {
+            throw new Error("Vui lòng chọn BỘ MÔN cụ thể để quản lý ngân hàng câu hỏi.");
+        }
+    } else {
+        if (!schoolId || schoolId === 'ALL' || !monId || monId === 'ALL') {
+            return null;
+        }
+    }
+
+    return { schoolId, monId };
+}
+
+async function bankRead() {
+    const context = getBankWorkspaceContext({ isWrite: false });
+    if (!context || !context.schoolId || !context.monId || context.schoolId === 'ALL' || context.monId === 'ALL') {
+        fullBankData = [];
+        availableBaiHocs = [];
+        if (document.getElementById("matrixBody")) document.getElementById("matrixBody").innerHTML = '';
+        if (document.getElementById("filterBaiHoc")) document.getElementById("filterBaiHoc").innerHTML = '<option value="">Tất cả</option>';
+        if (document.getElementById("bankTableBody")) document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">Vui lòng chọn trường và môn học cụ thể để xem ngân hàng câu hỏi.</td></tr>';
+        return [];
+    }
+
+    const data = await staffRpc('rpc_giao_vien_bank_read', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: context.schoolId,
+        p_mon_id: context.monId
+    });
+
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || 'Không thể tải ngân hàng câu hỏi');
+    }
+
+    return data.rows || [];
+}
+
+async function bankWrite(action, payload = {}) {
+    if (gvData.quyen === 'Admin') {
+        if (action === 'delete_all') {
+            const context = getBankWorkspaceContext({ isWrite: true, allowAllSubjects: true });
+            return await adminRpc('bank_delete_all', { truong_id: context.schoolId });
+        }
+        const context = getBankWorkspaceContext({ isWrite: true });
+        if (action === 'insert') {
+            const rows = (payload.rows || []).map(r => ({
+                ...r,
+                truong_id: context.schoolId,
+                mon_id: context.monId
+            }));
+            return await adminRpc('bank_insert', { rows });
+        }
+        if (action === 'update') {
+            return await adminRpc('bank_update', payload);
+        }
+        if (action === 'delete_ids') {
+            return await adminRpc('bank_delete_ids', payload);
+        }
+        if (action === 'delete_filter') {
+            return await adminRpc('bank_delete_filter', {
+                ...payload,
+                truong_id: context.schoolId,
+                mon_id: context.monId
+            });
+        }
+        throw new Error("Hành động ngân hàng không hợp lệ: " + action);
+    }
+
+    if (action === 'delete_all') {
+        throw new Error("Chỉ Admin mới có quyền xóa toàn bộ ngân hàng câu hỏi của trường.");
+    }
+    const context = getBankWorkspaceContext({ isWrite: true });
+    const data = await staffRpc('rpc_giao_vien_bank_write', {
+        p_ma_gv: gvData.ma_gv,
+        p_truong_id: context.schoolId,
+        p_action: action,
+        p_payload: payload
+    });
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || 'Lỗi thao tác ngân hàng câu hỏi');
+    }
+    return data;
+}
+
+async function loadBankMeta() {
+    try {
+        const rows = await bankRead();
+        const uniqueBaiHoc = Array.from(new Set((rows || []).map(d => d.bai_hoc).filter(Boolean)));
+        processBankMeta({ baiHocs: uniqueBaiHoc });
+    } catch (err) {
+        console.error("loadBankMeta error:", err);
     }
 }
 function processBankMeta(data) {
@@ -1944,15 +2202,15 @@ function addMatrixRow() {
     tbody.appendChild(tr); 
 }
 
-async function fetchFullBank(forceReload = false) { 
+async function fetchFullBank(forceReload = false) {
     if(!document.getElementById("bankTableBody")) return;
-    document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">⏳ Đang tải kho dữ liệu...</td></tr>'; 
-    let query = sb.from('ngan_hang').select('*').eq('truong_id', gvData.truong_id);
-    if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-    let {data} = await query;
-    if(data) {
-        fullBankData = data.map(q => ({ id: q.id, baiHoc: q.bai_hoc, phan: q.phan, mucDo: q.muc_do, noiDung: q.noi_dung, A: q.a, B: q.b, C: q.c, D: q.d, dapAnDung: q.dap_an_dung, LoiGiai: q.loi_giai }));
-        renderBankTable(); 
+    document.getElementById("bankTableBody").innerHTML = '<tr><td colspan="7">⏳ Đang tải kho dữ liệu...</td></tr>';
+    try {
+        const rows = await bankRead();
+        fullBankData = (rows || []).map(q => ({ id: q.id, baiHoc: q.bai_hoc, phan: q.phan, mucDo: q.muc_do, noiDung: q.noi_dung, A: q.a, B: q.b, C: q.c, D: q.d, dapAnDung: q.dap_an_dung, LoiGiai: q.loi_giai }));
+        renderBankTable();
+    } catch (err) {
+        document.getElementById("bankTableBody").innerHTML = `<tr><td colspan="7">❌ Lỗi: ${err.message}</td></tr>`;
     }
 }
 
@@ -1963,11 +2221,17 @@ function renderBankTable() {
     let html = ""; if(filtered.length === 0) html = '<tr><td colspan="7">Trống.</td></tr>'; else { filtered.forEach(q => { let snippet = q.noiDung.replace(new RegExp("<[^>]+>", "g"), ' ').substring(0, 80) + "..."; html += `<tr><td><input type="checkbox" class="chk-Bank" value="${q.id}"></td><td style="font-size:11px; color:#7f8c8d;">${String(q.id).split('-')[0]}</td><td><b>${q.baiHoc}</b></td><td>P.${q.phan}</td><td><b>${q.mucDo}</b></td><td style="text-align:left;">${snippet}</td><td><button style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; margin-bottom:5px; width:100%;" onclick="editBankQuestion('${q.id}')">Sửa</button><br><button style="background:#c0392b; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; width:100%;" onclick="deleteBankQuestion('${q.id}', this)">Xóa</button></td></tr>`; }); } document.getElementById("bankTableBody").innerHTML = html; 
 }
 
-async function deleteBankQuestion(id, btnElement) { 
-    if(!confirm("Xóa câu này?")) return; 
+async function deleteBankQuestion(id, btnElement) {
+    if(!confirm("Xóa câu này?")) return;
     btnElement.innerText = "⏳..."; btnElement.disabled = true;
-    let {error} = await sb.from('ngan_hang').delete().eq('id', id);
-    if(!error) fetchFullBank(true); else alert("Lỗi Supabase");
+    try {
+        await bankWrite('delete_ids', { ids: [id] });
+        fetchFullBank(true);
+    } catch (e) {
+        alert("Lỗi: " + e.message);
+        btnElement.innerText = "Xóa";
+        btnElement.disabled = false;
+    }
 }
 
 async function editBankQuestion(id) { 
@@ -1978,24 +2242,33 @@ async function editBankQuestion(id) {
     document.getElementById("editDapAnDung").value = dapAnHienThi; document.getElementById("editModal").style.display = "flex"; 
 }
 
-async function saveEditedQuestion() { 
+async function saveEditedQuestion() {
     let btn = document.querySelector("#editModal button");
-    let phan = document.getElementById("editPhan").value; let dapAn = safeHTML(document.getElementById("editDapAnDung").value.trim().toUpperCase()); 
-    if (phan === "3" && !dapAn.startsWith("'")) { dapAn = "'" + dapAn; } 
+    let phan = document.getElementById("editPhan").value; let dapAn = safeHTML(document.getElementById("editDapAnDung").value.trim().toUpperCase());
+    if (phan === "3" && !dapAn.startsWith("'")) { dapAn = "'" + dapAn; }
     btn.innerText = "⏳..."; btn.disabled = true;
-    
-    let updateData = { bai_hoc: safeHTML(document.getElementById("editBaiHoc").value.trim()), phan: phan, muc_do: document.getElementById("editMucDo").value, noi_dung: safeHTML(document.getElementById("editNoiDung").innerHTML), a: safeHTML(document.getElementById("editA").value), b: safeHTML(document.getElementById("editB").value), c: safeHTML(document.getElementById("editC").value), d: safeHTML(document.getElementById("editD").value), dap_an_dung: dapAn };
-    let {error} = await sb.from('ngan_hang').update(updateData).eq('id', document.getElementById("editID").value);
 
-    btn.innerText = "💾 Lưu Thay Đổi"; btn.disabled = false;
-    if(!error) { document.getElementById("editModal").style.display = "none"; fetchFullBank(true); } else alert("Lỗi");
+    let updateData = { bai_hoc: safeHTML(document.getElementById("editBaiHoc").value.trim()), phan: phan, muc_do: document.getElementById("editMucDo").value, noi_dung: safeHTML(document.getElementById("editNoiDung").innerHTML), a: safeHTML(document.getElementById("editA").value), b: safeHTML(document.getElementById("editB").value), c: safeHTML(document.getElementById("editC").value), d: safeHTML(document.getElementById("editD").value), dap_an_dung: dapAn };
+
+    try {
+        await bankWrite('update', { id: document.getElementById("editID").value, fields: updateData });
+        document.getElementById("editModal").style.display = "none";
+        fetchFullBank(true);
+    } catch (e) {
+        alert("Lỗi: " + e.message);
+    } finally {
+        btn.innerText = "💾 Lưu Thay Đổi";
+        btn.disabled = false;
+    }
 }
 
 /* =======================================================
    ĐIỀU HÀNH & QUẢN LÝ PHÒNG THI
 ======================================================= */
-async function loadMetaData() { 
-    let {data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', gvData.truong_id);
+async function loadMetaData() {
+    const targetSchoolId = getActiveTargetSchoolId();
+    let data = null;
+    if (targetSchoolId) ({data} = await sb.from('hoc_sinh').select('lop').eq('truong_id', targetSchoolId));
     let sel = document.getElementById('ctrlDoiTuong'); let html = '<option value="TatCa">🌎 Tất cả (Mặc định)</option>'; 
     if(data) {
         let lops = Array.from(new Set(data.map(d=>d.lop))).filter(Boolean).sort();
@@ -2006,10 +2279,11 @@ async function loadMetaData() {
     }
 }
 
-async function dieuKhien(trangThai) { 
+async function dieuKhien(trangThai) {
     try {
-        const maPhong = document.getElementById('ctrlMaPhong').value.trim(); 
-        if(!maPhong) return alert("Vui lòng nhập mã phòng!"); 
+        const cachedRoom = getSelectedRoom('ctrlMaPhong');
+        if(!cachedRoom) return alert("Vui lòng chọn phòng thi cụ thể!");
+        const maPhong = cachedRoom.MaPhong;
         document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
         
         let updateData = { trang_thai: trangThai };
@@ -2023,7 +2297,7 @@ async function dieuKhien(trangThai) {
             updateData.ten_dot = tenDot;
             updateData.thoi_gian = tg;
             
-            let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
+            let currentRoom = cachedRoom;
             if (currentRoom && currentRoom.DoiTuong && currentRoom.DoiTuong.includes(',') && doiTuongSelect === "TatCa") {
                 // Bỏ qua update để giữ nguyên danh sách lớp ghép
             } else {
@@ -2031,13 +2305,7 @@ async function dieuKhien(trangThai) {
             }
         }
         
-        // Dùng allRoomsData cache để tránh direct SELECT bị RLS block
-        let cachedRoom = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
-        if (!cachedRoom) {
-            await fetchRadar();
-            cachedRoom = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
-        }
-        let phong_id = cachedRoom ? cachedRoom.id : await getOrCreateRoom(maPhong);
+        let phong_id = cachedRoom.id;
         await rpcDieuKhienPhongThi(
             phong_id,
             trangThai,
@@ -2055,13 +2323,9 @@ async function dieuKhien(trangThai) {
     }
 }
 
-async function dieuKhienFast(maPhong, trangThai) { 
+async function dieuKhienFast(roomId, trangThai) {
     try {
-        let room = (allRoomsData || new Array()).find(r => String(r.MaPhong).trim() === String(maPhong).trim());
-        if (!room) {
-            await fetchRadar();
-            room = (allRoomsData || new Array()).find(r => String(r.MaPhong).trim() === String(maPhong).trim());
-        }
+        let room = (allRoomsData || new Array()).find(r => String(r.id) === String(roomId));
         if (!room || !room.id) throw new Error("Không xác định được ID phòng thi. Hãy bấm làm mới danh sách phòng rồi thử lại.");
 
         let updateData = {trang_thai: trangThai};
@@ -2090,22 +2354,21 @@ async function dieuKhienFast(maPhong, trangThai) {
 }
 
 
-async function xoaPhongHoanToan(maPhong) { 
+async function xoaPhongHoanToan(roomId) {
+    const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
+    const maPhong = cached?.MaPhong || '';
     if(!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) return; 
     let btn = event.target;
     let oldText = btn.innerText;
     btn.innerText = "⏳..."; btn.disabled = true;
 
     try {
-        let cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
-        if (!cached) { await fetchRadar(); cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong); }
         if (!cached || !cached.id) throw new Error("Không tìm thấy phòng thi trong danh sách.");
-        const { data, error } = await sb.rpc('rpc_xoa_phong_thi', {
+        const data = await staffRpc('rpc_xoa_phong_thi', {
             p_ma_gv:     gvData.ma_gv,
-            p_truong_id: gvData.truong_id,
+            p_truong_id: getRoomTargetSchoolId(cached),
             p_phong_id:  cached.id
         });
-        if (error) throw error;
         if (data && data.status !== 'success') throw new Error(data.message || 'Xóa thất bại');
         fetchRadar();
         alert("Đã xóa sạch dữ liệu phòng thi!");
@@ -2115,7 +2378,9 @@ async function xoaPhongHoanToan(maPhong) {
     }
 }
 
-async function xoaDeTrongPhong(maPhong) {
+async function xoaDeTrongPhong(roomId) {
+    const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
+    const maPhong = cached?.MaPhong || '';
     if(!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã trộn trong phòng [${maPhong}]?\n(Phòng thi và Điểm số của học sinh vẫn sẽ được giữ lại)`)) return;
     
     let btn = event.target;
@@ -2123,11 +2388,17 @@ async function xoaDeTrongPhong(maPhong) {
     if(btn) { btn.innerText = "⏳..."; btn.disabled = true; }
 
     try {
-        let cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong);
-        if (!cached) { await fetchRadar(); cached = (allRoomsData || []).find(r => String(r.MaPhong).trim() === maPhong); }
         if(cached && cached.id) {
-            let { error } = await sb.from('de_thi').delete().eq('phong_id', cached.id);
-            if(error) throw error;
+            if (gvData.quyen === 'Admin') {
+                await adminRpc('exam_delete_only', { phong_id: cached.id });
+            } else {
+                const data = await staffRpc('rpc_xoa_de_trong_phong', {
+                    p_ma_gv: gvData.ma_gv,
+                    p_truong_id: getRoomTargetSchoolId(cached),
+                    p_phong_id: cached.id
+                });
+                if (!data || data.status !== 'success') throw new Error(data?.message || 'Xóa đề thất bại.');
+            }
             alert(`✅ Đã xóa sạch đề thi trong phòng [${maPhong}] thành công!`);
         } else {
             alert("❌ Không tìm thấy thông tin phòng thi trên máy chủ.");
@@ -2200,10 +2471,9 @@ function khoiDongDongHoGiaoVien() {
                 let actTd = document.getElementById(`td-act-${roomId}`);
                 if(actTd) {
                     let r = allRoomsData.find(x => String(x.id) === String(roomId));
-                    let maPhong = r ? r.MaPhong : '';
-                    let btnHtml = `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${maPhong}', 'MO_PHONG')">Mở lại</button>`;
-                    let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${maPhong}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
-                    let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${maPhong}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
+                    let btnHtml = `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${roomId}', 'MO_PHONG')">Mở lại</button>`;
+                    let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${roomId}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
+                    let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${roomId}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
                     actTd.innerHTML = `${btnHtml} ${btnXoaDe} ${btnXoa}`;
                 }
 
@@ -2249,7 +2519,8 @@ async function fetchRadar() {
             ThoiGian: d.thoi_gian, 
             TrangThai: d.trang_thai, 
             ThoiGianMo: d.thoi_gian_mo, 
-            TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
+            TenTruong: d.ten_truong || (d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống'),
+            truong_id: d.truong_id,
             id: d.id 
         }));
         
@@ -2293,9 +2564,9 @@ async function fetchRadar() {
                 else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bế Điểm</span>"; 
                 else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
                 
-                let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.MaPhong}', 'MO_PHONG')">Mở lại</button>`; 
-                let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${r.MaPhong}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
-                let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${r.MaPhong}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`; 
+                let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.id}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.id}', 'MO_PHONG')">Mở lại</button>`;
+                let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${r.id}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
+                let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${r.id}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
                 
                 let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
 
@@ -2400,13 +2671,20 @@ async function taiDanhSachPhong() {
         if(selectBoxTab2) selectBoxTab2.innerHTML = defaultOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = defaultOpt;
         
         if(data && data.length > 0) {
-            let uniqueRooms = Array.from(new Set(data.map(d=>d.ma_phong || d.MaPhong)));
-            uniqueRooms.forEach(phong => {
-                let optHtml = `<option value="${phong}">${phong}</option>`;
+            data.forEach(room => {
+                const maPhong = room.ma_phong || room.MaPhong;
+                const tenTruong = room.ten_truong || room.TenTruong || 'Hệ thống';
+                const label = gvData.quyen === 'Admin' ? `${maPhong} — ${tenTruong}` : maPhong;
+                let optHtml = `<option value="${room.id}" data-ma-phong="${maPhong}" data-truong-id="${room.truong_id}">${label}</option>`;
                 if(selectBoxTab2) selectBoxTab2.innerHTML += optHtml; if(selectBoxTab3) selectBoxTab3.innerHTML += optHtml;
             });
             let phongDaLuu = localStorage.getItem('phongDangXem');
-            if (phongDaLuu && uniqueRooms.includes(phongDaLuu)) { if(selectBoxTab3) { selectBoxTab3.value = phongDaLuu; fetchDashboard(); } }
+            let savedRoom = data.find((room) => String(room.id) === String(phongDaLuu));
+            if (!savedRoom && phongDaLuu) {
+                const legacyMatches = data.filter((room) => String(room.ma_phong || room.MaPhong) === String(phongDaLuu));
+                if (legacyMatches.length === 1) savedRoom = legacyMatches[0];
+            }
+            if (savedRoom && selectBoxTab3) { selectBoxTab3.value = savedRoom.id; fetchDashboard(); }
         } else {
             let emptyOpt = '<option value="">⚠️ Chưa có phòng thi nào</option>';
             if(selectBoxTab2) selectBoxTab2.innerHTML = emptyOpt; if(selectBoxTab3) selectBoxTab3.innerHTML = emptyOpt;
@@ -2414,8 +2692,9 @@ async function taiDanhSachPhong() {
 
         if(selectBoxTab2) {
             selectBoxTab2.onchange = function() {
-                let r = allRoomsData.find(x => x.MaPhong === this.value);
+                let r = getSelectedRoom(this);
                 if(r) {
+                    loadMetaData();
                     document.getElementById('ctrlTenDot').value = r.TenDotKiemTra || "";
                     document.getElementById('ctrlThoiGian').value = r.ThoiGian || 45;
                     setTimeout(() => {
@@ -2439,21 +2718,17 @@ async function fetchDashboard(isAuto = false) {
         const sInput = document.getElementById('liveSearchInput');
         if (sInput && !isAuto) sInput.value = ''; 
 
-        const maPhong = document.getElementById('dashMaPhong').value;
-        if(!maPhong) return;
+        const currentRoom = getSelectedRoom('dashMaPhong');
+        if(!currentRoom) return;
         if(!isAuto) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">⏳ Đang tải dữ liệu...</td></tr>';
         
-        let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === String(maPhong).trim());
-        if(!currentRoom) return;
-
         let pArr = new Array();
         
         let dummyCacheBuster = new Date().getTime().toString();
         pArr.push(sb.from('ket_qua').select('*, hoc_sinh(ma_hs, ho_ten, lop)').eq('phong_id', currentRoom.id).neq('chi_tiet', dummyCacheBuster));
         
         if(allStudents.length === 0 || !isAuto) {
-             let qHS = sb.from('hoc_sinh').select('*');
-             if (gvData.quyen !== 'Admin') qHS = qHS.eq('truong_id', gvData.truong_id);
+             let qHS = sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', currentRoom.truong_id);
              pArr.push(qHS);
         }
         
@@ -2467,7 +2742,7 @@ async function fetchDashboard(isAuto = false) {
         if (results.length > 1) {
             let resHS = results[1];
             if (resHS.error) throw resHS.error;
-            allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', Quyen: d.quyen, id: d.id }));
+            allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, Quyen: d.quyen, id: d.id }));
         }
 
         duLieuBangDiem = (resKQ.data || new Array()).map(r => ({ 
@@ -2495,24 +2770,23 @@ function filterDashboard(filter) { currentDashFilter = filter; renderDashboardSu
 
 
 async function xoaDiemPhong() {
-    const maPhong = document.getElementById('dashMaPhong').value.trim(); 
-    if(!maPhong) return alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!"); 
+    const currentRoom = getSelectedRoom('dashMaPhong');
+    if(!currentRoom) return alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!");
+    const maPhong = currentRoom.MaPhong;
     if(!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) return;
     
     let btn = event.target;
     let oldText = btn.innerText;
     btn.innerText = "⏳ Đang xóa sạch..."; btn.disabled = true;
 
-    let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
-
     if(currentRoom) {
-        let {data, error} = await sb.rpc('rpc_reset_room_results', {
+        let data = await staffRpc('rpc_reset_room_results', {
             p_ma_gv: gvData.ma_gv,
-            p_truong_id: gvData.truong_id,
+            p_truong_id: getRoomTargetSchoolId(currentRoom),
             p_phong_id: currentRoom.id
         });
-        if(error || !data || data.status !== 'success') {
-            alert("❌ Lỗi máy chủ Supabase khi xóa: " + (error?.message || data?.message || 'Lỗi không xác định'));
+        if(!data || data.status !== 'success') {
+            alert("❌ Lỗi máy chủ Supabase khi xóa: " + (data?.message || 'Lỗi không xác định'));
         } else {
             alert(`✅ Đã reset phòng: xóa ${data.ket_qua_deleted || 0} kết quả và ${data.submissions_deleted || 0} receipt bài làm.`);
         }
@@ -2524,17 +2798,21 @@ async function xoaDiemPhong() {
     fetchDashboard();
 }
 
+function getActiveTargetSchoolId() {
+    if (gvData.quyen !== 'Admin') return gvData.truong_id;
+    return getSelectedRoom('ctrlMaPhong')?.truong_id || (activeWorkspaceTruongId !== 'ALL' ? activeWorkspaceTruongId : null);
+}
+
 async function khoiPhucChamDiemPhong() {
-    const maPhong = document.getElementById('dashMaPhong').value.trim();
-    const currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong);
+    const currentRoom = getSelectedRoom('dashMaPhong');
     if (!currentRoom) return alert("⚠️ Vui lòng chọn phòng thi cần khôi phục chấm điểm.");
-    const { data, error } = await sb.rpc('rpc_grade_pending_room', {
+    const data = await staffRpc('rpc_grade_pending_room', {
         p_ma_gv: gvData.ma_gv,
-        p_truong_id: gvData.truong_id,
+        p_truong_id: getRoomTargetSchoolId(currentRoom),
         p_phong_id: currentRoom.id
     });
-    if (error || !data || data.status !== 'success') {
-        return alert("❌ Không thể khôi phục chấm điểm: " + (error?.message || data?.message || 'Lỗi không xác định'));
+    if (!data || data.status !== 'success') {
+        return alert("❌ Không thể khôi phục chấm điểm: " + (data?.message || 'Lỗi không xác định'));
     }
     alert(`✅ Đã xử lý ${data.attempted || 0} bài chờ: ${data.graded || 0} thành công, ${data.failed || 0} cần kiểm tra thêm.`);
     fetchDashboard(true);
@@ -2543,8 +2821,7 @@ async function khoiPhucChamDiemPhong() {
 async function xuatExcel() { 
     if(duLieuBangDiem.length === 0) return alert("Chưa có dữ liệu để tải."); 
     
-    let exportData = new Array(); let maPhong = document.getElementById('dashMaPhong').value.trim(); 
-    let currentRoom = allRoomsData.find(r => String(r.MaPhong).trim() === maPhong); 
+    let exportData = new Array(); let currentRoom = getSelectedRoom('dashMaPhong');
     let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; 
     let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop; 
 
@@ -2761,7 +3038,9 @@ async function docFileExcelVaNap(loai) {
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
                     // Ưu tiên dùng truong_id từ file Excel, nếu không có thì dùng của người nạp
-                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : gvData.truong_id;
+                    if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
+                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
 
                     if (ma_hs && ho_ten) {
                         rowsToInsert.push({ ma_hs: ma_hs, ho_ten: ho_ten, lop: lop, mat_khau: defaultPass, truong_id: t_id });
@@ -2772,7 +3051,9 @@ async function docFileExcelVaNap(loai) {
                     let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
-                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : gvData.truong_id;
+                    if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
+                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
                     
                     if (ma_gv && ho_ten) {
                         rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: t_id });
@@ -2783,11 +3064,8 @@ async function docFileExcelVaNap(loai) {
 
         if (rowsToInsert.length === 0) throw new Error("Không tìm thấy dữ liệu hợp lệ!");
 
-        let tableName = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-        // Nâng cấp: Dùng upsert thay cho insert để ghi đè nếu trùng mã
-let conflictCols = loai === 'HS' ? 'truong_id, ma_hs' : 'truong_id, ma_gv';
-let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conflictCols });
-        if (error) throw error;
+        if (gvData.quyen !== 'Admin') throw new Error('Chỉ Admin được phép nạp tài khoản.');
+        await adminRpc('accounts_upsert', { kind: loai, rows: rowsToInsert });
 
         // Báo cáo đối chiếu số lượng quét được với số STT trong danh sách
         alert(`✅ Nạp thành công: ${rowsToInsert.length} tài khoản.\n📊 Kiểm tra chéo: Số thứ tự (STT) lớn nhất ghi nhận trong file Excel là ${maxStt}.`);
@@ -2807,28 +3085,23 @@ let { error } = await sb.from(tableName).upsert(rowsToInsert, { onConflict: conf
 
 async function fetchStudents(forceReload = false) { 
     document.getElementById('hsBody').innerHTML = '<tr><td colspan="7">⏳ Đang tải...</td></tr>'; 
-    let cached = sessionStorage.getItem('cache_students');
-    if (!forceReload && cached) {
-        allStudents = JSON.parse(cached); renderSubTabsHS(); renderStudentTable(); 
-        if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); return;
+    
+    let data;
+    if (gvData.quyen === 'Admin') data = (await adminRpc('accounts_list', { kind: 'HS', truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId })).rows;
+    else {
+        const response = await sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', gvData.truong_id).order('ma_hs', { ascending: true });
+        data = response.data;
     }
-    
-    let query = sb.from('hoc_sinh').select('*, truong_hoc(ten_truong)').order('ma_hs', { ascending: true });
-    // Chỉ lọc theo trường nếu không phải Admin
-    if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
-    
-    let {data} = await query;
     if(data) {
         allStudents = data.map(d => ({ 
             MaHS: d.ma_hs, 
             HoTen: d.ho_ten, 
             Lop: d.lop, 
-            TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
-            TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
+            TenTruong: d.ten_truong || 'Hệ thống',
+            TrangThai: getAccountPasswordState(d),
             Quyen: d.quyen, 
             id: d.id 
         }));
-        sessionStorage.setItem('cache_students', JSON.stringify(allStudents));
         renderSubTabsHS(); renderStudentTable(); 
         if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); 
     }
@@ -2855,7 +3128,7 @@ function renderStudentTable() {
     if(filtered.length === 0) html = '<tr><td colspan="7">Không có dữ liệu.</td></tr>'; 
     else { 
         filtered.forEach(hs => { 
-            let statusHTML = hs.TrangThai === "DaDoi" 
+            let statusHTML = hs.TrangThai === "KhongXacDinh" ? '<span style="color:#7f8c8d;">—</span>' : hs.TrangThai === "DaDoi"
                 ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
                 : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
             
@@ -2878,12 +3151,13 @@ async function fetchTeachers(forceReload = false) {
         g_sysMonList = resArr[0].data || new Array();
         if (resArr.length > 1) g_sysTruongList = resArr[1].data || new Array();
 
-        let query = sb.from('giao_vien').select('*, truong_hoc(ten_truong)').order('ma_gv', {ascending: true});
-        if (gvData.quyen !== 'Admin') query = query.eq('truong_id', gvData.truong_id);
-        
-        let {data, error} = await query;
-        
-        if (error) throw error;
+        let data;
+        if (gvData.quyen === 'Admin') data = (await adminRpc('accounts_list', { kind: 'GV', truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId })).rows;
+        else {
+            const response = await sb.from('giao_vien').select('id, truong_id, ma_gv, ho_ten, quyen, mon_id').eq('truong_id', gvData.truong_id).order('ma_gv', {ascending: true});
+            if (response.error) throw response.error;
+            data = response.data;
+        }
 
         if(data) {
             allTeachers = data.map(d => {
@@ -2894,8 +3168,8 @@ async function fetchTeachers(forceReload = false) {
                     MonId: d.mon_id,
                     TruongId: d.truong_id,
                     TenMon: matchedMon ? matchedMon.ten_mon : 'Chưa phân công',
-                    TenTruong: d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống',
-                    TrangThai: d.mat_khau==='123456'||d.mat_khau===DEFAULT_PASS_HASH?'MacDinh':'DaDoi', 
+                    TenTruong: d.ten_truong || 'Hệ thống',
+                    TrangThai: getAccountPasswordState(d),
                     Quyen: d.quyen, 
                     id: d.id 
                 };
@@ -2921,7 +3195,7 @@ function renderTeacherTable() {
         let sortedTeachers = [...allTeachers].sort((a, b) => (a.MaGV || "").localeCompare((b.MaGV || ""), undefined, {numeric: true, sensitivity: 'base'}));
         
         sortedTeachers.forEach(gv => { 
-            let statusHTML = gv.TrangThai === "DaDoi" 
+            let statusHTML = gv.TrangThai === "KhongXacDinh" ? '<span style="color:#7f8c8d;">—</span>' : gv.TrangThai === "DaDoi"
                 ? `<span style="background: #e8f5e9; color: #27ae60; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #27ae60; font-size: 12px;">✅ Đã đổi</span>` 
                 : `<span style="background: #f1f3f4; color: #5f6368; padding: 4px 12px; border-radius: 20px; font-weight: bold; border: 1px solid #dadce0; font-size: 12px;">Mặc định</span>`; 
             
@@ -2963,21 +3237,21 @@ function renderTeacherTable() {
 
 async function capNhatTruongGiaoVien(gvId, truongId) {
     if(!confirm("Xác nhận chuyển giáo viên này sang trường mới?")) return fetchTeachers();
-    let {error} = await sb.from('giao_vien').update({truong_id: truongId}).eq('id', gvId);
-    if(error) {
-        alert("❌ Lỗi cập nhật trường học: " + error.message);
-        fetchTeachers(); 
-    } else {
+    try { await adminRpc('teacher_update_school', { id: gvId, truong_id: truongId });
+        if (String(gvId) === String(gvData.id)) { gvData.truong_id = truongId; gvData.truong_ten = (g_sysTruongList || []).find((t) => t.id === truongId)?.ten_truong || gvData.truong_ten; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); document.getElementById('truongNameDisplay').innerText = gvData.truong_ten || 'HỆ THỐNG V4'; }
         alert("✅ Đã chuyển trường thành công!");
+        fetchTeachers();
+    } catch(error) {
+        alert("❌ Lỗi cập nhật trường học: " + error.message);
         fetchTeachers();
     }
 }
 
 async function capNhatMonGiaoVien(gvId, monId) {
     let valToUpdate = monId ? monId : null;
-    let {error} = await sb.from('giao_vien').update({mon_id: valToUpdate}).eq('id', gvId);
-    
-    if(error) {
+    try { await adminRpc('teacher_update_subject', { id: gvId, mon_id: valToUpdate });
+        if (String(gvId) === String(gvData.id)) { gvData.mon_id = valToUpdate; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); }
+    } catch(error) {
         alert("❌ Lỗi cập nhật phân công bộ môn trên máy chủ: " + error.message);
         fetchTeachers(); 
     } 
@@ -2994,30 +3268,19 @@ async function resetSelectedPass(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`Khôi phục mật khẩu mặc định cho ${checkedBoxes.length} tài khoản đã chọn?`)) return;
 
-    let pass = prompt("Hành động nhạy cảm! Vui lòng nhập mật khẩu Admin của bạn để xác nhận:");
-    if(!pass) return;
-
-    let hashedPass = await hashPassword(pass);
     let idsToUpdate = Array.from(checkedBoxes).map(cb => cb.value);
     
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xử lý..."; btn.disabled = true;
 
-    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: idsToUpdate,
-        p_default_hash: DEFAULT_PASS_HASH
-    });
+    let data = await adminRpc('accounts_reset_password', { kind: loai, ids: idsToUpdate });
     
     btn.innerText = oldText; btn.disabled = false;
     
-    if(error) return alert("❌ Lỗi máy chủ: " + error.message);
     if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã khôi phục mật khẩu thành công!`);
+    if (loai === 'GV' && idsToUpdate.includes(gvData.id)) return clearGvSessionAndReturnToLogin('Tài khoản quản trị hiện tại đã được đưa về mật khẩu mặc định. Vui lòng đăng nhập lại.');
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
@@ -3027,29 +3290,19 @@ async function deleteSelectedAccounts(loai) {
     if(checkedBoxes.length === 0) return alert("Vui lòng tick chọn ít nhất 1 tài khoản!");
     if(!confirm(`XÓA VĨNH VIỄN ${checkedBoxes.length} tài khoản đã chọn khỏi hệ thống?`)) return;
 
-    let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
-    if(!pass) return;
-
-    let hashedPass = await hashPassword(pass);
     let idsToDelete = Array.from(checkedBoxes).map(cb => cb.value);
     
     let btn = event.target;
     let oldText = btn.innerText; btn.innerText = "⏳ Đang xóa..."; btn.disabled = true;
 
-    let {data, error} = await sb.rpc('rpc_admin_xoa_tk', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: idsToDelete
-    });
+    let data = await adminRpc('accounts_delete', { kind: loai, ids: idsToDelete });
     
     btn.innerText = oldText; btn.disabled = false;
     
-    if(error) return alert("❌ Lỗi máy chủ: " + error.message);
     if(data && data.status === 'error') return alert(data.message);
 
     alert(`✅ Đã xóa tài khoản thành công!`);
+    if (loai === 'GV' && idsToDelete.includes(gvData.id)) return clearGvSessionAndReturnToLogin('Tài khoản quản trị hiện tại đã bị xóa. Vui lòng đăng nhập lại.');
     if(document.getElementById('chkAll' + loai)) document.getElementById('chkAll' + loai).checked = false;
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
@@ -3063,59 +3316,71 @@ async function deleteSelectedBank(btnElement) {
     let oldText = btnElement.innerText;
     btnElement.innerText = "⏳ Đang xóa..."; btnElement.disabled = true;
 
-    let {error} = await sb.from('ngan_hang').delete().in('id', idsToDelete);
-    
-    btnElement.innerText = oldText; btnElement.disabled = false;
-    if(!error) { document.getElementById('chkAllBank').checked = false; fetchFullBank(true); }
-    else alert("❌ Lỗi kết nối khi xóa dữ liệu!");
+    try {
+        await bankWrite('delete_ids', { ids: idsToDelete });
+        document.getElementById('chkAllBank').checked = false;
+        fetchFullBank(true);
+    } catch (e) {
+        alert("❌ Lỗi khi xóa dữ liệu: " + e.message);
+    } finally {
+        btnElement.innerText = oldText;
+        btnElement.disabled = false;
+    }
 }
 
-async function deleteBankBatch(deleteAll, btnElement) { 
-    if(deleteAll) { 
-        if(!confirm("🚨 BẠN ĐANG CHỌN XÓA SẠCH TOÀN BỘ KHO ĐỀ CỦA TRƯỜNG?\nBạn chắc chắn chứ?")) return; 
-        
-        let pass = prompt("Hành động cực kỳ nhạy cảm! Vui lòng nhập mật khẩu Admin để xác nhận:");
-        if(!pass) return;
+async function deleteBankBatch(deleteAll, btnElement) {
+    if(deleteAll) {
+        if (gvData.quyen !== 'Admin') return alert("Chỉ Admin mới có quyền xóa toàn bộ ngân hàng câu hỏi.");
+        if (!activeWorkspaceTruongId || activeWorkspaceTruongId === 'ALL') {
+            return alert("Vui lòng chọn TRƯỜNG ĐÍCH cụ thể để quản lý ngân hàng câu hỏi.");
+        }
+        let tenTruong = "trường đang chọn";
+        let tr = (g_sysTruongList || []).find(t => String(t.id) === String(activeWorkspaceTruongId));
+        if (tr) tenTruong = tr.ten_truong;
 
-        let hashedPass = await hashPassword(pass);
-        let oldText = btnElement.innerText; 
+        if(!confirm(`🚨 BẠN ĐANG CHỌN XÓA SẠCH TOÀN BỘ KHO ĐỀ CỦA [${tenTruong}] TRÊN TẤT CẢ BỘ MÔN?\nBạn chắc chắn chứ?`)) return;
+
+        let oldText = btnElement.innerText;
         btnElement.innerText = "⏳ Đang càn quét..."; btnElement.disabled = true; btnElement.style.background = "#7f8c8d";
-        
-        let {data, error} = await sb.rpc('rpc_admin_xoa_kho', {
-            p_ma_gv: gvData.ma_gv,
-            p_mat_khau: hashedPass,
-            p_truong_id: gvData.truong_id
-        });
 
-        btnElement.innerText = oldText; btnElement.disabled = false; btnElement.style.background = "#c0392b";
-        
-        if(error) return alert("❌ Lỗi máy chủ: " + error.message);
-        if(data && data.status === 'error') return alert(data.message);
-        
-        alert("✅ " + data.message);
-        fetchFullBank(true); loadBankMeta(true);
+        try {
+            await bankWrite('delete_all', {});
+            alert("✅ Đã xóa sạch toàn bộ kho đề của trường thành công!");
+            fetchFullBank(true);
+            loadBankMeta(true);
+        } catch (error) {
+            alert("❌ Lỗi máy chủ: " + error.message);
+        } finally {
+            btnElement.innerText = oldText;
+            btnElement.disabled = false;
+            btnElement.style.background = "#c0392b";
+        }
         return;
-    } 
-    else { 
-        let bH = document.getElementById("filterBaiHoc").value; let p = document.getElementById("filterPhan").value; let m = document.getElementById("filterMucDo").value; 
-        if(!bH && !p && !m) return alert("⚠️ Vui lòng chọn ít nhất 1 bộ lọc (Bài Học / Phần / Mức Độ) để xác định mảng câu hỏi cần xóa!"); 
-        if(!confirm("Xóa toàn bộ các câu hỏi đang được lọc hiển thị trên màn hình?")) return; 
-        
+    }
+    else {
+        let bH = document.getElementById("filterBaiHoc").value; let p = document.getElementById("filterPhan").value; let m = document.getElementById("filterMucDo").value;
+        if(!bH && !p && !m) return alert("⚠️ Vui lòng chọn ít nhất 1 bộ lọc (Bài Học / Phần / Mức Độ) để xác định mảng câu hỏi cần xóa!");
+        if(!confirm("Xóa toàn bộ các câu hỏi đang được lọc hiển thị trên màn hình?")) return;
+
         let oldText = btnElement.innerText; btnElement.innerText = "⏳ Đang càn quét..."; btnElement.disabled = true; btnElement.style.background = "#7f8c8d";
-        
-        let query = sb.from('ngan_hang').delete().eq('truong_id', gvData.truong_id);
-        if(activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") query = query.eq('mon_id', activeWorkspaceMonId);
-        
-        let filter_bH = document.getElementById("filterBaiHoc").value; let filter_p = document.getElementById("filterPhan").value; let filter_m = document.getElementById("filterMucDo").value;
-        if(filter_bH) query = query.eq('bai_hoc', filter_bH);
-        if(filter_p) query = query.eq('phan', filter_p);
-        if(filter_m) query = query.eq('muc_do', filter_m);
-        
-        let {error} = await query;
-        btnElement.innerText = oldText; btnElement.disabled = false;
-        btnElement.style.background = "#e67e22";
-        if(!error) { fetchFullBank(true); loadBankMeta(true); } else alert("Lỗi kết nối");
-    } 
+
+        let filterPayload = {};
+        if(bH) filterPayload.bai_hoc = bH;
+        if(p) filterPayload.phan = p;
+        if(m) filterPayload.muc_do = m;
+
+        try {
+            await bankWrite('delete_filter', filterPayload);
+            fetchFullBank(true);
+            loadBankMeta(true);
+        } catch (error) {
+            alert("❌ Lỗi kết nối khi xóa: " + error.message);
+        } finally {
+            btnElement.innerText = oldText;
+            btnElement.disabled = false;
+            btnElement.style.background = "#e67e22";
+        }
+    }
 }
 
 /* =======================================================
@@ -3164,16 +3429,33 @@ async function themTruongMoi() {
     if(!ma || !ten) return alert("Vui lòng nhập đủ Mã và Tên trường!");
     let btn = document.getElementById('btnThemTruong');
     btn.innerText = "..."; btn.disabled = true;
-    let { error } = await sb.from('truong_hoc').insert([{ ma_truong: ma, ten_truong: ten }]);
+    let error = null; try { await adminRpc('school_create', { ma_truong: ma, ten_truong: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
-    else { document.getElementById('newMaTruong').value = ''; document.getElementById('newTenTruong').value = ''; loadSysData(); }
+    else {
+        document.getElementById('newMaTruong').value = '';
+        document.getElementById('newTenTruong').value = '';
+        await loadSysData();
+        await refreshWorkspaceSelectors();
+        if (isAccountManagementActive()) {
+            clearAccountRuntimeState();
+            await fetchStudents(true);
+            await fetchTeachers(true);
+        }
+    }
 }
 
 async function xoaTruong(id) {
     if(!confirm("Xóa trường này?")) return;
-    let { error } = await sb.from('truong_hoc').delete().eq('id', id);
-    if(error) alert("Lỗi: " + error.message); else loadSysData();
+    let error = null; try { await adminRpc('school_delete', { id }); } catch (e) { error = e; }
+    if(error) return alert("Lỗi: " + error.message);
+    if (String(id) === String(gvData.truong_id)) return clearGvSessionAndReturnToLogin('Trường chứa tài khoản quản trị hiện tại đã bị xóa. Phiên đăng nhập đã kết thúc.');
+    if (String(id) === String(activeWorkspaceTruongId)) { activeWorkspaceTruongId = 'ALL'; localStorage.setItem('damSan_WorkspaceSchool', 'ALL'); }
+    clearAccountRuntimeState(); await loadSysData(); await refreshWorkspaceSelectors(); loadMetaData(); taiDanhSachPhong(); fetchRadar();
+    if (isAccountManagementActive()) {
+        await fetchStudents(true);
+        await fetchTeachers(true);
+    }
 }
 
 async function themMonMoi() {
@@ -3181,70 +3463,49 @@ async function themMonMoi() {
     if(!ten) return alert("Vui lòng nhập tên môn!");
     let btn = document.getElementById('btnThemMon');
     btn.innerText = "..."; btn.disabled = true;
-    let { error } = await sb.from('mon_hoc').insert([{ ten_mon: ten }]);
+    let error = null; try { await adminRpc('subject_create', { ten_mon: ten }); } catch (e) { error = e; }
     btn.innerText = "Thêm"; btn.disabled = false;
     if(error) alert("Lỗi: " + error.message);
-    else { document.getElementById('newTenMon').value = ''; loadSysData(); }
+    else {
+        document.getElementById('newTenMon').value = '';
+        await loadSysData();
+        await refreshWorkspaceSelectors();
+        loadBankMeta(true);
+        if (isAccountManagementActive()) {
+            await fetchTeachers(true);
+        }
+    }
 }
 
 async function xoaMon(id) {
     if(!confirm("Xóa môn này?")) return;
-    let { error } = await sb.from('mon_hoc').delete().eq('id', id);
-    if(error) alert("Lỗi: " + error.message); else loadSysData();
+    let error = null; try { await adminRpc('subject_delete', { id }); } catch (e) { error = e; }
+    if(error) return alert("Lỗi: " + error.message);
+    if (String(id) === String(activeWorkspaceMonId)) { activeWorkspaceMonId = 'ALL'; localStorage.setItem('damSan_Workspace', 'ALL'); }
+    if (String(id) === String(gvData.mon_id)) { gvData.mon_id = null; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); }
+    await loadSysData(); await refreshWorkspaceSelectors(); loadBankMeta(true); fetchFullBank(true); taiDanhSachPhong(); fetchRadar();
+    if (isAccountManagementActive()) {
+        await fetchTeachers(true);
+    }
 }
 
-async function resetPass(ma, uid, loai) { 
-    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return; 
-    let pass = prompt("Hanh dong nhay cam! Vui long nhap mat khau Admin cua ban de xac nhan:");
-    if(!pass) return;
-    let hashedPass = await hashPassword(pass);
-    let {data, error} = await sb.rpc('rpc_admin_reset_pass', {
-        p_ma_gv: gvData.ma_gv,
-        p_mat_khau: hashedPass,
-        p_truong_id: gvData.truong_id,
-        p_loai: loai,
-        p_ids: [uid],
-        p_default_hash: DEFAULT_PASS_HASH
-    });
-    if(error) return alert("Loi may chu: " + error.message);
+async function resetPass(ma, uid, loai) {
+    if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return;
+    let data = await adminRpc('accounts_reset_password', { kind: loai, ids: [uid] });
     if(data && data.status === 'error') return alert(data.message);
+    if (loai === 'GV' && String(uid) === String(gvData.id)) return clearGvSessionAndReturnToLogin('Tài khoản quản trị hiện tại đã được đưa về mật khẩu mặc định. Vui lòng đăng nhập lại.');
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
 
 async function migrateLegacyPasswords(loai, btnElement) {
     if (gvData.quyen !== 'Admin') return alert("Chỉ Admin mới có quyền thực hiện chuẩn hóa hàng loạt.");
-    if (!confirm(`Chuẩn hóa mật khẩu legacy cho toàn bộ tài khoản ${loai} trong trường hiện tại?\n\nHệ thống sẽ băm SHA-256 các mật khẩu còn dạng plain text.`)) return;
-
-    const table = loai === 'HS' ? 'hoc_sinh' : 'giao_vien';
-    const codeField = loai === 'HS' ? 'ma_hs' : 'ma_gv';
+    if (!confirm(`Chuẩn hóa mật khẩu legacy cho tài khoản ${loai} trong phạm vi trường đang chọn?`)) return;
     const oldText = btnElement ? btnElement.innerText : "";
     if (btnElement) { btnElement.innerText = "⏳ Đang chuẩn hóa..."; btnElement.disabled = true; }
 
     try {
-        const { data, error } = await sb.from(table).select(`id, ${codeField}, mat_khau`).eq('truong_id', gvData.truong_id);
-        if (error) throw error;
-
-        const all = data || new Array();
-        const legacy = all.filter((x) => isLegacyPlainPassword(x.mat_khau));
-        if (legacy.length === 0) {
-            alert(`✅ Không phát hiện tài khoản ${loai} nào còn mật khẩu plain text.`);
-            return;
-        }
-
-        let success = 0;
-        let failed = new Array();
-        for (const acc of legacy) {
-            const hashed = await hashPassword(acc.mat_khau);
-            const { error: upErr } = await sb.from(table).update({ mat_khau: hashed }).eq('id', acc.id);
-            if (upErr) failed.push(acc[codeField] || acc.id);
-            else success++;
-        }
-
-        let msg = `✅ Đã chuẩn hóa ${success}/${legacy.length} tài khoản ${loai}.`;
-        if (failed.length > 0) {
-            msg += `\n⚠️ Thất bại: ${failed.length} tài khoản (${failed.slice(0, 10).join(", ")}${failed.length > 10 ? ", ..." : ""}).`;
-        }
-        alert(msg);
+        const data = await adminRpc('normalize_legacy_passwords', { kind: loai, truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId });
+        alert(`✅ Đã chuẩn hóa ${data.count || 0} tài khoản ${loai}.`);
         if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
     } catch (e) {
         alert("❌ Lỗi khi chuẩn hóa mật khẩu legacy: " + e.message);
@@ -3335,9 +3596,11 @@ function xuLyLiveSearch() {
 }
 
 async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot = null, thoiGian = null, setOpenTime = false) {
-    const { data, error } = await sb.rpc('rpc_dieu_khien_phong_thi', {
+    const room = (allRoomsData || []).find((item) => String(item.id) === String(roomId));
+    if (!room) throw new Error('Không xác định được trường đích của phòng thi.');
+    const data = await staffRpc('rpc_dieu_khien_phong_thi', {
         p_ma_gv: gvData.ma_gv,
-        p_truong_id: gvData.truong_id,
+        p_truong_id: getRoomTargetSchoolId(room),
         p_room_id: roomId,
         p_trang_thai: trangThai,
         p_doi_tuong: doiTuong,
@@ -3345,7 +3608,6 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
         p_thoi_gian: thoiGian,
         p_set_open_time: setOpenTime
     });
-    if (error) throw error;
     if (!data || data.status !== 'success') {
         throw new Error(data?.message || "Khong the dieu khien phong thi");
     }
@@ -3354,13 +3616,13 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
 
 async function rpcLayDanhSachPhongThi() {
     const monId = (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") ? activeWorkspaceMonId : null;
-    const { data, error } = await sb.rpc('rpc_lay_danh_sach_phong_thi_gv', {
+    const targetTruongId = gvData.quyen === 'Admin' && activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId;
+    const data = await staffRpc('rpc_lay_danh_sach_phong_thi_gv', {
         p_ma_gv: gvData.ma_gv,
-        p_truong_id: gvData.truong_id,
+        p_truong_id: targetTruongId,
         p_mon_id: monId,
-        p_xem_toan_bo: gvData.quyen === 'Admin'
+        p_xem_toan_bo: gvData.quyen === 'Admin' && activeWorkspaceTruongId === 'ALL'
     });
-    if (error) throw error;
     if (!data || data.status !== 'success') {
         throw new Error(data?.message || "Khong tai duoc danh sach phong thi");
     }
