@@ -159,7 +159,7 @@ begin
         else
           insert into public.giao_vien(truong_id, ma_gv, ho_ten, mat_khau, quyen, mon_id)
           values ((v_row->>'truong_id')::uuid, trim(v_row->>'ma_gv'), v_row->>'ho_ten', v_row->>'mat_khau', coalesce(v_row->>'quyen', 'GiaoVien'), nullif(v_row->>'mon_id', '')::uuid)
-          on conflict (truong_id, ma_gv) do update set ho_ten=excluded.ho_ten, mat_khau=excluded.mat_khau, quyen=excluded.quyen, mon_id=excluded.mon_id
+          on conflict (truong_id, ma_gv) do update set ho_ten=excluded.ho_ten, mat_khau=excluded.mat_khau, quyen=excluded.quyen, mon_id=case when v_row ? 'mon_id' then excluded.mon_id else public.giao_vien.mon_id end
           returning id into v_target_gv_id;
           update public.staff_sessions set revoked_at=coalesce(revoked_at, now()) where gv_id=v_target_gv_id;
           update public.admin_sessions set revoked_at=coalesce(revoked_at, now()) where admin_id=v_target_gv_id;
@@ -190,9 +190,13 @@ begin
       else raise exception 'Invalid account kind'; end if;
       get diagnostics v_count = row_count;
     when 'teacher_update_school' then
+      select quyen into v_kind from public.giao_vien where id=(p_payload->>'id')::uuid;
       update public.giao_vien set truong_id=(p_payload->>'truong_id')::uuid where id=(p_payload->>'id')::uuid; get diagnostics v_count = row_count;
+      if v_count=1 and v_kind <> 'Admin' then update public.staff_sessions set revoked_at=coalesce(revoked_at,now()) where gv_id=(p_payload->>'id')::uuid; update public.admin_sessions set revoked_at=coalesce(revoked_at,now()) where admin_id=(p_payload->>'id')::uuid; end if;
     when 'teacher_update_subject' then
+      select quyen into v_kind from public.giao_vien where id=(p_payload->>'id')::uuid;
       update public.giao_vien set mon_id=nullif(p_payload->>'mon_id', '')::uuid where id=(p_payload->>'id')::uuid; get diagnostics v_count = row_count;
+      if v_count=1 and v_kind <> 'Admin' then update public.staff_sessions set revoked_at=coalesce(revoked_at,now()) where gv_id=(p_payload->>'id')::uuid; update public.admin_sessions set revoked_at=coalesce(revoked_at,now()) where admin_id=(p_payload->>'id')::uuid; end if;
     when 'normalize_legacy_passwords' then
       v_kind := p_payload->>'kind';
       if v_kind = 'HS' then update public.hoc_sinh set mat_khau=encode(extensions.digest(mat_khau, 'sha256'), 'hex') where mat_khau !~ '^[0-9a-fA-F]{64}$' and ((p_payload->>'truong_id') is null or truong_id=(p_payload->>'truong_id')::uuid);

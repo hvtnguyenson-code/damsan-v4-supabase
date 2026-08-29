@@ -183,5 +183,14 @@ mustMatch(/update public\.staff_sessions[\s\S]*v_changed_gv_ids/i, 'S93 normaliz
 mustMatch(/update public\.admin_sessions[\s\S]*v_changed_gv_ids/i, 'S94 normalize revokes admin sessions');
 mustMatch(/get diagnostics v_count=row_count;[\s\S]*return jsonb_build_object\('status','success','action',p_action,'count',v_count\)/i, 'S95 normalize returns account count');
 assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S96 P0 paths untouched');
+assert(/mon_id=case when v_row \? 'mon_id' then excluded\.mon_id else public\.giao_vien\.mon_id end/i.test(adminBody), 'S97 import GV preserves subject when omitted');
+assert(/v_row \? 'mon_id' then excluded\.mon_id/i.test(adminBody), 'S98 import GV accepts explicit subject');
+for (const action of ['teacher_update_school','teacher_update_subject']) {
+  const branch = adminBody.match(new RegExp(`when '${action}' then[\\s\\S]*?when '`, 'i'))[0];
+  assert(/v_kind <> 'Admin'[\s\S]*?update public\.staff_sessions/i.test(branch), `S99-S100 ${action} revokes non-Admin staff session`);
+  assert(/get diagnostics v_count = row_count;[\s\S]*?update public\.staff_sessions/i.test(branch), `S101 ${action} preserves account count`);
+}
+assert(/v_kind <> 'Admin'/i.test(adminBody), 'S102 Admin assignment avoids needless session revoke');
+assert(!/create or replace function public\.(rpc_receive_submission|rpc_submission_receipt_status|rpc_grade_submission|rpc_submission_room_counts)/i.test(migration), 'S103 P0 paths untouched');
 
-console.log('admin_control_plane_server_simulation: S1-S96 passed');
+console.log('admin_control_plane_server_simulation: S1-S103 passed');

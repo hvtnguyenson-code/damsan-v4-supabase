@@ -98,5 +98,12 @@ for (const [name, action] of [['resetSelectedPass','accounts_reset_password'],['
 assert(!/rpc_admin_reset_pass|rpc_admin_xoa_tk/.test(source), 'F55-F67 obsolete account RPCs removed');
 assert(!/from\('(hoc_sinh|giao_vien|truong_hoc|mon_hoc)'\)\.(insert|update|delete|upsert)/.test(source), 'F68 protected direct writes removed');
 assert.strictEqual(changed, '', 'F70 P0 files untouched');
+assert(!/cache_students/.test(body('fetchStudents')), 'F71 fetchStudents không dùng cache');
+for (const name of ['clearGvSessionAndReturnToLogin','dangXuatGV','hoanTatDangNhap']) assert(body(name).includes('clearAccountRuntimeState'), `F72-F74 ${name} dọn runtime account`);
+must(/if \(gvData\.quyen === 'Admin'\) \{ fetchStudents\(true\); fetchTeachers\(true\); \}/, 'F75 chỉ Admin prefetch accounts');
+must(/changeWorkspaceSchool[\s\S]*clearAccountRuntimeState\(\)/, 'F76 school switch invalidates account state');
+must(/Mã trường \[\$\{ma_truong\}\] không tồn tại/, 'F79 mã trường Excel sai bị chặn');
+must(/resetPass[\s\S]*clearGvSessionAndReturnToLogin/, 'F83 reset self Admin đăng xuất');
+assert.strictEqual(changed, '', 'F91 P0 files untouched');
 
-console.log('admin_frontend_session_simulation: F1-F70 passed');
+console.log('admin_frontend_session_simulation: F1-F91 passed');

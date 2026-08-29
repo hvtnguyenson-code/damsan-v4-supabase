@@ -46,7 +46,15 @@ function clearControlSessions() {
     clearStaffSession();
 }
 
+function clearAccountRuntimeState() {
+    sessionStorage.removeItem('cache_students');
+    allStudents = [];
+    allTeachers = [];
+    currentStudentFilter = 'TatCa';
+}
+
 function clearGvSessionAndReturnToLogin(message) {
+    clearAccountRuntimeState();
     clearControlSessions();
     sessionStorage.removeItem('damSan_GVSession');
     window.tempGvData = null;
@@ -238,6 +246,7 @@ function hoanTatDangNhap(loginData) {
         throw new Error('Phiên quản trị không hợp lệ. Vui lòng đăng nhập lại.');
     }
     gvData = safeGvProfile(user);
+    clearAccountRuntimeState();
     sessionStorage.setItem('damSan_StaffToken', loginData.staff_token);
     sessionStorage.setItem('damSan_StaffExpiresAt', loginData.staff_expires_at);
     if (user.quyen === 'Admin') {
@@ -355,6 +364,7 @@ async function dangXuatGV() {
         if (adminToken) requests.push(sb.rpc('rpc_admin_logout', { p_admin_token: adminToken }));
         await Promise.allSettled(requests);
         clearControlSessions();
+        clearAccountRuntimeState();
         sessionStorage.removeItem('damSan_GVSession');
         localStorage.removeItem('damSan_Workspace');
         localStorage.removeItem('damSan_WorkspaceSchool');
@@ -666,8 +676,7 @@ async function khoiTaoDuLieu() {
         loadBankMeta(); 
         loadMetaData(); 
         fetchRadar(); 
-        fetchStudents(); 
-        fetchTeachers(); 
+        if (gvData.quyen === 'Admin') { fetchStudents(true); fetchTeachers(true); }
         taiDanhSachPhong(); 
         
         // Kích hoạt ngay chức năng Auto-Refresh 5s từ giao diện HTML
@@ -1705,10 +1714,12 @@ function changeWorkspaceSchool(truongId) {
     activeWorkspaceTruongId = truongId;
     localStorage.setItem('damSan_WorkspaceSchool', truongId);
     danhSachDeThi = new Array(); danhSachThuCong = new Array();
+    clearAccountRuntimeState();
     if(document.getElementById('dashBody')) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">Chưa có dữ liệu...</td></tr>';
     loadMetaData();
     taiDanhSachPhong();
     fetchRadar();
+    if (document.getElementById('quanLyTK')?.classList.contains('active')) { fetchStudents(true); fetchTeachers(true); }
 }
 
 function getExamTargetSchoolId(maPhong) {
@@ -2881,7 +2892,8 @@ async function docFileExcelVaNap(loai) {
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
                     // Ưu tiên dùng truong_id từ file Excel, nếu không có thì dùng của người nạp
-                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
+                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
                     if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
 
                     if (ma_hs && ho_ten) {
@@ -2893,7 +2905,8 @@ async function docFileExcelVaNap(loai) {
                     let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
                     
-                    let t_id = (ma_truong && mapTruong[ma_truong]) ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
+                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
                     if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
                     
                     if (ma_gv && ho_ten) {
@@ -2926,11 +2939,6 @@ async function docFileExcelVaNap(loai) {
 
 async function fetchStudents(forceReload = false) { 
     document.getElementById('hsBody').innerHTML = '<tr><td colspan="7">⏳ Đang tải...</td></tr>'; 
-    let cached = sessionStorage.getItem('cache_students');
-    if (!forceReload && cached) {
-        allStudents = JSON.parse(cached); renderSubTabsHS(); renderStudentTable(); 
-        if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); return;
-    }
     
     let data;
     if (gvData.quyen === 'Admin') data = (await adminRpc('accounts_list', { kind: 'HS', truong_id: activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId })).rows;
@@ -2948,7 +2956,6 @@ async function fetchStudents(forceReload = false) {
             Quyen: d.quyen, 
             id: d.id 
         }));
-        sessionStorage.setItem('cache_students', JSON.stringify(allStudents));
         renderSubTabsHS(); renderStudentTable(); 
         if(document.getElementById('tab3') && document.getElementById('tab3').classList.contains('active')) fetchDashboard(); 
     }
@@ -3085,6 +3092,7 @@ function renderTeacherTable() {
 async function capNhatTruongGiaoVien(gvId, truongId) {
     if(!confirm("Xác nhận chuyển giáo viên này sang trường mới?")) return fetchTeachers();
     try { await adminRpc('teacher_update_school', { id: gvId, truong_id: truongId });
+        if (String(gvId) === String(gvData.id)) { gvData.truong_id = truongId; gvData.truong_ten = (g_sysTruongList || []).find((t) => t.id === truongId)?.ten_truong || gvData.truong_ten; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); document.getElementById('truongNameDisplay').innerText = gvData.truong_ten || 'HỆ THỐNG V4'; }
         alert("✅ Đã chuyển trường thành công!");
         fetchTeachers();
     } catch(error) {
@@ -3096,6 +3104,7 @@ async function capNhatTruongGiaoVien(gvId, truongId) {
 async function capNhatMonGiaoVien(gvId, monId) {
     let valToUpdate = monId ? monId : null;
     try { await adminRpc('teacher_update_subject', { id: gvId, mon_id: valToUpdate });
+        if (String(gvId) === String(gvData.id)) { gvData.mon_id = valToUpdate; sessionStorage.setItem('damSan_GVSession', JSON.stringify(safeGvProfile(gvData))); }
     } catch(error) {
         alert("❌ Lỗi cập nhật phân công bộ môn trên máy chủ: " + error.message);
         fetchTeachers(); 
@@ -3295,6 +3304,7 @@ async function resetPass(ma, uid, loai) {
     if(!confirm(`Khôi phục mật khẩu mặc định (123456) cho tài khoản ${ma}?`)) return;
     let data = await adminRpc('accounts_reset_password', { kind: loai, ids: [uid] });
     if(data && data.status === 'error') return alert(data.message);
+    if (loai === 'GV' && String(uid) === String(gvData.id)) return clearGvSessionAndReturnToLogin('Tài khoản quản trị hiện tại đã được đưa về mật khẩu mặc định. Vui lòng đăng nhập lại.');
     if(loai === 'HS') fetchStudents(true); else fetchTeachers(true);
 }
 
