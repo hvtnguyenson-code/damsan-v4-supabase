@@ -81,7 +81,7 @@ must(/function getSelectedRoom[\s\S]*room\.id/, 'F36 resolve action theo UUID');
 must(/candidates\.length > 1/, 'F37 room code trùng không tự chọn record đầu tiên');
 const preview = body('xemTruocDeThi');
 assert(!/from\('phong_thi'\)/.test(preview), 'F38 preview không direct SELECT phong_thi');
-must(/from\('de_thi'\)\.select\('\*'\)\.eq\('phong_id', room\.id\)/, 'F39 preview dùng phong_id UUID');
+must(/staffRpc\('rpc_staff_exam_preview', \{ p_phong_id: room\.id \}\)/, 'F39 preview dùng phong_id UUID');
 must(/selectedRoom\.truong_id|scopedRoom\.truong_id/, 'F40 room khác trường dùng truong_id room');
 must(/data\?\.code === 'staff_session_invalid'[\s\S]*clearGvSessionAndReturnToLogin/, 'F41 staff_session_invalid xóa local session');
 assert(!/from\('(phong_thi|de_thi)'\)\.(insert|update|delete|upsert)\(/.test(source), 'F42 không có direct room write');

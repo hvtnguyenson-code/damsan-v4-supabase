@@ -1811,33 +1811,34 @@ async function xemTruocDeThi() {
     if(!room) return alert("⚠️ Vui lòng chọn phòng thi cụ thể trước khi xem trước đề!");
 
     let btn = document.querySelector('button[onclick="xemTruocDeThi()"]');
-    let oldText = btn.innerText; btn.innerText = "⏳..."; btn.disabled = true;
+    let oldText = btn ? btn.innerText : "";
+    if (btn) { btn.innerText = "⏳..."; btn.disabled = true; }
 
     try {
-        let {data: exams, error} = await sb.from('de_thi').select('*').eq('phong_id', room.id);
-        btn.innerText = oldText; btn.disabled = false;
-
-        if (error) {
-            console.error("❌ Lỗi Supabase khi tải đề:", error);
-            return alert("Lỗi phân quyền hoặc hệ thống: " + (error.message || "Không xác định"));
+        let data = await staffRpc('rpc_staff_exam_preview', { p_phong_id: room.id });
+        if (!data || data.status !== 'success') {
+            throw new Error(data?.message || "Không thể tải đề thi xem trước.");
         }
+        let exams = data.exams || [];
 
-        if(!exams || exams.length === 0) { 
+        if(exams.length === 0) {
             console.warn("⚠️ Phòng này tồn tại nhưng bảng de_thi không có dữ liệu cho phong_id:", room.id);
-            return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên."); 
+            return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên.");
         }
 
         previewExamData = exams;
         let uniqueMaDe = Array.from(new Set(exams.map(e => e.ma_de))).sort();
         let selectHtml = '';
         uniqueMaDe.forEach(md => { selectHtml += '<option value="' + md + '">MÃ ĐỀ: ' + md + '</option>'; });
-        
+
         document.getElementById('previewMaDeSelect').innerHTML = selectHtml;
         document.getElementById('previewModal').style.display = 'flex';
-        renderPreviewContent(); 
-        
+        renderPreviewContent();
+
     } catch(e) {
-        btn.innerText = oldText; btn.disabled = false; alert("Lỗi khi tải đề thi: " + e.message);
+        alert("Lỗi khi tải đề thi: " + e.message);
+    } finally {
+        if (btn) { btn.innerText = oldText; btn.disabled = false; }
     }
 }
 
@@ -2724,8 +2725,7 @@ async function fetchDashboard(isAuto = false) {
         
         let pArr = new Array();
         
-        let dummyCacheBuster = new Date().getTime().toString();
-        pArr.push(sb.from('ket_qua').select('*, hoc_sinh(ma_hs, ho_ten, lop)').eq('phong_id', currentRoom.id).neq('chi_tiet', dummyCacheBuster));
+        pArr.push(staffRpc('rpc_lay_ket_qua_phong_gv', { p_phong_id: currentRoom.id }));
         
         if(allStudents.length === 0 || !isAuto) {
              let qHS = sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', currentRoom.truong_id);
@@ -2737,15 +2737,18 @@ async function fetchDashboard(isAuto = false) {
         if (myFetchId !== globalFetchDashId) return; 
 
         let resKQ = results[0];
-        if (resKQ.error) throw resKQ.error;
-        
+        if (!resKQ || resKQ.status !== 'success') {
+            throw new Error(resKQ?.message || "Không tải được dữ liệu kết quả phòng thi.");
+        }
+        let kqList = resKQ.results || [];
+
         if (results.length > 1) {
             let resHS = results[1];
             if (resHS.error) throw resHS.error;
             allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, Quyen: d.quyen, id: d.id }));
         }
 
-        duLieuBangDiem = (resKQ.data || new Array()).map(r => ({ 
+        duLieuBangDiem = kqList.map(r => ({ 
             MaHS: r.hoc_sinh ? r.hoc_sinh.ma_hs : 'Lỗi/Xóa', 
             HoTen: r.hoc_sinh ? r.hoc_sinh.ho_ten : 'Không rõ', 
             Lop: r.hoc_sinh ? r.hoc_sinh.lop : '', 

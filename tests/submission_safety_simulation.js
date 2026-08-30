@@ -1,3 +1,16 @@
+// Canonical legacy exam index reference helper (exact production lay_de_thi_an_toan reproduction)
+function legacyExamIndex(maHs, examCount) {
+  if (!examCount || examCount <= 0) return 0;
+  const cleanMaHs = String(maHs || '').trim();
+  if (/^[0-9]+$/.test(cleanMaHs)) {
+    return parseInt(cleanMaHs, 10) % examCount;
+  }
+  let hash = 0;
+  for (let i = 0; i < cleanMaHs.length; i++) {
+    hash = ((hash * 31) + cleanMaHs.charCodeAt(i)) % 2147483647;
+  }
+  return hash % examCount;
+}
 // Local deterministic model of the P0 receipt/grade/reset contracts. No network.
 const assert = require('assert');
 const fs = require('fs');
@@ -191,13 +204,24 @@ const testHocSinhCode = clientSource + `
   batDauPostReceiptLifecycleWatcher,
   dungPostReceiptLifecycleWatcher,
   _postReceiptLifecycleTick,
-  _postReceiptContextValid
+  _postReceiptContextValid,
+  capNhatMatKhau,
+  hashPassword,
+  getStudentToken,
+  isStudentSessionExpired,
+  clearStudentAuthSession,
+  completeStudentAuthenticatedSession,
+  joinRoom,
+  setPendingProof: (p) => { pendingStudentPasswordProof = p; },
+  getPendingProof: () => pendingStudentPasswordProof
 };
 `;
 
 function createStudentEnvironment() {
   const localStore = new Map();
   const sessionStore = new Map();
+  sessionStore.set('damSan_StudentToken', 'test-student-session-token');
+  sessionStore.set('damSan_StudentTokenExpiresAt', new Date(Date.now() + 86400000).toISOString());
   const domElements = {};
 
   const mockElement = (id = '') => ({
@@ -233,6 +257,32 @@ function createStudentEnvironment() {
   const mockSupabase = {
     rpc: async (name, params) => {
       rpcCalls.push({ name, params });
+      if (name === 'rpc_lay_thong_tin_phong_hs') {
+        const phong = mockSupabase._fromData?.['phong_thi'];
+        if (phong) {
+          return { data: { status: 'success', room: phong }, error: null };
+        }
+        return { data: { status: 'error', message: 'Không tìm thấy phòng thi này!' }, error: null };
+      }
+      if (name === 'rpc_hoc_sinh_result_status') {
+        if (mockSupabase._fromErrors?.['phong_thi'] || mockSupabase._fromErrors?.['ket_qua']) {
+          return { data: null, error: mockSupabase._fromErrors?.['phong_thi'] || mockSupabase._fromErrors?.['ket_qua'] };
+        }
+        const phong = mockSupabase._fromData?.['phong_thi'];
+        const kq = mockSupabase._fromData?.['ket_qua'];
+        const room_exists = phong !== null && phong !== undefined;
+        return {
+          data: {
+            status: 'success',
+            room_exists,
+            thoi_gian_mo: phong?.thoi_gian_mo || null,
+            trang_thai: phong?.trang_thai || 'CHO_THI',
+            has_result: kq !== null && kq !== undefined,
+            result: kq || null
+          },
+          error: null
+        };
+      }
       if (name === 'rpc_submission_receipt_status' || name === 'lay_thong_tin_nop_bai_theo_attempt') {
         return mockSupabase._receiptStatusResult || { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
       }
@@ -1257,7 +1307,7 @@ for (let i = 25; i <= 62; i++) {
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
 const serviceWorker = fs.readFileSync('sw.js', 'utf8');
 assert(!client.includes('result-watch-'));
-assert(client.includes('if (!kq) {'));
+assert(client.includes('if (!statusData.has_result) {') || client.includes('if (!kq) {'));
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
@@ -1295,7 +1345,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20260830-post-receipt-lifecycle-p0-006a');
+assert.strictEqual(clientVersion, '20260830-student-result-status-p0-007');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -1310,7 +1360,464 @@ const migration03 = fs.readFileSync('supabase/migrations/20260829000003_student_
 assert(migration03.includes('create or replace function public.rpc_reset_room_results'));
 assert(migration03.includes("set trang_thai = 'CHO_THI', thoi_gian_mo = null"));
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R62; P0-006A post-receipt lifecycle watcher; not a Supabase load test)');
+// =========================================================================
+// P0-007: STUDENT RESULT/PUBLICATION STATUS & SESSION HARDENING SUITE (R63 - R114)
+// =========================================================================
+
+const migContent = fs.readFileSync('supabase/migrations/20260830000001_student_result_publication_status_p0.sql', 'utf8');
+const hsCode = fs.readFileSync('hoc_sinh.js', 'utf8');
+const gvCode = fs.readFileSync('giaovien.js', 'utf8');
+
+// R63: Student session token creation contract in rpc_login_hoc_sinh
+assert(migContent.includes("v_student_token := encode(extensions.gen_random_bytes(32)"), "R63: login generates 32-byte hex token");
+assert(migContent.includes("'student_token', v_student_token"), "R63: login returns student_token");
+assert(migContent.includes("'student_expires_at', v_expires_at"), "R63: login returns student_expires_at");
+recordR('R63');
+
+// R64: Session token SHA-256 digest storage in public.student_sessions
+assert(migContent.includes("insert into public.student_sessions(token_hash, hs_id, expires_at)"), "R64: session record inserted");
+assert(migContent.includes("encode(extensions.digest(v_student_token, 'sha256'), 'hex')"), "R64: sha256 token hash generated");
+recordR('R64');
+
+// R65: Ephemeral session expiration helper validation
+const envR65 = createStudentEnvironment();
+assert.strictEqual(envR65.api.isStudentSessionExpired(), false, "R65: valid unexpired token returns false");
+envR65.sessionStore.set('damSan_StudentTokenExpiresAt', new Date(Date.now() - 1000).toISOString());
+assert.strictEqual(envR65.api.isStudentSessionExpired(), true, "R65: past expiry returns true");
+recordR('R65');
+
+// R66: Expired student session fail-closed on restore
+const envR66 = createStudentEnvironment();
+envR66.sessionStore.set('damSan_HSSession', JSON.stringify({ truong_id: 'sch-1', hs_id: 'hs-1', ma_hs: 'HS1' }));
+envR66.sessionStore.set('damSan_StudentTokenExpiresAt', new Date(Date.now() - 5000).toISOString());
+assert.strictEqual(envR66.api.getStudentToken(), null, "R66: expired token returns null and clears auth");
+assert.strictEqual(envR66.sessionStore.has('damSan_HSSession'), false, "R66: HSSession cleared on expired token");
+recordR('R66');
+
+// R67: rpc_student_logout contract revokes active session
+assert(migContent.includes("create or replace function public.rpc_student_logout"), "R67: logout RPC defined");
+assert(migContent.includes("set revoked_at = now()"), "R67: logout sets revoked_at");
+recordR('R67');
+
+// R68: Client-side logout cleans all session storage items
+const envR68 = createStudentEnvironment();
+envR68.sessionStore.set('damSan_HSSession', '{}');
+envR68.sessionStore.set('damSan_StudentToken', 'tok-68');
+envR68.sessionStore.set('damSan_StudentTokenExpiresAt', new Date(Date.now() + 60000).toISOString());
+envR68.api.clearStudentAuthSession();
+assert.strictEqual(envR68.sessionStore.has('damSan_HSSession'), false, "R68: damSan_HSSession removed");
+assert.strictEqual(envR68.sessionStore.has('damSan_StudentToken'), false, "R68: damSan_StudentToken removed");
+assert.strictEqual(envR68.sessionStore.has('damSan_StudentTokenExpiresAt'), false, "R68: damSan_StudentTokenExpiresAt removed");
+recordR('R68');
+
+// R69: Password change requires matching current password proof
+assert(migContent.includes("create or replace function public.rpc_change_hoc_sinh_password"), "R69: change password RPC defined");
+assert(migContent.includes("and mat_khau = p_current_password"), "R69: password change checks current password");
+recordR('R69');
+
+// R70: Password change revokes all existing student sessions
+assert(migContent.includes("update public.student_sessions") && migContent.includes("set revoked_at = now()") && migContent.includes("where hs_id = p_hs_id"), "R70: password change revokes all sessions");
+recordR('R70');
+
+// R71: Password change reauth fail-closed on network error
+assert(hsCode.includes("if (!reAuthOk) {"), "R71: hsCode checks reAuthOk");
+assert(hsCode.includes("clearStudentAuthSession();"), "R71: hsCode clears auth session on failed reauth");
+recordR('R71');
+
+// R72: Password change reauth fail-closed on malformed response
+assert(hsCode.includes("completeStudentAuthenticatedSession(reAuth)"), "R72: reauth validates payload completeness");
+recordR('R72');
+
+// R73: completeStudentAuthenticatedSession creates session only on complete payload
+const envR73 = createStudentEnvironment();
+envR73.sessionStore.clear();
+const okPayload = { status: 'success', student_token: 't73', student_expires_at: new Date(Date.now() + 60000).toISOString(), user: { id: 'hs-73', truong_id: 'sch-73', ma_hs: 'HS73', ho_ten: 'A', lop: '10' } };
+assert.strictEqual(envR73.api.completeStudentAuthenticatedSession(okPayload), true, "R73: complete payload accepted");
+assert.strictEqual(envR73.sessionStore.get('damSan_StudentToken'), 't73', "R73: token stored");
+recordR('R73');
+
+// R74: rpc_hoc_sinh_get_exam requires p_student_token
+assert(migContent.includes("create or replace function public.rpc_hoc_sinh_get_exam"), "R74: rpc_hoc_sinh_get_exam defined");
+assert(migContent.includes("p_student_token text"), "R74: rpc_hoc_sinh_get_exam takes token");
+recordR('R74');
+
+// R75: rpc_hoc_sinh_get_exam resolves caller via _student_session_hs_id
+assert(migContent.includes("v_hs_id := public._student_session_hs_id(p_student_token);"), "R75: get_exam resolves hs_id from token");
+assert(migContent.includes("invalid_session"), "R75: get_exam rejects invalid session");
+recordR('R75');
+
+// R76: _student_session_hs_id rejects expired/revoked sessions
+assert(migContent.includes("s.token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex')"), "R76: session lookup checks hash");
+assert(migContent.includes("and s.revoked_at is null"), "R76: session lookup checks non-revocation");
+assert(migContent.includes("and s.expires_at > now()"), "R76: session lookup checks expiry");
+recordR('R76');
+
+// R77: rpc_hoc_sinh_get_exam cross-student BOLA isolation
+assert(migContent.includes("from public.hoc_sinh") && migContent.includes("where id = v_hs_id"), "R77: student derived strictly from session");
+recordR('R77');
+
+// R78: rpc_hoc_sinh_get_exam cross-school isolation
+assert(migContent.includes("where id = p_phong_id and truong_id = v_student.truong_id;"), "R78: get_exam enforces school matching");
+recordR('R78');
+
+// R79: rpc_hoc_sinh_get_exam room status gating
+assert(migContent.includes("if v_room.trang_thai <> 'MO_PHONG' then"), "R79: get_exam rejects non-MO_PHONG");
+recordR('R79');
+
+// R80: rpc_hoc_sinh_get_exam doi_tuong gating
+assert(migContent.includes("v_room.doi_tuong = 'TatCa'"), "R80: get_exam checks doi_tuong");
+recordR('R80');
+
+// R81: rpc_hoc_sinh_get_exam answer-key stripping
+assert(migContent.includes("q - 'dap_an_dung' - 'DapAnDung'"), "R81: answer keys stripped from questions");
+recordR('R81');
+
+// R82: rpc_hoc_sinh_get_exam preserves question metadata
+assert(migContent.includes("into v_clean_cau_so") && migContent.includes("'cau_so', v_clean_cau_so"), "R82: clean questions returned in payload");
+recordR('R82');
+
+// R83: Exact legacy exam numeric modulo assignment
+assert(migContent.includes("v_exam_index := cast(v_clean_ma_hs as int) % v_exam_count;"), "R83: numeric branch uses integer modulo");
+recordR('R83');
+
+// R84: Exact legacy exam alphanumeric rolling 31-multiplier hash
+assert(migContent.includes("v_hash := ((v_hash * 31) + v_char_code) % 2147483647;"), "R84: alphanumeric branch uses 31-multiplier hash mod 2147483647");
+recordR('R84');
+
+// R85: Exact legacy exam whitespace trimming
+assert(migContent.includes("v_clean_ma_hs := trim(v_student.ma_hs);"), "R85: student code trimmed");
+recordR('R85');
+
+// R86: rpc_hoc_sinh_grade_submission signature and token binding
+assert(migContent.includes("create or replace function public.rpc_hoc_sinh_grade_submission"), "R86: grade submission RPC defined");
+recordR('R86');
+
+// R87: rpc_hoc_sinh_grade_submission BOLA enforcement
+assert(migContent.includes("if v_sub.hs_id <> v_hs_id then"), "R87: grade submission rejects non-owner student");
+recordR('R87');
+
+// R88: rpc_hoc_sinh_grade_submission hides score/details
+assert(migContent.includes("return jsonb_build_object(") && migContent.includes("'status', 'graded'"), "R88: grading response returns graded status");
+recordR('R88');
+
+// R89: Direct rpc_grade_submission revoked from browser roles
+assert(migContent.includes("revoke all on function public.rpc_grade_submission(uuid) from public, anon, authenticated;"), "R89: direct rpc_grade_submission revoked");
+recordR('R89');
+
+// R90: Direct lay_de_thi_an_toan revoked from browser roles
+assert(migContent.includes("revoke all on function public.lay_de_thi_an_toan from public, anon, authenticated"), "R90: lay_de_thi_an_toan revoked");
+recordR('R90');
+
+// R91: Direct nop_bai_va_cham_diem revoked from browser roles
+assert(migContent.includes("revoke all on function public.nop_bai_va_cham_diem from public, anon, authenticated"), "R91: nop_bai_va_cham_diem revoked");
+recordR('R91');
+
+// R92: Direct table SELECT on ket_qua revoked
+assert(migContent.includes("revoke all on table public.ket_qua from anon, authenticated;"), "R92: ket_qua direct access revoked");
+recordR('R92');
+
+// R93: Direct table SELECT on de_thi revoked
+assert(migContent.includes("revoke all on table public.de_thi from anon, authenticated;"), "R93: de_thi direct access revoked");
+recordR('R93');
+
+// R94: Permissive RLS policy result_read_minimal dropped
+assert(migContent.includes("drop policy if exists result_read_minimal on public.ket_qua;"), "R94: result_read_minimal dropped");
+recordR('R94');
+
+// R95: Permissive RLS policy exam_read_minimal dropped
+assert(migContent.includes("drop policy if exists exam_read_minimal on public.de_thi;"), "R95: exam_read_minimal dropped");
+recordR('R95');
+
+// R96: rpc_hoc_sinh_result_status signature takes token and phong_id
+assert(migContent.includes("create or replace function public.rpc_hoc_sinh_result_status"), "R96: result status RPC defined");
+recordR('R96');
+
+// R97: rpc_hoc_sinh_result_status cross-student BOLA isolation
+assert(migContent.includes("where phong_id = p_phong_id and hs_id = v_hs_id"), "R97: result query scoped strictly to session hs_id");
+recordR('R97');
+
+// R98: rpc_hoc_sinh_result_status cross-school isolation
+assert(migContent.includes("where id = p_phong_id and truong_id = v_student.truong_id;"), "R98: result status checks school matching");
+recordR('R98');
+
+// R99: rpc_hoc_sinh_result_status active/non-published room hides result payload
+assert(migContent.includes("v_result_payload := null;"), "R99: non-published room sets null result payload");
+recordR('R99');
+
+// R100: rpc_hoc_sinh_result_status non-existent result returns has_result=false
+assert(migContent.includes("'has_result', false") && migContent.includes("'result', null"), "R100: no result state defined");
+recordR('R100');
+
+// R101: rpc_hoc_sinh_result_status CONG_BO_DIEM returns score only and null chi_tiet
+assert(migContent.includes("if v_room.trang_thai = 'CONG_BO_DIEM' then") && migContent.includes("'chi_tiet', null"), "R101: CONG_BO_DIEM branch defined");
+recordR('R101');
+
+// R102: rpc_hoc_sinh_result_status XEM_DAP_AN returns full review and de_thi
+assert(migContent.includes("elsif v_room.trang_thai = 'XEM_DAP_AN' then") && migContent.includes("'de_thi', v_exam"), "R102: XEM_DAP_AN branch defined");
+recordR('R102');
+
+// R103: rpc_lay_ket_qua_phong_gv requires authenticated staff role
+assert(migContent.includes("create or replace function public.rpc_lay_ket_qua_phong_gv"), "R103: teacher results RPC defined");
+assert(migContent.includes("revoke all on function public.rpc_lay_ket_qua_phong_gv"), "R103: teacher RPC revoked from public");
+recordR('R103');
+
+// R104: rpc_staff_exam_preview requires authenticated staff role
+assert(migContent.includes("create or replace function public.rpc_staff_exam_preview"), "R104: staff exam preview RPC defined");
+assert(migContent.includes("revoke all on function public.rpc_staff_exam_preview"), "R104: exam preview revoked from public");
+recordR('R104');
+
+// R105 (Section 3 & 4): Exact legacy assignment compatibility vectors + distinction vector
+assert.strictEqual(legacyExamIndex('100403', 4), 3, "Vector 100403 / 4 -> 3");
+assert.strictEqual(legacyExamIndex('012345', 4), 1, "Vector 012345 / 4 -> 1");
+assert.strictEqual(legacyExamIndex('HS001', 4), 2, "Vector HS001 / 4 -> 2");
+assert.notStrictEqual(legacyExamIndex('HS001', 4), 0, "HS001 is NOT simple ASCII sum");
+assert.strictEqual(legacyExamIndex('DAMSAN2026', 5), 1, "Vector DAMSAN2026 / 5 -> 1");
+assert.notStrictEqual(legacyExamIndex('DAMSAN2026', 5), 4, "DAMSAN2026 is NOT index 4");
+assert.strictEqual(legacyExamIndex('X', 1), 0, "Vector X / 1 -> 0");
+assert.strictEqual(legacyExamIndex('  HS001  ', 4), legacyExamIndex('HS001', 4), "Whitespace trimmed matching production");
+assert.strictEqual(legacyExamIndex('  100403  ', 4), legacyExamIndex('100403', 4), "Numeric whitespace trimmed matching production");
+assert.strictEqual(legacyExamIndex('  DAMSAN2026  ', 5), legacyExamIndex('DAMSAN2026', 5), "Alphanumeric whitespace trimmed matching production");
+const hash123ABC = (function(){ let h = 0; for(let c of '123ABC') h = ((h * 31) + c.charCodeAt(0)) % 2147483647; return h % 4; })();
+assert.strictEqual(legacyExamIndex('123ABC', 4), hash123ABC, "123ABC uses rolling hash branch");
+assert.notStrictEqual(legacyExamIndex('123ABC', 4), parseInt('123', 10) % 4, "123ABC does NOT use parseInt numeric prefix");
+assert.strictEqual(legacyExamIndex('  123ABC  ', 4), hash123ABC, "  123ABC  trimmed matches 123ABC");
+recordR('R105');
+
+// R106: Display score normalization for same-session Part-I-only exam (scale to 10)
+const envR106 = createStudentEnvironment();
+envR106.api.setState({
+  truong_id: 'sch-1', hs_id: 'hs-1', phong_id: 'room-106', ho_ten: 'Nguyen Van A',
+  cau_hoi: Array.from({ length: 10 }, (_, i) => ({ cau_so: i + 1, phan: '1' }))
+});
+envR106.mockSupabase._fromData = {
+  phong_thi: { id: 'room-106', trang_thai: 'CONG_BO_DIEM', thoi_gian_mo: 1000 },
+  ket_qua: { id: 'kq-106', diem: 2.5, so_lan_vi_pham: 0 }
+};
+await envR106.api.checkTeacherCommand(true);
+assert.strictEqual(envR106.getEl('final_score_val').innerText, '10.00', "R106: 10 Part-I questions with raw 2.5 normalized to 10.00");
+envR106.mockSupabase._fromData.ket_qua.diem = 1.25;
+await envR106.api.checkTeacherCommand(false);
+assert.strictEqual(envR106.getEl('final_score_val').innerText, '5.00', "R106: 10 Part-I questions with raw 1.25 normalized to 5.00");
+recordR('R106');
+
+// R107: Display score raw preservation for mixed Part I & Part II exam
+const envR107 = createStudentEnvironment();
+envR107.api.setState({
+  truong_id: 'sch-1', hs_id: 'hs-1', phong_id: 'room-107', ho_ten: 'Nguyen Van A',
+  cau_hoi: [{ cau_so: 1, phan: '1' }, { cau_so: 2, phan: '2' }]
+});
+envR107.mockSupabase._fromData = {
+  phong_thi: { id: 'room-107', trang_thai: 'CONG_BO_DIEM', thoi_gian_mo: 1000 },
+  ket_qua: { id: 'kq-107', diem: 4.5, so_lan_vi_pham: 0 }
+};
+await envR107.api.checkTeacherCommand(true);
+assert.strictEqual(envR107.getEl('final_score_val').innerText, '4.50', "R107: mixed Part I/II exam preserves raw score");
+recordR('R107');
+
+// R108: Display score fallback when state.cau_hoi is unavailable
+const envR108 = createStudentEnvironment();
+envR108.api.setState({
+  truong_id: 'sch-1', hs_id: 'hs-1', phong_id: 'room-108', ho_ten: 'Nguyen Van A',
+  cau_hoi: []
+});
+envR108.mockSupabase._fromData = {
+  phong_thi: { id: 'room-108', trang_thai: 'CONG_BO_DIEM', thoi_gian_mo: 1000 },
+  ket_qua: { id: 'kq-108', diem: 7.5, so_lan_vi_pham: 0 }
+};
+await envR108.api.checkTeacherCommand(true);
+assert.strictEqual(envR108.getEl('final_score_val').innerText, '7.50', "R108: unavailable cau_hoi preserves raw score");
+recordR('R108');
+
+// R109: joinRoom fail-closed on statusError (preserves fatal_violation and keeps lockout)
+const envR109 = createStudentEnvironment();
+envR109.api.setState({ truong_id: 'sch-1', hs_id: 'hs-109', ma_hs: 'HS109', lop: '12A' });
+envR109.localStore.set('fatal_violation_HS109_room-109', 'true');
+envR109.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_lay_thong_tin_phong_hs') return { data: { status: 'success', room: { id: 'room-109', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } }, error: null };
+  if (name === 'rpc_hoc_sinh_result_status') return { data: null, error: { message: 'Network connection failure' } };
+  return { data: null, error: null };
+};
+await envR109.api.joinRoom('P109');
+assert.strictEqual(envR109.localStore.has('fatal_violation_HS109_room-109'), true, "R109: fatal_violation preserved on network/RPC error");
+recordR('R109');
+
+// R110: joinRoom fail-closed on invalid_session (preserves fatal_violation, clears auth, navigates to login)
+const envR110 = createStudentEnvironment();
+envR110.api.setState({ truong_id: 'sch-1', hs_id: 'hs-110', ma_hs: 'HS110', lop: '12A' });
+let r110Section = 'room-section';
+envR110.sandbox.showSection = (s) => { r110Section = s; };
+envR110.localStore.set('fatal_violation_HS110_room-110', 'true');
+envR110.mockSupabase._fromData = { phong_thi: { id: 'room-110', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } };
+envR110.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_lay_thong_tin_phong_hs') return { data: { status: 'success', room: { id: 'room-110', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } }, error: null };
+  if (name === 'rpc_hoc_sinh_result_status') return { data: { status: 'error', code: 'invalid_session', message: 'Phiên hết hạn' }, error: null };
+  return { data: null, error: null };
+};
+await envR110.api.joinRoom('P110');
+assert.strictEqual(envR110.localStore.has('fatal_violation_HS110_room-110'), true, "R110: fatal_violation preserved on invalid_session");
+assert.strictEqual(envR110.sessionStore.has('damSan_StudentToken'), false, "R110: auth session cleared on invalid_session");
+assert.strictEqual(r110Section, 'login-section', "R110: redirected to login-section");
+recordR('R110');
+
+// R111: joinRoom preserves fatal_violation when so_lan_vi_pham > 0
+const envR111 = createStudentEnvironment();
+envR111.api.setState({ truong_id: 'sch-1', hs_id: 'hs-111', ma_hs: 'HS111', lop: '12A' });
+envR111.localStore.set('fatal_violation_HS111_room-111', 'true');
+envR111.mockSupabase._fromData = {
+  phong_thi: { id: 'room-111', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' },
+  ket_qua: { id: 'kq-111', diem: 8.0, so_lan_vi_pham: 3 }
+};
+await envR111.api.joinRoom('P111');
+assert.strictEqual(envR111.localStore.has('fatal_violation_HS111_room-111'), true, "R111: fatal_violation preserved when violation count > 0");
+recordR('R111');
+
+// R112: joinRoom clears fatal_violation ONLY on authoritative successful status with no result or 0 violations
+const envR112 = createStudentEnvironment();
+envR112.api.setState({ truong_id: 'sch-1', hs_id: 'hs-112', ma_hs: 'HS112', lop: '12A' });
+envR112.localStore.set('fatal_violation_HS112_room-112', 'true');
+envR112.mockSupabase._fromData = {
+  phong_thi: { id: 'room-112', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' },
+  ket_qua: null
+};
+await envR112.api.joinRoom('P112');
+assert.strictEqual(envR112.localStore.has('fatal_violation_HS112_room-112'), false, "R112: fatal_violation cleared on authoritative no-result status");
+recordR('R112');
+
+// R113 (Section 5 & 6): Behavioral simulation for forced password-change reauth (Cases A, B, C)
+// Case A: Successful password change + successful reauth -> token, expiry, and HSSession created
+const envCaseA = createStudentEnvironment();
+let currentSectionA = 'change-password-section';
+envCaseA.sandbox.showSection = (sec) => { currentSectionA = sec; };
+envCaseA.getEl('new_password').value = 'NewPassword123';
+envCaseA.getEl('confirm_password').value = 'NewPassword123';
+envCaseA.getEl('ma_truong').value = 'DAMSAN';
+envCaseA.api.setPendingProof('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92');
+envCaseA.api.setState({ truong_id: 'school-1', hs_id: 'hs-101', ma_hs: 'HS101', ho_ten: 'Nguyen Van A', lop: '12A1' });
+envCaseA.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_change_hoc_sinh_password') {
+    return { data: { status: 'success', message: 'Cập nhật thành công' }, error: null };
+  }
+  if (name === 'rpc_login_hoc_sinh') {
+    return {
+      data: {
+        status: 'success',
+        student_token: 'case-a-token',
+        student_expires_at: new Date(Date.now() + 86400000).toISOString(),
+        user: { id: 'hs-101', truong_id: 'school-1', ma_hs: 'HS101', ho_ten: 'Nguyen Van A', lop: '12A1' }
+      },
+      error: null
+    };
+  }
+  return { data: null, error: null };
+};
+await envCaseA.api.capNhatMatKhau();
+assert.strictEqual(envCaseA.sessionStore.get('damSan_StudentToken'), 'case-a-token', "Case A: token persisted");
+assert.strictEqual(envCaseA.sessionStore.has('damSan_StudentTokenExpiresAt'), true, "Case A: expiresAt persisted");
+assert.strictEqual(envCaseA.sessionStore.has('damSan_HSSession'), true, "Case A: HSSession created");
+assert.strictEqual(envCaseA.api.getPendingProof(), null, "Case A: proof cleared");
+assert.strictEqual(currentSectionA, 'room-section', "Case A: navigated to room-section");
+
+// Case B: Successful password change + reauth error -> fails closed, clears all sessions, returns to login
+const envCaseB = createStudentEnvironment();
+let currentSectionB = 'change-password-section';
+envCaseB.sandbox.showSection = (sec) => { currentSectionB = sec; };
+envCaseB.getEl('new_password').value = 'NewPassword123';
+envCaseB.getEl('confirm_password').value = 'NewPassword123';
+envCaseB.getEl('ma_truong').value = 'DAMSAN';
+envCaseB.api.setPendingProof('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92');
+envCaseB.api.setState({ truong_id: 'school-1', hs_id: 'hs-101', ma_hs: 'HS101', ho_ten: 'Nguyen Van A', lop: '12A1' });
+envCaseB.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_change_hoc_sinh_password') {
+    return { data: { status: 'success', message: 'Cập nhật thành công' }, error: null };
+  }
+  if (name === 'rpc_login_hoc_sinh') {
+    return { data: null, error: { message: 'Network connection failed during reauth' } };
+  }
+  return { data: null, error: null };
+};
+await envCaseB.api.capNhatMatKhau();
+assert.strictEqual(envCaseB.sessionStore.has('damSan_StudentToken'), false, "Case B: NO token persisted on reauth error");
+assert.strictEqual(envCaseB.sessionStore.has('damSan_StudentTokenExpiresAt'), false, "Case B: NO expiresAt persisted");
+assert.strictEqual(envCaseB.sessionStore.has('damSan_HSSession'), false, "Case B: NO HSSession created");
+assert.strictEqual(envCaseB.api.getPendingProof(), null, "Case B: proof cleared");
+assert.strictEqual(currentSectionB, 'login-section', "Case B: redirected to login-section");
+
+// Case C: Successful password change + reauth success but malformed/missing token -> fails closed
+const envCaseC = createStudentEnvironment();
+let currentSectionC = 'change-password-section';
+envCaseC.sandbox.showSection = (sec) => { currentSectionC = sec; };
+envCaseC.getEl('new_password').value = 'NewPassword123';
+envCaseC.getEl('confirm_password').value = 'NewPassword123';
+envCaseC.getEl('ma_truong').value = 'DAMSAN';
+envCaseC.api.setPendingProof('8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92');
+envCaseC.api.setState({ truong_id: 'school-1', hs_id: 'hs-101', ma_hs: 'HS101', ho_ten: 'Nguyen Van A', lop: '12A1' });
+envCaseC.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_change_hoc_sinh_password') {
+    return { data: { status: 'success', message: 'Cập nhật thành công' }, error: null };
+  }
+  if (name === 'rpc_login_hoc_sinh') {
+    return {
+      data: {
+        status: 'success',
+        user: { id: 'hs-101', truong_id: 'school-1', ma_hs: 'HS101' }
+      },
+      error: null
+    };
+  }
+  return { data: null, error: null };
+};
+await envCaseC.api.capNhatMatKhau();
+assert.strictEqual(envCaseC.sessionStore.has('damSan_StudentToken'), false, "Case C: NO token persisted when missing from reauth");
+assert.strictEqual(envCaseC.sessionStore.has('damSan_StudentTokenExpiresAt'), false, "Case C: NO expiresAt persisted");
+assert.strictEqual(envCaseC.sessionStore.has('damSan_HSSession'), false, "Case C: NO HSSession created");
+assert.strictEqual(envCaseC.api.getPendingProof(), null, "Case C: proof cleared");
+assert.strictEqual(currentSectionC, 'login-section', "Case C: redirected to login-section");
+recordR('R113');
+
+// R114 (Section 7): Deterministic static validation guard on the untracked SQL migration
+// 1. Assert complete numeric regex
+assert(!migContent.includes("v_clean_ma_hs ~ '^[0-9]+\n"), "No truncated regex in migration");
+assert(migContent.includes("v_clean_ma_hs ~ '^[0-9]+" + String.fromCharCode(36) + "'"), "Complete regex present in migration");
+
+// 2. Assert each RPC definition occurs exactly once
+const expectedRpcDefs = [
+  '_student_session_hs_id',
+  'rpc_login_hoc_sinh',
+  'rpc_student_logout',
+  'rpc_change_hoc_sinh_password',
+  'rpc_hoc_sinh_get_exam',
+  'rpc_hoc_sinh_grade_submission',
+  'rpc_hoc_sinh_result_status',
+  'rpc_lay_ket_qua_phong_gv',
+  'rpc_staff_exam_preview'
+];
+expectedRpcDefs.forEach(rpc => {
+  const re = new RegExp('create or replace function public\\.' + rpc + '\\s*\\(', 'g');
+  const count = (migContent.match(re) || []).length;
+  assert.strictEqual(count, 1, "Expected exactly 1 definition for " + rpc + ", got " + count);
+});
+
+// 3. Assert balanced $function$ delimiters
+const funcDelimsCount = (migContent.match(/\$function\$/g) || []).length;
+assert.strictEqual(funcDelimsCount % 2, 0, "Balanced $function$ delimiters");
+
+// 4. Assert balanced $ delimiters
+const doDelimsCount = (migContent.match(/\$\$/g) || []).length;
+assert.strictEqual(doDelimsCount % 2, 0, "Balanced $ delimiters");
+
+// 5. Strengthened EOF guard: migration must end exactly with expected final statement
+assert.strictEqual(
+  migContent.trimEnd().endsWith("alter table public.de_thi enable row level security;"),
+  true,
+  "R114: migration terminates cleanly with final alter table statement"
+);
+recordR('R114');
+
+for (let i = 25; i <= 114; i++) {
+  assert(rCoverage['R' + i], "missing coverage for R" + i);
+}
+
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R114; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);

@@ -1,4 +1,4 @@
-const VERSION = '20260830-post-receipt-lifecycle-p0-006a';
+const VERSION = '20260830-student-result-status-p0-007';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',

@@ -1,7 +1,58 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260830-post-receipt-lifecycle-p0-006a';
+const VERSION = '20260830-student-result-status-p0-007';
+
+// P0-007: Student token session helpers (ephemeral in sessionStorage only)
+function getStudentToken() {
+    try {
+        if (isStudentSessionExpired()) {
+            clearStudentAuthSession();
+            return null;
+        }
+        return sessionStorage.getItem('damSan_StudentToken') || null;
+    } catch(e) { return null; }
+}
+
+function isStudentSessionExpired() {
+    try {
+        const token = sessionStorage.getItem('damSan_StudentToken');
+        if (!token) return true;
+        const expiresAtStr = sessionStorage.getItem('damSan_StudentTokenExpiresAt');
+        if (!expiresAtStr) return true;
+        const expiresAt = new Date(expiresAtStr).getTime();
+        if (isNaN(expiresAt)) return true;
+        return Date.now() >= expiresAt;
+    } catch(e) { return true; }
+}
+
+function completeStudentAuthenticatedSession(loginData) {
+    if (!loginData || loginData.status !== 'success' || !loginData.user) return false;
+    const token = loginData.student_token;
+    const expiresAtStr = loginData.student_expires_at;
+    if (!token || !expiresAtStr) return false;
+    const expiresAt = new Date(expiresAtStr).getTime();
+    if (isNaN(expiresAt) || expiresAt <= Date.now()) return false;
+
+    sessionStorage.setItem('damSan_StudentToken', token);
+    sessionStorage.setItem('damSan_StudentTokenExpiresAt', expiresAtStr);
+    sessionStorage.setItem('damSan_HSSession', JSON.stringify({
+        truong_id: loginData.user.truong_id,
+        hs_id: loginData.user.id,
+        ma_hs: loginData.user.ma_hs,
+        ho_ten: loginData.user.ho_ten,
+        lop: loginData.user.lop
+    }));
+    return true;
+}
+
+function clearStudentAuthSession() {
+    try {
+        sessionStorage.removeItem('damSan_HSSession');
+        sessionStorage.removeItem('damSan_StudentToken');
+        sessionStorage.removeItem('damSan_StudentTokenExpiresAt');
+    } catch(e) {}
+}
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
@@ -168,6 +219,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let session = sessionStorage.getItem('damSan_HSSession');
     if (session) {
+        const token = getStudentToken();
+        if (!token || isStudentSessionExpired()) {
+            clearStudentAuthSession();
+            alert("Phiên đăng nhập cần được xác thực lại sau khi hệ thống cập nhật.");
+            showSection('login-section');
+            return;
+        }
+
         let s = JSON.parse(session);
         state.truong_id = s.truong_id; state.hs_id = s.hs_id; state.ma_hs = s.ma_hs; state.ho_ten = s.ho_ten; state.lop = s.lop;
 
@@ -313,11 +372,17 @@ function luuTaiKhoan(maHs, hoTen, lop) {
     renderSavedAccounts();
 }
 
-function dangXuatHS() {
+async function dangXuatHS() {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
         pendingStudentPasswordProof = null;
         dungPostReceiptLifecycleWatcher(); // P0-006A: Dung watcher khi dang xuat
-        sessionStorage.removeItem('damSan_HSSession');
+        const token = getStudentToken();
+        if (token && !state.isOffline) {
+            try {
+                await _supabase.rpc('rpc_student_logout', { p_student_token: token });
+            } catch(e) { console.warn('[logout]', e); }
+        }
+        clearStudentAuthSession();
         location.reload();
     }
 }
@@ -868,9 +933,10 @@ async function login() {
             return;
         }
 
-        sessionStorage.setItem('damSan_HSSession', JSON.stringify({
-            truong_id: state.truong_id, hs_id: state.hs_id, ma_hs: state.ma_hs, ho_ten: state.ho_ten, lop: state.lop
-        }));
+        if (!completeStudentAuthenticatedSession(loginData)) {
+            clearStudentAuthSession();
+            throw new Error("Phản hồi đăng nhập không hợp lệ từ máy chủ. Thiếu thông tin phiên bảo mật.");
+        }
 
         document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten;
         document.getElementById('lop_hs_hien_thi').innerText = state.lop;
@@ -921,10 +987,30 @@ async function capNhatMatKhau() {
             renderSavedAccounts();
         }
 
-        // Sau khi đổi xong thì lưu session và vào phòng thi
-        sessionStorage.setItem('damSan_HSSession', JSON.stringify({
-            truong_id: state.truong_id, hs_id: state.hs_id, ma_hs: state.ma_hs, ho_ten: state.ho_ten, lop: state.lop
-        }));
+        // Sau khi đổi xong thì bắt buộc tái xác thực để nhận session token bảo mật
+        const maTruongEl = document.getElementById('ma_truong');
+        const maTruong = maTruongEl ? maTruongEl.value.trim().toUpperCase() : '';
+        let reAuthOk = false;
+        if (maTruong && state.ma_hs) {
+            try {
+                const { data: reAuth, error: reAuthErr } = await _supabase.rpc('rpc_login_hoc_sinh', {
+                    p_ma_truong: maTruong,
+                    p_ma_hs: state.ma_hs,
+                    p_mat_khau: hashedNewPass
+                });
+                if (!reAuthErr && completeStudentAuthenticatedSession(reAuth)) {
+                    reAuthOk = true;
+                }
+            } catch(e) { console.warn('[reauth]', e); }
+        }
+
+        if (!reAuthOk) {
+            clearStudentAuthSession();
+            pendingStudentPasswordProof = null;
+            alert("Mật khẩu đã được cập nhật. Vui lòng đăng nhập lại.");
+            showSection('login-section');
+            return;
+        }
 
         document.getElementById('ten_hs_hien_thi').innerText = state.ho_ten;
         document.getElementById('lop_hs_hien_thi').innerText = state.lop;
@@ -961,28 +1047,7 @@ async function timPhongThiTuDong() {
             matchedRooms = rpcData.rooms || new Array();
             submittedRoomIds = rpcData.submitted_room_ids || new Array();
         } else {
-            if (!String(rpcErr.message || '').includes('rpc_lay_danh_sach_phong_thi_hs')) throw rpcErr;
-
-            const { data: rooms, error } = await _supabase.from('phong_thi')
-                .select('id, ma_phong, ten_dot, doi_tuong, trang_thai')
-                .eq('truong_id', state.truong_id)
-                .neq('trang_thai', 'CHO_THI')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-
-            const { data: kqData } = await _supabase.from('ket_qua')
-                .select('phong_id, diem')
-                .eq('hs_id', state.hs_id);
-
-            submittedRoomIds = (kqData || []).filter(k => k.diem !== null && k.diem !== undefined).map(k => k.phong_id);
-
-            matchedRooms = (rooms || new Array()).filter(room => {
-                if (!room.doi_tuong || room.doi_tuong === 'TatCa') return true;
-                let allowedClasses = room.doi_tuong.split(',').map(s => s.trim());
-                // CHÍNH XÁC: Nhận diện cả Lớp và Mã Học Sinh
-                return allowedClasses.includes(state.lop) || allowedClasses.includes(state.ma_hs);
-            });
+            throw rpcErr;
         }
 
         if (matchedRooms.length > 0) {
@@ -1075,17 +1140,43 @@ async function joinRoom(maPhongAuto = null) {
         state.room_opened_at = phongData.thoi_gian_mo;
         kichHoatLienKetRealtime();
 
-        const { data: res } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single();
-        
-        // LOGIC KHÔI PHỤC QUYỀN THI (CLEAR LOCKOUT) KHI GIÁO VIÊN RESET
-        // Nếu không tìm thấy kết quả trên server (đã bị xóa) hoặc số lần vi phạm đã được reset về 0
-        if (!res || (res && (res.so_lan_vi_pham || 0) === 0)) {
-            localStorage.removeItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
-            // Không xóa draft/final chỉ vì ket_qua chưa tồn tại. Một FINAL_PENDING có thể
-            // đang chờ mạng hoặc chờ retry sau khi server chưa kịp trả receipt.
+        const token = getStudentToken();
+        if (!token) {
+            clearStudentAuthSession();
+            alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+            showSection('login-section');
+            return;
         }
 
-        if (res && res.diem !== null && res.diem !== undefined) {
+        const { data: statusData, error: statusError } = await _supabase.rpc('rpc_hoc_sinh_result_status', {
+            p_student_token: token,
+            p_phong_id: state.phong_id
+        });
+
+        if (statusError) {
+            console.warn('[joinRoom] Lỗi kiểm tra trạng thái kết quả:', statusError.message);
+            throw new Error('Lỗi kết nối máy chủ khi kiểm tra trạng thái phòng thi: ' + (statusError.message || 'Lỗi mạng'));
+        }
+
+        if (!statusData || statusData.status !== 'success') {
+            if (statusData?.code === 'invalid_session') {
+                clearStudentAuthSession();
+                alert("Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.");
+                showSection('login-section');
+                return;
+            }
+            throw new Error(statusData?.message || 'Không thể xác thực trạng thái phòng thi');
+        }
+
+        const hasResult = statusData.has_result;
+        const res = statusData.result;
+
+        // LOGIC KHÔI PHỤC QUYỀN THI (CLEAR LOCKOUT) KHI GIÁO VIÊN RESET
+        if (!hasResult || (res && (res.so_lan_vi_pham || 0) === 0)) {
+            localStorage.removeItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
+        }
+
+        if (hasResult) {
             state.user_result = res;
             document.getElementById('finish_name').innerText = state.ho_ten;
             showSection('result-section');
@@ -1128,10 +1219,21 @@ async function joinRoom(maPhongAuto = null) {
 
         await dongBoGiamSatThoiGian();
 
-        const { data: safeExamData, error: examErr } = await _supabase.rpc('lay_de_thi_an_toan', { p_phong_id: state.phong_id, p_ma_hs: state.ma_hs });
+        if (!token) {
+            clearStudentAuthSession();
+            alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+            showSection('login-section');
+            return;
+        }
+
+        const { data: safeExamData, error: examErr } = await _supabase.rpc('rpc_hoc_sinh_get_exam', {
+            p_student_token: token,
+            p_phong_id: state.phong_id
+        });
         if (examErr) throw new Error("Lỗi tải đề thi từ máy chủ: " + examErr.message);
-        if (safeExamData && safeExamData.error) throw new Error(safeExamData.error);
-        if (!safeExamData || !safeExamData.cau_so) throw new Error("Không thể lấy dữ liệu đề thi!");
+        if (!safeExamData || safeExamData.status !== 'success' || !safeExamData.cau_so) {
+            throw new Error(safeExamData?.message || "Không thể lấy dữ liệu đề thi!");
+        }
 
         state.ma_de = safeExamData.ma_de;
         state.cau_hoi = typeof safeExamData.cau_so === 'string' ? JSON.parse(safeExamData.cau_so) : safeExamData.cau_so;
@@ -1606,13 +1708,9 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         // [Fix Perf] Fire-and-forget: tránh chiếm Supabase connection pool trong lúc thi.
         // so_lan_vi_pham được sync chính xác khi nộp bài (gradeAndSubmit).
         try {
-            _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single()
-                .then(({ data }) => {
-                    if (data) {
-                        _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount, chi_tiet: forensicData }).eq('id', data.id).then(() => { console.log("Đã chốt vi phạm Phần II"); });
-                    }
-                    // Không INSERT khi chưa có row — receipt/grader tạo ket_qua dẫn xuất.
-                });
+            if (state.phong_id && state.hs_id) {
+                _supabase.rpc('rpc_cap_nhat_vi_pham', { p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_so_lan: cheatCount }).then(() => {});
+            }
         } catch(e) { console.warn('[violation-write]', e); }
 
         localStorage.setItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id, 'true');
@@ -1636,13 +1734,9 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     // [Fix Perf] Fire-and-forget: tránh chiếm Supabase connection pool trong lúc thi.
     // so_lan_vi_pham được sync chính xác khi nộp bài (gradeAndSubmit).
     try {
-        _supabase.from('ket_qua').select('id').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).single()
-            .then(({ data }) => {
-                if (data) {
-                    _supabase.from('ket_qua').update({ so_lan_vi_pham: cheatCount }).eq('id', data.id).then(() => {});
-                }
-                // Không INSERT khi chưa có row — receipt/grader tạo ket_qua dẫn xuất.
-            });
+        if (state.phong_id && state.hs_id) {
+            _supabase.rpc('rpc_cap_nhat_vi_pham', { p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_so_lan: cheatCount }).then(() => {});
+        }
     } catch(e) { console.warn('[violation-write]', e); }
 
     const warningEl = document.getElementById('cheat-warning');
@@ -1980,9 +2074,11 @@ async function requestGrading(submissionId) {
     if (isGradingSubmission || state.isOffline) return;
     isGradingSubmission = true;
     try {
+        const token = getStudentToken();
+        if (!token) throw new Error('No student token');
         let data = null; let error = null;
         for (let attempt = 1; attempt <= 3; attempt++) {
-            ({ data, error } = await _supabase.rpc('rpc_grade_submission', { p_submission_id: submissionId }));
+            ({ data, error } = await _supabase.rpc('rpc_hoc_sinh_grade_submission', { p_student_token: token, p_submission_id: submissionId }));
             if (!error && data?.status === 'graded') break;
             if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 500 * attempt + Math.floor(Math.random() * 750)));
         }
@@ -2002,24 +2098,27 @@ async function checkTeacherCommand(isAuto = false) {
     isCheckingCommand = true;
 
     try {
-        const { data: phong, error: phongError } = await _supabase.from('phong_thi').select('id, trang_thai, thoi_gian_mo').eq('id', state.phong_id).maybeSingle();
-        const { data: kq, error: kqError } = await _supabase.from('ket_qua').select('*').eq('phong_id', state.phong_id).eq('hs_id', state.hs_id).maybeSingle();
-        // [Fix D] Diagnostic log — xem nguồn gọi, trạng thái phòng, và độ sẵn sàng của dữ liệu
-        console.log('[checkCmd] isAuto=', isAuto, '| trang_thai=', phong?.trang_thai, '| phongErr=', phongError?.message, '| kqErr=', kqError?.message, '| ma_de=', kq?.ma_de);
+        const token = getStudentToken();
+        if (!token) {
+            console.warn('[checkCmd] No student session token');
+            return;
+        }
 
-        // P0-006: Network/RLS query failure is NEVER reset evidence — preserve all recovery state.
-        if (phongError || kqError) {
-            console.warn('[checkCmd] Query error — keeping recovery evidence:', phongError?.message || kqError?.message);
+        const { data: statusData, error: statusError } = await _supabase.rpc('rpc_hoc_sinh_result_status', {
+            p_student_token: token,
+            p_phong_id: state.phong_id
+        });
+
+        if (statusError || !statusData || statusData.status !== 'success') {
+            console.warn('[checkCmd] Query error — keeping recovery evidence:', statusError?.message || statusData?.message);
             if (!isAuto) alert('Lỗi kết nối máy chủ khi kiểm tra trạng thái. Vui lòng thử lại sau.');
             return;
         }
 
-        // P0-006: Generation comparison — the ONLY authoritative reset evidence.
-        // CHO_THI alone is NOT sufficient; room_opened_at mismatch confirms a new attempt.
         const _normGen = v => (v === null || v === undefined) ? null : String(v);
-        const serverGen = _normGen(phong?.thoi_gian_mo);
+        const serverGen = _normGen(statusData.thoi_gian_mo);
         const localGen = _normGen(state.room_opened_at);
-        const roomDeleted = !phong; // server query ok + no error + data=null → room gone
+        const roomDeleted = statusData.room_exists === false;
         const generationChanged = !roomDeleted && localGen !== null && serverGen !== localGen;
 
         if (roomDeleted || generationChanged) {
@@ -2028,7 +2127,6 @@ async function checkTeacherCommand(isAuto = false) {
                 const reconciled = await reconcileSavedSubmission(_snapshot);
                 if (reconciled !== null) {
                     if (reconciled.recovery_archive_failed) {
-                        // Archive failed: keep all evidence, block teardown.
                         if (!recoveryArchiveFailureNoticeShown) {
                             recoveryArchiveFailureNoticeShown = true;
                             alert('Bài đã chốt vẫn được giữ an toàn trên thiết bị nhưng chưa thể lưu bản khôi phục. Vui lòng báo giám thị.');
@@ -2041,7 +2139,7 @@ async function checkTeacherCommand(isAuto = false) {
             state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
             state.cau_hoi = []; state.user_result = null; cheatCount = 0;
             dongTatCaRealtimeHocSinh();
-            dungPostReceiptLifecycleWatcher(); // P0-006A
+            dungPostReceiptLifecycleWatcher();
             showSection('room-section');
             timPhongThiTuDong();
             if (!isAuto) alert(roomDeleted
@@ -2050,8 +2148,8 @@ async function checkTeacherCommand(isAuto = false) {
             return;
         }
 
-        state.user_result = kq;
-        if (!kq) {
+        if (!statusData.has_result) {
+            console.warn('[checkCmd] ket_qua null but room intact — keeping recovery evidence');
             let receipt = getSubmissionReceipt();
             const snapshot = getFinalSnapshot();
             if (!receipt?.submission_id && snapshot?.attempt_id) {
@@ -2067,27 +2165,16 @@ async function checkTeacherCommand(isAuto = false) {
             }
             return;
         }
-        renderForensicPanel();
 
-        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT (DISPLAY-ONLY)
-        let displayScore = kq.diem;
-        const questions = state.cau_hoi || [];
-        if (questions.length > 0) {
-            const hasPart2Or3 = questions.some(q => {
-                let p = String(q.phan || q.Phan);
-                return p === "2" || p === "3";
-            });
-            // Nếu chỉ có Phần I, tự động quy đổi về thang 10 dựa trên tổng số câu
-            if (!hasPart2Or3) {
-                const maxRaw = questions.length * 0.25;
-                if (maxRaw > 0) displayScore = (kq.diem / maxRaw) * 10;
-            }
+        if (statusData.trang_thai === 'THU_BAI' || statusData.trang_thai === 'CONG_BO_DIEM' || statusData.trang_thai === 'XEM_DAP_AN') {
+            document.getElementById('finish_name').innerText = state.ho_ten;
+            showSection('result-section');
         }
 
-        if (phong.trang_thai === 'CONG_BO_DIEM' || phong.trang_thai === 'XEM_DAP_AN') {
-            document.getElementById('score-display-area').style.display = 'block';
-            document.getElementById('final_score_val').innerText = displayScore.toFixed(2);
-        } else {
+        const kq = statusData.result;
+        state.user_result = kq;
+
+        if (statusData.trang_thai !== 'CONG_BO_DIEM' && statusData.trang_thai !== 'XEM_DAP_AN') {
             document.getElementById('score-display-area').style.display = 'none';
             document.getElementById('review-content').innerHTML = `
                 <div style="text-align:center; margin-top:30px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px dashed #dadce0;">
@@ -2099,29 +2186,43 @@ async function checkTeacherCommand(isAuto = false) {
             return;
         }
 
-        if (phong.trang_thai === 'XEM_DAP_AN') {
-            let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : kq.chi_tiet;
-            // [Fix 1A] Bỏ gate !chiTiet[0].A — luôn enrich khi có ma_de để tránh bỏ sót câu hỏi
-            // || ct.X bảo toàn giá trị hiện có trong chi_tiet nếu de_thi không có trường tương ứng
-            if (chiTiet.length > 0 && kq.ma_de) {
-                const { data: deData } = await _supabase.from('de_thi').select('cau_so').eq('phong_id', state.phong_id).eq('ma_de', kq.ma_de).single();
-                if (deData) {
-                    let cauHois = typeof deData.cau_so === 'string' ? JSON.parse(deData.cau_so) : deData.cau_so;
-                    chiTiet = chiTiet.map((ct, idx) => {
-                        let cauGoc = cauHois[idx] || {};
-                        return { ...ct,
-                            A: cauGoc.A || cauGoc.DapAnA || ct.A,
-                            B: cauGoc.B || cauGoc.DapAnB || ct.B,
-                            C: cauGoc.C || cauGoc.DapAnC || ct.C,
-                            D: cauGoc.D || cauGoc.DapAnD || ct.D
-                        };
-                    });
-                    // [Fix 1C] Nếu state.cau_hoi trống (học sinh re-login/F5), populate từ de_thi
-                    // để renderReview có nguồn fallback qua qData cho cả nội dung câu hỏi
-                    if (!state.cau_hoi || state.cau_hoi.length === 0) {
-                        state.cau_hoi = cauHois;
-                    }
-                }
+        if (!kq) return;
+        renderForensicPanel();
+
+        let displayScore = (kq.diem !== null && kq.diem !== undefined) ? kq.diem : null;
+        const questions = state.cau_hoi || [];
+        if (displayScore !== null && questions.length > 0) {
+            const hasPart2Or3 = questions.some(q => {
+                let p = String(q.phan || q.Phan);
+                return p === "2" || p === "3";
+            });
+            if (!hasPart2Or3) {
+                const maxRaw = questions.length * 0.25;
+                if (maxRaw > 0) displayScore = (kq.diem / maxRaw) * 10;
+            }
+        }
+
+        document.getElementById('score-display-area').style.display = 'block';
+        document.getElementById('final_score_val').innerText = (displayScore !== null && displayScore !== undefined) ? displayScore.toFixed(2) : '--';
+
+        if (statusData.trang_thai === 'XEM_DAP_AN') {
+            let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : (kq.chi_tiet || []);
+            let cauHois = kq.de_thi ? (typeof kq.de_thi === 'string' ? JSON.parse(kq.de_thi) : kq.de_thi) : null;
+            if (cauHois && (!state.cau_hoi || state.cau_hoi.length === 0)) {
+                state.cau_hoi = cauHois;
+            }
+            if (chiTiet.length > 0 && cauHois) {
+                chiTiet = chiTiet.map((ct, idx) => {
+                    let cauGoc = cauHois[idx] || {};
+                    return {
+                        ...ct,
+                        noi_dung: cauGoc.noi_dung || ct.noi_dung,
+                        A: cauGoc.A || cauGoc.DapAnA || ct.A,
+                        B: cauGoc.B || cauGoc.DapAnB || ct.B,
+                        C: cauGoc.C || cauGoc.DapAnC || ct.C,
+                        D: cauGoc.D || cauGoc.DapAnD || ct.D
+                    };
+                });
             }
             renderReview(chiTiet);
         } else {
