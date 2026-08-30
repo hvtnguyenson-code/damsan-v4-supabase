@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260830-student-result-status-p0-007';
+const VERSION = '20260830-student-rpc-cutover-p0-008b';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -945,7 +945,9 @@ async function login() {
         document.getElementById('panel_lop_hs').innerText = state.lop;
 
         showSection('room-section');
-        timPhongThiTuDong();
+        void resumeSavedSubmission().then(recovered => {
+            if (!recovered) timPhongThiTuDong();
+        });
     } catch (error) { alert(error.message); } finally {
         btn.innerText = "ĐĂNG NHẬP VÀO HỆ THỐNG"; btn.disabled = false;
     }
@@ -1020,7 +1022,9 @@ async function capNhatMatKhau() {
 
         alert("Cập nhật mật khẩu thành công! Bây giờ bạn có thể tham gia phòng thi.");
         showSection('room-section');
-        timPhongThiTuDong();
+        void resumeSavedSubmission().then(recovered => {
+            if (!recovered) timPhongThiTuDong();
+        });
     } catch (error) {
         alert("Lỗi cập nhật mật khẩu: " + error.message);
     } finally {
@@ -1035,13 +1039,26 @@ async function timPhongThiTuDong() {
         let matchedRooms = new Array();
         let submittedRoomIds = new Array();
 
-        const { data: rpcData, error: rpcErr } = await _supabase.rpc('rpc_lay_danh_sach_phong_thi_hs', {
-            p_hs_id: state.hs_id,
-            p_truong_id: state.truong_id
+        const token = getStudentToken();
+        if (!token) {
+            clearStudentAuthSession();
+            alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+            showSection('login-section');
+            return;
+        }
+
+        const { data: rpcData, error: rpcErr } = await _supabase.rpc('rpc_hoc_sinh_room_list', {
+            p_student_token: token
         });
 
         if (!rpcErr) {
             if (!rpcData || rpcData.status !== 'success') {
+                if (rpcData?.code === 'invalid_session') {
+                    clearStudentAuthSession();
+                    alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+                    showSection('login-section');
+                    return;
+                }
                 throw new Error(rpcData?.message || "Không tải được danh sách phòng thi.");
             }
             matchedRooms = rpcData.rooms || new Array();
@@ -1105,27 +1122,31 @@ async function joinRoom(maPhongAuto = null) {
     state.ma_phong_text = maPhong;
 
     try {
+        const token = getStudentToken();
+        if (!token) {
+            clearStudentAuthSession();
+            alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+            showSection('login-section');
+            return;
+        }
+
         let phongData = null;
-        const { data: rpcRoomData, error: rpcRoomErr } = await _supabase.rpc('rpc_lay_thong_tin_phong_hs', {
-            p_hs_id: state.hs_id,
-            p_truong_id: state.truong_id,
+        const { data: rpcRoomData, error: rpcRoomErr } = await _supabase.rpc('rpc_hoc_sinh_room_info', {
+            p_student_token: token,
             p_ma_phong: maPhong
         });
 
-        if (!rpcRoomErr) {
-            if (!rpcRoomData || rpcRoomData.status !== 'success') {
-                throw new Error(rpcRoomData?.message || "Không tìm thấy phòng thi này!");
+        if (rpcRoomErr) throw rpcRoomErr;
+        if (!rpcRoomData || rpcRoomData.status !== 'success') {
+            if (rpcRoomData?.code === 'invalid_session') {
+                clearStudentAuthSession();
+                alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+                showSection('login-section');
+                return;
             }
-            phongData = rpcRoomData.room;
-        } else {
-            if (!String(rpcRoomErr.message || '').includes('rpc_lay_thong_tin_phong_hs')) throw rpcRoomErr;
-
-            const { data: directPhongData, error: directRoomErr } = await _supabase.from('phong_thi')
-                .select('id, trang_thai, thoi_gian, thoi_gian_mo, doi_tuong, mon_hoc(ten_mon)')
-                .eq('truong_id', state.truong_id).eq('ma_phong', maPhong).single();
-            if (directRoomErr) throw directRoomErr;
-            phongData = directPhongData;
+            throw new Error(rpcRoomData?.message || "Không tìm thấy phòng thi này!");
         }
+        phongData = rpcRoomData.room;
 
         if (!phongData) throw new Error("Không tìm thấy phòng thi này!");
 
@@ -1139,14 +1160,6 @@ async function joinRoom(maPhongAuto = null) {
         state.phong_id = phongData.id;
         state.room_opened_at = phongData.thoi_gian_mo;
         kichHoatLienKetRealtime();
-
-        const token = getStudentToken();
-        if (!token) {
-            clearStudentAuthSession();
-            alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-            showSection('login-section');
-            return;
-        }
 
         const { data: statusData, error: statusError } = await _supabase.rpc('rpc_hoc_sinh_result_status', {
             p_student_token: token,
@@ -1314,7 +1327,7 @@ async function _postReceiptLifecycleTick() {
     })();
     if (!snapshot && !isOnReceiptOrResult) return;
 
-    // P0-006A: Secure lifecycle reconciliation qua rpc_submission_receipt_status (SECURITY DEFINER)
+    // P0-008B: Secure lifecycle reconciliation qua rpc_hoc_sinh_submission_receipt_status (SECURITY DEFINER)
     // Chay truoc va khong phu thuoc SELECT tren phong_thi
     if (snapshot && snapshot.attempt_id) {
         const reconciled = await reconcileSavedSubmission(snapshot);
@@ -1708,8 +1721,9 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
         // [Fix Perf] Fire-and-forget: tránh chiếm Supabase connection pool trong lúc thi.
         // so_lan_vi_pham được sync chính xác khi nộp bài (gradeAndSubmit).
         try {
-            if (state.phong_id && state.hs_id) {
-                _supabase.rpc('rpc_cap_nhat_vi_pham', { p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_so_lan: cheatCount }).then(() => {});
+            const token = getStudentToken();
+            if (state.phong_id && token) {
+                _supabase.rpc('rpc_hoc_sinh_update_violation', { p_student_token: token, p_phong_id: state.phong_id, p_so_lan: cheatCount }).then(() => {});
             }
         } catch(e) { console.warn('[violation-write]', e); }
 
@@ -1734,8 +1748,9 @@ function xuLyGianLan(reason = 'Hành vi nghi vấn') {
     // [Fix Perf] Fire-and-forget: tránh chiếm Supabase connection pool trong lúc thi.
     // so_lan_vi_pham được sync chính xác khi nộp bài (gradeAndSubmit).
     try {
-        if (state.phong_id && state.hs_id) {
-            _supabase.rpc('rpc_cap_nhat_vi_pham', { p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_so_lan: cheatCount }).then(() => {});
+        const token = getStudentToken();
+        if (state.phong_id && token) {
+            _supabase.rpc('rpc_hoc_sinh_update_violation', { p_student_token: token, p_phong_id: state.phong_id, p_so_lan: cheatCount }).then(() => {});
         }
     } catch(e) { console.warn('[violation-write]', e); }
 
@@ -1879,13 +1894,17 @@ function clearActiveSubmissionKeys() {
 
 async function reconcileSavedSubmission(snapshot) {
     try {
-        const { data, error } = await _supabase.rpc('rpc_submission_receipt_status', {
+        const token = getStudentToken();
+        if (!token) return snapshot; // Missing or expired token is not evidence of reset; preserve final data.
+
+        const { data, error } = await _supabase.rpc('rpc_hoc_sinh_submission_receipt_status', {
+            p_student_token: token,
             p_attempt_id: snapshot.attempt_id,
-            p_truong_id: snapshot.truong_id,
             p_phong_id: snapshot.phong_id,
             p_room_opened_at: snapshot.room_opened_at
         });
         if (error) return snapshot; // A network failure is never evidence of an admin reset.
+        if (data?.code === 'invalid_session') return snapshot; // Invalid session is never evidence of reset.
         if (data?.status === 'missing' && data?.reset_confirmed === true) {
             const archived = archiveFinalSnapshot(snapshot, data.room_exists === false ? 'room_deleted' : 'room_attempt_changed');
             if (!archived) {
@@ -2023,13 +2042,26 @@ async function receiveFinalSubmission() {
         requestGrading(existingReceipt.submission_id);
         return;
     }
+    const token = getStudentToken();
+    if (!token) {
+        isSubmitting = false;
+        console.warn('Student token unavailable for receive submission; keeping final snapshot for recovery.');
+        clearStudentAuthSession();
+        alert('Phiên đăng nhập đã hết hạn. Bài đã chốt được bảo toàn; vui lòng đăng nhập lại để tiếp tục nộp bài.');
+        showSection('login-section');
+        return;
+    }
     isSubmitting = true;
     let lastError = null;
     for (let attempt = 1; attempt <= 4; attempt++) {
-        const { data, error } = await _supabase.rpc('rpc_receive_submission', {
-            p_attempt_id: snapshot.attempt_id, p_truong_id: snapshot.truong_id, p_phong_id: snapshot.phong_id,
-            p_hs_id: snapshot.hs_id, p_ma_de: snapshot.ma_de, p_raw_answers: snapshot.raw_answers,
-            p_client_submitted_at: snapshot.client_submitted_at, p_room_opened_at: snapshot.room_opened_at
+        const { data, error } = await _supabase.rpc('rpc_hoc_sinh_receive_submission', {
+            p_student_token: token,
+            p_attempt_id: snapshot.attempt_id,
+            p_phong_id: snapshot.phong_id,
+            p_ma_de: snapshot.ma_de,
+            p_raw_answers: snapshot.raw_answers,
+            p_client_submitted_at: snapshot.client_submitted_at,
+            p_room_opened_at: snapshot.room_opened_at
         });
         if (!error && data && data.status === 'received' && data.submission_id && data.received_at) {
             const receipt = { ...data, state: SUBMISSION_STATE.SERVER_RECEIVED };
@@ -2040,6 +2072,14 @@ async function receiveFinalSubmission() {
             dongTatCaRealtimeHocSinh();
             showReceivedState(receipt);
             requestGrading(receipt.submission_id);
+            return;
+        }
+        if (!error && data?.code === 'invalid_session') {
+            isSubmitting = false;
+            console.warn('Session expired during receive submission; preserving final snapshot.');
+            clearStudentAuthSession();
+            alert('Phiên đăng nhập đã hết hạn. Bài đã chốt được bảo toàn; vui lòng đăng nhập lại để tiếp tục nộp bài.');
+            showSection('login-section');
             return;
         }
         if (!error && data?.code === 'room_attempt_changed') {
@@ -2085,7 +2125,7 @@ async function requestGrading(submissionId) {
         if (error || !data || data.status !== 'graded') throw error || new Error(data?.message || 'Grading pending');
         const snapshot = getFinalSnapshot();
         if (snapshot) { snapshot.state = SUBMISSION_STATE.GRADED; localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot)); }
-        if (cheatCount > 0) await _supabase.rpc('rpc_cap_nhat_vi_pham', { p_phong_id: state.phong_id, p_hs_id: state.hs_id, p_so_lan: cheatCount });
+        if (cheatCount > 0 && token) await _supabase.rpc('rpc_hoc_sinh_update_violation', { p_student_token: token, p_phong_id: state.phong_id, p_so_lan: cheatCount });
         checkTeacherCommand(true);
     } catch (e) {
         console.warn('Submission received; grading remains pending:', e.message);

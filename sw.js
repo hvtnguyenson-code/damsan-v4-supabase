@@ -1,4 +1,4 @@
-const VERSION = '20260830-student-result-status-p0-007';
+const VERSION = '20260830-student-rpc-cutover-p0-008b';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
