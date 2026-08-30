@@ -1202,6 +1202,7 @@ function _postReceiptContextValid() {
 // P0-006A: Tick cua lifecycle watcher
 async function _postReceiptLifecycleTick() {
     if (!_postReceiptContextValid()) { dungPostReceiptLifecycleWatcher(); return; }
+    if (state.isOffline) return;
     const snapshot = getFinalSnapshot();
     const isOnReceiptOrResult = (function() {
         try {
@@ -1210,7 +1211,32 @@ async function _postReceiptLifecycleTick() {
         } catch(e) { return false; }
     })();
     if (!snapshot && !isOnReceiptOrResult) return;
-    if (state.isOffline) return;
+
+    // P0-006A: Secure lifecycle reconciliation qua rpc_submission_receipt_status (SECURITY DEFINER)
+    // Chay truoc va khong phu thuoc SELECT tren phong_thi
+    if (snapshot && snapshot.attempt_id) {
+        const reconciled = await reconcileSavedSubmission(snapshot);
+        if (reconciled === null) {
+            // Authoritative reset/deletion da duoc chung minh boi server
+            state.phong_id = null;
+            state.room_opened_at = null;
+            state.ma_de = '';
+            state.cau_hoi = [];
+            state.user_result = null;
+            cheatCount = 0;
+            dongTatCaRealtimeHocSinh();
+            dungPostReceiptLifecycleWatcher();
+            showSection('room-section');
+            timPhongThiTuDong();
+            return;
+        }
+        if (reconciled?.recovery_archive_failed) {
+            return;
+        }
+    }
+
+    // Sau khi secure lifecycle reconciliation khong phat hien reset,
+    // refresh publication / ket_qua neu phong khong bi reset
     await checkTeacherCommand(true);
 }
 // P0-006A: Khoi dong post-receipt lifecycle watcher (idempotent)
@@ -1238,7 +1264,7 @@ function batDauPostReceiptLifecycleWatcher() {
                 const _normG = v => (v === null || v === undefined) ? null : String(v);
                 const serverGen = _normG(payload.new && payload.new.thoi_gian_mo);
                 const localGen = _normG(capturedOpenedAt);
-                if (localGen !== null && serverGen !== localGen) { void checkTeacherCommand(true); }
+                if (localGen !== null && serverGen !== localGen) { void _postReceiptLifecycleTick(); }
             }).subscribe();
     } catch(e) { console.warn('[post-receipt-watcher]', e); }
     postReceiptLifecyclePollTimer = setInterval(() => { void _postReceiptLifecycleTick(); }, 12000);

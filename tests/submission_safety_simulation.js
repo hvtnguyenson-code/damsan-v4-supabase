@@ -1096,8 +1096,161 @@ assert.strictEqual(oldCh.subscribed, false, 'R57: old channel was unsubscribed/r
 assert.strictEqual(envR57.intervals.filter(i => !i.cleared).length, 1, 'R57: exactly 1 active poll timer remains');
 recordR('R57');
 
-// Verify all R25-R57 assertions passed
-for (let i = 25; i <= 57; i++) {
+// ==========================================================
+// R58-R62: Production RLS Boundary & Secure Receipt Reconciliation
+// ==========================================================
+
+// R58: PRODUCTION RLS CONTRACT — direct phong_thi SELECT denied, receipt RPC reset_confirmed=true -> cleans up authoritative reset
+const envR58 = createStudentEnvironment();
+const snapR58 = {
+  version: 1,
+  state: 'SERVER_RECEIVED',
+  attempt_id: 'att-r58',
+  truong_id: 'school-58',
+  phong_id: 'room-r58',
+  hs_id: 'hs-58',
+  ma_de: '101',
+  room_opened_at: 58000,
+  raw_answers: [{ chon: 'A' }],
+  client_submitted_at: '2026-08-30T10:00:00Z',
+  auto_submit: false
+};
+envR58.localStore.set('final_damsan_room-r58_hs-58', JSON.stringify(snapR58));
+envR58.localStore.set('receipt_damsan_room-r58_hs-58', JSON.stringify({ submission_id: 'sub-58', received_at: '2026-08-30T10:00:00Z' }));
+envR58.api.setState({ phong_id: 'room-r58', room_opened_at: 58000, hs_id: 'hs-58', truong_id: 'school-58' });
+envR58.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
+envR58.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
+
+await envR58.api._postReceiptLifecycleTick();
+
+assert.strictEqual(envR58.localStore.has('final_damsan_room-r58_hs-58'), false, 'R58: active snapshot cleared despite phong_thi RLS error');
+assert.strictEqual(envR58.localStore.has('receipt_damsan_room-r58_hs-58'), false, 'R58: active receipt cleared');
+assert.strictEqual(envR58.localStore.has('recovery_damsan_room-r58_hs-58_att-r58'), true, 'R58: snapshot archived');
+assert.strictEqual(envR58.api.getState().phong_id, null, 'R58: state.phong_id cleared to null');
+assert.strictEqual(envR58.api.getState().room_opened_at, null, 'R58: state.room_opened_at cleared to null');
+recordR('R58');
+
+// R59: RLS + UNCONFIRMED — direct phong_thi denied, receipt RPC unconfirmed -> retains FINAL/state
+const envR59 = createStudentEnvironment();
+const snapR59 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-r59',
+  truong_id: 'school-59',
+  phong_id: 'room-r59',
+  hs_id: 'hs-59',
+  ma_de: '101',
+  room_opened_at: 59000,
+  raw_answers: [{ chon: 'A' }],
+  client_submitted_at: '2026-08-30T10:00:00Z',
+  auto_submit: false
+};
+envR59.localStore.set('final_damsan_room-r59_hs-59', JSON.stringify(snapR59));
+envR59.api.setState({ phong_id: 'room-r59', room_opened_at: 59000, hs_id: 'hs-59', truong_id: 'school-59' });
+envR59.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
+envR59.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+
+await envR59.api._postReceiptLifecycleTick();
+
+assert.strictEqual(envR59.localStore.has('final_damsan_room-r59_hs-59'), true, 'R59: snapshot preserved when unconfirmed');
+assert.strictEqual(envR59.localStore.has('recovery_damsan_room-r59_hs-59_att-r59'), false, 'R59: must not archive when unconfirmed');
+assert.strictEqual(envR59.api.getState().phong_id, 'room-r59', 'R59: phong_id preserved');
+assert.strictEqual(envR59.api.getState().room_opened_at, 59000, 'R59: room_opened_at preserved');
+recordR('R59');
+
+// R60: RLS + RPC NETWORK ERROR — direct phong_thi denied, receipt RPC 503 error -> retains FINAL/state
+const envR60 = createStudentEnvironment();
+const snapR60 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-r60',
+  truong_id: 'school-60',
+  phong_id: 'room-r60',
+  hs_id: 'hs-60',
+  ma_de: '101',
+  room_opened_at: 60000,
+  raw_answers: [{ chon: 'A' }],
+  client_submitted_at: '2026-08-30T10:00:00Z',
+  auto_submit: false
+};
+envR60.localStore.set('final_damsan_room-r60_hs-60', JSON.stringify(snapR60));
+envR60.api.setState({ phong_id: 'room-r60', room_opened_at: 60000, hs_id: 'hs-60', truong_id: 'school-60' });
+envR60.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
+envR60.mockSupabase._receiptStatusResult = { data: null, error: { message: '503 Service Unavailable' } };
+
+await envR60.api._postReceiptLifecycleTick();
+
+assert.strictEqual(envR60.localStore.has('final_damsan_room-r60_hs-60'), true, 'R60: snapshot preserved on RPC network error');
+assert.strictEqual(envR60.localStore.has('recovery_damsan_room-r60_hs-60_att-r60'), false, 'R60: must not archive on network error');
+assert.strictEqual(envR60.api.getState().phong_id, 'room-r60', 'R60: phong_id preserved');
+recordR('R60');
+
+// R61: POLLING FALLBACK UNDER REAL PRODUCTION PERMISSION MODEL — phong_thi direct SELECT denied, polling cleanup succeeds
+const envR61 = createStudentEnvironment();
+const snapR61 = {
+  version: 1,
+  state: 'SERVER_RECEIVED',
+  attempt_id: 'att-r61',
+  truong_id: 'school-61',
+  phong_id: 'room-r61',
+  hs_id: 'hs-61',
+  ma_de: '101',
+  room_opened_at: 61000,
+  raw_answers: [{ chon: 'C' }],
+  client_submitted_at: '2026-08-30T10:00:00Z',
+  auto_submit: false
+};
+envR61.localStore.set('final_damsan_room-r61_hs-61', JSON.stringify(snapR61));
+envR61.api.setState({ phong_id: 'room-r61', room_opened_at: 61000, hs_id: 'hs-61', truong_id: 'school-61' });
+envR61.api.batDauPostReceiptLifecycleWatcher();
+const r61Poll = envR61.intervals.find(i => i.ms === 12000 && !i.cleared);
+assert(r61Poll, 'R61: 12s poll timer registered');
+
+envR61.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
+envR61.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
+
+r61Poll.fn();
+await new Promise(resolve => setTimeout(resolve, 20));
+
+assert.strictEqual(envR61.localStore.has('final_damsan_room-r61_hs-61'), false, 'R61: polling under RLS cleared snapshot');
+assert.strictEqual(envR61.localStore.has('recovery_damsan_room-r61_hs-61_att-r61'), true, 'R61: polling archived snapshot');
+assert.strictEqual(envR61.api.getState().phong_id, null, 'R61: phong_id cleared on polling reset');
+recordR('R61');
+
+// R62: REALTIME EVENT UNDER REAL PRODUCTION PERMISSION MODEL — realtime event triggers receipt-status cleanup when SELECT denied
+const envR62 = createStudentEnvironment();
+const snapR62 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-r62',
+  truong_id: 'school-62',
+  phong_id: 'room-r62',
+  hs_id: 'hs-62',
+  ma_de: '101',
+  room_opened_at: 62000,
+  raw_answers: [{ chon: 'A' }],
+  client_submitted_at: '2026-08-30T10:00:00Z',
+  auto_submit: false
+};
+envR62.localStore.set('final_damsan_room-r62_hs-62', JSON.stringify(snapR62));
+envR62.api.setState({ phong_id: 'room-r62', room_opened_at: 62000, hs_id: 'hs-62', truong_id: 'school-62' });
+envR62.api.batDauPostReceiptLifecycleWatcher();
+const r62Channel = envR62.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r62');
+assert(r62Channel, 'R62: channel must exist');
+
+envR62.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
+envR62.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
+
+r62Channel.triggerPostgresChanges({ new: { id: 'room-r62', thoi_gian_mo: null } });
+await new Promise(resolve => setTimeout(resolve, 20));
+
+assert.strictEqual(envR62.localStore.has('final_damsan_room-r62_hs-62'), false, 'R62: realtime trigger under RLS cleared snapshot');
+assert.strictEqual(envR62.localStore.has('recovery_damsan_room-r62_hs-62_att-r62'), true, 'R62: realtime trigger archived snapshot');
+assert.strictEqual(envR62.api.getState().phong_id, null, 'R62: phong_id cleared on realtime reset');
+recordR('R62');
+
+// Verify all R25-R62 assertions passed
+for (let i = 25; i <= 62; i++) {
   assert.strictEqual(rCoverage[`R${i}`], true, `Missing coverage for R${i}`);
 }
 
@@ -1157,7 +1310,7 @@ const migration03 = fs.readFileSync('supabase/migrations/20260829000003_student_
 assert(migration03.includes('create or replace function public.rpc_reset_room_results'));
 assert(migration03.includes("set trang_thai = 'CHO_THI', thoi_gian_mo = null"));
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R57; P0-006A post-receipt lifecycle watcher; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R62; P0-006A post-receipt lifecycle watcher; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);
