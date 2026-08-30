@@ -2748,7 +2748,7 @@ async function fetchDashboard(isAuto = false) {
             allStudents = (resHS.data || new Array()).map(d => ({ MaHS: d.ma_hs, HoTen: d.ho_ten, Lop: d.lop, Quyen: d.quyen, id: d.id }));
         }
 
-        duLieuBangDiem = kqList.map(r => ({ 
+        duLieuBangDiem = kqList.map(r => ({
             MaHS: r.hoc_sinh ? r.hoc_sinh.ma_hs : 'Lỗi/Xóa', 
             HoTen: r.hoc_sinh ? r.hoc_sinh.ho_ten : 'Không rõ', 
             Lop: r.hoc_sinh ? r.hoc_sinh.lop : '', 
