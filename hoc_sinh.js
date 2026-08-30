@@ -1,12 +1,15 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260829-recovery-lifecycle-p0-006';
+const VERSION = '20260830-post-receipt-lifecycle-p0-006a';
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
 let realtimeResultChannel = null;   // [Fix 1B] Channel riêng cho màn kết quả sau khi nộp bài
 let realtimeResultCleanupTimer = null; // Timer tự dọn channel sau 30 phút
+let postReceiptLifecycleChannel = null;   // P0-006A: Watcher độc lập theo dõi vòng đời phòng sau receipt
+let postReceiptLifecyclePollTimer = null; // P0-006A: Polling fallback khi realtime không phát event
+let postReceiptLifecycleContextKey = null; // P0-006A: Context key chống duplicate watcher
 let examTimer = null;
 // Chỉ giữ proof hash của mật khẩu mặc định trong runtime cho lần đổi mật khẩu đầu tiên.
 let pendingStudentPasswordProof = null;
@@ -313,6 +316,7 @@ function luuTaiKhoan(maHs, hoTen, lop) {
 function dangXuatHS() {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
         pendingStudentPasswordProof = null;
+        dungPostReceiptLifecycleWatcher(); // P0-006A: Dung watcher khi dang xuat
         sessionStorage.removeItem('damSan_HSSession');
         location.reload();
     }
@@ -381,9 +385,18 @@ window.addEventListener('online', () => {
     let btnSubmit = document.getElementById('btn-submit-exam');
     if (btnSubmit) { btnSubmit.style.opacity = '1'; btnSubmit.style.cursor = 'pointer'; }
     setTimeout(() => { if (!state.isOffline && banner.className === 'online') { banner.className = ''; } }, 4000);
+    // P0-006A: Khi co mang lai, kich hoat lifecycle check
+    void _postReceiptLifecycleTick();
     void resumeSavedSubmission().then(recovered => {
         if (!recovered && state.hs_id) timPhongThiTuDong();
     });
+});
+
+// P0-006A: Khi PWA tro lai foreground - visibilitychange fallback
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !isExamActive) {
+        void _postReceiptLifecycleTick();
+    }
 });
 
 function hienThiThongBaoLuu() {
@@ -1078,6 +1091,8 @@ async function joinRoom(maPhongAuto = null) {
             showSection('result-section');
             // Kết quả được kiểm tra thủ công qua HTTP; sau receipt không giữ WebSocket học sinh.
             dongTatCaRealtimeHocSinh();
+            // P0-006A: Khoi dong lifecycle watcher
+            batDauPostReceiptLifecycleWatcher();
             checkTeacherCommand(true);
             return;
         }
@@ -1173,6 +1188,60 @@ function dongTatCaRealtimeHocSinh() {
     if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
     if (realtimeResultCleanupTimer) { clearTimeout(realtimeResultCleanupTimer); realtimeResultCleanupTimer = null; }
     if (realtimeResultChannel) { _supabase.removeChannel(realtimeResultChannel); realtimeResultChannel = null; }
+}
+// P0-006A: Dung post-receipt lifecycle watcher an toan
+function dungPostReceiptLifecycleWatcher() {
+    if (postReceiptLifecyclePollTimer) { clearInterval(postReceiptLifecyclePollTimer); postReceiptLifecyclePollTimer = null; }
+    if (postReceiptLifecycleChannel) { try { _supabase.removeChannel(postReceiptLifecycleChannel); } catch(e) {} postReceiptLifecycleChannel = null; }
+    postReceiptLifecycleContextKey = null;
+}
+// P0-006A: Kiem tra context post-receipt co hop le khong
+function _postReceiptContextValid() {
+    return !!(state.phong_id && state.room_opened_at !== null && state.room_opened_at !== undefined);
+}
+// P0-006A: Tick cua lifecycle watcher
+async function _postReceiptLifecycleTick() {
+    if (!_postReceiptContextValid()) { dungPostReceiptLifecycleWatcher(); return; }
+    const snapshot = getFinalSnapshot();
+    const isOnReceiptOrResult = (function() {
+        try {
+            const rs = document.getElementById('result-section');
+            return rs && rs.classList && rs.classList.contains('active');
+        } catch(e) { return false; }
+    })();
+    if (!snapshot && !isOnReceiptOrResult) return;
+    if (state.isOffline) return;
+    await checkTeacherCommand(true);
+}
+// P0-006A: Khoi dong post-receipt lifecycle watcher (idempotent)
+function batDauPostReceiptLifecycleWatcher() {
+    if (!_postReceiptContextValid()) {
+        dungPostReceiptLifecycleWatcher();
+        return;
+    }
+    const currentKey = `${state.phong_id}:${state.room_opened_at}`;
+    if (postReceiptLifecycleContextKey === currentKey && (postReceiptLifecycleChannel || postReceiptLifecyclePollTimer)) {
+        return;
+    }
+    dungPostReceiptLifecycleWatcher();
+    postReceiptLifecycleContextKey = currentKey;
+    const capturedPhongId = state.phong_id;
+    const capturedOpenedAt = state.room_opened_at;
+    try {
+        postReceiptLifecycleChannel = _supabase
+            .channel('post-receipt-lifecycle-' + capturedPhongId)
+            .on('postgres_changes', {
+                event: 'UPDATE', schema: 'public', table: 'phong_thi',
+                filter: 'id=eq.' + capturedPhongId
+            }, (payload) => {
+                if (state.phong_id !== capturedPhongId) return;
+                const _normG = v => (v === null || v === undefined) ? null : String(v);
+                const serverGen = _normG(payload.new && payload.new.thoi_gian_mo);
+                const localGen = _normG(capturedOpenedAt);
+                if (localGen !== null && serverGen !== localGen) { void checkTeacherCommand(true); }
+            }).subscribe();
+    } catch(e) { console.warn('[post-receipt-watcher]', e); }
+    postReceiptLifecyclePollTimer = setInterval(() => { void _postReceiptLifecycleTick(); }, 12000);
 }
 
 function renderExam() {
@@ -1821,6 +1890,8 @@ function showReceivedState(receipt) {
     document.getElementById('score-display-area').style.display = 'none';
     document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(dinhDangThoiGianVN(receipt.received_at))}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
     try { document.exitFullscreen(); } catch (e) { }
+    // P0-006A: Khoi dong post-receipt lifecycle watcher
+    batDauPostReceiptLifecycleWatcher();
 }
 
 async function receiveFinalSubmission() {
@@ -1864,6 +1935,7 @@ async function receiveFinalSubmission() {
             state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
             state.cau_hoi = []; state.user_result = null; cheatCount = 0;
             dongTatCaRealtimeHocSinh();
+            dungPostReceiptLifecycleWatcher(); // P0-006A
             alert('Lượt thi này đã được giáo viên reset. Bản chốt cũ không được gửi lại; hãy vào lượt thi mới khi phòng được mở.');
             showSection('room-section');
             timPhongThiTuDong();
@@ -1943,6 +2015,7 @@ async function checkTeacherCommand(isAuto = false) {
             state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
             state.cau_hoi = []; state.user_result = null; cheatCount = 0;
             dongTatCaRealtimeHocSinh();
+            dungPostReceiptLifecycleWatcher(); // P0-006A
             showSection('room-section');
             timPhongThiTuDong();
             if (!isAuto) alert(roomDeleted
