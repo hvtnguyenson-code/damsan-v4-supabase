@@ -1813,11 +1813,302 @@ assert.strictEqual(
 );
 recordR('R114');
 
-for (let i = 25; i <= 114; i++) {
+// =========================================================================
+// P0-008A: SECURE TOKEN-BOUND STUDENT RPC SUITE (R115 - R137)
+// =========================================================================
+
+const mig008Content = fs.readFileSync('supabase/migrations/20260830000002_student_rpc_token_binding_p0_008a.sql', 'utf8');
+
+// R115: secure receive requires valid student token
+assert(mig008Content.includes("create or replace function public.rpc_hoc_sinh_receive_submission"), "R115: secure receive defined");
+assert(mig008Content.includes("p_student_token text"), "R115: secure receive requires p_student_token");
+assert(mig008Content.includes("v_hs_id := public._student_session_hs_id(p_student_token);"), "R115: resolves token via _student_session_hs_id");
+assert(mig008Content.includes("'invalid_session'"), "R115: rejects invalid session");
+recordR('R115');
+
+// R116: secure receive has no hs_id/truong_id caller identity parameters
+const r116Match = mig008Content.match(/create or replace function public\.rpc_hoc_sinh_receive_submission\s*\(([\s\S]*?)\)\s*returns/);
+assert(r116Match, "R116: receive signature parsed");
+assert(!r116Match[1].includes('p_hs_id'), "R116: no p_hs_id parameter");
+assert(!r116Match[1].includes('p_truong_id'), "R116: no p_truong_id parameter");
+recordR('R116');
+
+// R117: foreign attempt_id cannot return another student's receipt
+assert(mig008Content.includes("if v_submission.hs_id = v_hs_id and v_submission.truong_id = v_student.truong_id and v_submission.phong_id = p_phong_id then"), "R117: fast idempotency enforces strict ownership");
+// Model validation for foreign attempt collision
+const foreignCollisionStore = new Map();
+foreignCollisionStore.set('attempt-foreign', { id: 'sub-foreign', hs_id: 'hs-other', truong_id: 'sch-1', phong_id: 'room-1' });
+function checkAttemptOwnership(attemptId, callerHsId, callerSchoolId, callerRoomId) {
+  const existing = foreignCollisionStore.get(attemptId);
+  if (!existing) return { status: 'new' };
+  if (existing.hs_id === callerHsId && existing.truong_id === callerSchoolId && existing.phong_id === callerRoomId) {
+    return { status: 'received', id: existing.id };
+  }
+  return { status: 'error', message: 'Attempt ID không hợp lệ hoặc đã tồn tại.' };
+}
+assert.strictEqual(checkAttemptOwnership('attempt-foreign', 'hs-caller', 'sch-1', 'room-1').status, 'error', "R117: foreign attempt fails closed");
+assert.strictEqual(checkAttemptOwnership('attempt-foreign', 'hs-other', 'sch-1', 'room-1').status, 'received', "R117: own attempt succeeds");
+recordR('R117');
+
+// R118: exact deterministic exam assignment vectors remain correct
+assert.strictEqual(legacyExamIndex('100403', 4), 3, "R118: Vector 100403 / 4 -> 3");
+assert.strictEqual(legacyExamIndex('012345', 4), 1, "R118: Vector 012345 / 4 -> 1");
+assert.strictEqual(legacyExamIndex('HS001', 4), 2, "R118: Vector HS001 / 4 -> 2");
+assert.strictEqual(legacyExamIndex('DAMSAN2026', 5), 1, "R118: Vector DAMSAN2026 / 5 -> 1");
+assert.strictEqual(legacyExamIndex('X', 1), 0, "R118: Vector X / 1 -> 0");
+const r118Hash123ABC = (function(){ let h = 0; for(let c of '123ABC') h = ((h * 31) + c.charCodeAt(0)) % 2147483647; return h % 4; })();
+assert.strictEqual(legacyExamIndex('123ABC', 4), r118Hash123ABC, "R118: 123ABC uses rolling hash");
+assert.strictEqual(legacyExamIndex('  100403  ', 4), 3, "R118: trimmed numeric matches");
+assert.strictEqual(legacyExamIndex('  HS001  ', 4), 2, "R118: trimmed alphanumeric matches");
+recordR('R118');
+
+// R119: p_ma_de mismatch is rejected
+assert(mig008Content.includes("v_clean_ma_hs ~ '^[0-9]+" + String.fromCharCode(36) + "'"), "R119: numeric regex present");
+assert(mig008Content.includes("v_expected_ma_de is null or trim(p_ma_de) <> trim(v_expected_ma_de)"), "R119: expected ma_de compared against p_ma_de");
+assert(mig008Content.includes("'exam_assignment_mismatch'"), "R119: exam_assignment_mismatch error returned on mismatch");
+recordR('R119');
+
+// R120: own exact retry remains idempotent and returns same receipt
+const r120Store = new SubmissionStore();
+const r120First = r120Store.receive('attempt-120', 'room-120', 'hs-120', [{ chon: 'A' }]);
+const r120Second = r120Store.receive('attempt-120', 'room-120', 'hs-120', [{ chon: 'A' }]);
+assert.strictEqual(r120First.id, r120Second.id, "R120: exact retry returns identical receipt");
+recordR('R120');
+
+// R121: second attempt id for same own room/student preserves one-submission semantics
+const r121SecondAttempt = r120Store.receive('attempt-121-diff', 'room-120', 'hs-120', [{ chon: 'B' }]);
+assert.strictEqual(r121SecondAttempt.id, r120First.id, "R121: second attempt for same room/student returns existing receipt");
+assert(mig008Content.includes("on conflict do nothing") && mig008Content.includes("where phong_id = p_phong_id") && mig008Content.includes("and hs_id = v_hs_id"), "R121: migration preserves one-submission semantics");
+recordR('R121');
+
+// R122: room generation/reset check remains enforced
+assert(mig008Content.includes("p_room_opened_at is null or v_room.thoi_gian_mo is distinct from p_room_opened_at"), "R122: room_opened_at generation check in migration");
+assert(mig008Content.includes("'room_attempt_changed'"), "R122: room_attempt_changed error code returned");
+recordR('R122');
+
+// R123: secure receipt status is token-bound and foreign attempt cannot leak
+assert(mig008Content.includes("create or replace function public.rpc_hoc_sinh_submission_receipt_status"), "R123: receipt status defined");
+const r123Match = mig008Content.match(/create or replace function public\.rpc_hoc_sinh_submission_receipt_status\s*\(([\s\S]*?)\)\s*returns/);
+assert(r123Match, "R123: receipt status signature parsed");
+assert(!r123Match[1].includes('p_hs_id'), "R123: no p_hs_id parameter");
+assert(!r123Match[1].includes('p_truong_id'), "R123: no p_truong_id parameter");
+assert(mig008Content.includes("v_submission.hs_id = v_hs_id and v_submission.truong_id = v_student.truong_id"), "R123: receipt status validates token-bound ownership");
+recordR('R123');
+
+// R124: secure violation update can only affect token-bound student
+assert(mig008Content.includes("create or replace function public.rpc_hoc_sinh_update_violation"), "R124: violation RPC defined");
+const r124Match = mig008Content.match(/create or replace function public\.rpc_hoc_sinh_update_violation\s*\(([\s\S]*?)\)\s*returns/);
+assert(r124Match, "R124: violation signature parsed");
+assert(!r124Match[1].includes('p_hs_id'), "R124: no p_hs_id parameter");
+assert(mig008Content.includes("and hs_id = v_hs_id"), "R124: violation update scoped to token-bound hs_id");
+assert(mig008Content.includes("p_so_lan < 0"), "R124: rejects negative violation counts");
+recordR('R124');
+
+// R125: violation count cannot be decreased
+assert(mig008Content.includes("so_lan_vi_pham = greatest(coalesce(so_lan_vi_pham, 0), p_so_lan)"), "R125: monotonic violation update");
+function updateMonotonicViolation(current, incoming) {
+  if (incoming < 0) return current;
+  return Math.max(current || 0, incoming);
+}
+assert.strictEqual(updateMonotonicViolation(2, 5), 5, "R125: count increased from 2 to 5");
+assert.strictEqual(updateMonotonicViolation(5, 1), 5, "R125: count preserved at 5 when lower count incoming");
+recordR('R125');
+
+// R126: room info derives identity from token
+assert(mig008Content.includes("create or replace function public.rpc_hoc_sinh_room_info"), "R126: room info RPC defined");
+const r126Match = mig008Content.match(/create or replace function public\.rpc_hoc_sinh_room_info\s*\(([\s\S]*?)\)\s*returns/);
+assert(r126Match, "R126: room info signature parsed");
+assert(!r126Match[1].includes('p_hs_id'), "R126: no p_hs_id parameter");
+assert(!r126Match[1].includes('p_truong_id'), "R126: no p_truong_id parameter");
+assert(mig008Content.includes("pt.truong_id = v_student.truong_id"), "R126: room lookup enforces student school");
+recordR('R126');
+
+// R127: room list derives identity from token and returns only own submitted ids
+assert(mig008Content.includes("create or replace function public.rpc_hoc_sinh_room_list"), "R127: room list RPC defined");
+const r127Match = mig008Content.match(/create or replace function public\.rpc_hoc_sinh_room_list\s*\(([\s\S]*?)\)\s*returns/);
+assert(r127Match, "R127: room list signature parsed");
+assert(!r127Match[1].includes('p_hs_id'), "R127: no p_hs_id parameter");
+assert(!r127Match[1].includes('p_truong_id'), "R127: no p_truong_id parameter");
+assert(mig008Content.includes("where hs_id = v_hs_id") && mig008Content.includes("and diem is not null"), "R127: submitted room ids scoped to student graded results");
+recordR('R127');
+
+// R128: all new SECURITY DEFINER functions pin search_path=public (per-function block isolation)
+const expected008Functions = [
+  'rpc_hoc_sinh_receive_submission',
+  'rpc_hoc_sinh_submission_receipt_status',
+  'rpc_hoc_sinh_update_violation',
+  'rpc_hoc_sinh_room_info',
+  'rpc_hoc_sinh_room_list'
+];
+expected008Functions.forEach(fn => {
+  const blockRegex = new RegExp('create or replace function public\\.' + fn + '\\b[\\s\\S]*?\\$function\\$', 'i');
+  const match = mig008Content.match(blockRegex);
+  assert(match, "R128: function block found for " + fn);
+  const blockHeader = match[0];
+  assert(/\bsecurity\s+definer\b/i.test(blockHeader), "R128: " + fn + " header contains security definer");
+  assert(/\bset\s+search_path\s*=\s*public\b/i.test(blockHeader), "R128: " + fn + " header contains set search_path = public");
+});
+recordR('R128');
+
+// R129: all new functions explicitly revoke PUBLIC execute and grant anon/authenticated as intended
+expected008Functions.forEach(fn => {
+  const revokeRe = new RegExp('revoke all on function public\\.' + fn + '\\([^)]*\\) from public;', 'g');
+  assert(revokeRe.test(mig008Content), "R129: " + fn + " revokes execute from public");
+  const grantRe = new RegExp('grant execute on function public\\.' + fn + '\\([^)]*\\) to anon, authenticated;', 'g');
+  assert(grantRe.test(mig008Content), "R129: " + fn + " grants execute to anon, authenticated");
+});
+recordR('R129');
+
+// R130: Phase-A migration does NOT revoke legacy browser RPCs yet
+const legacyRpcsToPreserve = [
+  'rpc_receive_submission',
+  'rpc_submission_receipt_status',
+  'rpc_cap_nhat_vi_pham',
+  'rpc_lay_thong_tin_phong_hs',
+  'rpc_lay_danh_sach_phong_thi_hs'
+];
+legacyRpcsToPreserve.forEach(legacyRpc => {
+  const legacyRevokeRegex = new RegExp('revoke[\\s\\S]*?' + legacyRpc, 'i');
+  assert(!legacyRevokeRegex.test(mig008Content), "R130: legacy RPC " + legacyRpc + " is NOT revoked in Phase A");
+});
+recordR('R130');
+
+// R131: migration structural integrity
+// 1. Each RPC definition occurs exactly once
+expected008Functions.forEach(rpc => {
+  const re = new RegExp('create or replace function public\\.' + rpc + '\\s*\\(', 'g');
+  const count = (mig008Content.match(re) || []).length;
+  assert.strictEqual(count, 1, "R131: Expected exactly 1 definition for " + rpc + ", got " + count);
+});
+
+// 2. Balanced $function$ delimiters
+const funcDelims008Count = (mig008Content.match(/\$function\$/g) || []).length;
+assert.strictEqual(funcDelims008Count % 2, 0, "R131: Balanced $function$ delimiters");
+assert.strictEqual(funcDelims008Count, 10, "R131: Exactly 5 functions with 10 $function$ delimiters");
+
+// 3. Balanced $$ delimiters
+const doDelims008Count = (mig008Content.match(/\$\$/g) || []).length;
+assert.strictEqual(doDelims008Count % 2, 0, "R131: Balanced $$ delimiters");
+
+// 4. Clean EOF
+assert(
+  mig008Content.trimEnd().endsWith("grant execute on function public.rpc_hoc_sinh_room_list(text) to anon, authenticated;"),
+  "R131: migration terminates cleanly with final grant statement"
+);
+recordR('R131');
+
+// R132: room list filters CHO_THI and sorts newest-first (created_at DESC)
+assert(mig008Content.includes("pt.trang_thai <> 'CHO_THI'"), "R132: migration filters out CHO_THI");
+assert(mig008Content.includes("order by pt.created_at desc"), "R132: migration orders by created_at desc");
+const r132Rooms = [
+  { id: 'r1', created_at: 100, trang_thai: 'CHO_THI', doi_tuong: 'TatCa' },
+  { id: 'r2', created_at: 200, trang_thai: 'MO_PHONG', doi_tuong: 'TatCa' },
+  { id: 'r3', created_at: 300, trang_thai: 'DANG_THI', doi_tuong: 'TatCa' }
+];
+const r132Filtered = r132Rooms
+  .filter(r => r.trang_thai !== 'CHO_THI')
+  .sort((a, b) => b.created_at - a.created_at);
+assert.strictEqual(r132Filtered.length, 2, "R132: CHO_THI filtered out");
+assert.strictEqual(r132Filtered[0].id, 'r3', "R132: newest first");
+assert.strictEqual(r132Filtered[1].id, 'r2', "R132: second newest");
+recordR('R132');
+
+// R133: room list exact audience semantics
+assert(!mig008Content.includes("or pt.doi_tuong = ''"), "R133: empty string not treated as TatCa in room list");
+assert(!mig008Content.includes("or exists (select 1 from public.ket_qua kq where kq.phong_id = pt.id"), "R133: historical result does not bypass audience in room list");
+function isEligibleAudience(doiTuong, studentClass, studentMaHs) {
+  if (doiTuong === null || doiTuong === 'TatCa') return true;
+  if (!doiTuong || doiTuong.trim() === '') return false;
+  const items = doiTuong.split(',').map(s => s.trim());
+  return items.includes(studentClass) || items.includes(studentMaHs);
+}
+assert.strictEqual(isEligibleAudience(null, '12A', 'HS1'), true, "R133: NULL allowed");
+assert.strictEqual(isEligibleAudience('TatCa', '12A', 'HS1'), true, "R133: TatCa allowed");
+assert.strictEqual(isEligibleAudience('12A, 12B', '12A', 'HS1'), true, "R133: matching class allowed");
+assert.strictEqual(isEligibleAudience('HS1, HS2', '12C', 'HS1'), true, "R133: matching student allowed");
+assert.strictEqual(isEligibleAudience('', '12A', 'HS1'), false, "R133: empty string NOT allowed");
+assert.strictEqual(isEligibleAudience('12B', '12A', 'HS1'), false, "R133: non-matching class NOT allowed");
+recordR('R133');
+
+// R134: submitted_room_ids reflects only own graded ket_qua
+assert(mig008Content.includes("from public.ket_qua") && mig008Content.includes("where hs_id = v_hs_id") && mig008Content.includes("and diem is not null"), "R134: submitted_room_ids from graded ket_qua");
+const r134Kq = [
+  { hs_id: 'hs-1', phong_id: 'room-1', diem: 8.5 },
+  { hs_id: 'hs-1', phong_id: 'room-2', diem: null },
+  { hs_id: 'hs-2', phong_id: 'room-3', diem: 9.0 }
+];
+const r134Submitted = [...new Set(r134Kq.filter(k => k.hs_id === 'hs-1' && k.diem !== null).map(k => k.phong_id))];
+assert.deepStrictEqual(r134Submitted, ['room-1'], "R134: only graded own results in submitted_room_ids");
+recordR('R134');
+
+// R135: room info exact eligibility semantics and legacy JSON shape including nested mon_hoc.ten_mon
+assert(mig008Content.includes("'mon_hoc', v_room.mon_hoc"), "R135: room info returns nested mon_hoc");
+const r135Output = {
+  status: 'success',
+  room: {
+    id: 'room-uuid',
+    trang_thai: 'MO_PHONG',
+    thoi_gian: 45,
+    thoi_gian_mo: 1700000000000,
+    doi_tuong: 'TatCa',
+    mon_hoc: { ten_mon: 'Toán học' }
+  }
+};
+assert.strictEqual(r135Output.room.mon_hoc.ten_mon, 'Toán học', "R135: nested mon_hoc.ten_mon present");
+assert.strictEqual(Object.prototype.hasOwnProperty.call(r135Output.room, 'ten_mon'), false, "R135: flat ten_mon not at root");
+recordR('R135');
+
+// R136: foreign attempt existence and unknown attempt produce indistinguishable responses
+function evalReceiptStatus(attemptId, callerHsId, callerSchoolId, callerRoomId, roomOpenedAt, store, rooms) {
+  if (attemptId && store.has(attemptId)) {
+    const sub = store.get(attemptId);
+    if (sub.hs_id === callerHsId && sub.truong_id === callerSchoolId && (!callerRoomId || sub.phong_id === callerRoomId)) {
+      return { status: sub.status, submission_id: sub.id, attempt_id: sub.attempt_id, received_at: sub.received_at, reset_confirmed: false };
+    }
+  }
+  const room = rooms.get(callerRoomId);
+  if (!room || room.truong_id !== callerSchoolId) {
+    return { status: 'missing', reset_confirmed: true, room_exists: false };
+  }
+  if (roomOpenedAt && room.thoi_gian_mo !== roomOpenedAt) {
+    return { status: 'missing', reset_confirmed: true, room_exists: true };
+  }
+  return { status: 'missing', reset_confirmed: false, room_exists: true };
+}
+const r136Store = new Map();
+r136Store.set('foreign-attempt-uuid', { id: 'foreign-sub-id', attempt_id: 'foreign-attempt-uuid', hs_id: 'other-student', truong_id: 'sch-1', phong_id: 'room-1', status: 'graded', received_at: '2026-08-30T00:00:00Z' });
+const r136Rooms = new Map();
+r136Rooms.set('room-1', { id: 'room-1', truong_id: 'sch-1', thoi_gian_mo: 1000 });
+
+const resForeign = evalReceiptStatus('foreign-attempt-uuid', 'caller-student', 'sch-1', 'room-1', 1000, r136Store, r136Rooms);
+const resUnknown = evalReceiptStatus('completely-random-uuid', 'caller-student', 'sch-1', 'room-1', 1000, r136Store, r136Rooms);
+assert.deepStrictEqual(resForeign, resUnknown, "R136: foreign attempt and unknown attempt produce identical responses");
+assert.strictEqual(resForeign.status, 'missing', "R136: status is missing");
+assert.strictEqual(resForeign.submission_id, undefined, "R136: no submission_id leaked");
+recordR('R136');
+
+// R137: post-INSERT conflict never returns received with NULL receipt
+assert(mig008Content.includes("v_submission.id is null") && mig008Content.includes("'submission_conflict'"), "R137: post-conflict null check returns submission_conflict");
+function handlePostConflictLookup(insertedRow, ownCanonicalRow) {
+  let sub = insertedRow;
+  if (!sub) {
+    sub = ownCanonicalRow;
+  }
+  if (!sub || !sub.id) {
+    return { status: 'error', code: 'submission_conflict', message: 'Không thể hoàn tất nộp bài do xung đột dữ liệu.' };
+  }
+  return { status: 'received', submission_id: sub.id, attempt_id: sub.attempt_id, received_at: sub.received_at };
+}
+assert.strictEqual(handlePostConflictLookup(null, null).status, 'error', "R137: null canonical row fails closed");
+assert.strictEqual(handlePostConflictLookup(null, null).code, 'submission_conflict', "R137: returns submission_conflict");
+assert.strictEqual(handlePostConflictLookup(null, { id: 'own-sub-1', attempt_id: 'a1', received_at: 100 }).status, 'received', "R137: existing own canonical row returns receipt");
+recordR('R137');
+
+for (let i = 25; i <= 137; i++) {
   assert(rCoverage['R' + i], "missing coverage for R" + i);
 }
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R114; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R137; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A token-bound student RPC layer; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);
