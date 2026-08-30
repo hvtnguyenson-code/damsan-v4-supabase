@@ -212,6 +212,7 @@ const testHocSinhCode = clientSource + `
   clearStudentAuthSession,
   completeStudentAuthenticatedSession,
   joinRoom,
+  login,
   setPendingProof: (p) => { pendingStudentPasswordProof = p; },
   getPendingProof: () => pendingStudentPasswordProof
 };
@@ -257,7 +258,7 @@ function createStudentEnvironment() {
   const mockSupabase = {
     rpc: async (name, params) => {
       rpcCalls.push({ name, params });
-      if (name === 'rpc_lay_thong_tin_phong_hs') {
+      if (name === 'rpc_hoc_sinh_room_info' || name === 'rpc_lay_thong_tin_phong_hs') {
         const phong = mockSupabase._fromData?.['phong_thi'];
         if (phong) {
           return { data: { status: 'success', room: phong }, error: null };
@@ -283,10 +284,10 @@ function createStudentEnvironment() {
           error: null
         };
       }
-      if (name === 'rpc_submission_receipt_status' || name === 'lay_thong_tin_nop_bai_theo_attempt') {
+      if (name === 'rpc_hoc_sinh_submission_receipt_status' || name === 'rpc_submission_receipt_status' || name === 'lay_thong_tin_nop_bai_theo_attempt') {
         return mockSupabase._receiptStatusResult || { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
       }
-      if (name === 'rpc_receive_submission' || name === 'nop_bai_hoc_sinh_v3' || name === 'nop_bai_hoc_sinh') {
+      if (name === 'rpc_hoc_sinh_receive_submission' || name === 'rpc_receive_submission' || name === 'nop_bai_hoc_sinh_v3' || name === 'nop_bai_hoc_sinh') {
         return mockSupabase._nopBaiResult || { data: { status: 'received', submission_id: 'sub-real-1', received_at: '2026-08-29T13:11:46Z' }, error: null };
       }
       return { data: null, error: null };
@@ -499,8 +500,8 @@ assert.strictEqual(foundR28.length, 1);
 assert.strictEqual(foundR28[0].attempt_id, sampleAttemptId);
 let r28ReceiveCall = null;
 envR28.mockSupabase.rpc = async (name, params) => {
-  if (name === 'rpc_receive_submission') r28ReceiveCall = params;
-  if (name === 'rpc_submission_receipt_status') return { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+  if (name === 'rpc_hoc_sinh_receive_submission' || name === 'rpc_receive_submission') r28ReceiveCall = params;
+  if (name === 'rpc_hoc_sinh_submission_receipt_status' || name === 'rpc_submission_receipt_status') return { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
   return { data: { status: 'received', submission_id: 'sub-real-r28', received_at: '2026-08-29T13:11:46Z' }, error: null };
 };
 await envR28.api.resumeSavedSubmission();
@@ -509,7 +510,7 @@ assert.strictEqual(envR28.api.getState().room_opened_at, 1724920000000);
 recordR('R28');
 
 // R29: receive uses the exact original immutable attempt_id
-assert(r28ReceiveCall, 'Real resumeSavedSubmission must call rpc_receive_submission');
+assert(r28ReceiveCall, 'Real resumeSavedSubmission must call receive submission RPC');
 assert.strictEqual(r28ReceiveCall.p_attempt_id, sampleAttemptId);
 recordR('R29');
 
@@ -1314,7 +1315,7 @@ assert(client.includes("data?.code === 'room_attempt_changed'"));
 assert(client.includes('archiveFinalSnapshot(snapshot, \'room_attempt_changed\')'));
 assert(client.includes('return matches(JSON.parse(localStorage.getItem(key)))'));
 assert(client.includes('if (!archived) {'));
-assert(client.includes('p_truong_id: snapshot.truong_id') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
+assert(client.includes('p_student_token: token') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
 assert(client.includes("if (receipt?.submission_id && receipt?.received_at)"));
 assert(client.includes('Chưa xác nhận được trạng thái bài nộp từ máy chủ.'));
 assert(client.includes('function submissionKeysFor(phongId, hsId)'));
@@ -1345,7 +1346,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20260830-student-result-status-p0-007');
+assert.strictEqual(clientVersion, '20260830-student-rpc-cutover-p0-008b');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -1633,7 +1634,7 @@ const envR109 = createStudentEnvironment();
 envR109.api.setState({ truong_id: 'sch-1', hs_id: 'hs-109', ma_hs: 'HS109', lop: '12A' });
 envR109.localStore.set('fatal_violation_HS109_room-109', 'true');
 envR109.mockSupabase.rpc = async (name) => {
-  if (name === 'rpc_lay_thong_tin_phong_hs') return { data: { status: 'success', room: { id: 'room-109', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } }, error: null };
+  if (name === 'rpc_hoc_sinh_room_info' || name === 'rpc_lay_thong_tin_phong_hs') return { data: { status: 'success', room: { id: 'room-109', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } }, error: null };
   if (name === 'rpc_hoc_sinh_result_status') return { data: null, error: { message: 'Network connection failure' } };
   return { data: null, error: null };
 };
@@ -1649,7 +1650,7 @@ envR110.sandbox.showSection = (s) => { r110Section = s; };
 envR110.localStore.set('fatal_violation_HS110_room-110', 'true');
 envR110.mockSupabase._fromData = { phong_thi: { id: 'room-110', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } };
 envR110.mockSupabase.rpc = async (name) => {
-  if (name === 'rpc_lay_thong_tin_phong_hs') return { data: { status: 'success', room: { id: 'room-110', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } }, error: null };
+  if (name === 'rpc_hoc_sinh_room_info' || name === 'rpc_lay_thong_tin_phong_hs') return { data: { status: 'success', room: { id: 'room-110', doi_tuong: 'TatCa', trang_thai: 'DANG_THI' } }, error: null };
   if (name === 'rpc_hoc_sinh_result_status') return { data: { status: 'error', code: 'invalid_session', message: 'Phiên hết hạn' }, error: null };
   return { data: null, error: null };
 };
@@ -2104,11 +2105,234 @@ assert.strictEqual(handlePostConflictLookup(null, null).code, 'submission_confli
 assert.strictEqual(handlePostConflictLookup(null, { id: 'own-sub-1', attempt_id: 'a1', received_at: 100 }).status, 'received', "R137: existing own canonical row returns receipt");
 recordR('R137');
 
-for (let i = 25; i <= 137; i++) {
+// ============================================================================
+// P0-008B: STUDENT RPC CLIENT CUTOVER & CLEANUP SUITE (R138 - R148)
+// ============================================================================
+const hsJs008b = fs.readFileSync('hoc_sinh.js', 'utf8');
+const swJs008b = fs.readFileSync('sw.js', 'utf8');
+const hsHtml008b = fs.readFileSync('hoc_sinh.html', 'utf8');
+const mig008bContent = fs.readFileSync('supabase/migrations/20260830000003_student_rpc_cutover_p0_008b.sql', 'utf8');
+
+// R138: hoc_sinh.js uses rpc_hoc_sinh_receive_submission
+assert(hsJs008b.includes("_supabase.rpc('rpc_hoc_sinh_receive_submission'"), "R138: hoc_sinh.js calls rpc_hoc_sinh_receive_submission");
+recordR('R138');
+
+// R139: secure receive sends p_student_token and does NOT send p_hs_id / p_truong_id
+const receiveMatch = hsJs008b.match(/_supabase\.rpc\('rpc_hoc_sinh_receive_submission',\s*\{([\s\S]*?)\}\)/);
+assert(receiveMatch, "R139: found rpc_hoc_sinh_receive_submission call block");
+assert(receiveMatch[1].includes("p_student_token: token"), "R139: receives p_student_token");
+assert(!receiveMatch[1].includes("p_hs_id"), "R139: does not send p_hs_id");
+assert(!receiveMatch[1].includes("p_truong_id"), "R139: does not send p_truong_id");
+recordR('R139');
+
+// R140: reconcile uses rpc_hoc_sinh_submission_receipt_status, sends token and not p_truong_id
+const receiptStatusMatch = hsJs008b.match(/_supabase\.rpc\('rpc_hoc_sinh_submission_receipt_status',\s*\{([\s\S]*?)\}\)/);
+assert(receiptStatusMatch, "R140: found rpc_hoc_sinh_submission_receipt_status call block");
+assert(receiptStatusMatch[1].includes("p_student_token: token"), "R140: sends p_student_token");
+assert(!receiptStatusMatch[1].includes("p_truong_id"), "R140: does not send p_truong_id");
+recordR('R140');
+
+// R141: all 3 violation call-sites use rpc_hoc_sinh_update_violation and do not send p_hs_id
+const violationCalls = hsJs008b.match(/_supabase\.rpc\('rpc_hoc_sinh_update_violation'[\s\S]*?\)/g) || [];
+assert.strictEqual(violationCalls.length, 3, "R141: exactly 3 violation call sites using rpc_hoc_sinh_update_violation");
+violationCalls.forEach((callStr, idx) => {
+  assert(callStr.includes("p_student_token: token"), "R141 [" + idx + "]: sends p_student_token");
+  assert(!callStr.includes("p_hs_id"), "R141 [" + idx + "]: does not send p_hs_id");
+});
+recordR('R141');
+
+// R142: room lookup uses rpc_hoc_sinh_room_info and has no direct phong_thi fallback
+const roomInfoMatch = hsJs008b.match(/_supabase\.rpc\('rpc_hoc_sinh_room_info',\s*\{([\s\S]*?)\}\)/);
+assert(roomInfoMatch, "R142: found rpc_hoc_sinh_room_info call");
+assert(roomInfoMatch[1].includes("p_student_token: token"), "R142: sends p_student_token");
+assert(!roomInfoMatch[1].includes("p_hs_id") && !roomInfoMatch[1].includes("p_truong_id"), "R142: does not send p_hs_id/p_truong_id");
+assert(!hsJs008b.includes("_supabase.from('phong_thi')"), "R142: no direct phong_thi table access fallback");
+recordR('R142');
+
+// R143: room list uses rpc_hoc_sinh_room_list and does not send caller identity IDs
+const roomListMatch = hsJs008b.match(/_supabase\.rpc\('rpc_hoc_sinh_room_list',\s*\{([\s\S]*?)\}\)/);
+assert(roomListMatch, "R143: found rpc_hoc_sinh_room_list call");
+assert(roomListMatch[1].includes("p_student_token: token"), "R143: sends p_student_token");
+assert(!roomListMatch[1].includes("p_hs_id") && !roomListMatch[1].includes("p_truong_id"), "R143: no caller hs_id/truong_id");
+recordR('R143');
+
+// R144: hoc_sinh.js has no runtime calls to the 5 legacy RPCs
+const legacyRPCs = [
+  'rpc_receive_submission',
+  'rpc_submission_receipt_status',
+  'rpc_cap_nhat_vi_pham',
+  'rpc_lay_thong_tin_phong_hs',
+  'rpc_lay_danh_sach_phong_thi_hs'
+];
+legacyRPCs.forEach(legacyName => {
+  assert(!hsJs008b.includes(`'${legacyName}'`) && !hsJs008b.includes(`"${legacyName}"`), "R144: no runtime invocation of " + legacyName);
+});
+recordR('R144');
+
+// R145: durable snapshot retains hs_id/truong_id for local recovery filtering, but secure server calls do not send these fields
+assert(hsJs008b.includes("findRecoverableFinalSnapshotsForCurrentStudent"), "R145: local recovery filtering function exists");
+assert(hsJs008b.includes("snapshot.hs_id === state.hs_id"), "R145: matches hs_id locally for recovery");
+assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: matches truong_id locally for recovery");
+recordR('R145');
+
+// R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
+const expectedVersion = '20260830-student-rpc-cutover-p0-008b';
+assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
+assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
+assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");
+recordR('R146');
+
+// R147: cleanup migration revokes 5 legacy functions from public, anon, authenticated without DROP or revoking secure RPCs
+legacyRPCs.forEach(legacyName => {
+  assert(mig008bContent.includes(legacyName), "R147: migration revokes " + legacyName);
+});
+assert(mig008bContent.includes("from public, anon, authenticated"), "R147: revokes from public, anon, authenticated");
+assert(!mig008bContent.toUpperCase().includes("DROP FUNCTION"), "R147: no DROP FUNCTION");
+assert(!mig008bContent.includes("rpc_hoc_sinh_"), "R147: does not revoke secure rpc_hoc_sinh_*");
+assert(!mig008bContent.toLowerCase().includes("service_role") && !mig008bContent.toLowerCase().includes("postgres"), "R147: does not revoke service_role/postgres");
+recordR('R147');
+
+// R148: P0-007 token-bound RPCs remain in hoc_sinh.js and not replaced by legacy
+assert(hsJs008b.includes("_supabase.rpc('rpc_hoc_sinh_result_status'"), "R148: rpc_hoc_sinh_result_status present");
+assert(hsJs008b.includes("_supabase.rpc('rpc_hoc_sinh_get_exam'"), "R148: rpc_hoc_sinh_get_exam present");
+assert(hsJs008b.includes("_supabase.rpc('rpc_hoc_sinh_grade_submission'"), "R148: rpc_hoc_sinh_grade_submission present");
+recordR('R148');
+
+// R149: Manual login success prioritizes resumeSavedSubmission() before timPhongThiTuDong()
+const loginIdx = hsJs008b.indexOf("async function login()");
+const resumeInLogin = hsJs008b.indexOf("void resumeSavedSubmission().then", loginIdx);
+const nextFuncAfterLogin = hsJs008b.indexOf("async function capNhatMatKhau()", loginIdx);
+assert(loginIdx > -1 && resumeInLogin > loginIdx && resumeInLogin < nextFuncAfterLogin, "R149: login contains resumeSavedSubmission");
+assert(hsJs008b.includes("if (!recovered) timPhongThiTuDong();"), "R149: timPhongThiTuDong is conditional on !recovered");
+recordR('R149');
+
+// R150: Password-change reauth success prioritizes resumeSavedSubmission() before room list
+const capNhatIdx = hsJs008b.indexOf("async function capNhatMatKhau()");
+const resumeSavedInCapNhat = hsJs008b.indexOf("void resumeSavedSubmission().then", capNhatIdx);
+const nextFuncAfterCapNhat = hsJs008b.indexOf("async function timPhongThiTuDong()", capNhatIdx);
+assert(capNhatIdx > -1 && resumeSavedInCapNhat > capNhatIdx && resumeSavedInCapNhat < nextFuncAfterCapNhat, "R150: capNhatMatKhau contains resumeSavedSubmission");
+recordR('R150');
+
+// R151: Receive invalid_session preserves FINAL, clears auth, does not clear active keys/create attempt, navigates to login
+const envR151 = createStudentEnvironment();
+const sampleAttemptR151 = 'attempt-r151-uuid';
+const sampleSnapshotR151 = {
+  hs_id: 'hs-151',
+  truong_id: 'sch-151',
+  phong_id: 'room-151',
+  attempt_id: sampleAttemptR151,
+  ma_de: '151',
+  raw_answers: [{ cau: 1, chon: 'A' }],
+  state: 'FINAL_PENDING',
+  client_submitted_at: '2026-08-30T15:00:00.000Z',
+  room_opened_at: 1700000000000
+};
+envR151.api.setState({ hs_id: 'hs-151', truong_id: 'sch-151', phong_id: 'room-151' });
+envR151.localStore.set('final_damsan_room-151_hs-151', JSON.stringify(sampleSnapshotR151));
+
+let r151Section = 'exam-section';
+envR151.sandbox.showSection = (sec) => { r151Section = sec; };
+envR151.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    return { data: { status: 'error', code: 'invalid_session', message: 'Phiên đăng nhập đã hết hạn.' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+await envR151.api.receiveFinalSubmission();
+
+const storedR151 = JSON.parse(envR151.localStore.get('final_damsan_room-151_hs-151') || 'null');
+assert(storedR151, "R151: final snapshot preserved in localStorage");
+assert.strictEqual(storedR151.attempt_id, sampleAttemptR151, "R151: exact attempt_id preserved");
+assert.strictEqual(storedR151.state, 'FINAL_PENDING', "R151: state remains FINAL_PENDING");
+assert.strictEqual(envR151.sessionStore.has('damSan_StudentToken'), false, "R151: student token cleared");
+assert.strictEqual(r151Section, 'login-section', "R151: navigated to login-section for re-auth");
+recordR('R151');
+
+// R152: Behavioral simulation: FINAL_PENDING exists + session expired + room not open + login again
+// => recovery calls receive with original attempt_id without needing user to click room list
+const envR152 = createStudentEnvironment();
+const sampleAttemptR152 = 'attempt-r152-original';
+const sampleSnapshotR152 = {
+  hs_id: 'hs-152',
+  truong_id: 'sch-152',
+  phong_id: 'room-152',
+  attempt_id: sampleAttemptR152,
+  ma_de: '152',
+  raw_answers: [{ cau: 1, chon: 'B' }, { cau: 2, chon: 'C' }],
+  state: 'FINAL_PENDING',
+  client_submitted_at: '2026-08-30T15:10:00.000Z',
+  room_opened_at: 1700000000000
+};
+
+// 1. Snapshot exists in localStorage from previous session
+envR152.localStore.set('final_damsan_room-152_hs-152', JSON.stringify(sampleSnapshotR152));
+
+// 2. Setup login form elements
+envR152.getEl('ma_truong').value = 'DAMSAN';
+envR152.getEl('ma_hs').value = 'HS152';
+envR152.getEl('mat_khau').value = 'MyPassword123';
+
+let r152ReceivedParams = null;
+let r152RoomListCalled = false;
+
+envR152.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_login_hoc_sinh') {
+    return {
+      data: {
+        status: 'success',
+        student_token: 'new-token-after-relogin',
+        student_expires_at: new Date(Date.now() + 86400000).toISOString(),
+        user: { id: 'hs-152', truong_id: 'sch-152', ma_hs: 'HS152', ho_ten: 'Le Thi B', lop: '12B' }
+      },
+      error: null
+    };
+  }
+  if (name === 'rpc_hoc_sinh_submission_receipt_status') {
+    return { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+  }
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    r152ReceivedParams = params;
+    return {
+      data: {
+        status: 'received',
+        submission_id: 'sub-recovered-152',
+        received_at: '2026-08-30T15:12:00.000Z'
+      },
+      error: null
+    };
+  }
+  if (name === 'rpc_hoc_sinh_grade_submission') {
+    return { data: { status: 'graded' }, error: null };
+  }
+  if (name === 'rpc_hoc_sinh_room_list') {
+    r152RoomListCalled = true;
+    return { data: { status: 'success', rooms: [], submitted_room_ids: [] }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+// 3. User performs manual login
+await envR152.api.login();
+await new Promise(r => setTimeout(r, 50));
+
+// 4. Verify recovery called receive with original attempt_id
+assert(r152ReceivedParams, "R152: receive submission was called automatically upon login");
+assert.strictEqual(r152ReceivedParams.p_attempt_id, sampleAttemptR152, "R152: used exact original attempt_id");
+assert.strictEqual(r152ReceivedParams.p_student_token, 'new-token-after-relogin', "R152: used new authenticated token");
+assert.deepStrictEqual(r152ReceivedParams.p_raw_answers, sampleSnapshotR152.raw_answers, "R152: exact raw_answers preserved");
+assert.strictEqual(r152RoomListCalled, false, "R152: room list scanning suppressed when recovery succeeded");
+
+const recoveredReceiptR152 = JSON.parse(envR152.localStore.get('receipt_damsan_room-152_hs-152') || 'null');
+assert(recoveredReceiptR152, "R152: receipt saved after successful recovery");
+assert.strictEqual(recoveredReceiptR152.submission_id, 'sub-recovered-152', "R152: submission_id saved");
+recordR('R152');
+
+for (let i = 25; i <= 152; i++) {
   assert(rCoverage['R' + i], "missing coverage for R" + i);
 }
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R137; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A token-bound student RPC layer; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R152; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);
