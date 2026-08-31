@@ -140,4 +140,3 @@ $function$;
 
 revoke all on function public.rpc_admin_import_accounts(text, text, jsonb) from public, anon, authenticated;
 grant execute on function public.rpc_admin_import_accounts(text, text, jsonb) to anon, authenticated;
-
