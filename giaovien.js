@@ -99,6 +99,24 @@ async function adminRpc(action, payload) {
     return data;
 }
 
+async function adminImportAccounts(kind, rows) {
+    const token = ensureControlSession('admin');
+    const { data, error } = await sb.rpc('rpc_admin_import_accounts', {
+        p_admin_token: token,
+        p_kind: kind,
+        p_rows: rows
+    });
+    if (data?.code === 'admin_session_invalid') {
+        clearGvSessionAndReturnToLogin('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
+        throw new Error('admin_session_invalid');
+    }
+    if (error) throw error;
+    if (!data || data.status !== 'success') {
+        throw new Error(data?.message || 'Nạp danh sách tài khoản thất bại.');
+    }
+    return data;
+}
+
 async function staffRpc(rpcName, args) {
     const token = ensureControlSession('staff');
     const { data, error } = await sb.rpc(rpcName, { p_staff_token: token, ...args });
@@ -2972,65 +2990,392 @@ async function xuatExcel() {
 // TÍNH NĂNG IMPORT EXCEL
 // ==========================================================
 
-async function taiFileMau(loai) {
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Mau_Nhap_Lieu');
-    
-    if (loai === 'HS') {
-        worksheet.columns = [
-            { header: 'STT', key: 'stt', width: 8 },
-            { header: 'Mã HS', key: 'ma_hs', width: 15 },
-            { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
-            { header: 'Lớp', key: 'lop', width: 15 },
-            { header: 'Mã Trường', key: 'ma_truong', width: 15 }
-        ];
-        worksheet.addRow({ stt: 1, ma_hs: 'HS001', ho_ten: 'Nguyễn Văn A', lop: '10A1', ma_truong: 'DAMSAN' });
-    } else {
-        worksheet.columns = [
-            { header: 'STT', key: 'stt', width: 8 },
-            { header: 'Mã GV', key: 'ma_gv', width: 15 },
-            { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
-            { header: 'Quyền (Admin/GV)', key: 'quyen', width: 20 },
-            { header: 'Mã Trường', key: 'ma_truong', width: 15 }
-        ];
-        worksheet.addRow({ stt: 1, ma_gv: 'GV001', ho_ten: 'Phạm Văn C', quyen: 'Admin', ma_truong: 'DAMSAN' });
-    }
-    
-    worksheet.getRow(1).eachCell((cell) => { 
-        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; 
-        cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF1A73E8'} }; 
-        cell.alignment = { vertical: 'middle', horizontal: 'center' }; 
-    });
+let excelJsLoadingPromise = null;
+const EXCELJS_SCRIPT_TIMEOUT_MS = 10000;
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `Mau_Nhap_${loai}.xlsx`; a.click();
-    window.URL.revokeObjectURL(url);
+function ensureExcelJsReady() {
+    if (typeof window !== 'undefined' && window.ExcelJS && window.ExcelJS.Workbook) {
+        return Promise.resolve(window.ExcelJS);
+    }
+    if (excelJsLoadingPromise) {
+        return excelJsLoadingPromise;
+    }
+    excelJsLoadingPromise = new Promise((resolve, reject) => {
+        if (typeof window === 'undefined' || typeof document === 'undefined') {
+            return reject(new Error('Môi trường trình duyệt không hợp lệ.'));
+        }
+        if (window.ExcelJS && window.ExcelJS.Workbook) {
+            return resolve(window.ExcelJS);
+        }
+        const timeoutMs = (typeof window !== 'undefined' && window.__EXCELJS_SCRIPT_TIMEOUT_MS) || EXCELJS_SCRIPT_TIMEOUT_MS;
+        const primarySrc = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
+        const fallbackSrc = 'https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js';
+
+        function loadDynamicScript(src, onFail) {
+            let settled = false;
+            let timer = null;
+
+            const cleanupAndSettle = (action) => {
+                if (settled) return;
+                settled = true;
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+                action();
+            };
+
+            let script = document.querySelector(`script[data-damsan-exceljs-loader="${src}"]`);
+            if (script) {
+                const state = script.getAttribute('data-damsan-exceljs-state');
+                if (state === 'loading') {
+                    script.addEventListener('load', () => {
+                        cleanupAndSettle(() => {
+                            if (window.ExcelJS && window.ExcelJS.Workbook) {
+                                resolve(window.ExcelJS);
+                            } else if (onFail) {
+                                onFail();
+                            } else {
+                                reject(new Error('Không thể tải thư viện xử lý Excel. Vui lòng kiểm tra kết nối mạng và thử lại.'));
+                            }
+                        });
+                    }, { once: true });
+
+                    script.addEventListener('error', () => {
+                        cleanupAndSettle(() => {
+                            if (onFail) {
+                                onFail();
+                            } else {
+                                reject(new Error('Không thể tải thư viện xử lý Excel. Vui lòng kiểm tra kết nối mạng và thử lại.'));
+                            }
+                        });
+                    }, { once: true });
+
+                    timer = setTimeout(() => {
+                        cleanupAndSettle(() => {
+                            script.setAttribute('data-damsan-exceljs-state', 'error');
+                            try { script.remove(); } catch (e) {}
+                            if (onFail) {
+                                onFail();
+                            } else {
+                                reject(new Error('Không thể tải thư viện xử lý Excel. Vui lòng kiểm tra kết nối mạng và thử lại.'));
+                            }
+                        });
+                    }, timeoutMs);
+                    return;
+                } else {
+                    try { script.remove(); } catch (e) {}
+                }
+            }
+
+            const newScript = document.createElement('script');
+            newScript.src = src;
+            newScript.async = true;
+            newScript.setAttribute('data-damsan-exceljs-loader', src);
+            newScript.setAttribute('data-damsan-exceljs-state', 'loading');
+
+            newScript.onload = () => {
+                cleanupAndSettle(() => {
+                    newScript.setAttribute('data-damsan-exceljs-state', 'loaded');
+                    if (window.ExcelJS && window.ExcelJS.Workbook) {
+                        resolve(window.ExcelJS);
+                    } else {
+                        newScript.setAttribute('data-damsan-exceljs-state', 'error');
+                        try { newScript.remove(); } catch (e) {}
+                        if (onFail) {
+                            onFail();
+                        } else {
+                            reject(new Error('Không thể tải thư viện xử lý Excel. Vui lòng kiểm tra kết nối mạng và thử lại.'));
+                        }
+                    }
+                });
+            };
+
+            newScript.onerror = () => {
+                cleanupAndSettle(() => {
+                    newScript.setAttribute('data-damsan-exceljs-state', 'error');
+                    try { newScript.remove(); } catch (e) {}
+                    if (onFail) {
+                        onFail();
+                    } else {
+                        reject(new Error('Không thể tải thư viện xử lý Excel. Vui lòng kiểm tra kết nối mạng và thử lại.'));
+                    }
+                });
+            };
+
+            timer = setTimeout(() => {
+                cleanupAndSettle(() => {
+                    newScript.setAttribute('data-damsan-exceljs-state', 'error');
+                    try { newScript.remove(); } catch (e) {}
+                    if (onFail) {
+                        onFail();
+                    } else {
+                        reject(new Error('Không thể tải thư viện xử lý Excel. Vui lòng kiểm tra kết nối mạng và thử lại.'));
+                    }
+                });
+            }, timeoutMs);
+
+            document.head.appendChild(newScript);
+        }
+
+        loadDynamicScript(primarySrc, () => {
+            loadDynamicScript(fallbackSrc, null);
+        });
+    }).catch(err => {
+        excelJsLoadingPromise = null;
+        throw err;
+    });
+    return excelJsLoadingPromise;
+}
+
+function normalizeImportHeader(val) {
+    if (val === null || val === undefined) return '';
+    return String(val).trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function validateAccountImportHeaders(worksheet, loai) {
+    if (!worksheet || worksheet.rowCount < 1) {
+        throw new Error('File Excel không có dòng tiêu đề.');
+    }
+    const row1 = worksheet.getRow(1);
+
+    const getColText = (colIndex) => {
+        const cell = row1.getCell(colIndex);
+        return normalizeImportHeader(cell.value);
+    };
+
+    if (loai === 'HS') {
+        const c1 = getColText(1);
+        const c2 = getColText(2);
+        const c3 = getColText(3);
+        const c4 = getColText(4);
+        const c5 = getColText(5);
+
+        if (c1 !== 'stt') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 1 phải là [STT].');
+        }
+        if (c2 !== 'mã hs' && c2 !== 'ma hs') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 2 phải là [Mã HS].');
+        }
+        if (c3 !== 'họ và tên' && c3 !== 'ho va ten' && c3 !== 'họ tên' && c3 !== 'ho ten') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 3 phải là [Họ và Tên].');
+        }
+        if (c4 !== 'lớp' && c4 !== 'lop') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 4 phải là [Lớp].');
+        }
+        if (c5 !== 'mã trường' && c5 !== 'ma truong') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 5 phải là [Mã Trường].');
+        }
+    } else {
+        const c1 = getColText(1);
+        const c2 = getColText(2);
+        const c3 = getColText(3);
+        const c4 = getColText(4);
+        const c5 = getColText(5);
+        const c6 = getColText(6);
+
+        if (c1 !== 'stt') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 1 phải là [STT].');
+        }
+        if (c2 !== 'mã gv' && c2 !== 'ma gv') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 2 phải là [Mã GV].');
+        }
+        if (c3 !== 'họ và tên' && c3 !== 'ho va ten' && c3 !== 'họ tên' && c3 !== 'ho ten') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 3 phải là [Họ và Tên].');
+        }
+        const validQuyenHeaders = [
+            'quyền (admin/giaovien)',
+            'quyen (admin/giaovien)',
+            'quyền (admin/gv)',
+            'quyen (admin/gv)',
+            'quyền',
+            'quyen'
+        ];
+        if (!validQuyenHeaders.includes(c4)) {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 4 phải là [Quyền (Admin/GiaoVien)] hoặc mẫu cũ [Quyền (Admin/GV)].');
+        }
+        if (c5 !== 'mã trường' && c5 !== 'ma truong') {
+            throw new Error('Dòng tiêu đề không đúng định dạng. Cột 5 phải là [Mã Trường].');
+        }
+        if (c6) {
+            const validMonHeaders = [
+                'môn học (tùy chọn)',
+                'mon hoc (tuy chon)',
+                'môn học (tuy chon)',
+                'mon hoc (tùy chọn)',
+                'môn học',
+                'mon hoc'
+            ];
+            if (!validMonHeaders.includes(c6)) {
+                throw new Error('Dòng tiêu đề không đúng định dạng. Cột 6 (nếu có) phải là [Môn học (tùy chọn)].');
+            }
+        }
+    }
+}
+
+async function taiFileMau(loai, btnElement) {
+    const btn = btnElement || (window.event?.currentTarget) || null;
+    const oldText = btn ? btn.innerText : '';
+    if (btn) {
+        btn.innerText = '⏳ Đang tạo file...';
+        btn.disabled = true;
+    }
+    try {
+        await ensureExcelJsReady();
+        const workbook = new ExcelJS.Workbook();
+        const dataSheet = workbook.addWorksheet('Mau_Nhap_Lieu', {
+            views: [{ state: 'frozen', ySplit: 1 }]
+        });
+
+        if (loai === 'HS') {
+            dataSheet.columns = [
+                { header: 'STT', key: 'stt', width: 8 },
+                { header: 'Mã HS', key: 'ma_hs', width: 18, style: { numFmt: '@' } },
+                { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
+                { header: 'Lớp', key: 'lop', width: 15 },
+                { header: 'Mã Trường', key: 'ma_truong', width: 18, style: { numFmt: '@' } }
+            ];
+        } else {
+            dataSheet.columns = [
+                { header: 'STT', key: 'stt', width: 8 },
+                { header: 'Mã GV', key: 'ma_gv', width: 18, style: { numFmt: '@' } },
+                { header: 'Họ và Tên', key: 'ho_ten', width: 30 },
+                { header: 'Quyền (Admin/GiaoVien)', key: 'quyen', width: 25 },
+                { header: 'Mã Trường', key: 'ma_truong', width: 18, style: { numFmt: '@' } },
+                { header: 'Môn học (tùy chọn)', key: 'mon_hoc', width: 25 }
+            ];
+        }
+
+        dataSheet.getRow(1).eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A73E8' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        // Add Huong_Dan worksheet
+        const guideSheet = workbook.addWorksheet('Huong_Dan');
+        guideSheet.columns = [
+            { header: 'Mục', key: 'muc', width: 25 },
+            { header: 'Nội dung hướng dẫn', key: 'noi_dung', width: 85 }
+        ];
+        guideSheet.getRow(1).eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF34495E' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        if (loai === 'HS') {
+            guideSheet.addRow({ muc: '1. Cấu trúc file', noi_dung: 'Trang tính đầu tiên (Mau_Nhap_Lieu) là trang chứa dữ liệu import thực tế.' });
+            guideSheet.addRow({ muc: '2. Các cột bắt buộc', noi_dung: 'STT, Mã HS, Họ và Tên, Lớp. Cột Mã Trường nếu để trống sẽ lấy theo trường đang chọn trên hệ thống.' });
+            guideSheet.addRow({ muc: '3. Mật khẩu mặc định', noi_dung: 'Tài khoản TẠO MỚI được cấp mật khẩu mặc định 123456 (bắt buộc đổi khi đăng nhập). Tài khoản ĐÃ TỒN TẠI sẽ GIỮ NGUYÊN mật khẩu hiện tại.' });
+            guideSheet.addRow({ muc: '4. Định dạng Text', noi_dung: 'Cột Mã HS và Mã Trường cần định dạng Text (Văn bản) để tránh mất số 0 ở đầu.' });
+            guideSheet.addRow({ muc: '5. Dữ liệu ví dụ', noi_dung: 'STT: 1 | Mã HS: 100401 | Họ và Tên: Nguyễn Văn A | Lớp: 10A4 | Mã Trường: DAMSAN' });
+            guideSheet.addRow({ muc: '6. Lưu ý quan trọng', noi_dung: 'Không nhập dữ liệu mẫu từ trang Hướng dẫn vào hệ thống. Hãy nhập dữ liệu thật vào trang Mau_Nhap_Lieu.' });
+        } else {
+            guideSheet.addRow({ muc: '1. Cấu trúc file', noi_dung: 'Trang tính đầu tiên (Mau_Nhap_Lieu) là trang chứa dữ liệu import thực tế.' });
+            guideSheet.addRow({ muc: '2. Các cột bắt buộc', noi_dung: 'STT, Mã GV, Họ và Tên. Cột Mã Trường nếu để trống sẽ lấy theo trường đang chọn.' });
+            guideSheet.addRow({ muc: '3. Phân quyền', noi_dung: 'Giá trị hợp lệ: GiaoVien hoặc Admin. Nếu để trống, tài khoản mới mặc định là GiaoVien, tài khoản cũ giữ nguyên quyền hiện tại.' });
+            guideSheet.addRow({ muc: '4. Môn học (tùy chọn)', noi_dung: 'Nhập chính xác tên môn học trong hệ thống (VD: Địa lí, Toán...). Nếu để trống, tài khoản cũ giữ nguyên môn học đã gán.' });
+            guideSheet.addRow({ muc: '5. Mật khẩu mặc định', noi_dung: 'Tài khoản TẠO MỚI được cấp mật khẩu mặc định 123456. Tài khoản ĐÃ TỒN TẠI sẽ GIỮ NGUYÊN mật khẩu hiện tại.' });
+            guideSheet.addRow({ muc: '6. Định dạng Text', noi_dung: 'Cột Mã GV và Mã Trường cần định dạng Text (Văn bản) để tránh mất số 0 ở đầu.' });
+            guideSheet.addRow({ muc: '7. Dữ liệu ví dụ', noi_dung: 'STT: 1 | Mã GV: GV001 | Họ và Tên: Nguyễn Văn B | Quyền: GiaoVien | Mã Trường: DAMSAN | Môn học: Địa lí' });
+            guideSheet.addRow({ muc: '8. Lưu ý quan trọng', noi_dung: 'Không nhập dữ liệu mẫu từ trang Hướng dẫn vào hệ thống. Hãy nhập dữ liệu thật vào trang Mau_Nhap_Lieu.' });
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Mau_Nhap_${loai}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+        }, 1500);
+    } catch (e) {
+        alert('❌ Lỗi tải file mẫu: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.innerText = oldText;
+            btn.disabled = false;
+        }
+    }
 }
 
 async function docFileExcelVaNap(loai) {
     let fileInput = document.getElementById(`fileExcel${loai}`);
-    if(!fileInput.files || fileInput.files.length === 0) return alert("Vui lòng chọn file Excel!");
+    if (!fileInput.files || fileInput.files.length === 0) return alert("Vui lòng chọn file Excel!");
+    const file = fileInput.files[0];
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+        return alert("Hệ thống chỉ hỗ trợ định dạng file .xlsx!");
+    }
     let btn = document.getElementById(`btnNap${loai}`);
-    let oldText = btn.innerText; btn.innerText = "⏳ Đang đọc và nạp..."; btn.disabled = true;
+    let oldText = btn ? btn.innerText : '';
+    if (btn) {
+        btn.innerText = "⏳ Đang đọc và nạp...";
+        btn.disabled = true;
+    }
     
     try {
+        await ensureExcelJsReady();
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(fileInput.files[0]);
+        await workbook.xlsx.load(file);
+        if (!workbook.worksheets || workbook.worksheets.length === 0) {
+            throw new Error("File Excel không có trang tính nào.");
+        }
         const worksheet = workbook.worksheets[0];
+
+        // Xác minh dòng tiêu đề trước khi đọc dữ liệu
+        validateAccountImportHeaders(worksheet, loai);
+
+        if (worksheet.rowCount < 2) {
+            throw new Error("File Excel không có dữ liệu để nạp.");
+        }
+
         let rowsToInsert = new Array();
-        let defaultPass = await hashPassword('123456');
 
         // Tải bản đồ mã trường -> ID trường để gán động
-        const { data: truongs } = await sb.from('truong_hoc').select('id, ma_truong');
+        const { data: truongs, error: errTruong } = await sb.from('truong_hoc').select('id, ma_truong');
+        if (errTruong) throw errTruong;
         const mapTruong = {};
-        if (truongs) truongs.forEach(t => mapTruong[t.ma_truong.toUpperCase()] = t.id);
+        if (truongs) truongs.forEach(t => {
+            if (t.ma_truong) mapTruong[t.ma_truong.toUpperCase()] = t.id;
+        });
 
-        let maxStt = 0; 
+        // Tải bản đồ môn học cho GV
+        let mapMon = {};
+        let validMonNames = [];
+        if (loai === 'GV') {
+            const { data: monHocs, error: errMon } = await sb.from('mon_hoc').select('id, ten_mon');
+            if (errMon) throw errMon;
+            if (monHocs) {
+                monHocs.forEach(m => {
+                    if (m.ten_mon) {
+                        mapMon[m.ten_mon.trim().toLowerCase()] = m.id;
+                        validMonNames.push(m.ten_mon.trim());
+                    }
+                });
+            }
+        }
+
+        let maxStt = 0;
+        const seenKeys = new Set();
 
         worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) { 
+            if (rowNumber > 1) {
+                // Kiểm tra xem dòng có dữ liệu không
+                let hasValue = false;
+                for (let c = 1; c <= 7; c++) {
+                    const val = row.getCell(c).value;
+                    if (val !== null && val !== undefined && String(val).trim() !== '') {
+                        hasValue = true;
+                        break;
+                    }
+                }
+                if (!hasValue) return; // Bỏ qua dòng trống hoàn toàn
+
                 let sttRaw = row.getCell(1).value;
                 let stt = sttRaw ? parseInt(sttRaw.toString().trim()) : 0;
                 if (!isNaN(stt) && stt > maxStt) maxStt = stt;
@@ -3040,28 +3385,76 @@ async function docFileExcelVaNap(loai) {
                     let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
                     let lop = row.getCell(4).value ? row.getCell(4).value.toString().trim() : '';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
-                    
-                    // Ưu tiên dùng truong_id từ file Excel, nếu không có thì dùng của người nạp
-                    if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
-                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
-                    if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
 
-                    if (ma_hs && ho_ten) {
-                        rowsToInsert.push({ ma_hs: ma_hs, ho_ten: ho_ten, lop: lop, mat_khau: defaultPass, truong_id: t_id });
+                    if (!ma_hs) throw new Error(`Dòng ${rowNumber}: Thiếu thông tin Mã HS.`);
+                    if (!ho_ten) throw new Error(`Dòng ${rowNumber}: Thiếu thông tin Họ và Tên.`);
+                    if (!lop) throw new Error(`Dòng ${rowNumber}: Thiếu thông tin Lớp.`);
+
+                    if (ma_truong && !mapTruong[ma_truong]) {
+                        throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
                     }
+                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (!t_id || t_id === 'ALL') {
+                        throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
+                    }
+
+                    const accountKey = `${t_id}::${ma_hs.toUpperCase()}`;
+                    if (seenKeys.has(accountKey)) {
+                        throw new Error(`Dòng ${rowNumber}: Trùng lặp mã học sinh [${ma_hs}] trong cùng một trường.`);
+                    }
+                    seenKeys.add(accountKey);
+
+                    rowsToInsert.push({ ma_hs: ma_hs.toUpperCase(), ho_ten: ho_ten, lop: lop, truong_id: t_id });
                 } else {
                     let ma_gv = row.getCell(2).value ? row.getCell(2).value.toString().trim() : '';
                     let ho_ten = row.getCell(3).value ? row.getCell(3).value.toString().trim() : '';
-                    let quyen = row.getCell(4).value ? row.getCell(4).value.toString().trim() : 'GV';
+                    let quyenRaw = row.getCell(4).value ? row.getCell(4).value.toString().trim() : '';
                     let ma_truong = row.getCell(5).value ? row.getCell(5).value.toString().trim().toUpperCase() : '';
-                    
-                    if (ma_truong && !mapTruong[ma_truong]) throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
-                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
-                    if (!t_id || t_id === 'ALL') throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
-                    
-                    if (ma_gv && ho_ten) {
-                        rowsToInsert.push({ ma_gv: ma_gv, ho_ten: ho_ten, quyen: quyen, mat_khau: defaultPass, truong_id: t_id });
+                    let monRaw = row.getCell(6).value ? row.getCell(6).value.toString().trim() : '';
+
+                    if (!ma_gv) throw new Error(`Dòng ${rowNumber}: Thiếu thông tin Mã GV.`);
+                    if (!ho_ten) throw new Error(`Dòng ${rowNumber}: Thiếu thông tin Họ và Tên.`);
+
+                    let quyen;
+                    if (quyenRaw) {
+                        const normQuyen = quyenRaw.toLowerCase().replace(/[\s_]+/g, '');
+                        if (normQuyen === 'gv' || normQuyen === 'giaovien' || normQuyen === 'giáoviên') {
+                            quyen = 'GiaoVien';
+                        } else if (normQuyen === 'admin') {
+                            quyen = 'Admin';
+                        } else {
+                            throw new Error(`Dòng ${rowNumber}: Quyền [${quyenRaw}] không hợp lệ. Chỉ chấp nhận GiaoVien hoặc Admin.`);
+                        }
                     }
+
+                    if (ma_truong && !mapTruong[ma_truong]) {
+                        throw new Error(`Dòng ${rowNumber}: Mã trường [${ma_truong}] không tồn tại trong hệ thống.`);
+                    }
+                    let t_id = ma_truong ? mapTruong[ma_truong] : activeWorkspaceTruongId;
+                    if (!t_id || t_id === 'ALL') {
+                        throw new Error('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích.');
+                    }
+
+                    let mon_id;
+                    if (monRaw) {
+                        const normMon = monRaw.toLowerCase();
+                        if (mapMon[normMon]) {
+                            mon_id = mapMon[normMon];
+                        } else {
+                            throw new Error(`Dòng ${rowNumber}: Môn học [${monRaw}] không tồn tại. Danh sách môn hợp lệ: ${validMonNames.join(', ')}`);
+                        }
+                    }
+
+                    const accountKey = `${t_id}::${ma_gv.toLowerCase()}`;
+                    if (seenKeys.has(accountKey)) {
+                        throw new Error(`Dòng ${rowNumber}: Trùng lặp mã giáo viên [${ma_gv}] trong cùng một trường.`);
+                    }
+                    seenKeys.add(accountKey);
+
+                    const gvRow = { ma_gv: ma_gv, ho_ten: ho_ten, truong_id: t_id };
+                    if (quyen) gvRow.quyen = quyen;
+                    if (mon_id) gvRow.mon_id = mon_id;
+                    rowsToInsert.push(gvRow);
                 }
             }
         });
@@ -3069,20 +3462,22 @@ async function docFileExcelVaNap(loai) {
         if (rowsToInsert.length === 0) throw new Error("Không tìm thấy dữ liệu hợp lệ!");
 
         if (gvData.quyen !== 'Admin') throw new Error('Chỉ Admin được phép nạp tài khoản.');
-        await adminRpc('accounts_upsert', { kind: loai, rows: rowsToInsert });
+        const result = await adminImportAccounts(loai, rowsToInsert);
 
         // Báo cáo đối chiếu số lượng quét được với số STT trong danh sách
-        alert(`✅ Nạp thành công: ${rowsToInsert.length} tài khoản.\n📊 Kiểm tra chéo: Số thứ tự (STT) lớn nhất ghi nhận trong file Excel là ${maxStt}.`);
+        alert(`✅ Nạp thành công: ${result.count || rowsToInsert.length} tài khoản (${result.inserted || 0} thêm mới, ${result.updated || 0} cập nhật).\n📊 Kiểm tra chéo: Số thứ tự (STT) lớn nhất ghi nhận trong file Excel là ${maxStt}.`);
         
         if (loai === 'HS') fetchStudents(true); else fetchTeachers(true);
-        fileInput.value = ""; 
+        fileInput.value = "";
     } catch(e) {
         alert("❌ Lỗi: " + e.message);
     } finally {
-        btn.innerText = oldText; btn.disabled = false;
+        if (btn) {
+            btn.innerText = oldText;
+            btn.disabled = false;
+        }
     }
 }
-
 // ==========================================================
 // QUẢN LÝ TÀI KHOẢN GIÁO VIÊN VÀ HỌC SINH
 // ==========================================================

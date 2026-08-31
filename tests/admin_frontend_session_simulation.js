@@ -93,7 +93,7 @@ assert(!/from\('(hoc_sinh|giao_vien)'\)\.select\('\*'\)/.test(body('fetchStudent
 must(/hoc_sinh'\)\.select\('id, truong_id, ma_hs, ho_ten, lop, quyen'\)\.eq\('truong_id', currentRoom\.truong_id\)/, 'F49-F50 dashboard school-scoped safe read');
 must(/getActiveTargetSchoolId\(\)/, 'F51 class metadata target school');
 must(/changeWorkspaceSchool[\s\S]*taiDanhSachPhong\(\)[\s\S]*fetchRadar\(\)/, 'F52 school change refreshes rooms');
-must(/adminRpc\('accounts_upsert'/, 'F53 import control plane');
+must(/adminImportAccounts|rpc_admin_import_accounts/, 'F53 import control plane');
 must(/Dòng dữ liệu chưa có mã trường và chưa chọn trường đích/, 'F54 import target guard');
 for (const [name, action] of [['resetSelectedPass','accounts_reset_password'],['resetPass','accounts_reset_password'],['deleteSelectedAccounts','accounts_delete'],['capNhatTruongGiaoVien','teacher_update_school'],['capNhatMonGiaoVien','teacher_update_subject'],['migrateLegacyPasswords','normalize_legacy_passwords'],['themTruongMoi','school_create'],['xoaTruong','school_delete'],['themMonMoi','subject_create'],['xoaMon','subject_delete']]) assert(body(name).includes(action), `B1 ${name}`);
 assert(!/rpc_admin_reset_pass|rpc_admin_xoa_tk/.test(source), 'F55-F67 obsolete account RPCs removed');
@@ -168,8 +168,8 @@ recordF('F79');
 
 // F80: docFileExcelVaNap: ma_truong rỗng AND activeWorkspaceTruongId null/ALL => throw lỗi trước khi gọi adminRpc('accounts_upsert')
 const guardIdx = docExcelBody.indexOf('Dòng dữ liệu chưa có mã trường và chưa chọn trường đích');
-const upsertIdx = docExcelBody.indexOf("adminRpc('accounts_upsert'");
-assert(guardIdx >= 0 && upsertIdx > guardIdx, 'F80 docFileExcelVaNap kiểm tra trường đích trước adminRpc accounts_upsert');
+const upsertIdx = docExcelBody.search(/adminImportAccounts|rpc_admin_import_accounts/);
+assert(guardIdx >= 0 && upsertIdx > guardIdx, 'F80 docFileExcelVaNap kiểm tra trường đích trước import');
 recordF('F80');
 
 // F81: capNhatTruongGiaoVien self Admin: cập nhật gvData.truong_id và persist safe session
@@ -452,4 +452,115 @@ for (let i = 92; i <= 120; i += 1) {
   assert.strictEqual(b2Coverage[label], true, `Thiếu coverage assertion cho ${label}`);
 }
 
-console.log('admin_frontend_session_simulation: F1-F120 passed');
+
+// ==========================================================
+// F121-F150: Account Import Workbook & Safety Fixes (Task 009 V2)
+// ==========================================================
+const b3Coverage = {};
+const recordB3 = (id) => { b3Coverage[id] = true; };
+
+// F121: ensureExcelJsReady fallback loading, global check and DOM duplicate check (C4)
+const ensureBody = body('ensureExcelJsReady');
+assert(ensureBody.includes('window.ExcelJS') && ensureBody.includes('cdnjs.cloudflare.com') && ensureBody.includes('cdn.jsdelivr.net'), 'F121 ensureExcelJsReady checks global and has CDN fallbacks');
+assert(ensureBody.includes('data-damsan-exceljs-loader') && ensureBody.includes('querySelector'), 'F121 ensureExcelJsReady checks DOM before creating script');
+recordB3('F121');
+
+// F122: taiFileMau manages button state and error alert
+const taiFileBody = body('taiFileMau');
+assert(taiFileBody.includes('Đang tạo file') && taiFileBody.includes('ensureExcelJsReady') && taiFileBody.includes('alert('), 'F122 taiFileMau button state & error handling');
+recordB3('F122');
+
+// F123: taiFileMau HS data sheet has NO example data row (C1), columns with text format
+assert(taiFileBody.includes('Mau_Nhap_Lieu') && taiFileBody.includes("numFmt: '@'"), 'F123 taiFileMau HS template structure & text format');
+assert(!/dataSheet\.addRow/.test(taiFileBody), 'F123 dataSheet Mau_Nhap_Lieu has NO example row');
+recordB3('F123');
+
+// F124: taiFileMau GV template columns with canonical role and optional subject, NO example data row in dataSheet (C1)
+assert(taiFileBody.includes('Quyền (Admin/GiaoVien)') && taiFileBody.includes('Môn học (tùy chọn)'), 'F124 taiFileMau GV template structure');
+recordB3('F124');
+
+// F125: taiFileMau creates Huong_Dan sheet containing examples and non-import warning (C1)
+assert(taiFileBody.includes('Huong_Dan') && taiFileBody.includes('123456'), 'F125 taiFileMau creates Huong_Dan sheet');
+assert(taiFileBody.includes('guideSheet.addRow') && taiFileBody.includes('100401') && taiFileBody.includes('GV001'), 'F125 examples in Huong_Dan');
+assert(taiFileBody.includes('Không nhập dữ liệu mẫu từ trang Hướng dẫn'), 'F125 Huong_Dan explicitly warns against importing sample data');
+recordB3('F125');
+
+// F126: taiFileMau robust Blob download with delayed revocation
+assert(taiFileBody.includes('document.body.appendChild(a)') && taiFileBody.includes('document.body.removeChild(a)') && taiFileBody.includes('setTimeout'), 'F126 taiFileMau robust blob download');
+recordB3('F126');
+
+// F127: giaovien.html accepts .xlsx only and has cache bust 20260831-account-import-009
+const htmlSource = fs.readFileSync('giaovien.html', 'utf8');
+assert(htmlSource.includes('id="fileExcelHS" accept=".xlsx"') && htmlSource.includes('id="fileExcelGV" accept=".xlsx"'), 'F127 giaovien.html accepts .xlsx only');
+assert(htmlSource.includes('giaovien.js?v=20260831-account-import-009'), 'F127 cache bust query updated');
+recordB3('F127');
+
+// F128: docFileExcelVaNap validates file extension .xlsx
+const docImportBody = body('docFileExcelVaNap');
+assert(docImportBody.includes(".endsWith('.xlsx')"), 'F128 docFileExcelVaNap checks .xlsx extension');
+recordB3('F128');
+
+// F129: docFileExcelVaNap calls ensureExcelJsReady
+assert(docImportBody.includes('await ensureExcelJsReady()'), 'F129 docFileExcelVaNap calls ensureExcelJsReady');
+recordB3('F129');
+
+// F130: docFileExcelVaNap validates headers before reading rows and before server RPC (C2)
+const headerValIndex = docImportBody.indexOf('validateAccountImportHeaders(worksheet, loai);');
+const rpcIndex = docImportBody.search(/adminImportAccounts|rpc_admin_import_accounts/);
+assert(headerValIndex >= 0 && rpcIndex > headerValIndex, 'F130 validateAccountImportHeaders is called before RPC write');
+recordB3('F130');
+
+// F131: Header validation logic for HS, GV (new 6-col), GV (legacy 5-col) and malformed headers (C2)
+const headerValidator = body('validateAccountImportHeaders');
+assert(headerValidator.includes('stt') && headerValidator.includes('mã hs') && headerValidator.includes('mã gv') && headerValidator.includes('lớp') && headerValidator.includes('mã trường'), 'F131 header validation covers all required fields');
+assert(headerValidator.includes('quyền (admin/gv)') || headerValidator.includes('quyen (admin/gv)'), 'F131 header validation accepts legacy GV header');
+recordB3('F131');
+
+// F132: docFileExcelVaNap validates required HS fields
+assert(docImportBody.includes('Thiếu thông tin Mã HS') && docImportBody.includes('Thiếu thông tin Họ và Tên') && docImportBody.includes('Thiếu thông tin Lớp'), 'F132 docFileExcelVaNap validates HS fields');
+recordB3('F132');
+
+// F133: docFileExcelVaNap validates required GV fields
+assert(docImportBody.includes('Thiếu thông tin Mã GV') && docImportBody.includes('Thiếu thông tin Họ và Tên'), 'F133 docFileExcelVaNap validates GV fields');
+recordB3('F133');
+
+// F134: docFileExcelVaNap normalizes GV roles and rejects invalid
+assert(docImportBody.includes('GiaoVien') && docImportBody.includes('Admin') && docImportBody.includes('không hợp lệ. Chỉ chấp nhận GiaoVien hoặc Admin'), 'F134 docFileExcelVaNap role normalization');
+recordB3('F134');
+
+// F135: docFileExcelVaNap omits blank quyen
+assert(docImportBody.includes('if (quyen) gvRow.quyen = quyen;'), 'F135 docFileExcelVaNap omits blank quyen');
+recordB3('F135');
+
+// F136: docFileExcelVaNap validates subject exact match and lists valid names on error
+assert(docImportBody.includes('Môn học [') && docImportBody.includes('Danh sách môn hợp lệ'), 'F136 docFileExcelVaNap subject validation');
+recordB3('F136');
+
+// F137: docFileExcelVaNap omits blank mon_id
+assert(docImportBody.includes('if (mon_id) gvRow.mon_id = mon_id;'), 'F137 docFileExcelVaNap omits blank mon_id');
+recordB3('F137');
+
+// F138: docFileExcelVaNap detects duplicate account keys inside workbook
+assert(docImportBody.includes('seenKeys') && docImportBody.includes('Trùng lặp mã'), 'F138 docFileExcelVaNap rejects workbook duplicate keys');
+recordB3('F138');
+
+// F139: docFileExcelVaNap payload does not contain mat_khau
+assert(!/mat_khau/.test(docImportBody), 'F139 docFileExcelVaNap does not include mat_khau in import rows');
+recordB3('F139');
+
+// F140: docFileExcelVaNap calls adminImportAccounts
+assert(docImportBody.includes('adminImportAccounts(loai, rowsToInsert)'), 'F140 docFileExcelVaNap calls adminImportAccounts');
+recordB3('F140');
+
+// F141: adminImportAccounts helper handles admin_session_invalid fail-closed
+const adminImportBody = body('adminImportAccounts');
+assert(adminImportBody.includes('rpc_admin_import_accounts') && adminImportBody.includes('admin_session_invalid') && adminImportBody.includes('clearGvSessionAndReturnToLogin'), 'F141 adminImportAccounts session handling');
+recordB3('F141');
+
+// Coverage gate for F121-F141
+for (let i = 121; i <= 141; i += 1) {
+  const label = `F${i}`;
+  assert.strictEqual(b3Coverage[label], true, `Thiếu coverage assertion cho ${label}`);
+}
+
+console.log('admin_frontend_session_simulation: F1-F141 passed');
