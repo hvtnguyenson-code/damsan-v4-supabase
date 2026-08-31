@@ -3008,8 +3008,8 @@ function ensureExcelJsReady() {
             return resolve(window.ExcelJS);
         }
         const timeoutMs = (typeof window !== 'undefined' && window.__EXCELJS_SCRIPT_TIMEOUT_MS) || EXCELJS_SCRIPT_TIMEOUT_MS;
-        const primarySrc = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js';
-        const fallbackSrc = 'https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js';
+        const primarySrc = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.bare.min.js';
+        const fallbackSrc = 'https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.bare.min.js';
 
         function loadDynamicScript(src, onFail) {
             let settled = false;
