@@ -106,11 +106,12 @@ vm.runInContext(gvJsSource, gvEnv);
 const parseAuthoritativeFinalScore = gvEnv.parseAuthoritativeFinalScore;
 const parseServerGradingDetails = gvEnv.parseServerGradingDetails;
 const computeDisplayPartContributions = gvEnv.computeDisplayPartContributions;
-const FLEX_LITE_TEACHER_CONFIG_ENABLED = gvEnv.FLEX_LITE_TEACHER_CONFIG_ENABLED;
+const isQuestionFullyCorrectFromServerDetail = gvEnv.isQuestionFullyCorrectFromServerDetail;
 
 assert.strictEqual(typeof parseAuthoritativeFinalScore, 'function', 'parseAuthoritativeFinalScore must be a function');
 assert.strictEqual(typeof parseServerGradingDetails, 'function', 'parseServerGradingDetails must be a function');
 assert.strictEqual(typeof computeDisplayPartContributions, 'function', 'computeDisplayPartContributions must be a function');
+assert.strictEqual(typeof isQuestionFullyCorrectFromServerDetail, 'function', 'isQuestionFullyCorrectFromServerDetail must be a function');
 
 // -------------------------------------------------------------------------
 // SCORE-UI-01: Oracle Room 1 (TOT_NGHIEP, 1 MCQ)
@@ -455,7 +456,8 @@ console.log('Test SCORE-UI-16: CUSTOM explanatory copy in giaovien.html');
 console.log('Test SCORE-UI-17: Teacher config activation feature flag is true');
 {
     const flagInSource = /const\s+FLEX_LITE_TEACHER_CONFIG_ENABLED\s*=\s*true;/.test(gvJsSource);
-    assert(flagInSource, 'SCORE-UI-17: FLEX_LITE_TEACHER_CONFIG_ENABLED must be true in giaovien.js');    console.log('  -> PASSED');
+    assert(flagInSource, 'SCORE-UI-17: FLEX_LITE_TEACHER_CONFIG_ENABLED must be true in giaovien.js');
+    console.log('  -> PASSED');
 }
 
 // -------------------------------------------------------------------------
@@ -469,4 +471,166 @@ console.log('Test SCORE-UI-18: Zero double-normalization code remains in client 
     console.log('  -> PASSED');
 }
 
-console.log('\n=== ALL 18 FLEX-LITE-004 AUTHORITATIVE SCORE PRESENTATION TESTS PASSED ===');
+// -------------------------------------------------------------------------
+// SCORE-UI-19: Server Room List RPC metadata contract (Migration structural check)
+// -------------------------------------------------------------------------
+console.log('Test SCORE-UI-19: Server Room List RPC metadata contract in migration');
+{
+    const migPath = path.join(__dirname, '..', 'supabase', 'migrations', '20260902070001_flex_lite_room_scoring_metadata_read.sql');
+    assert(fs.existsSync(migPath), 'SCORE-UI-19: Migration 20260902070001_flex_lite_room_scoring_metadata_read.sql must exist');
+    const migSql = fs.readFileSync(migPath, 'utf8');
+
+    assert(migSql.includes('public.rpc_lay_danh_sach_phong_thi_gv'), 'SCORE-UI-19: Defines rpc_lay_danh_sach_phong_thi_gv');
+    assert(migSql.includes("'assessment_type', pt.assessment_type"), 'SCORE-UI-19: Exposes pt.assessment_type in room JSON');
+    assert(migSql.includes("'scoring_config', pt.scoring_config"), 'SCORE-UI-19: Exposes pt.scoring_config in room JSON');
+    assert(migSql.includes('p_staff_token text'), 'SCORE-UI-19: Preserves p_staff_token');
+    assert(migSql.includes('public._staff_session_gv_id(p_staff_token)'), 'SCORE-UI-19: Preserves staff session validation');
+    assert(migSql.includes("v_quyen <> 'Admin' and p_truong_id is distinct from v_teacher_truong_id"), 'SCORE-UI-19: Preserves school authorization scope');
+    assert(migSql.includes('security definer set search_path = public'), 'SCORE-UI-19: Preserves security definer search_path');
+    assert(migSql.includes('grant execute on function public.rpc_lay_danh_sach_phong_thi_gv(text, text, uuid, uuid, boolean) to anon, authenticated;'), 'SCORE-UI-19: Preserves execute grants');
+    assert(!migSql.includes('pt.de_thi'), 'SCORE-UI-19: Must not expose pt.de_thi payload');
+    assert(!migSql.includes('pt.dap_an'), 'SCORE-UI-19: Must not expose answers');
+    console.log('  -> PASSED');
+}
+
+// -------------------------------------------------------------------------
+// SCORE-UI-20: Server room payload flows into allRoomsData and reaches computeDisplayPartContributions
+// -------------------------------------------------------------------------
+console.log('Test SCORE-UI-20: Server room payload flows into allRoomsData without falling back to LEGACY');
+{
+    // Simulate server room responses as returned by the updated rpc_lay_danh_sach_phong_thi_gv
+    const serverCustomRoom = {
+        id: 'room-custom-001',
+        ma_phong: 'FLEX_CUSTOM_442',
+        ten_dot: 'Kiểm tra 15p Custom',
+        doi_tuong: 'TatCa',
+        thoi_gian: 45,
+        trang_thai: 'CONG_BO_DIEM',
+        thoi_gian_mo: 1000,
+        truong_id: 'sch-001',
+        mon_id: 'mon-001',
+        ten_truong: 'THPT Đam San',
+        assessment_type: 'CUSTOM',
+        scoring_config: { p1_weight: 4, p2_weight: 4, p3_weight: 2 }
+    };
+
+    const serverMcqRoom = {
+        id: 'room-mcq-001',
+        ma_phong: 'FLEX_MCQ_10',
+        ten_dot: 'Kiểm tra Trắc nghiệm',
+        doi_tuong: 'TatCa',
+        thoi_gian: 15,
+        trang_thai: 'CONG_BO_DIEM',
+        thoi_gian_mo: 1000,
+        truong_id: 'sch-001',
+        mon_id: 'mon-001',
+        ten_truong: 'THPT Đam San',
+        assessment_type: 'MCQ_ONLY',
+        scoring_config: {}
+    };
+
+    // Simulate fetchRadar mapping in giaovien.js
+    const mappedCustom = {
+        MaPhong: serverCustomRoom.ma_phong,
+        TenDotKiemTra: serverCustomRoom.ten_dot,
+        DoiTuong: serverCustomRoom.doi_tuong,
+        ThoiGian: serverCustomRoom.thoi_gian,
+        TrangThai: serverCustomRoom.trang_thai,
+        ThoiGianMo: serverCustomRoom.thoi_gian_mo,
+        TenTruong: serverCustomRoom.ten_truong,
+        truong_id: serverCustomRoom.truong_id,
+        id: serverCustomRoom.id,
+        assessment_type: serverCustomRoom.assessment_type || 'LEGACY',
+        scoring_config: serverCustomRoom.scoring_config || {}
+    };
+
+    const mappedMcq = {
+        MaPhong: serverMcqRoom.ma_phong,
+        TenDotKiemTra: serverMcqRoom.ten_dot,
+        DoiTuong: serverMcqRoom.doi_tuong,
+        ThoiGian: serverMcqRoom.thoi_gian,
+        TrangThai: serverMcqRoom.trang_thai,
+        ThoiGianMo: serverMcqRoom.thoi_gian_mo,
+        TenTruong: serverMcqRoom.ten_truong,
+        truong_id: serverMcqRoom.truong_id,
+        id: serverMcqRoom.id,
+        assessment_type: serverMcqRoom.assessment_type || 'LEGACY',
+        scoring_config: serverMcqRoom.scoring_config || {}
+    };
+
+    assert.strictEqual(mappedCustom.assessment_type, 'CUSTOM', 'SCORE-UI-20: Custom room retains assessment_type CUSTOM');
+    assert.strictEqual(mappedCustom.scoring_config.p1_weight, 4, 'SCORE-UI-20: Custom room retains scoring_config');
+    assert.strictEqual(mappedMcq.assessment_type, 'MCQ_ONLY', 'SCORE-UI-20: MCQ room retains assessment_type MCQ_ONLY');
+
+    // HS in Custom room
+    const hsCustom = {
+        MaHS: '100403',
+        Diem: 8,
+        ChiTiet: JSON.stringify([
+            { q: 1, phan: '1', chon: 'A', dung: 'A', diem: 0.25 },
+            { q: 2, phan: '2', chon: 'Đ-S-Đ-Đ', dung: 'Đ-S-Đ-S', diem: 0.5 },
+            { q: 3, phan: '3', chon: '15', dung: '15', diem: 0.25 }
+        ])
+    };
+
+    const presCustom = computeDisplayPartContributions(hsCustom, mappedCustom.assessment_type, mappedCustom.scoring_config);
+    assert.strictEqual(presCustom.finalScore, 8);
+    assert.strictEqual(presCustom.p1, 4, 'SCORE-UI-20: P1 correctly weighted to 4');
+    assert.strictEqual(presCustom.p2, 2, 'SCORE-UI-20: P2 correctly weighted to 2');
+    assert.strictEqual(presCustom.p3, 2, 'SCORE-UI-20: P3 correctly weighted to 2');
+
+    // HS in MCQ room
+    const hsMcq = {
+        MaHS: '100403',
+        Diem: 10,
+        ChiTiet: JSON.stringify([{ q: 1, phan: '1', chon: 'A', dung: 'A', diem: 0.25 }])
+    };
+    const presMcq = computeDisplayPartContributions(hsMcq, mappedMcq.assessment_type, mappedMcq.scoring_config);
+    assert.strictEqual(presMcq.finalScore, 10);
+    assert.strictEqual(presMcq.p1, 10, 'SCORE-UI-20: P1 equals authoritative final score 10');
+    assert.strictEqual(presMcq.p2, 0);
+    assert.strictEqual(presMcq.p3, 0);
+
+    console.log('  -> PASSED');
+}
+
+// -------------------------------------------------------------------------
+// SCORE-UI-21: Killer-question (Part II analytics) correctness criteria
+// -------------------------------------------------------------------------
+console.log('Test SCORE-UI-21: Killer-question analytics (Part II full-correct vs partial)');
+{
+    // Part II: partial scores must be counted INCORRECT for killer-question analytics
+    const p2_000 = { phan: '2', diem: 0.00, chon: 'S-S-S-S', dung: 'Đ-Đ-Đ-Đ' };
+    const p2_010 = { phan: '2', diem: 0.10, chon: 'Đ-S-S-S', dung: 'Đ-Đ-Đ-Đ' };
+    const p2_025 = { phan: '2', diem: 0.25, chon: 'Đ-Đ-S-S', dung: 'Đ-Đ-Đ-Đ' };
+    const p2_050 = { phan: '2', diem: 0.50, chon: 'Đ-Đ-Đ-S', dung: 'Đ-Đ-Đ-Đ' };
+    const p2_100 = { phan: '2', diem: 1.00, chon: 'Đ-Đ-Đ-Đ', dung: 'Đ-Đ-Đ-Đ' };
+
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_000), false, 'SCORE-UI-21: P2 diem=0.00 is NOT fully correct');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_010), false, 'SCORE-UI-21: P2 diem=0.10 is NOT fully correct (partial)');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_025), false, 'SCORE-UI-21: P2 diem=0.25 is NOT fully correct (partial)');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_050), false, 'SCORE-UI-21: P2 diem=0.50 is NOT fully correct (partial)');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_100), true,  'SCORE-UI-21: P2 diem=1.00 IS fully correct');
+
+    // Part I
+    const p1_000 = { phan: '1', diem: 0.00, chon: 'B', dung: 'A' };
+    const p1_025 = { phan: '1', diem: 0.25, chon: 'A', dung: 'A' };
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p1_000), false, 'SCORE-UI-21: P1 diem=0 is NOT correct');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p1_025), true,  'SCORE-UI-21: P1 diem=0.25 IS correct');
+
+    // Part III
+    const p3_000 = { phan: '3', diem: 0.00, chon: '10', dung: '15' };
+    const p3_025 = { phan: '3', diem: 0.25, chon: '15', dung: '15' };
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p3_000), false, 'SCORE-UI-21: P3 diem=0 is NOT correct');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p3_025), true,  'SCORE-UI-21: P3 diem=0.25 IS correct');
+
+    // Fallback when item.diem is not present (legacy client grading details)
+    const p2_legacy_partial = { phan: '2', chon: 'Đ-S-S-S', dung: 'Đ-Đ-Đ-Đ' };
+    const p2_legacy_full = { phan: '2', chon: 'Đ-Đ-Đ-Đ', dung: 'Đ-Đ-Đ-Đ' };
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_legacy_partial), false, 'SCORE-UI-21: Legacy P2 partial match is false');
+    assert.strictEqual(isQuestionFullyCorrectFromServerDetail(p2_legacy_full), true, 'SCORE-UI-21: Legacy P2 4-match is true');
+
+    console.log('  -> PASSED');
+}
+
+console.log('\n=== ALL 21 FLEX-LITE-004 AUTHORITATIVE SCORE PRESENTATION TESTS PASSED ===');

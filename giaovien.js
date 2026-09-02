@@ -311,6 +311,50 @@ function computeDisplayPartContributions(hs, assessmentType = 'LEGACY', scoringC
     };
 }
 
+function isQuestionFullyCorrectFromServerDetail(item) {
+    if (!item || typeof item !== 'object') return false;
+    const phan = String(item.phan ?? item.Phan ?? '1').trim();
+
+    if (item.diem !== undefined && item.diem !== null) {
+        const diemVal = Number(item.diem) || 0;
+        if (phan === '1') {
+            return Math.abs(diemVal - 0.25) < 0.0001;
+        } else if (phan === '2') {
+            return Math.abs(diemVal - 1.0) < 0.0001;
+        } else if (phan === '3') {
+            return Math.abs(diemVal - 0.25) < 0.0001;
+        }
+        return diemVal > 0;
+    }
+
+    if (phan === '1') {
+        const cVal = String(item.chon || '').toUpperCase().trim();
+        const dVal = String(item.dung || '').toUpperCase().trim();
+        return (cVal !== '' && cVal === dVal);
+    } else if (phan === '2') {
+        const cArr = String(item.chon || '').split('-');
+        const dStr = String(item.dung || '').toUpperCase().replace(/[ÐD]/g, 'Đ');
+        const dArr = dStr.match(/[ĐS]/g) || [];
+        let match = 0;
+        for (let i = 0; i < 4; i++) {
+            const cValRaw = cArr[i] || '';
+            const cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
+            let cleanCVal = '';
+            if (cVal.includes('Đ')) cleanCVal = 'Đ';
+            if (cVal.includes('S')) cleanCVal = 'S';
+            const dVal = dArr[i] || '';
+            if (cleanCVal !== '' && cleanCVal === dVal) match++;
+        }
+        return (match === 4);
+    } else if (phan === '3') {
+        const aClean = String(item.chon || '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+        const dClean = String(item.dung || '').replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+        return (aClean !== '' && aClean === dClean);
+    }
+
+    return false;
+}
+
 
 function getAccountPasswordState(row) {
     if (typeof row?.must_change_password !== 'boolean') return 'KhongXacDinh';
@@ -1110,7 +1154,7 @@ function renderDashboardTable() {
 
     displayList.sort((a, b) => (String(a.MaHS) || '').localeCompare(String(b.MaHS) || ''));
 
-        let assessmentType = currentRoom?.assessment_type || 'LEGACY';
+    let assessmentType = currentRoom?.assessment_type || 'LEGACY';
     let scoringConfig = currentRoom?.scoring_config || {};
 
     displayList.forEach(hs => {
@@ -1130,36 +1174,7 @@ function renderDashboardTable() {
                 const entries = Array.isArray(ct) ? ct : Object.entries(ct).map(([k, v]) => ({ key: k, ...v }));
                 entries.forEach((item, idx) => {
                     const k = item.key || item.q || String(idx + 1);
-                    let isDung = false;
-                    if(item.diem !== undefined && item.diem !== null) {
-                        isDung = Number(item.diem) > 0;
-                    } else if(item.phan==="1") {
-                        let cVal = String(item.chon||"").toUpperCase().trim();
-                        let dVal = String(item.dung||"").toUpperCase().trim();
-                        isDung = (cVal === dVal);
-                    }
-                    else if(item.phan==="2") {
-                        let cArr = String(item.chon||"").split('-');
-                        let dStr = String(item.dung||"").toUpperCase().replace(/[ÐD]/g, 'Đ');
-                        let dArr = dStr.match(/[ĐS]/g);
-                        if (!dArr) dArr = [];
-                        let match = 0;
-                        for(let i=0; i<4; i++) {
-                            let cValRaw = cArr[i] || "";
-                            let cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
-                            let cleanCVal = "";
-                            if (cVal.includes("Đ")) cleanCVal = "Đ";
-                            if (cVal.includes("S")) cleanCVal = "S";
-                            let dVal = dArr[i] || "";
-                            if(cleanCVal !== "" && cleanCVal === dVal) match++;
-                        }
-                        isDung = (match === 4);
-                    }
-                    else if(item.phan==="3") {
-                        let aClean = String(item.chon).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
-                        let dClean = String(item.dung).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
-                        isDung = (aClean !== "" && aClean === dClean);
-                    }
+                    let isDung = isQuestionFullyCorrectFromServerDetail(item);
                     if(!isDung) {
                         failCount[k] = (failCount[k] || 0) + 1;
                         if (item.noiDungCau) failCount[k+"_txt"] = item.noiDungCau;
