@@ -59,10 +59,10 @@ assert(totNghiepLabel.includes('chấm điểm thô'), 'CFG-TOT-02: TOT_NGHIEP o
 assert(!totNghiepLabel.includes('0.5'), 'CFG-TOT-03: TOT_NGHIEP option must NOT contain "0.5"');
 assert(!/quy\s+đổi\s+thang\s+10/i.test(totNghiepLabel), 'CFG-TOT-04: TOT_NGHIEP option must NOT contain "quy đổi thang 10"');
 
-// 4. Feature flag exists and is strictly false
+// 4. Feature flag exists and is strictly true
 assert(
-  /const\s+FLEX_LITE_TEACHER_CONFIG_ENABLED\s*=\s*false\s*;/i.test(gvJs),
-  'CFG-FLAG-01: FLEX_LITE_TEACHER_CONFIG_ENABLED must exist in giaovien.js and be false'
+  /const\s+FLEX_LITE_TEACHER_CONFIG_ENABLED\s*=\s*true\s*;/i.test(gvJs),
+  'CFG-FLAG-01: FLEX_LITE_TEACHER_CONFIG_ENABLED must exist in giaovien.js and be true'
 );
 
 // 5. Centralized validator exists and does not compute final score
@@ -151,13 +151,26 @@ assert(qrtBody.includes('changePhanQrt()'), 'REG-05c: renderQuarantineItem calls
 
 // Setup minimal mock browser environment for VM execution
 function createVMEnv(domValues = {}) {
-  const dummyEl = {
-    value: 'TOT_NGHIEP',
-    checked: false,
-    style: {},
-    addEventListener: () => {},
-    removeEventListener: () => {}
-  };
+  const elements = {};
+  function getEl(id) {
+    if (!elements[id]) {
+      const defaultVal = domValues[id] !== undefined
+        ? domValues[id]
+        : (id === 'flexLiteAssessmentType' ? 'TOT_NGHIEP' : '');
+      elements[id] = {
+        id,
+        value: defaultVal,
+        checked: false,
+        style: {},
+        classList: { add: () => {}, remove: () => {}, contains: () => false },
+        appendChild: () => {},
+        insertBefore: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {}
+      };
+    }
+    return elements[id];
+  }
   const sandbox = {
     console,
     Math,
@@ -201,12 +214,7 @@ function createVMEnv(domValues = {}) {
         appendChild: () => {},
         insertBefore: () => {}
       }),
-      getElementById: (id) => {
-        if (domValues[id] !== undefined) {
-          return { value: domValues[id], style: {}, checked: false };
-        }
-        return dummyEl;
-      },
+      getElementById: (id) => getEl(id),
       querySelectorAll: () => [],
       querySelector: () => null,
       head: { appendChild: () => {} },
@@ -579,29 +587,83 @@ const validateFn = gvContext.validateFlexLiteAssessmentForSave;
   assert.throws(() => validateFn(exam, config), /không đồng nhất số lượng câu hỏi hoặc cấu trúc phần/i, 'CFG-11: Different part counts between variants must throw error');
 }
 
-// CFG-12: feature flag false => null config / legacy payload
+// CFG-12: Empty exam validation guard
 {
-  const snapshotFn = gvContext.snapshotFlexLiteAssessmentConfig;
-  const snap = snapshotFn();
-  assert.strictEqual(snap, null, 'CFG-12a: snapshotFlexLiteAssessmentConfig returns null when flag is false');
-  const res = validateFn([{ MaDe: '101', Phan: '99', NoiDung: 'Q' }], snap);
-  assert(res.valid, 'CFG-12b: validateFlexLiteAssessmentForSave passes immediately when config is null');
+  const config = { assessment_type: 'TOT_NGHIEP', scoring_config: {} };
+  assert.throws(() => validateFn([], config), /Đề thi không có câu hỏi nào để lưu/i, 'CFG-12a: Empty exam array must throw error');
+  assert.throws(() => validateFn(null, config), /Đề thi không có câu hỏi nào để lưu/i, 'CFG-12b: Non-array exam must throw error');
 }
 
 // =========================================================================
-// SECTION E: DOM CUSTOM WEIGHT SNAPSHOT TESTS (SIMULATING ENABLED FLAG)
+// SECTION E: DOM UI SYNC, ACTIVE SNAPSHOT AND CUSTOM WEIGHT TESTS
 // =========================================================================
 
-// Test with mocked DOM values when feature flag is enabled
+// UI-01: syncFlexLiteAssessmentPanel across creation modes & unsupported modes
+{
+  const uiEnv = createVMEnv();
+  vm.createContext(uiEnv);
+  vm.runInContext(gvJs, uiEnv);
+
+  const panel = uiEnv.document.getElementById('flexLiteAssessmentPanel');
+  const customWeights = uiEnv.document.getElementById('flexLiteCustomWeights');
+  const typeSelect = uiEnv.document.getElementById('flexLiteAssessmentType');
+
+  // Creation modes must display the panel
+  for (const mode of ['direct', 'manual', 'matrix', 'offline']) {
+    panel.style.display = 'none';
+    uiEnv.syncFlexLiteAssessmentPanel(mode);
+    assert.strictEqual(panel.style.display, 'block', `UI-01: ${mode} mode must display panel`);
+  }
+
+  // Non-create / unsupported modes must hide the panel
+  for (const unsupportedMode of ['bank', 'room', 'view', null, 'unknown']) {
+    panel.style.display = 'block';
+    uiEnv.syncFlexLiteAssessmentPanel(unsupportedMode);
+    assert.strictEqual(panel.style.display, 'none', `UI-01: ${unsupportedMode} mode must hide panel`);
+  }
+
+  // CUSTOM selection shows custom-weight inputs
+  typeSelect.value = 'CUSTOM';
+  uiEnv.syncFlexLiteAssessmentPanel('direct');
+  assert.strictEqual(panel.style.display, 'block', 'UI-01: direct mode displays panel with CUSTOM');
+  assert.strictEqual(customWeights.style.display, 'block', 'UI-01: CUSTOM displays custom weights');
+
+  // Non-CUSTOM profiles hide custom-weight inputs
+  for (const profile of ['TOT_NGHIEP', 'MCQ_ONLY', 'TRUE_FALSE_ONLY', 'SHORT_ONLY']) {
+    typeSelect.value = profile;
+    uiEnv.onFlexLiteAssessmentTypeChange();
+    assert.strictEqual(customWeights.style.display, 'none', `UI-01: ${profile} hides custom weights`);
+  }
+}
+
+// UI-02: Active snapshot generation for all 5 teacher profiles
+{
+  // Non-CUSTOM profiles return active metadata with empty scoring_config
+  for (const profile of ['TOT_NGHIEP', 'MCQ_ONLY', 'TRUE_FALSE_ONLY', 'SHORT_ONLY']) {
+    const ctx = createVMEnv({ flexLiteAssessmentType: profile });
+    vm.createContext(ctx);
+    vm.runInContext(gvJs, ctx);
+    const snap = ctx.snapshotFlexLiteAssessmentConfig();
+    assert.notStrictEqual(snap, null, `UI-02: Profile ${profile} snapshot must not be null when active`);
+    assert.strictEqual(snap.assessment_type, profile, `UI-02: Profile ${profile} assessment_type must match`);
+    assert.strictEqual(typeof snap.scoring_config, 'object', `UI-02: Profile ${profile} scoring_config must be object`);
+    assert.strictEqual(Object.keys(snap.scoring_config).length, 0, `UI-02: Profile ${profile} scoring_config must be empty`);
+  }
+
+  // Default snapshot (without explicit override) is TOT_NGHIEP contract
+  const defaultCtx = createVMEnv();
+  vm.createContext(defaultCtx);
+  vm.runInContext(gvJs, defaultCtx);
+  const defaultSnap = defaultCtx.snapshotFlexLiteAssessmentConfig();
+  assert.strictEqual(defaultSnap.assessment_type, 'TOT_NGHIEP', 'UI-02: Default snapshot is TOT_NGHIEP contract');
+  assert.strictEqual(Object.keys(defaultSnap.scoring_config).length, 0, 'UI-02: Default snapshot scoring_config is empty');
+}
+
+// Test with mocked DOM values for CUSTOM weight snapshotting
 function testSnapshotWithDom(domValues) {
   const customContext = createVMEnv(domValues);
-  // Modify script to enable feature flag in isolated VM context
-  const enabledScript = gvJs.replace(
-    'const FLEX_LITE_TEACHER_CONFIG_ENABLED = false;',
-    'const FLEX_LITE_TEACHER_CONFIG_ENABLED = true;'
-  );
   vm.createContext(customContext);
-  vm.runInContext(enabledScript, customContext);
+  vm.runInContext(gvJs, customContext);
   return {
     snapshot: customContext.snapshotFlexLiteAssessmentConfig(),
     validate: customContext.validateFlexLiteAssessmentForSave
@@ -676,4 +738,4 @@ function testSnapshotWithDom(domValues) {
   assert(res.valid, 'DOM-SNAP-04: Valid 4/4/2 snapshot must pass validation');
 }
 
-console.log('PASS: flex_lite_teacher_config_frontend_simulation.js (All PARSER-01..12, CFG-01..12, REG-01..05, DOM-SNAP-01..04 passed on BOTH parseOnline and parseV8)');
+console.log('PASS: flex_lite_teacher_config_frontend_simulation.js (All PARSER-01..12, CFG-01..12, REG-01..05, UI-01..02, DOM-SNAP-01..04 passed on BOTH parseOnline and parseV8)');
