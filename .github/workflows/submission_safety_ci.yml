@@ -38,6 +38,7 @@ jobs:
           node tests/flex_lite_teacher_config_server_simulation.js
           node tests/flex_lite_teacher_config_frontend_simulation.js
           node tests/flex_lite_authoritative_score_presentation_simulation.js
+          node tests/student_result_session_error_handling_simulation.js
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then

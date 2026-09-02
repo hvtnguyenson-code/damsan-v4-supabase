@@ -1346,7 +1346,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20260902-flex-lite-004');
+assert.strictEqual(clientVersion, '20260902-flex-lite-005');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -2176,7 +2176,7 @@ assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: match
 recordR('R145');
 
 // R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
-const expectedVersion = '20260902-flex-lite-004';
+const expectedVersion = '20260902-flex-lite-005';
 assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
 assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
 assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");
