@@ -20,6 +20,8 @@ function createMockStudentEnv(initialSessionStorage = {}, initialLocalStorage = 
     const localStorageData = { ...initialLocalStorage };
     const domElements = {};
     const alertCalls = [];
+    const windowListeners = {};
+    const documentListeners = {};
 
     function getEl(id) {
         if (!domElements[id]) {
@@ -28,7 +30,7 @@ function createMockStudentEnv(initialSessionStorage = {}, initialLocalStorage = 
                 value: '',
                 innerText: '',
                 innerHTML: '',
-                style: { display: 'block' },
+                style: { display: 'block', opacity: '1', cursor: 'pointer' },
                 classList: {
                     _classes: new Set(),
                     add: function(c) { this._classes.add(c); },
@@ -68,8 +70,27 @@ function createMockStudentEnv(initialSessionStorage = {}, initialLocalStorage = 
         dinhDangThoiGianVN: (d) => String(d),
         alert: (msg) => { alertCalls.push(msg); },
         _getAlertCalls: () => alertCalls,
-        addEventListener: () => {},
-        removeEventListener: () => {},
+        addEventListener: (name, fn) => {
+            windowListeners[name] = windowListeners[name] || [];
+            windowListeners[name].push(fn);
+        },
+        removeEventListener: (name, fn) => {
+            if (windowListeners[name]) {
+                windowListeners[name] = windowListeners[name].filter(f => f !== fn);
+            }
+        },
+        _triggerWindowEvent: async (name, eventObj) => {
+            const list = windowListeners[name] || [];
+            for (const fn of list) {
+                await fn(eventObj);
+            }
+        },
+        _triggerDocumentEvent: async (name, eventObj) => {
+            const list = documentListeners[name] || [];
+            for (const fn of list) {
+                await fn(eventObj);
+            }
+        },
         sessionStorage: {
             getItem: (k) => sessionStorageData[k] !== undefined ? sessionStorageData[k] : null,
             setItem: (k, v) => { sessionStorageData[k] = String(v); },
@@ -92,8 +113,16 @@ function createMockStudentEnv(initialSessionStorage = {}, initialLocalStorage = 
                 innerHTML: '',
                 textContent: ''
             }),
-            addEventListener: () => {},
-            removeEventListener: () => {},
+            addEventListener: (name, fn) => {
+                documentListeners[name] = documentListeners[name] || [];
+                documentListeners[name].push(fn);
+            },
+            removeEventListener: (name, fn) => {
+                if (documentListeners[name]) {
+                    documentListeners[name] = documentListeners[name].filter(f => f !== fn);
+                }
+            },
+            visibilityState: 'visible',
             head: { appendChild: () => {}, removeChild: () => {} },
             body: { appendChild: () => {}, removeChild: () => {} }
         },
@@ -116,8 +145,15 @@ function createMockStudentEnv(initialSessionStorage = {}, initialLocalStorage = 
             })
         },
         window: {
-            addEventListener: () => {},
-            removeEventListener: () => {},
+            addEventListener: (name, fn) => {
+                windowListeners[name] = windowListeners[name] || [];
+                windowListeners[name].push(fn);
+            },
+            removeEventListener: (name, fn) => {
+                if (windowListeners[name]) {
+                    windowListeners[name] = windowListeners[name].filter(f => f !== fn);
+                }
+            },
             location: { reload: () => {} }
         }
     };
@@ -688,8 +724,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-16: first alert recorded');
     assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-16: exactly 1 RPC call made');
 
-    // 2. Simulate delay > 1500ms (beyond any temporary timer)
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // 2. Genuinely wait > 1100ms to exceed any temporary timer (such as the legacy 1000ms reset)
+    await new Promise(resolve => setTimeout(resolve, 1150));
 
     // 3. Trigger _postReceiptLifecycleTick() again with durable snapshot present
     await vm.runInContext('_postReceiptLifecycleTick()', env);
@@ -871,8 +907,252 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     assert(!hsJsSource.includes('window.handleStudentInvalidSession ='), 'SESSION-RESULT-20: hoc_sinh.js has no window test exports');
 
     console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-21: REAL online listener after invalid_session
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-21: REAL online listener after invalid_session does NOT resurrect result UI or trigger RPCs');
+    let rpcCallCount = 0;
+    let gradingRpcCount = 0;
+    let roomListRpcCount = 0;
+    const validExpiry = new Date(Date.now() + 3600000).toISOString();
+    const mockReceipt = { submission_id: 'sub-resurrect-01', attempt_id: 'att-resurrect-01', received_at: '2026-09-02T10:00:00Z', state: 'SERVER_RECEIVED' };
+    const mockFinal = { attempt_id: 'att-resurrect-01', phong_id: 'phong-1', state: 'SERVER_RECEIVED' };
+
+    const env = createMockStudentEnv(
+        {
+            damSan_StudentToken: 'tok-expire-resurrect',
+            damSan_StudentTokenExpiresAt: validExpiry,
+            damSan_HSSession: JSON.stringify({ ma_hs: 'HS001', hs_id: 'hs-001', truong_id: 'sch-001' })
+        },
+        {
+            'receipt_HS001_phong-1': JSON.stringify(mockReceipt),
+            'final_HS001_phong-1': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_result_status: async () => {
+                rpcCallCount++;
+                return {
+                    data: { status: 'error', code: 'invalid_session', message: 'Hết hạn.' },
+                    error: null
+                };
+            },
+            rpc_hoc_sinh_grade_submission: async () => {
+                gradingRpcCount++;
+                return { data: { status: 'graded' }, error: null };
+            },
+            rpc_hoc_sinh_danh_sach_phong: async () => {
+                roomListRpcCount++;
+                return { data: { status: 'success', rooms: [] }, error: null };
+            }
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    vm.runInContext('state.hs_id = "hs-001"; state.truong_id = "sch-001"; state.ma_hs = "HS001"; state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+
+    // 1. Invalidate session via checkTeacherCommand(true)
+    await vm.runInContext('checkTeacherCommand(true)', env);
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-21: initial invalidation alert shown');
+    assert(env.document.getElementById('login-section').classList.contains('active'), 'SESSION-RESULT-21: login-section is active');
+    assert(!env.document.getElementById('result-section').classList.contains('active'), 'SESSION-RESULT-21: result-section is NOT active');
+    assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-21: exactly 1 result RPC call made during initial invalidation');
+
+    // 2. Invoke REAL registered online callback
+    await env._triggerWindowEvent('online');
+
+    // 3. Verify UI and RPC invariants:
+    assert(env.document.getElementById('login-section').classList.contains('active'), 'SESSION-RESULT-21: login-section remains active');
+    assert(!env.document.getElementById('result-section').classList.contains('active'), 'SESSION-RESULT-21: result-section was NOT resurrected');
+    assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-21: no extra result-status RPC called after online event');
+    assert.strictEqual(gradingRpcCount, 0, 'SESSION-RESULT-21: no grading RPC called');
+    assert.strictEqual(roomListRpcCount, 0, 'SESSION-RESULT-21: no room-list RPC called');
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-21: exactly 1 alert total (no second alert on online)');
+
+    // 4. Verify durable snapshot remains intact
+    assert.strictEqual(env.localStorage.getItem('final_HS001_phong-1'), JSON.stringify(mockFinal), 'SESSION-RESULT-21: final snapshot preserved');
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-22: REAL visibilitychange callback after invalid_session
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-22: REAL visibilitychange callback after invalid_session does NOT trigger publication or alerts');
+    let rpcCallCount = 0;
+    const validExpiry = new Date(Date.now() + 3600000).toISOString();
+    const mockReceipt = { submission_id: 'sub-vis-01', attempt_id: 'att-vis-01', received_at: '2026-09-02T10:00:00Z', state: 'SERVER_RECEIVED' };
+    const mockFinal = { attempt_id: 'att-vis-01', phong_id: 'phong-1', state: 'SERVER_RECEIVED' };
+
+    const env = createMockStudentEnv(
+        {
+            damSan_StudentToken: 'tok-expire-vis2',
+            damSan_StudentTokenExpiresAt: validExpiry,
+            damSan_HSSession: JSON.stringify({ ma_hs: 'HS001', hs_id: 'hs-001', truong_id: 'sch-001' })
+        },
+        {
+            'receipt_HS001_phong-1': JSON.stringify(mockReceipt),
+            'final_HS001_phong-1': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_result_status: async () => {
+                rpcCallCount++;
+                return {
+                    data: { status: 'error', code: 'invalid_session', message: 'Hết hạn.' },
+                    error: null
+                };
+            }
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    vm.runInContext('state.hs_id = "hs-001"; state.truong_id = "sch-001"; state.ma_hs = "HS001"; state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+
+    // Invalidate
+    await vm.runInContext('checkTeacherCommand(true)', env);
+    assert.strictEqual(env._getAlertCalls().length, 1);
+    assert.strictEqual(rpcCallCount, 1);
+
+    // Invoke REAL registered visibilitychange event
+    env.document.visibilityState = 'visible';
+    await env._triggerDocumentEvent('visibilitychange');
+
+    assert(env.document.getElementById('login-section').classList.contains('active'), 'SESSION-RESULT-22: login remains active');
+    assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-22: no publication RPC called on visibilitychange');
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-22: exactly 1 alert total');
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-23: Successful fresh login after invalidation restores recovery execution
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-23: Successful fresh login after invalidation restores normal recovery execution');
+    let gradingRpcCount = 0;
+    const mockReceipt = { submission_id: 'sub-login-resume', attempt_id: 'att-login-resume', received_at: '2026-09-02T10:00:00Z', state: 'SERVER_RECEIVED' };
+    const mockFinal = { attempt_id: 'att-login-resume', phong_id: 'phong-1', hs_id: 'hs-001', truong_id: 'sch-001', room_opened_at: 1000, state: 'SERVER_RECEIVED', raw_answers: [] };
+
+    const env = createMockStudentEnv(
+        {},
+        {
+            'receipt_damsan_phong-1_hs-001': JSON.stringify(mockReceipt),
+            'final_damsan_phong-1_hs-001': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_submission_receipt_status: async () => ({
+                data: { status: 'success', state: 'SERVER_RECEIVED' },
+                error: null
+            }),
+            rpc_hoc_sinh_grade_submission: async () => {
+                gradingRpcCount++;
+                return { data: { status: 'graded' }, error: null };
+            },
+            rpc_hoc_sinh_result_status: async () => ({
+                data: { status: 'success', room_exists: true, thoi_gian_mo: 1000, trang_thai: 'CONG_BO_DIEM', has_result: true, result: { diem: 9.5 } },
+                error: null
+            })
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    // 1. Invalidate session initially
+    vm.runInContext('handleStudentInvalidSession("Hết hạn");', env);
+    assert.strictEqual(vm.runInContext('studentSessionInvalidated', env), true);
+
+    // 2. Perform valid fresh login
+    const validFuture = new Date(Date.now() + 7200000).toISOString();
+    const loginPayload = {
+        status: 'success',
+        student_token: 'fresh-relogin-token',
+        student_expires_at: validFuture,
+        user: { id: 'hs-001', truong_id: 'sch-001', ma_hs: 'HS001', ho_ten: 'HS Mot', lop: '12A' }
+    };
+    const loginResult = vm.runInContext(`completeStudentAuthenticatedSession(${JSON.stringify(loginPayload)})`, env);
+    assert.strictEqual(loginResult, true);
+    assert.strictEqual(vm.runInContext('studentSessionInvalidated', env), false, 'SESSION-RESULT-23: latch reset on valid login');
+
+    // 3. Hydrate state
+    vm.runInContext('state.hs_id = "hs-001"; state.truong_id = "sch-001"; state.ma_hs = "HS001"; state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+
+    // 4. Now resumeSavedSubmission should run normally
+    const resumed = await vm.runInContext('resumeSavedSubmission()', env);
+    assert.strictEqual(resumed, true, 'SESSION-RESULT-23: resumeSavedSubmission executed successfully');
+    assert.strictEqual(gradingRpcCount, 1, 'SESSION-RESULT-23: grading RPC called after valid re-login');
+    assert(env.document.getElementById('result-section').classList.contains('active'), 'SESSION-RESULT-23: result-section activated after valid re-login recovery');
+    assert.strictEqual(
+        vm.runInContext('postReceiptLifecyclePollTimer !== null', env),
+        true,
+        'SESSION-RESULT-23: post-receipt lifecycle watcher restarted'
+    );
+
+    // 5. Clean up resources created during this test
+    vm.runInContext(
+        'dungPostReceiptLifecycleWatcher(); dongTatCaRealtimeHocSinh();',
+        env
+    );
+    assert.strictEqual(
+        vm.runInContext('postReceiptLifecyclePollTimer', env),
+        null,
+        'SESSION-RESULT-23: lifecycle watcher cleaned up after test'
+    );
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-24: Failed login keeps latch active and online/visibility events inert
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-24: Failed login keeps latch active and online/visibility events inert');
+    let rpcCallCount = 0;
+    const mockReceipt = { submission_id: 'sub-fail-login', attempt_id: 'att-fail-login', received_at: '2026-09-02T10:00:00Z', state: 'SERVER_RECEIVED' };
+    const mockFinal = { attempt_id: 'att-fail-login', phong_id: 'phong-1', hs_id: 'hs-001', truong_id: 'sch-001', room_opened_at: 1000, state: 'SERVER_RECEIVED', raw_answers: [] };
+
+    const env = createMockStudentEnv(
+        {},
+        {
+            'receipt_damsan_phong-1_hs-001': JSON.stringify(mockReceipt),
+            'final_damsan_phong-1_hs-001': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_result_status: async () => {
+                rpcCallCount++;
+                return { data: { status: 'error', code: 'invalid_session' }, error: null };
+            }
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    // Invalidate
+    vm.runInContext('handleStudentInvalidSession("Hết hạn");', env);
+    assert.strictEqual(vm.runInContext('studentSessionInvalidated', env), true);
+
+    // Failed login attempt
+    const badLogin = { status: 'error', message: 'Tài khoản không tồn tại' };
+    const res = vm.runInContext(`completeStudentAuthenticatedSession(${JSON.stringify(badLogin)})`, env);
+    assert.strictEqual(res, false);
+    assert.strictEqual(vm.runInContext('studentSessionInvalidated', env), true, 'SESSION-RESULT-24: latch remains true');
+
+    // Trigger online and visibility
+    await env._triggerWindowEvent('online');
+    env.document.visibilityState = 'visible';
+    await env._triggerDocumentEvent('visibilitychange');
+
+    assert(env.document.getElementById('login-section').classList.contains('active'), 'SESSION-RESULT-24: login section remains active');
+    assert(!env.document.getElementById('result-section').classList.contains('active'), 'SESSION-RESULT-24: result section remains inactive');
+    assert.strictEqual(rpcCallCount, 0, 'SESSION-RESULT-24: no RPC called');
+    console.log('  -> PASSED');
 })()).then(() => {
-    console.log('\n=== ALL 20 FLEX-LITE-005 STUDENT RESULT SESSION & ERROR HANDLING TESTS PASSED ===\n');
+    console.log('\n=== ALL 24 FLEX-LITE-005 STUDENT RESULT SESSION & ERROR HANDLING TESTS PASSED ===\n');
 }).catch((err) => {
     console.error('Test failed:', err);
     process.exit(1);

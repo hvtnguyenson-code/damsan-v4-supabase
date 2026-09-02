@@ -1337,6 +1337,7 @@ function _postReceiptContextValid() {
 }
 // P0-006A: Tick cua lifecycle watcher
 async function _postReceiptLifecycleTick() {
+    if (studentSessionInvalidated) return;
     if (!_postReceiptContextValid()) { dungPostReceiptLifecycleWatcher(); return; }
     if (state.isOffline) return;
     const snapshot = getFinalSnapshot();
@@ -1948,6 +1949,7 @@ async function reconcileSavedSubmission(snapshot) {
 }
 
 async function resumeSavedSubmission() {
+    if (studentSessionInvalidated) return true;
     let snapshot = getFinalSnapshot();
     if (!snapshot && state.hs_id && state.truong_id) {
         const candidates = findRecoverableFinalSnapshotsForCurrentStudent();
@@ -2132,7 +2134,7 @@ async function receiveFinalSubmission() {
 }
 
 async function requestGrading(submissionId) {
-    if (isGradingSubmission || state.isOffline) return;
+    if (studentSessionInvalidated || isGradingSubmission || state.isOffline) return;
     isGradingSubmission = true;
     try {
         const token = getStudentToken();
