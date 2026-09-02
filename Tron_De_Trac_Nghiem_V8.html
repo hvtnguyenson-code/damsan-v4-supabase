@@ -597,15 +597,26 @@
     
     htmlText = htmlText.replace(/Thí\s*sinh\s*trả\s*lời\s*từ\s*câu[^<]*?đến\s*câu[^<.]*[.]?/gi, "");
 
-    const reP2 = /PH(?:ẦN|AN)\s*(?:II|2)\b/i;
-    const reP3 = /PH(?:ẦN|AN)\s*(?:III|3)\b/i;
+    const reP2 = /PH(?:ẦN|AN)(?:<[^>]+>|\s|&nbsp;)*(?:II|2)\b/i;
+    const reP3 = /PH(?:ẦN|AN)(?:<[^>]+>|\s|&nbsp;)*(?:III|3)\b/i;
     let idxP2 = htmlText.search(reP2); let idxP3 = htmlText.search(reP3);
 
     if (idxP2 !== -1 && idxP3 !== -1 && idxP3 < idxP2) idxP3 = -1;
 
     let p1H = htmlText, p2H = "", p3H = "";
-    if (idxP2 !== -1 && idxP3 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2, idxP3); p3H = htmlText.substring(idxP3); } 
-    else if (idxP2 !== -1) { p1H = htmlText.substring(0, idxP2); p2H = htmlText.substring(idxP2); }
+    if (idxP2 !== -1 && idxP3 !== -1) {
+        p1H = htmlText.substring(0, idxP2);
+        p2H = htmlText.substring(idxP2, idxP3);
+        p3H = htmlText.substring(idxP3);
+    }
+    else if (idxP2 !== -1) {
+        p1H = htmlText.substring(0, idxP2);
+        p2H = htmlText.substring(idxP2);
+    }
+    else if (idxP3 !== -1) {
+        p1H = htmlText.substring(0, idxP3);
+        p3H = htmlText.substring(idxP3);
+    }
 
     const cleanContent = h => (h||"").replace(/<\/?(p|div|ul|ol|li|span|font)[^>]*>/gi, '<br>').replace(/(<br>\s*)+/gi, '<br>').replace(/^<br>|<br>$/gi, '').replace(/<[^>]*$/g, '').trim();
     const cleanAns = h => (h||"").replace(/<[^>]+>/g, ' ').replace(/<[^>]*$/g, '').replace(/\s+/g, ' ').trim();

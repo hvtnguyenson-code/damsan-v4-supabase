@@ -340,6 +340,44 @@
                 <div class="workspace">
                     
                     <div id="taoDe" class="tab-content active">
+                        <!-- SHARED FLEX-LITE ASSESSMENT PANEL -->
+                        <div id="flexLiteAssessmentPanel" style="display: none; background: #f0fdf4; border: 1px solid #86efac; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+                            <div style="font-weight: bold; color: #166534; font-size: 14px; margin-bottom: 6px;">
+                                ⚙️ CẤU HÌNH THANG ĐIỂM & ĐỀ THI (FLEX-LITE)
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start;">
+                                <div style="flex: 2; min-width: 260px;">
+                                    <label style="font-size: 13px; font-weight: bold; color: #1e293b; display: block; margin-bottom: 4px;">Loại bài kiểm tra / Thang điểm:</label>
+                                    <select id="flexLiteAssessmentType" onchange="onFlexLiteAssessmentTypeChange()" style="width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; font-weight: bold; color: #0f172a; background: white;">
+                                        <option value="TOT_NGHIEP">Tốt nghiệp — P1/P2/P3, chấm điểm thô</option>
+                                        <option value="MCQ_ONLY">Chỉ trắc nghiệm 4 lựa chọn (Phần I) — quy về 10</option>
+                                        <option value="TRUE_FALSE_ONLY">Chỉ Đúng/Sai (Phần II) — quy về 10</option>
+                                        <option value="SHORT_ONLY">Chỉ trả lời ngắn (Phần III) — quy về 10</option>
+                                        <option value="CUSTOM">Tùy chỉnh trọng số các phần (Tổng = 10 điểm)</option>
+                                    </select>
+                                </div>
+                                <div id="flexLiteCustomWeights" style="display: none; flex: 3; min-width: 280px; background: white; padding: 10px 15px; border-radius: 6px; border: 1px dashed #22c55e;">
+                                    <div style="font-size: 13px; font-weight: bold; color: #15803d; margin-bottom: 8px;">Trọng số các phần (Tổng = 10 điểm):</div>
+                                    <div style="display: flex; gap: 10px;">
+                                        <div style="flex: 1;">
+                                            <label style="font-size: 12px;">Phần I (MCQ):</label>
+                                            <input type="number" id="flexLiteP1Weight" min="0" max="10" step="0.01" value="4" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label style="font-size: 12px;">Phần II (Đ/S):</label>
+                                            <input type="number" id="flexLiteP2Weight" min="0" max="10" step="0.01" value="4" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label style="font-size: 12px;">Phần III (Ngắn):</label>
+                                            <input type="number" id="flexLiteP3Weight" min="0" max="10" step="0.01" value="2" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold;">
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 11px; color: #64748b; margin-top: 6px;">
+                                        * Tổng ba trọng số phải = 10; phần không có câu trong đề phải có trọng số = 0; server là nơi quyết định điểm số chính thức.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <div id="subTabManual" class="sub-tab-content" style="background: #fdf2e9; padding: 20px; border-radius: 8px; border-left: 5px solid #e74c3c;">
                             <div class="box-title" style="color: #e74c3c;">✍️ GÕ CÂU HỎI TRỰC TIẾP & ĐẨY VÀO PHÒNG</div>
                             <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 20px;">
