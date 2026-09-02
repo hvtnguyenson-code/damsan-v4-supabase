@@ -1346,7 +1346,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20260830-student-rpc-cutover-p0-008b');
+assert.strictEqual(clientVersion, '20260902-flex-lite-004');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -1595,10 +1595,10 @@ envR106.mockSupabase._fromData = {
   ket_qua: { id: 'kq-106', diem: 2.5, so_lan_vi_pham: 0 }
 };
 await envR106.api.checkTeacherCommand(true);
-assert.strictEqual(envR106.getEl('final_score_val').innerText, '10.00', "R106: 10 Part-I questions with raw 2.5 normalized to 10.00");
+assert.strictEqual(envR106.getEl('final_score_val').innerText, '2.50', "R106: 10 Part-I questions displays authoritative score 2.50");
 envR106.mockSupabase._fromData.ket_qua.diem = 1.25;
 await envR106.api.checkTeacherCommand(false);
-assert.strictEqual(envR106.getEl('final_score_val').innerText, '5.00', "R106: 10 Part-I questions with raw 1.25 normalized to 5.00");
+assert.strictEqual(envR106.getEl('final_score_val').innerText, '1.25', "R106: 10 Part-I questions displays authoritative score 1.25");
 recordR('R106');
 
 // R107: Display score raw preservation for mixed Part I & Part II exam
@@ -2176,7 +2176,7 @@ assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: match
 recordR('R145');
 
 // R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
-const expectedVersion = '20260830-student-rpc-cutover-p0-008b';
+const expectedVersion = '20260902-flex-lite-004';
 assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
 assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
 assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");

@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260830-student-rpc-cutover-p0-008b';
+const VERSION = '20260902-flex-lite-004';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -2229,21 +2229,9 @@ async function checkTeacherCommand(isAuto = false) {
         if (!kq) return;
         renderForensicPanel();
 
-        let displayScore = (kq.diem !== null && kq.diem !== undefined) ? kq.diem : null;
-        const questions = state.cau_hoi || [];
-        if (displayScore !== null && questions.length > 0) {
-            const hasPart2Or3 = questions.some(q => {
-                let p = String(q.phan || q.Phan);
-                return p === "2" || p === "3";
-            });
-            if (!hasPart2Or3) {
-                const maxRaw = questions.length * 0.25;
-                if (maxRaw > 0) displayScore = (kq.diem / maxRaw) * 10;
-            }
-        }
-
+        let displayScore = (kq.diem !== null && kq.diem !== undefined) ? Number(kq.diem) : null;
         document.getElementById('score-display-area').style.display = 'block';
-        document.getElementById('final_score_val').innerText = (displayScore !== null && displayScore !== undefined) ? displayScore.toFixed(2) : '--';
+        document.getElementById('final_score_val').innerText = (displayScore !== null && !isNaN(displayScore)) ? displayScore.toFixed(2) : '--';
 
         if (statusData.trang_thai === 'XEM_DAP_AN') {
             let chiTiet = typeof kq.chi_tiet === 'string' ? JSON.parse(kq.chi_tiet) : (kq.chi_tiet || []);
