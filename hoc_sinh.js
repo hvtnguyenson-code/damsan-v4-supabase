@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260902-flex-lite-004';
+const VERSION = '20260902-flex-lite-005';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -52,6 +52,36 @@ function clearStudentAuthSession() {
         sessionStorage.removeItem('damSan_StudentToken');
         sessionStorage.removeItem('damSan_StudentTokenExpiresAt');
     } catch(e) {}
+}
+
+let isHandlingInvalidSession = false;
+
+function handleStudentInvalidSession(customMessage = null, options = {}) {
+    if (typeof dungPostReceiptLifecycleWatcher === 'function') {
+        dungPostReceiptLifecycleWatcher();
+    }
+    if (typeof dongTatCaRealtimeHocSinh === 'function') {
+        dongTatCaRealtimeHocSinh();
+    }
+    clearStudentAuthSession();
+
+    if (isHandlingInvalidSession) return;
+    isHandlingInvalidSession = true;
+
+    const msg = customMessage || "Phiên đăng nhập đã hết hạn hoặc không còn hợp lệ. Vui lòng đăng nhập lại để tiếp tục.";
+    try {
+        if (!options.silent) {
+            alert(msg);
+        }
+    } catch(e) {}
+
+    if (typeof showSection === 'function') {
+        showSection('login-section');
+    }
+
+    setTimeout(() => {
+        isHandlingInvalidSession = false;
+    }, 1000);
 }
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
@@ -1054,9 +1084,7 @@ async function timPhongThiTuDong() {
         if (!rpcErr) {
             if (!rpcData || rpcData.status !== 'success') {
                 if (rpcData?.code === 'invalid_session') {
-                    clearStudentAuthSession();
-                    alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-                    showSection('login-section');
+                    handleStudentInvalidSession(rpcData?.message);
                     return;
                 }
                 throw new Error(rpcData?.message || "Không tải được danh sách phòng thi.");
@@ -1139,9 +1167,7 @@ async function joinRoom(maPhongAuto = null) {
         if (rpcRoomErr) throw rpcRoomErr;
         if (!rpcRoomData || rpcRoomData.status !== 'success') {
             if (rpcRoomData?.code === 'invalid_session') {
-                clearStudentAuthSession();
-                alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-                showSection('login-section');
+                handleStudentInvalidSession(rpcRoomData?.message);
                 return;
             }
             throw new Error(rpcRoomData?.message || "Không tìm thấy phòng thi này!");
@@ -1173,9 +1199,7 @@ async function joinRoom(maPhongAuto = null) {
 
         if (!statusData || statusData.status !== 'success') {
             if (statusData?.code === 'invalid_session') {
-                clearStudentAuthSession();
-                alert("Phiên làm việc không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.");
-                showSection('login-section');
+                handleStudentInvalidSession(statusData?.message);
                 return;
             }
             throw new Error(statusData?.message || 'Không thể xác thực trạng thái phòng thi');
@@ -2132,7 +2156,10 @@ async function requestGrading(submissionId) {
     } finally { isGradingSubmission = false; }
 }
 async function checkTeacherCommand(isAuto = false) {
-    if (state.isOffline) return alert("Không thể tải kết quả vì bạn đang mất mạng!");
+    if (state.isOffline) {
+        if (!isAuto) alert("Không thể tải kết quả vì bạn đang mất mạng!");
+        return;
+    }
     // [Fix C] Guard tránh race condition: nếu đã có lần gọi đang chạy, bỏ qua lần sau
     if (isCheckingCommand) { console.log('[checkCmd] skipped — đang xử lý lần trước, isAuto=', isAuto); return; }
     isCheckingCommand = true;
@@ -2141,6 +2168,7 @@ async function checkTeacherCommand(isAuto = false) {
         const token = getStudentToken();
         if (!token) {
             console.warn('[checkCmd] No student session token');
+            handleStudentInvalidSession();
             return;
         }
 
@@ -2149,9 +2177,26 @@ async function checkTeacherCommand(isAuto = false) {
             p_phong_id: state.phong_id
         });
 
-        if (statusError || !statusData || statusData.status !== 'success') {
-            console.warn('[checkCmd] Query error — keeping recovery evidence:', statusError?.message || statusData?.message);
+        if (statusError) {
+            console.warn('[checkCmd] Transport/RPC error — keeping recovery evidence:', statusError.message);
             if (!isAuto) alert('Lỗi kết nối máy chủ khi kiểm tra trạng thái. Vui lòng thử lại sau.');
+            return;
+        }
+
+        if (!statusData) {
+            console.warn('[checkCmd] No usable response from server — keeping recovery evidence');
+            if (!isAuto) alert('Không nhận được phản hồi từ máy chủ khi kiểm tra trạng thái. Vui lòng thử lại sau.');
+            return;
+        }
+
+        if (statusData.status !== 'success') {
+            if (statusData.code === 'invalid_session') {
+                console.warn('[checkCmd] Student session expired/invalid — transitioning to login');
+                handleStudentInvalidSession(statusData.message);
+                return;
+            }
+            console.warn('[checkCmd] Server returned error status:', statusData.message || statusData.code);
+            if (!isAuto) alert(statusData.message || 'Không thể kiểm tra trạng thái phòng thi từ máy chủ.');
             return;
         }
 
@@ -2444,4 +2489,19 @@ function khoiPhucBaiLamNhap() {
             }
         } catch (e) { console.error("Lỗi khi khôi phục bản nháp:", e); }
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.state = state;
+    window.checkTeacherCommand = checkTeacherCommand;
+    window.handleStudentInvalidSession = handleStudentInvalidSession;
+    window.joinRoom = joinRoom;
+    window.timPhongThiTuDong = timPhongThiTuDong;
+    window.batDauPostReceiptLifecycleWatcher = batDauPostReceiptLifecycleWatcher;
+    window.dungPostReceiptLifecycleWatcher = dungPostReceiptLifecycleWatcher;
+    window.getPostReceiptLifecyclePollTimer = () => postReceiptLifecyclePollTimer;
+    window.clearStudentAuthSession = clearStudentAuthSession;
+    window.getStudentToken = getStudentToken;
+    window.getFinalSnapshot = getFinalSnapshot;
+    window.getSubmissionReceipt = getSubmissionReceipt;
 }
