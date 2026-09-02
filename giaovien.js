@@ -154,6 +154,207 @@ function validateFlexLiteAssessmentForSave(deThiArray, config) {
 
     return { valid: true };
 }
+function parseAuthoritativeFinalScore(diemRaw) {
+    if (diemRaw === null || diemRaw === undefined || diemRaw === "" || diemRaw === "-") {
+        return null;
+    }
+    const num = Number(diemRaw);
+    return isNaN(num) ? null : num;
+}
+
+function parseServerGradingDetails(chiTietRaw) {
+    let ct = null;
+    if (typeof chiTietRaw === 'string') {
+        try {
+            ct = JSON.parse(chiTietRaw);
+        } catch (e) {
+            ct = null;
+        }
+    } else if (typeof chiTietRaw === 'object' && chiTietRaw !== null) {
+        ct = chiTietRaw;
+    }
+
+    const res = {
+        p1Count: 0,
+        p2Count: 0,
+        p3Count: 0,
+        totalCount: 0,
+        rawP1Earned: 0,
+        rawP2Earned: 0,
+        rawP3Earned: 0,
+        rawP1Max: 0,
+        rawP2Max: 0,
+        rawP3Max: 0
+    };
+
+    if (!ct) return res;
+
+    const entries = Array.isArray(ct) ? ct : Object.values(ct);
+
+    for (const item of entries) {
+        if (!item || typeof item !== 'object') continue;
+        const phan = String(item.phan ?? item.Phan ?? '1').trim();
+        res.totalCount++;
+
+        if (phan === '1') {
+            res.p1Count++;
+            let p1Pt = 0;
+            if (item.diem !== undefined && item.diem !== null) {
+                p1Pt = Number(item.diem) || 0;
+            } else {
+                const cVal = String(item.chon || '').toUpperCase().trim();
+                const dVal = String(item.dung || '').toUpperCase().trim();
+                if (cVal && cVal === dVal) p1Pt = 0.25;
+            }
+            res.rawP1Earned += p1Pt;
+        } else if (phan === '2') {
+            res.p2Count++;
+            let p2Pt = 0;
+            if (item.diem !== undefined && item.diem !== null) {
+                p2Pt = Number(item.diem) || 0;
+            } else {
+                const cArr = String(item.chon || '').split('-');
+                const dStr = String(item.dung || '').toUpperCase().replace(/[ÐD]/g, 'Đ');
+                const dArr = dStr.match(/[ĐS]/g) || [];
+                let match = 0;
+                for (let i = 0; i < 4; i++) {
+                    const cValRaw = cArr[i] || '';
+                    const cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
+                    let cleanCVal = '';
+                    if (cVal.includes('Đ')) cleanCVal = 'Đ';
+                    if (cVal.includes('S')) cleanCVal = 'S';
+                    const dVal = dArr[i] || '';
+                    if (cleanCVal !== '' && cleanCVal === dVal) match++;
+                }
+                if (match === 1) p2Pt = 0.1;
+                else if (match === 2) p2Pt = 0.25;
+                else if (match === 3) p2Pt = 0.5;
+                else if (match === 4) p2Pt = 1.0;
+            }
+            res.rawP2Earned += p2Pt;
+        } else if (phan === '3') {
+            res.p3Count++;
+            let p3Pt = 0;
+            if (item.diem !== undefined && item.diem !== null) {
+                p3Pt = Number(item.diem) || 0;
+            } else {
+                const aClean = String(item.chon || '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+                const dClean = String(item.dung || '').replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+                if (aClean !== '' && aClean === dClean) p3Pt = 0.25;
+            }
+            res.rawP3Earned += p3Pt;
+        }
+    }
+
+    res.rawP1Max = res.p1Count * 0.25;
+    res.rawP2Max = res.p2Count * 1.0;
+    res.rawP3Max = res.p3Count * 0.25;
+
+    return res;
+}
+
+function computeDisplayPartContributions(hs, assessmentType = 'LEGACY', scoringConfig = {}) {
+    const authoritativeScore = parseAuthoritativeFinalScore(hs ? (hs.Diem ?? hs.diem ?? hs.score) : null);
+    const isSubmitted = authoritativeScore !== null;
+
+    if (!isSubmitted) {
+        return {
+            isSubmitted: false,
+            finalScore: null,
+            finalDisplay: "-",
+            p1: "-",
+            p2: "-",
+            p3: "-"
+        };
+    }
+
+    const details = parseServerGradingDetails(hs ? (hs.ChiTiet ?? hs.chi_tiet ?? hs.grading_details) : null);
+    const type = String(assessmentType || 'LEGACY').trim().toUpperCase();
+
+    let p1Contrib = 0;
+    let p2Contrib = 0;
+    let p3Contrib = 0;
+
+    if (type === 'MCQ_ONLY') {
+        p1Contrib = authoritativeScore;
+        p2Contrib = 0;
+        p3Contrib = 0;
+    } else if (type === 'TRUE_FALSE_ONLY') {
+        p1Contrib = 0;
+        p2Contrib = authoritativeScore;
+        p3Contrib = 0;
+    } else if (type === 'SHORT_ONLY') {
+        p1Contrib = 0;
+        p2Contrib = 0;
+        p3Contrib = authoritativeScore;
+    } else if (type === 'CUSTOM') {
+        const p1Weight = Number(scoringConfig?.p1_weight) || 0;
+        const p2Weight = Number(scoringConfig?.p2_weight) || 0;
+        const p3Weight = Number(scoringConfig?.p3_weight) || 0;
+
+        p1Contrib = details.rawP1Max > 0 ? (details.rawP1Earned / details.rawP1Max) * p1Weight : 0;
+        p2Contrib = details.rawP2Max > 0 ? (details.rawP2Earned / details.rawP2Max) * p2Weight : 0;
+        p3Contrib = details.rawP3Max > 0 ? (details.rawP3Earned / details.rawP3Max) * p3Weight : 0;
+    } else {
+        p1Contrib = details.rawP1Earned;
+        p2Contrib = details.rawP2Earned;
+        p3Contrib = details.rawP3Earned;
+    }
+
+    return {
+        isSubmitted: true,
+        finalScore: authoritativeScore,
+        finalDisplay: authoritativeScore.toFixed(2),
+        p1: Number(p1Contrib.toFixed(2)),
+        p2: Number(p2Contrib.toFixed(2)),
+        p3: Number(p3Contrib.toFixed(2))
+    };
+}
+
+function isQuestionFullyCorrectFromServerDetail(item) {
+    if (!item || typeof item !== 'object') return false;
+    const phan = String(item.phan ?? item.Phan ?? '1').trim();
+
+    if (item.diem !== undefined && item.diem !== null) {
+        const diemVal = Number(item.diem) || 0;
+        if (phan === '1') {
+            return Math.abs(diemVal - 0.25) < 0.0001;
+        } else if (phan === '2') {
+            return Math.abs(diemVal - 1.0) < 0.0001;
+        } else if (phan === '3') {
+            return Math.abs(diemVal - 0.25) < 0.0001;
+        }
+        return diemVal > 0;
+    }
+
+    if (phan === '1') {
+        const cVal = String(item.chon || '').toUpperCase().trim();
+        const dVal = String(item.dung || '').toUpperCase().trim();
+        return (cVal !== '' && cVal === dVal);
+    } else if (phan === '2') {
+        const cArr = String(item.chon || '').split('-');
+        const dStr = String(item.dung || '').toUpperCase().replace(/[ÐD]/g, 'Đ');
+        const dArr = dStr.match(/[ĐS]/g) || [];
+        let match = 0;
+        for (let i = 0; i < 4; i++) {
+            const cValRaw = cArr[i] || '';
+            const cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
+            let cleanCVal = '';
+            if (cVal.includes('Đ')) cleanCVal = 'Đ';
+            if (cVal.includes('S')) cleanCVal = 'S';
+            const dVal = dArr[i] || '';
+            if (cleanCVal !== '' && cleanCVal === dVal) match++;
+        }
+        return (match === 4);
+    } else if (phan === '3') {
+        const aClean = String(item.chon || '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+        const dClean = String(item.dung || '').replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
+        return (aClean !== '' && aClean === dClean);
+    }
+
+    return false;
+}
+
 
 function getAccountPasswordState(row) {
     if (typeof row?.must_change_password !== 'boolean') return 'KhongXacDinh';
@@ -953,118 +1154,64 @@ function renderDashboardTable() {
 
     displayList.sort((a, b) => (String(a.MaHS) || '').localeCompare(String(b.MaHS) || '')); 
 
-    displayList.forEach(hs => { 
-        hs.p1Score = 0; hs.p2Score = 0; hs.p3Score = 0; 
-        
-        let isSubmitted = (hs.Diem !== null && hs.Diem !== undefined && hs.Diem !== "-");
+    let assessmentType = currentRoom?.assessment_type || 'LEGACY';
+    let scoringConfig = currentRoom?.scoring_config || {};
 
-        if(hs.ChiTiet && isSubmitted) { 
-            try { 
-                // TỐI ƯU: Chỉ parse JSON nếu nội dung thay đổi (so sánh với cache)
+    displayList.forEach(hs => {
+        let isSubmitted = (hs.Diem !== null && hs.Diem !== undefined && hs.Diem !== "-");
+        const scorePres = computeDisplayPartContributions(hs, assessmentType, scoringConfig);
+
+        if(hs.ChiTiet && isSubmitted) {
+            try {
                 let ct;
                 if (chiTietCache.has(hs.ChiTiet)) {
                     ct = chiTietCache.get(hs.ChiTiet);
                 } else {
-                    ct = JSON.parse(hs.ChiTiet);
+                    ct = typeof hs.ChiTiet === 'string' ? JSON.parse(hs.ChiTiet) : hs.ChiTiet;
                     chiTietCache.set(hs.ChiTiet, ct);
                 }
 
-                for (let k in ct) { 
-                    let item = ct[k]; let isDung = false; 
-                    if(item.phan==="1") { 
-                        let cVal = String(item.chon||"").toUpperCase().trim();
-                        let dVal = String(item.dung||"").toUpperCase().trim();
-                        isDung = (cVal === dVal); 
-                        if(isDung) hs.p1Score += 0.25; 
-                    } 
-                    else if(item.phan==="2") { 
-                        let cArr = String(item.chon||"").split('-'); 
-                        let dStr = String(item.dung||"").toUpperCase().replace(/[ÐD]/g, 'Đ');
-                        let dArr = dStr.match(/[ĐS]/g);
-                        if (!dArr) dArr = [];
-                        let match = 0; 
-                        for(let i=0; i<4; i++) { 
-                            let cValRaw = cArr[i] || "";
-                            let cVal = String(cValRaw).toUpperCase().replace(/[ÐD]/g, 'Đ');
-                            let cleanCVal = "";
-                            if (cVal.includes("Đ")) cleanCVal = "Đ";
-                            if (cVal.includes("S")) cleanCVal = "S";
-                            let dVal = dArr[i] || "";
-                            if(cleanCVal !== "" && cleanCVal === dVal) match++; 
-                        } 
-                        if(match===1) hs.p2Score += 0.1; else if(match===2) hs.p2Score += 0.25; else if(match===3) hs.p2Score += 0.5; else if(match===4) hs.p2Score += 1.0; 
-                        isDung = (match === 4); 
-                    } 
-                    else if(item.phan==="3") { 
-                        let aClean = String(item.chon).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
-                        let dClean = String(item.dung).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
-                        isDung = (aClean !== "" && aClean === dClean);
-                        if(isDung) hs.p3Score += 0.25; 
-                    } 
-                    if(!isDung) { 
-                        failCount[k] = (failCount[k] || 0) + 1; 
-                        failCount[k+"_txt"] = item.noiDungCau; 
-                    } 
-                }
-            } catch(e){} 
-        } 
+                const entries = Array.isArray(ct) ? ct : Object.entries(ct).map(([k, v]) => ({ key: k, ...v }));
+                entries.forEach((item, idx) => {
+                    const k = item.key || item.q || String(idx + 1);
+                    let isDung = isQuestionFullyCorrectFromServerDetail(item);
+                    if(!isDung) {
+                        failCount[k] = (failCount[k] || 0) + 1;
+                        if (item.noiDungCau) failCount[k+"_txt"] = item.noiDungCau;
+                    }
+                });
+            } catch(e){}
+        }
 
-        hs.p1Score = parseFloat(hs.p1Score).toFixed(2);
-        hs.p2Score = parseFloat(hs.p2Score).toFixed(2);
-        hs.p3Score = parseFloat(hs.p3Score).toFixed(2);
-
-        if (isSubmitted) { 
-            submittedCount++; 
-            let diemFloat = parseFloat(hs.Diem) || 0;
-            sum += diemFloat; 
-            if(diemFloat >= 5.0) passed++; 
+        if (scorePres.isSubmitted) {
+            submittedCount++;
+            let diemFloat = scorePres.finalScore;
+            sum += diemFloat;
+            if(diemFloat >= 5.0) passed++;
 
             if (diemFloat >= 8.0) countGioi++;
             else if (diemFloat >= 6.5) countKha++;
             else if (diemFloat >= 5.0) countTB++;
             else countYeu++;
-        } 
-        
-        let totalRaw = isSubmitted ? parseFloat(hs.Diem) : 0;
-        let totalDisplay = isSubmitted ? totalRaw : "-";
-
-        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT TRÊN DASHBOARD (HIỂN THỊ)
-        if (isSubmitted) {
-            try {
-                let ct = typeof hs.ChiTiet === 'string' ? JSON.parse(hs.ChiTiet) : hs.ChiTiet;
-                let hasP2P3 = Object.values(ct).some(v => v.phan === "2" || v.phan === "3");
-                if (!hasP2P3) {
-                    let totalQ = Object.keys(ct).length;
-                    let maxRaw = totalQ * 0.25;
-                    if (maxRaw > 0) totalDisplay = (totalRaw / maxRaw) * 10;
-                }
-            } catch(e) {}
         }
-        
-        let total = isSubmitted ? parseFloat(totalDisplay).toFixed(2) : "-"; 
-        
-        // ĐỒNG BỘ ĐIỂM THÀNH PHẦN (P1) NẾU LÀ BÀI KIỂM TRA NGẮN
-        let p1Display = isSubmitted ? parseFloat(hs.p1Score) : "-";
-        let p2Display = isSubmitted ? parseFloat(hs.p2Score) : "-";
-        let p3Display = isSubmitted ? parseFloat(hs.p3Score) : "-";
 
-        if (isSubmitted && totalDisplay !== totalRaw) {
-            // Nếu có quy đổi (chỉ có Phần I), gán P1 bằng tổng điểm luôn
-            p1Display = parseFloat(totalDisplay).toFixed(2);
-        }
+        let total = scorePres.isSubmitted ? scorePres.finalDisplay : "-";
+        let p1Display = scorePres.isSubmitted ? (typeof scorePres.p1 === 'number' ? scorePres.p1.toFixed(2) : scorePres.p1) : "-";
+        let p2Display = scorePres.isSubmitted ? (typeof scorePres.p2 === 'number' ? scorePres.p2.toFixed(2) : scorePres.p2) : "-";
+        let p3Display = scorePres.isSubmitted ? (typeof scorePres.p3 === 'number' ? scorePres.p3.toFixed(2) : scorePres.p3) : "-";
 
         let badgeClass = '';
-        if(isSubmitted) {
-            let score = parseFloat(total);
+        if(scorePres.isSubmitted) {
+            let score = scorePres.finalScore;
             if(score >= 8.0) badgeClass = 'bg-gioi';
             else if(score >= 6.5) badgeClass = 'bg-kha';
             else if(score >= 5.0) badgeClass = 'bg-tb';
             else badgeClass = 'bg-yeu';
         }
-        
-        let scoreHtml = isSubmitted ? `<span class="badge-score ${badgeClass}">${total}</span>` : `<span style="color:#95a5a6; font-weight:bold;">${total}</span>`;
-        let trStyle = isSubmitted && parseFloat(total) < 5.0 ? 'background-color: #fdf2e9;' : ''; 
-        
+
+        let scoreHtml = scorePres.isSubmitted ? `<span class="badge-score ${badgeClass}">${total}</span>` : `<span style="color:#95a5a6; font-weight:bold;">${total}</span>`;
+        let trStyle = scorePres.isSubmitted && scorePres.finalScore < 5.0 ? 'background-color: #fdf2e9;' : '';
+
         let sttHtml = isSubmitted ? '<span style="color:#27ae60;font-weight:bold;">✅ Đã nộp</span>' : '<span style="color:#95a5a6;">Chưa nộp</span>';
 
         const txtSBD = (hs.MaHS || "").toString().toUpperCase();
@@ -2705,16 +2852,18 @@ async function fetchRadar() {
             }
         }
 
-        allRoomsData = (data||[]).map(d => ({ 
-            MaPhong: d.ma_phong, 
-            TenDotKiemTra: d.ten_dot, 
-            DoiTuong: d.doi_tuong, 
-            ThoiGian: d.thoi_gian, 
-            TrangThai: d.trang_thai, 
-            ThoiGianMo: d.thoi_gian_mo, 
+        allRoomsData = (data||[]).map(d => ({
+            MaPhong: d.ma_phong,
+            TenDotKiemTra: d.ten_dot,
+            DoiTuong: d.doi_tuong,
+            ThoiGian: d.thoi_gian,
+            TrangThai: d.trang_thai,
+            ThoiGianMo: d.thoi_gian_mo,
             TenTruong: d.ten_truong || (d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống'),
             truong_id: d.truong_id,
-            id: d.id 
+            id: d.id,
+            assessment_type: d.assessment_type || 'LEGACY',
+            scoring_config: d.scoring_config || {}
         }));
         
         let tbody = document.getElementById('radarBody');
@@ -3046,61 +3195,29 @@ async function xuatExcel() {
     let belowAvg = 0; let maxScore = -1; let minScore = 11; 
     exportData.sort((a,b) => (String(a.MaHS)||'').localeCompare(String(b.MaHS)||'')); 
     
-    exportData.forEach((hs, idx) => { 
-        let p1 = 0, p2 = 0, p3 = 0; 
-        if(hs.ChiTiet && hs.Diem !== "-") { 
-            try { 
-                let ct = JSON.parse(hs.ChiTiet); 
-                Object.keys(ct).forEach(k => { 
-                    let item = Reflect.get(ct, k); 
-                    if(item.phan === "1" && String(item.chon||"").toUpperCase().trim() === String(item.dung||"").toUpperCase().trim()) p1 += 0.25; 
-                    if(item.phan === "2") { 
-                        let cArr = String(item.chon||"").split('-'); 
-                        let dStr = String(item.dung||"").toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
-                        let dArr = dStr.match(new RegExp("Đ|S", "g"));
-                        if (!dArr) dArr = new Array();
-                        let match = 0; 
-                        for(let i=0; i<4; i++) { 
-                            let cValRaw = cArr[i] || "";
-                            let cVal = String(cValRaw).toUpperCase().replace(new RegExp("Ð|D", "g"), 'Đ');
-                            let cleanCVal = "";
-                            if (cVal.includes("Đ")) cleanCVal = "Đ";
-                            if (cVal.includes("S")) cleanCVal = "S";
-                            let dVal = dArr[i] || "";
-                            if(cleanCVal !== "" && cleanCVal === dVal) match++; 
-                        } 
-                        if(match===1) p2+=0.1; else if(match===2) p2+=0.25; else if(match===3) p2+=0.5; else if(match===4) p2+=1.0; 
-                    } 
-                    if(item.phan === "3") {
-                        let aClean = String(item.chon).replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
-                        let dClean = String(item.dung).replace(/'/g, '').replace(/,/g, '.').replace(/\s/g, '').toLowerCase();
-                        if(aClean !== "" && aClean === dClean) p3 += 0.25;
-                    }
-                }); 
-            } catch(e){} 
-        } 
-        let totalRaw = hs.Diem !== "-" ? (parseFloat(hs.Diem) || 0) : "-"; 
-        let totalDisplay = totalRaw;
-        let p1Display = p1;
+    let assessmentType = currentRoom?.assessment_type || 'LEGACY';
+    let scoringConfig = currentRoom?.scoring_config || {};
 
-        // LOGIC QUY ĐỔI ĐIỂM LINH HOẠT KHI XUẤT EXCEL
-        if (totalRaw !== "-") {
-            try {
-                let ct = JSON.parse(hs.ChiTiet);
-                let hasP2P3 = Object.values(ct).some(v => v.phan === "2" || v.phan === "3");
-                if (!hasP2P3) {
-                    let totalQ = Object.keys(ct).length;
-                    let maxRaw = totalQ * 0.25;
-                    if (maxRaw > 0) {
-                        totalDisplay = (totalRaw / maxRaw) * 10;
-                        p1Display = totalDisplay; // Đồng bộ P1
-                    }
-                }
-            } catch(e) {}
-
-            if(totalDisplay < 5.0) belowAvg++; if(totalDisplay > maxScore) maxScore = totalDisplay; if(totalDisplay < minScore) minScore = totalDisplay; 
+    exportData.forEach((hs, idx) => {
+        const scorePres = computeDisplayPartContributions(hs, assessmentType, scoringConfig);
+        if (scorePres.isSubmitted) {
+            if (scorePres.finalScore < 5.0) belowAvg++;
+            if (scorePres.finalScore > maxScore) maxScore = scorePres.finalScore;
+            if (scorePres.finalScore < minScore) minScore = scorePres.finalScore;
         }
-        worksheet.addRow({ stt: idx + 1, sbd: hs.MaHS, name: hs.HoTen, lop: hs.Lop, made: hs.MaDe || "-", total: typeof totalDisplay === 'number' ? parseFloat(totalDisplay.toFixed(2)) : totalDisplay, p1: hs.Diem!=="-" ? parseFloat(p1Display.toFixed(2)) : "-", p2: hs.Diem!=="-" ? parseFloat(p2.toFixed(2)) : "-", p3: hs.Diem!=="-" ? parseFloat(p3.toFixed(2)) : "-", vipham: hs.ViPham > 0 ? hs.ViPham : "", time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-" }); 
+        worksheet.addRow({
+            stt: idx + 1,
+            sbd: hs.MaHS,
+            name: hs.HoTen,
+            lop: hs.Lop,
+            made: hs.MaDe || "-",
+            total: scorePres.isSubmitted ? scorePres.finalScore : "-",
+            p1: scorePres.isSubmitted ? scorePres.p1 : "-",
+            p2: scorePres.isSubmitted ? scorePres.p2 : "-",
+            p3: scorePres.isSubmitted ? scorePres.p3 : "-",
+            vipham: hs.ViPham > 0 ? hs.ViPham : "",
+            time: hs.ThoiGian ? new Date(hs.ThoiGian).toLocaleString('vi-VN') : "-"
+        });
     }); 
     
     worksheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }; cell.fill = { type: 'pattern', pattern:'solid', fgColor:{argb:'FF2980B9'} }; cell.alignment = { vertical: 'middle', horizontal: 'center' }; cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} }; }); 
