@@ -43,6 +43,7 @@ function completeStudentAuthenticatedSession(loginData) {
         ho_ten: loginData.user.ho_ten,
         lop: loginData.user.lop
     }));
+    studentSessionInvalidated = false;
     return true;
 }
 
@@ -54,7 +55,7 @@ function clearStudentAuthSession() {
     } catch(e) {}
 }
 
-let isHandlingInvalidSession = false;
+let studentSessionInvalidated = false;
 
 function handleStudentInvalidSession(customMessage = null, options = {}) {
     if (typeof dungPostReceiptLifecycleWatcher === 'function') {
@@ -65,8 +66,8 @@ function handleStudentInvalidSession(customMessage = null, options = {}) {
     }
     clearStudentAuthSession();
 
-    if (isHandlingInvalidSession) return;
-    isHandlingInvalidSession = true;
+    if (studentSessionInvalidated) return;
+    studentSessionInvalidated = true;
 
     const msg = customMessage || "Phiên đăng nhập đã hết hạn hoặc không còn hợp lệ. Vui lòng đăng nhập lại để tiếp tục.";
     try {
@@ -78,10 +79,6 @@ function handleStudentInvalidSession(customMessage = null, options = {}) {
     if (typeof showSection === 'function') {
         showSection('login-section');
     }
-
-    setTimeout(() => {
-        isHandlingInvalidSession = false;
-    }, 1000);
 }
 
 let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
@@ -2489,19 +2486,4 @@ function khoiPhucBaiLamNhap() {
             }
         } catch (e) { console.error("Lỗi khi khôi phục bản nháp:", e); }
     }
-}
-
-if (typeof window !== 'undefined') {
-    window.state = state;
-    window.checkTeacherCommand = checkTeacherCommand;
-    window.handleStudentInvalidSession = handleStudentInvalidSession;
-    window.joinRoom = joinRoom;
-    window.timPhongThiTuDong = timPhongThiTuDong;
-    window.batDauPostReceiptLifecycleWatcher = batDauPostReceiptLifecycleWatcher;
-    window.dungPostReceiptLifecycleWatcher = dungPostReceiptLifecycleWatcher;
-    window.getPostReceiptLifecyclePollTimer = () => postReceiptLifecyclePollTimer;
-    window.clearStudentAuthSession = clearStudentAuthSession;
-    window.getStudentToken = getStudentToken;
-    window.getFinalSnapshot = getFinalSnapshot;
-    window.getSubmissionReceipt = getSubmissionReceipt;
 }

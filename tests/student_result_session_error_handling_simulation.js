@@ -153,8 +153,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.phong_id = "phong-1";', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), null, 'SESSION-RESULT-01: student token cleared');
     assert.strictEqual(env.sessionStorage.getItem('damSan_HSSession'), null, 'SESSION-RESULT-01: student session cleared');
@@ -194,14 +194,14 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-auto';
-    env.state.room_opened_at = 1000;
-    env.batDauPostReceiptLifecycleWatcher();
+    vm.runInContext('state.phong_id = "phong-auto"; state.room_opened_at = 1000;', env);
+    vm.runInContext('batDauPostReceiptLifecycleWatcher()', env);
 
-    await env.checkTeacherCommand(true);
+    await vm.runInContext('checkTeacherCommand(true)', env);
 
     assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), null, 'SESSION-RESULT-02: token cleared');
-    assert.strictEqual(env.getPostReceiptLifecyclePollTimer(), null, 'SESSION-RESULT-02: polling timer stopped');
+    const pollTimer = vm.runInContext('postReceiptLifecyclePollTimer', env);
+    assert.strictEqual(pollTimer, null, 'SESSION-RESULT-02: polling timer stopped');
     assert(env.document.getElementById('login-section').classList.contains('active'), 'SESSION-RESULT-02: navigated to login');
     console.log('  -> PASSED');
 })()).then(() =>
@@ -229,12 +229,10 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    // Trigger handleStudentInvalidSession directly twice concurrently
-    env.handleStudentInvalidSession('Hết hạn');
-    env.handleStudentInvalidSession('Hết hạn');
+    vm.runInContext('handleStudentInvalidSession("Hết hạn"); handleStudentInvalidSession("Hết hạn");', env);
 
     const alerts = env._getAlertCalls();
-    assert.strictEqual(alerts.length, 1, 'SESSION-RESULT-03: exactly 1 alert shown despite 2 calls');
+    assert.strictEqual(alerts.length, 1, 'SESSION-RESULT-03: exactly 1 alert shown despite multiple calls');
     console.log('  -> PASSED');
 })()).then(() =>
 
@@ -267,9 +265,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.ma_hs = 'HS001';
-    env.state.phong_id = 'phong-1';
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.ma_hs = "HS001"; state.phong_id = "phong-1";', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), 'tok-valid', 'SESSION-RESULT-04: valid auth preserved');
     assert.strictEqual(env.localStorage.getItem('receipt_HS001_phong-1'), JSON.stringify(mockReceipt), 'SESSION-RESULT-04: receipt preserved');
@@ -302,8 +299,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    await env.checkTeacherCommand(true);
+    vm.runInContext('state.phong_id = "phong-1";', env);
+    await vm.runInContext('checkTeacherCommand(true)', env);
 
     assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), 'tok-valid', 'SESSION-RESULT-05: valid auth preserved');
     const alerts = env._getAlertCalls();
@@ -334,8 +331,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.phong_id = "phong-1";', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), 'tok-valid', 'SESSION-RESULT-06: valid auth preserved');
     const alerts = env._getAlertCalls();
@@ -378,9 +375,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    env.state.room_opened_at = 1000;
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.document.getElementById('final_score_val').innerText, '8.75', 'SESSION-RESULT-07: score is 8.75');
     assert.strictEqual(env.document.getElementById('score-display-area').style.display, 'block');
@@ -424,9 +420,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    env.state.room_opened_at = 1000;
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.document.getElementById('final_score_val').innerText, '0.25', 'SESSION-RESULT-08: score is 0.25');
     assert(env.document.getElementById('review-content').innerHTML.includes('CHI TIẾT BÀI LÀM & ĐÁP ÁN'), 'SESSION-RESULT-08: review content rendered');
@@ -463,9 +458,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    env.state.room_opened_at = 1000;
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.document.getElementById('final_score_val').innerText, '0.25', 'SESSION-RESULT-09: 0.25 displayed');
     console.log('  -> PASSED');
@@ -501,9 +495,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    env.state.room_opened_at = 1000;
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     assert.strictEqual(env.document.getElementById('final_score_val').innerText, '10.00', 'SESSION-RESULT-10: 10.00 displayed');
     console.log('  -> PASSED');
@@ -535,9 +528,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.ma_hs = 'HS001';
-    env.state.phong_id = 'phong-1';
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.ma_hs = "HS001"; state.phong_id = "phong-1";', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     const savedFinal = env.localStorage.getItem('final_HS001_phong-1');
     assert.strictEqual(savedFinal, JSON.stringify(mockFinal), 'SESSION-RESULT-11: FINAL snapshot strictly preserved in localStorage');
@@ -570,9 +562,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.ma_hs = 'HS001';
-    env.state.phong_id = 'phong-1';
-    await env.checkTeacherCommand(false);
+    vm.runInContext('state.ma_hs = "HS001"; state.phong_id = "phong-1";', env);
+    await vm.runInContext('checkTeacherCommand(false)', env);
 
     const savedReceipt = env.localStorage.getItem('receipt_HS001_phong-1');
     assert.strictEqual(savedReceipt, JSON.stringify(mockReceipt), 'SESSION-RESULT-12: receipt strictly preserved in localStorage');
@@ -602,13 +593,14 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    env.state.phong_id = 'phong-1';
-    env.state.room_opened_at = 1000;
-    env.batDauPostReceiptLifecycleWatcher();
-    assert.notStrictEqual(env.getPostReceiptLifecyclePollTimer(), null, 'SESSION-RESULT-13: polling timer was active');
+    vm.runInContext('state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+    vm.runInContext('batDauPostReceiptLifecycleWatcher()', env);
+    const pollTimerBefore = vm.runInContext('postReceiptLifecyclePollTimer', env);
+    assert.notStrictEqual(pollTimerBefore, null, 'SESSION-RESULT-13: polling timer was active');
 
-    await env.checkTeacherCommand(true);
-    assert.strictEqual(env.getPostReceiptLifecyclePollTimer(), null, 'SESSION-RESULT-13: polling timer cleared');
+    await vm.runInContext('checkTeacherCommand(true)', env);
+    const pollTimerAfter = vm.runInContext('postReceiptLifecyclePollTimer', env);
+    assert.strictEqual(pollTimerAfter, null, 'SESSION-RESULT-13: polling timer cleared');
     console.log('  -> PASSED');
 })()).then(() =>
 
@@ -635,7 +627,7 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     vm.createContext(env);
     vm.runInContext(hsJsSource, env);
 
-    await env.joinRoom('TEST_ROOM');
+    await vm.runInContext('joinRoom("TEST_ROOM")', env);
     assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), null, 'SESSION-RESULT-14: joinRoom clears token on invalid_session');
     assert(env.document.getElementById('login-section').classList.contains('active'), 'SESSION-RESULT-14: joinRoom navigates to login');
     console.log('  -> PASSED');
@@ -651,8 +643,236 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20260902-flex-lite-005');
     assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20260902-flex-lite-005');
     console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-16: Delayed lifecycle tick after invalid_session does not re-alert (> 1000 ms)
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-16: Delayed lifecycle tick (>1000ms) after invalid_session does not re-alert');
+    let rpcCallCount = 0;
+    const validExpiry = new Date(Date.now() + 3600000).toISOString();
+    const mockFinal = { attempt_id: 'att-001', phong_id: 'phong-1', state: 'SERVER_RECEIVED' };
+
+    const env = createMockStudentEnv(
+        {
+            damSan_StudentToken: 'tok-expire-test',
+            damSan_StudentTokenExpiresAt: validExpiry,
+            damSan_HSSession: JSON.stringify({ ma_hs: 'HS001' })
+        },
+        {
+            'final_HS001_phong-1': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_result_status: async () => {
+                rpcCallCount++;
+                return {
+                    data: { status: 'error', code: 'invalid_session', message: 'Hết hạn.' },
+                    error: null
+                };
+            },
+            rpc_hoc_sinh_submission_receipt_status: async () => ({
+                data: { status: 'success', state: 'SERVER_RECEIVED' },
+                error: null
+            })
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    vm.runInContext('state.ma_hs = "HS001"; state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+
+    // 1. First trigger invalid_session via checkTeacherCommand(true)
+    await vm.runInContext('checkTeacherCommand(true)', env);
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-16: first alert recorded');
+    assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-16: exactly 1 RPC call made');
+
+    // 2. Simulate delay > 1500ms (beyond any temporary timer)
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 3. Trigger _postReceiptLifecycleTick() again with durable snapshot present
+    await vm.runInContext('_postReceiptLifecycleTick()', env);
+
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-16: NO second alert fired on delayed tick');
+    assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-16: NO authenticated RPC called with invalid/cleared token');
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-17: Visibility/foreground trigger after invalid_session does not re-alert
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-17: Visibility/foreground trigger after invalid_session does not re-alert');
+    let rpcCallCount = 0;
+    const validExpiry = new Date(Date.now() + 3600000).toISOString();
+    const mockFinal = { attempt_id: 'att-001', phong_id: 'phong-1', state: 'SERVER_RECEIVED' };
+
+    const env = createMockStudentEnv(
+        {
+            damSan_StudentToken: 'tok-expire-vis',
+            damSan_StudentTokenExpiresAt: validExpiry,
+            damSan_HSSession: JSON.stringify({ ma_hs: 'HS001' })
+        },
+        {
+            'final_HS001_phong-1': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_result_status: async () => {
+                rpcCallCount++;
+                return {
+                    data: { status: 'error', code: 'invalid_session', message: 'Hết hạn.' },
+                    error: null
+                };
+            }
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    vm.runInContext('state.ma_hs = "HS001"; state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+
+    // Invalidate session
+    await vm.runInContext('checkTeacherCommand(true)', env);
+    assert.strictEqual(env._getAlertCalls().length, 1);
+
+    // Simulate multiple visibilitychange / foreground triggers
+    await vm.runInContext('_postReceiptLifecycleTick()', env);
+    await vm.runInContext('_postReceiptLifecycleTick()', env);
+
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-17: No repeated alerts on visibility foreground');
+    assert.strictEqual(rpcCallCount, 1, 'SESSION-RESULT-17: No extra authenticated RPC calls');
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-18: Online trigger after invalid_session does not re-alert
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-18: Online trigger after invalid_session does not re-alert');
+    let rpcCallCount = 0;
+    const validExpiry = new Date(Date.now() + 3600000).toISOString();
+    const mockFinal = { attempt_id: 'att-001', phong_id: 'phong-1', state: 'SERVER_RECEIVED' };
+
+    const env = createMockStudentEnv(
+        {
+            damSan_StudentToken: 'tok-expire-onl',
+            damSan_StudentTokenExpiresAt: validExpiry,
+            damSan_HSSession: JSON.stringify({ ma_hs: 'HS001' })
+        },
+        {
+            'final_HS001_phong-1': JSON.stringify(mockFinal)
+        },
+        {
+            rpc_hoc_sinh_result_status: async () => {
+                rpcCallCount++;
+                return {
+                    data: { status: 'error', code: 'invalid_session', message: 'Hết hạn.' },
+                    error: null
+                };
+            }
+        }
+    );
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    vm.runInContext('state.ma_hs = "HS001"; state.phong_id = "phong-1"; state.room_opened_at = 1000;', env);
+
+    // Invalidate session
+    await vm.runInContext('checkTeacherCommand(true)', env);
+    assert.strictEqual(env._getAlertCalls().length, 1);
+
+    // Simulate online event trigger calling _postReceiptLifecycleTick()
+    vm.runInContext('state.isOffline = false;', env);
+    await vm.runInContext('_postReceiptLifecycleTick()', env);
+
+    assert.strictEqual(env._getAlertCalls().length, 1, 'SESSION-RESULT-18: No repeated alert on online event');
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-19: Successful new login resets invalid-session latch
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-19: Successful new login resets invalid-session latch');
+    const env = createMockStudentEnv();
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    // 1. Trigger invalid session
+    vm.runInContext('handleStudentInvalidSession("Hết hạn");', env);
+    const latchBefore = vm.runInContext('studentSessionInvalidated', env);
+    assert.strictEqual(latchBefore, true, 'SESSION-RESULT-19: latch is true after invalidation');
+
+    // 2. Perform successful login
+    const validFuture = new Date(Date.now() + 7200000).toISOString();
+    const loginPayload = {
+        status: 'success',
+        student_token: 'new-fresh-token-456',
+        student_expires_at: validFuture,
+        user: {
+            id: 'hs-001',
+            truong_id: 'sch-001',
+            ma_hs: 'HS001',
+            ho_ten: 'Hoc Sinh Moi',
+            lop: '12A1'
+        }
+    };
+
+    const loginResult = vm.runInContext(`completeStudentAuthenticatedSession(${JSON.stringify(loginPayload)})`, env);
+    assert.strictEqual(loginResult, true, 'SESSION-RESULT-19: login succeeded');
+
+    const latchAfter = vm.runInContext('studentSessionInvalidated', env);
+    assert.strictEqual(latchAfter, false, 'SESSION-RESULT-19: latch successfully reset to false on fresh login');
+    assert.strictEqual(env.sessionStorage.getItem('damSan_StudentToken'), 'new-fresh-token-456', 'SESSION-RESULT-19: new token stored');
+    console.log('  -> PASSED');
+})()).then(() =>
+
+// -------------------------------------------------------------------------
+// SESSION-RESULT-20: Failed/invalid login does NOT reset invalid-session latch
+// -------------------------------------------------------------------------
+(async () => {
+    console.log('Test SESSION-RESULT-20: Failed/invalid login does NOT reset invalid-session latch');
+    const env = createMockStudentEnv();
+
+    vm.createContext(env);
+    vm.runInContext(hsJsSource, env);
+
+    // 1. Trigger invalid session
+    vm.runInContext('handleStudentInvalidSession("Hết hạn");', env);
+    assert.strictEqual(vm.runInContext('studentSessionInvalidated', env), true);
+
+    // 2. Attempt failed login with past expiry
+    const pastExpiry = new Date(Date.now() - 10000).toISOString();
+    const badLoginPayload = {
+        status: 'success',
+        student_token: 'bad-expired-token',
+        student_expires_at: pastExpiry,
+        user: { id: 'hs-001', ma_hs: 'HS001' }
+    };
+
+    const loginResult = vm.runInContext(`completeStudentAuthenticatedSession(${JSON.stringify(badLoginPayload)})`, env);
+    assert.strictEqual(loginResult, false, 'SESSION-RESULT-20: completeStudentAuthenticatedSession rejected expired login');
+
+    const latchAfterBad = vm.runInContext('studentSessionInvalidated', env);
+    assert.strictEqual(latchAfterBad, true, 'SESSION-RESULT-20: latch remains TRUE after failed login');
+
+    // 3. Attempt null user login
+    const nullUserPayload = { status: 'error', message: 'Sai mật khẩu' };
+    const nullUserResult = vm.runInContext(`completeStudentAuthenticatedSession(${JSON.stringify(nullUserPayload)})`, env);
+    assert.strictEqual(nullUserResult, false, 'SESSION-RESULT-20: completeStudentAuthenticatedSession rejected error payload');
+    assert.strictEqual(vm.runInContext('studentSessionInvalidated', env), true, 'SESSION-RESULT-20: latch still remains TRUE');
+
+    // 4. Also verify production hoc_sinh.js does not contain window test hooks
+    assert(!hsJsSource.includes('window.checkTeacherCommand ='), 'SESSION-RESULT-20: hoc_sinh.js has no window test exports');
+    assert(!hsJsSource.includes('window.handleStudentInvalidSession ='), 'SESSION-RESULT-20: hoc_sinh.js has no window test exports');
+
+    console.log('  -> PASSED');
 })()).then(() => {
-    console.log('\n=== ALL 15 FLEX-LITE-005 STUDENT RESULT SESSION & ERROR HANDLING TESTS PASSED ===\n');
+    console.log('\n=== ALL 20 FLEX-LITE-005 STUDENT RESULT SESSION & ERROR HANDLING TESTS PASSED ===\n');
 }).catch((err) => {
     console.error('Test failed:', err);
     process.exit(1);
