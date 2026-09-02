@@ -7,6 +7,154 @@ let gvData = null;
 let activeWorkspaceMonId = null;
 let activeWorkspaceTruongId = null;
 
+const FLEX_LITE_TEACHER_CONFIG_ENABLED = false;
+
+function readFlexLiteWeight(id) {
+    const raw = document.getElementById(id)?.value;
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+        return NaN;
+    }
+    return Number(raw);
+}
+
+function onFlexLiteAssessmentTypeChange() {
+    const typeEl = document.getElementById('flexLiteAssessmentType');
+    const customWeightsEl = document.getElementById('flexLiteCustomWeights');
+    if (customWeightsEl) {
+        customWeightsEl.style.display = (typeEl && typeEl.value === 'CUSTOM') ? 'block' : 'none';
+    }
+}
+
+function syncFlexLiteAssessmentPanel(mode = 'direct') {
+    const panel = document.getElementById('flexLiteAssessmentPanel');
+    if (!panel) return;
+    if (!FLEX_LITE_TEACHER_CONFIG_ENABLED) {
+        panel.style.display = 'none';
+        return;
+    }
+    const visibleModes = ['direct', 'manual', 'matrix', 'offline'];
+    if (visibleModes.includes(mode)) {
+        panel.style.display = 'block';
+        onFlexLiteAssessmentTypeChange();
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+function snapshotFlexLiteAssessmentConfig() {
+    if (!FLEX_LITE_TEACHER_CONFIG_ENABLED) return null;
+    const typeEl = document.getElementById('flexLiteAssessmentType');
+    const assessmentType = typeEl ? typeEl.value : 'TOT_NGHIEP';
+    if (assessmentType === 'CUSTOM') {
+        const p1W = readFlexLiteWeight('flexLiteP1Weight');
+        const p2W = readFlexLiteWeight('flexLiteP2Weight');
+        const p3W = readFlexLiteWeight('flexLiteP3Weight');
+        return {
+            assessment_type: 'CUSTOM',
+            scoring_config: { p1_weight: p1W, p2_weight: p2W, p3_weight: p3W }
+        };
+    }
+    return {
+        assessment_type: assessmentType,
+        scoring_config: {}
+    };
+}
+
+function validateFlexLiteAssessmentForSave(deThiArray, config) {
+    if (!config) return { valid: true };
+    if (!Array.isArray(deThiArray) || deThiArray.length === 0) {
+        throw new Error("Đề thi không có câu hỏi nào để lưu.");
+    }
+
+    const groupedByMaDe = {};
+    for (const q of deThiArray) {
+        const part = String(q.Phan ?? q.phan ?? '1').trim();
+        if (!['1', '2', '3'].includes(part)) {
+            throw new Error(`Phát hiện phần câu hỏi không hợp lệ: ${part}. Chỉ hỗ trợ Phần 1, 2, 3.`);
+        }
+        const md = String(q.MaDe ?? q.ma_de ?? 'default');
+        if (!groupedByMaDe[md]) {
+            groupedByMaDe[md] = { p1: 0, p2: 0, p3: 0, total: 0 };
+        }
+        if (part === '1') groupedByMaDe[md].p1++;
+        else if (part === '2') groupedByMaDe[md].p2++;
+        else if (part === '3') groupedByMaDe[md].p3++;
+        groupedByMaDe[md].total++;
+    }
+
+    let expected = null;
+    for (const md of Object.keys(groupedByMaDe)) {
+        const counts = groupedByMaDe[md];
+        if (!expected) {
+            expected = counts;
+        } else {
+            if (counts.p1 !== expected.p1 || counts.p2 !== expected.p2 || counts.p3 !== expected.p3 || counts.total !== expected.total) {
+                throw new Error("Các mã đề không đồng nhất số lượng câu hỏi hoặc cấu trúc phần.");
+            }
+        }
+    }
+
+    const { p1, p2, p3, total } = expected;
+    if (total < 1) {
+        throw new Error("Đề thi phải có ít nhất 1 câu hỏi.");
+    }
+
+    const type = config.assessment_type;
+    if (type === 'TOT_NGHIEP') {
+        if ((p1 + p2 + p3) !== total || total < 1) {
+            throw new Error("Cấu hình Tốt nghiệp yêu cầu các câu hỏi chỉ thuộc Phần 1, Phần 2, Phần 3 (tối thiểu 1 câu).");
+        }
+    } else if (type === 'MCQ_ONLY') {
+        if (p1 !== total || p1 < 1) {
+            throw new Error("Cấu hình Chỉ trắc nghiệm (MCQ_ONLY) yêu cầu tất cả các câu hỏi phải thuộc Phần 1 (tối thiểu 1 câu).");
+        }
+    } else if (type === 'TRUE_FALSE_ONLY') {
+        if (p2 !== total || p2 < 1) {
+            throw new Error("Cấu hình Chỉ Đúng/Sai (TRUE_FALSE_ONLY) yêu cầu tất cả các câu hỏi phải thuộc Phần 2 (tối thiểu 1 câu).");
+        }
+    } else if (type === 'SHORT_ONLY') {
+        if (p3 !== total || p3 < 1) {
+            throw new Error("Cấu hình Chỉ trả lời ngắn (SHORT_ONLY) yêu cầu tất cả các câu hỏi phải thuộc Phần 3 (tối thiểu 1 câu).");
+        }
+    } else if (type === 'CUSTOM') {
+        if ((p1 + p2 + p3) !== total || total < 1) {
+            throw new Error("Cấu hình Tùy chỉnh (CUSTOM) yêu cầu các câu hỏi chỉ thuộc Phần 1, Phần 2, Phần 3 (tối thiểu 1 câu).");
+        }
+        const sc = config.scoring_config;
+        if (!sc || typeof sc !== 'object' || !('p1_weight' in sc) || !('p2_weight' in sc) || !('p3_weight' in sc)) {
+            throw new Error("Cấu hình CUSTOM yêu cầu đủ 3 trọng số p1_weight, p2_weight, p3_weight.");
+        }
+        if (sc.p1_weight === null || sc.p2_weight === null || sc.p3_weight === null || typeof sc.p1_weight === 'undefined' || typeof sc.p2_weight === 'undefined' || typeof sc.p3_weight === 'undefined') {
+            throw new Error("Trọng số CUSTOM không được để trống hoặc mang giá trị null.");
+        }
+        const p1W = Number(sc.p1_weight);
+        const p2W = Number(sc.p2_weight);
+        const p3W = Number(sc.p3_weight);
+        if (!Number.isFinite(p1W) || !Number.isFinite(p2W) || !Number.isFinite(p3W)) {
+            throw new Error("Trọng số CUSTOM phải là số hợp lệ.");
+        }
+        if (p1W < 0 || p1W > 10 || p2W < 0 || p2W > 10 || p3W < 0 || p3W > 10) {
+            throw new Error("Mỗi trọng số CUSTOM phải nằm trong khoảng từ 0 đến 10.");
+        }
+        if (Math.abs((p1W + p2W + p3W) - 10) > 0.0001) {
+            throw new Error("Tổng các trọng số CUSTOM phải bằng đúng 10.");
+        }
+        if (p1 === 0 && p1W !== 0) {
+            throw new Error("Trọng số Phần 1 phải bằng 0 khi đề không có câu hỏi Phần 1.");
+        }
+        if (p2 === 0 && p2W !== 0) {
+            throw new Error("Trọng số Phần 2 phải bằng 0 khi đề không có câu hỏi Phần 2.");
+        }
+        if (p3 === 0 && p3W !== 0) {
+            throw new Error("Trọng số Phần 3 phải bằng 0 khi đề không có câu hỏi Phần 3.");
+        }
+    } else {
+        throw new Error(`Loại bài kiểm tra không hợp lệ: ${type}`);
+    }
+
+    return { valid: true };
+}
+
 function getAccountPasswordState(row) {
     if (typeof row?.must_change_password !== 'boolean') return 'KhongXacDinh';
     return row.must_change_password ? 'MacDinh' : 'DaDoi';
@@ -487,6 +635,7 @@ function checkWorkspaceAction() {
 function khoiTaoGiaoDienHeThong() {
     initQuarantineUI(); 
     initMultiClassModal(); 
+    syncFlexLiteAssessmentPanel('direct');
 }
 
 // KHỞI TẠO UI TRẠM KIỂM DỊCH
@@ -1062,6 +1211,7 @@ function switchTab(tabId) {
 }
 
 function switchSubTabTaoDe(mode) {
+    syncFlexLiteAssessmentPanel(mode);
     document.querySelectorAll('#taoDe .sub-tab-content').forEach(el => el.classList.remove('active'));
     const targetId = 'subTab' + mode.charAt(0).toUpperCase() + mode.slice(1);
     const targetEl = document.getElementById(targetId);
@@ -1385,6 +1535,7 @@ window.processFile = async function(mode) {
                 currentParams.soLuong = parseInt(document.getElementById('soLuongDeDirect').value) || 4;
                 currentParams.startCode = parseInt(document.getElementById('startCodeDirect').value) || 101;
                 currentParams.stepCode = parseInt(document.getElementById('stepCodeDirect').value) || 1;
+                currentParams.assessmentConfig = snapshotFlexLiteAssessmentConfig();
             } else {
                 currentParams.baiHoc = document.getElementById('baiHocNap').value.trim();
             }
@@ -1406,7 +1557,8 @@ window.processFile = async function(mode) {
             soLuong: parseInt(document.getElementById('soLuongDeDirect').value) || 4,
             startCode: parseInt(document.getElementById('startCodeDirect').value) || 101,
             stepCode: parseInt(document.getElementById('stepCodeDirect').value) || 1,
-            baiHoc: document.getElementById('baiHocNap') ? document.getElementById('baiHocNap').value.trim() : ''
+            baiHoc: document.getElementById('baiHocNap') ? document.getElementById('baiHocNap').value.trim() : '',
+            assessmentConfig: mode === 'direct' ? snapshotFlexLiteAssessmentConfig() : null
         });
 
     } catch (err) {
@@ -1508,8 +1660,10 @@ window.continueProcessingFile = async function(cauHoiGoc, mode, btn, logEl, oldT
             logEl.innerText = "Đang thực hiện thuật toán trộn đề...";
             generateExams(cauHoiGoc, params.soLuong, params.maPhong, params.startCode, params.stepCode);
 
+            validateFlexLiteAssessmentForSave(danhSachDeThi, params.assessmentConfig);
+
             logEl.innerText = "Đang đẩy dữ liệu lên máy chủ Supabase...";
-            let pushRes = await luuDeThiLenSupabase(danhSachDeThi);
+            let pushRes = await luuDeThiLenSupabase(danhSachDeThi, params.assessmentConfig);
             if (pushRes.status === 'success') {
                 logEl.innerText = `✅ HOÀN TẤT! Đã trộn ${params.soLuong} đề và đẩy an toàn vào phòng [${params.maPhong}].`;
             } else {
@@ -1638,9 +1792,18 @@ function dayDeThuCong() {
     btn.innerText = "⏳ ĐANG TRỘN VÀ ĐẨY..."; 
     btn.disabled = true; 
     
+    const assessmentConfig = snapshotFlexLiteAssessmentConfig();
     generateExams(danhSachThuCong, soLuongDe, maPhong, startCode, stepCode); 
     
-    luuDeThiLenSupabase(danhSachDeThi).then(data => { 
+    try {
+        validateFlexLiteAssessmentForSave(danhSachDeThi, assessmentConfig);
+    } catch (valErr) {
+        btn.innerText = oldText;
+        btn.disabled = false;
+        return alert("❌ Lỗi cấu hình thang điểm: " + valErr.message);
+    }
+
+    luuDeThiLenSupabase(danhSachDeThi, assessmentConfig).then(data => {
         btn.innerText = oldText; 
         btn.disabled = false; 
         if(data.status === "success") { 
@@ -1790,9 +1953,13 @@ function getSelectedRoom(selectElementOrId) {
     return (allRoomsData || []).find((room) => String(room.id) === String(select.value)) || null;
 }
 
-async function luuDeThiLenSupabase(deThiArray) {
+async function luuDeThiLenSupabase(deThiArray, assessmentConfig = null) {
     if(deThiArray.length === 0) return {status: 'success'};
     let maPhong = deThiArray[0].MaPhong;
+
+    if (assessmentConfig) {
+        validateFlexLiteAssessmentForSave(deThiArray, assessmentConfig);
+    }
 
     let groupedByMaDe = {};
     deThiArray.forEach(q => {
@@ -1808,7 +1975,12 @@ async function luuDeThiLenSupabase(deThiArray) {
     let rowsToInsert = new Array();
     for (let ma_de in groupedByMaDe) {
         let cauSoArr = Reflect.get(groupedByMaDe, ma_de);
-        rowsToInsert.push({ ma_de: String(ma_de), cau_so: cauSoArr });
+        let rowObj = { ma_de: String(ma_de), cau_so: cauSoArr };
+        if (assessmentConfig && typeof assessmentConfig === 'object') {
+            rowObj.assessment_type = assessmentConfig.assessment_type;
+            rowObj.scoring_config = assessmentConfig.scoring_config;
+        }
+        rowsToInsert.push(rowObj);
     }
 
     let rpcMonId = (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") ? activeWorkspaceMonId : null;
@@ -2004,11 +2176,14 @@ async function layDeTuIframe(btnElement) {
         danhSachDeIframe = JSON.parse(JSON.stringify(danhSachDeIframe));
         danhSachDeIframe.forEach(q => q.MaPhong = maPhong);
 
+        const assessmentConfig = snapshotFlexLiteAssessmentConfig();
+        validateFlexLiteAssessmentForSave(danhSachDeIframe, assessmentConfig);
+
         let oldText = btnElement ? btnElement.innerText : "";
         if (btnElement) btnElement.innerText = "⏳ ĐANG HÚT & ĐẨY LÊN...";
         if (btnElement) btnElement.disabled = true;
 
-        let result = await luuDeThiLenSupabase(danhSachDeIframe);
+        let result = await luuDeThiLenSupabase(danhSachDeIframe, assessmentConfig);
         
         if (btnElement) btnElement.innerText = oldText;
         if (btnElement) btnElement.disabled = false;
@@ -2077,10 +2252,12 @@ async function generateFromMatrix() {
         if (selectedQuestions.length === 0) throw new Error("Bảng Ma trận đang trống hoặc tổng số câu hỏi yêu cầu bằng 0!");
         
         logEl.innerText = "Đang bắt đầu trộn đề...";
+        const assessmentConfig = snapshotFlexLiteAssessmentConfig();
         generateExams(selectedQuestions, soLuongDe, maPhong, startCode, stepCode);
+        validateFlexLiteAssessmentForSave(danhSachDeThi, assessmentConfig);
         
         logEl.innerText = "Đang đồng bộ dữ liệu với máy chủ...";
-        let pushRes = await luuDeThiLenSupabase(danhSachDeThi);
+        let pushRes = await luuDeThiLenSupabase(danhSachDeThi, assessmentConfig);
         if (pushRes.status === 'success') {
             logEl.innerText = `✅ HOÀN TẤT! Hệ thống đã bốc ngẫu nhiên ${selectedQuestions.length} câu, trộn thành ${soLuongDe} mã đề và đẩy an toàn vào phòng [${maPhong}].`;
         } else {
@@ -2400,7 +2577,7 @@ async function xoaPhongHoanToan(roomId) {
 async function xoaDeTrongPhong(roomId) {
     const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
     const maPhong = cached?.MaPhong || '';
-    if(!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã trộn trong phòng [${maPhong}]?\n(Phòng thi và Điểm số của học sinh vẫn sẽ được giữ lại)`)) return;
+    if(!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã nạp trong phòng [${maPhong}]?\n(Chỉ được phép xóa khi phòng ở trạng thái CHỜ THI, chưa mở phòng và chưa có học sinh nộp bài)`)) return;
     
     let btn = event.target;
     let oldText = (btn && btn.innerText) ? btn.innerText : "Xóa Đề";
@@ -2408,16 +2585,13 @@ async function xoaDeTrongPhong(roomId) {
 
     try {
         if(cached && cached.id) {
-            if (gvData.quyen === 'Admin') {
-                await adminRpc('exam_delete_only', { phong_id: cached.id });
-            } else {
-                const data = await staffRpc('rpc_xoa_de_trong_phong', {
-                    p_ma_gv: gvData.ma_gv,
-                    p_truong_id: getRoomTargetSchoolId(cached),
-                    p_phong_id: cached.id
-                });
-                if (!data || data.status !== 'success') throw new Error(data?.message || 'Xóa đề thất bại.');
-            }
+            // Replaced adminRpc('exam_delete_only', { phong_id: cached.id }) with authoritative safe staffRpc for both Admin and teacher
+            const data = await staffRpc('rpc_xoa_de_trong_phong', {
+                p_ma_gv: gvData.ma_gv,
+                p_truong_id: getRoomTargetSchoolId(cached),
+                p_phong_id: cached.id
+            });
+            if (!data || data.status !== 'success') throw new Error(data?.message || 'Xóa đề thất bại.');
             alert(`✅ Đã xóa sạch đề thi trong phòng [${maPhong}] thành công!`);
         } else {
             alert("❌ Không tìm thấy thông tin phòng thi trên máy chủ.");
