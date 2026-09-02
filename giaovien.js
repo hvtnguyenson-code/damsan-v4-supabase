@@ -7,7 +7,7 @@ let gvData = null;
 let activeWorkspaceMonId = null;
 let activeWorkspaceTruongId = null;
 
-const FLEX_LITE_TEACHER_CONFIG_ENABLED = false;
+const FLEX_LITE_TEACHER_CONFIG_ENABLED = true;
 
 function readFlexLiteWeight(id) {
     const raw = document.getElementById(id)?.value;
