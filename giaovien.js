@@ -3054,14 +3054,166 @@ async function taiDanhSachPhong() {
     }
 }
 
+// ==========================================================
+// DASHBOARD ACTION STATE & RELIABILITY HELPERS (FLEX-LITE-006)
+// ==========================================================
+
+const DASHBOARD_ACTIONS = {
+    refresh: {
+        id: 'dashRefreshBtn',
+        normal: '🔄 Cập nhật Bảng Điểm',
+        busy: '⏳ Đang cập nhật...',
+        success: '✅ Đã cập nhật',
+        error: '❌ Cập nhật lỗi'
+    },
+    regrade: {
+        id: 'dashRegradeBtn',
+        normal: '🛠️ Chấm lại bài đang chờ',
+        busy: '⏳ Đang chấm lại...',
+        success: '✅ Đã chấm lại',
+        error: '❌ Chấm lại lỗi'
+    },
+    export: {
+        id: 'dashExportBtn',
+        normal: '📥 Tải Excel',
+        busy: '⏳ Đang tạo Excel...',
+        success: '✅ Đã tải Excel',
+        error: '❌ Tải Excel lỗi'
+    },
+    delete: {
+        id: 'dashDeleteResultsBtn',
+        normal: '🗑️ Xóa điểm phòng này',
+        busy: '⏳ Đang xóa điểm...',
+        success: '✅ Đã xóa điểm',
+        error: '❌ Xóa điểm lỗi'
+    }
+};
+
+const activeDashboardActions = new Set();
+let dashboardManualRefreshActive = false;
+const DASHBOARD_FEEDBACK_DELAY_MS = 800;
+const DASHBOARD_NEUTRAL_STATUSES = new Set(['cancelled', 'no_room', 'no_data', 'stale', 'skipped']);
+
+function setDashboardActionState(actionKey, state) {
+    const cfg = DASHBOARD_ACTIONS[actionKey];
+    if (!cfg) return;
+    const btn = document.getElementById(cfg.id);
+    if (!btn) return;
+    if (state === 'busy') {
+        btn.innerText = cfg.busy;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.setAttribute('data-action-state', 'busy');
+    } else if (state === 'success') {
+        btn.innerText = cfg.success;
+        btn.disabled = true;
+        btn.removeAttribute('aria-busy');
+        btn.setAttribute('data-action-state', 'success');
+    } else if (state === 'error') {
+        btn.innerText = cfg.error;
+        btn.disabled = true;
+        btn.removeAttribute('aria-busy');
+        btn.setAttribute('data-action-state', 'error');
+    } else {
+        btn.innerText = cfg.normal;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        btn.setAttribute('data-action-state', 'normal');
+    }
+}
+
+function finishDashboardAction(actionKey, outcome) {
+    if (DASHBOARD_NEUTRAL_STATUSES.has(outcome)) {
+        activeDashboardActions.delete(actionKey);
+        setDashboardActionState(actionKey, 'normal');
+        return;
+    }
+    const state = (outcome === 'success') ? 'success' : 'error';
+    setDashboardActionState(actionKey, state);
+    setTimeout(() => {
+        activeDashboardActions.delete(actionKey);
+        setDashboardActionState(actionKey, 'normal');
+    }, DASHBOARD_FEEDBACK_DELAY_MS);
+}
+
+async function runDashboardAction(actionKey, actionFn, options = {}) {
+    if (activeDashboardActions.has(actionKey)) {
+        return { status: 'skipped', reason: 'already_running' };
+    }
+    activeDashboardActions.add(actionKey);
+    if (actionKey === 'refresh') {
+        dashboardManualRefreshActive = true;
+    }
+
+    if (!options.manualBusy) {
+        setDashboardActionState(actionKey, 'busy');
+    }
+
+    let outcome = 'error';
+    let result = null;
+    try {
+        result = await actionFn();
+        if (result && DASHBOARD_NEUTRAL_STATUSES.has(result.status)) {
+            outcome = result.status;
+        } else if (result && result.status === 'success') {
+            outcome = 'success';
+        } else if (result && result.status === 'error') {
+            outcome = 'error';
+        } else if (result === false) {
+            outcome = 'error';
+        } else {
+            outcome = 'error';
+        }
+        return result;
+    } catch (err) {
+        outcome = 'error';
+        console.error(`Lỗi action ${actionKey}:`, err);
+        return { status: 'error', error: err };
+    } finally {
+        if (actionKey === 'refresh') {
+            dashboardManualRefreshActive = false;
+        }
+        finishDashboardAction(actionKey, outcome);
+    }
+}
+
+async function refreshDashboardManually() {
+    return runDashboardAction('refresh', async () => {
+        const res = await fetchDashboard(false);
+        if (!res) {
+            return { status: 'error', error: new Error('Empty response from fetchDashboard') };
+        }
+        if (res.status === 'no_room') {
+            alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!");
+            return { status: 'no_room' };
+        }
+        if (res.status === 'stale') {
+            return { status: 'stale' };
+        }
+        if (res.status === 'skipped') {
+            return { status: 'skipped' };
+        }
+        if (res.status === 'error') {
+            return { status: 'error', error: res.error };
+        }
+        if (res.status === 'success') {
+            return { status: 'success' };
+        }
+        return { status: 'error', error: new Error('Unknown fetch status') };
+    });
+}
+
 // BỘ TẢI ĐIỂM CỰC MẠNH (HỖ TRỢ ĐỌC DỮ LIỆU TỪ 2 LUỒNG: REALTIME & AUTO REFRESH 5S)
-async function fetchDashboard(isAuto = false) { 
+async function fetchDashboard(isAuto = false) {
+    if (isAuto && dashboardManualRefreshActive) {
+        return { status: 'skipped' };
+    }
     try {
         const sInput = document.getElementById('liveSearchInput');
-        if (sInput && !isAuto) sInput.value = ''; 
+        if (sInput && !isAuto) sInput.value = '';
 
         const currentRoom = getSelectedRoom('dashMaPhong');
-        if(!currentRoom) return;
+        if(!currentRoom) return { status: 'no_room' };
         if(!isAuto) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">⏳ Đang tải dữ liệu...</td></tr>';
         
         let pArr = new Array();
@@ -3075,7 +3227,9 @@ async function fetchDashboard(isAuto = false) {
         
         let myFetchId = ++globalFetchDashId;
         let results = await Promise.all(pArr);
-        if (myFetchId !== globalFetchDashId) return; 
+        if (myFetchId !== globalFetchDashId) {
+            return { status: 'stale' };
+        }
 
         let resKQ = results[0];
         if (!resKQ || resKQ.status !== 'success') {
@@ -3100,11 +3254,13 @@ async function fetchDashboard(isAuto = false) {
             ViPham: r.so_lan_vi_pham || 0  // ĐÃ BỔ SUNG NHẬN DỮ LIỆU VI PHẠM
         }));
 
-        renderDashboardSubTabs(); 
-        renderDashboardTable(); 
+        renderDashboardSubTabs();
+        renderDashboardTable();
+        return { status: 'success' };
     } catch(e) {
         console.error("Lỗi fetchDashboard:", e);
         if (!isAuto) document.getElementById('dashBody').innerHTML = `<tr><td colspan="10" style="color:red; font-weight:bold;">❌ Lỗi kết nối tải bảng điểm: ${e.message}</td></tr>`;
+        return { status: 'error', error: e };
     }
 }
 
@@ -3114,33 +3270,32 @@ function filterDashboard(filter) { currentDashFilter = filter; renderDashboardSu
 
 
 async function xoaDiemPhong() {
-    const currentRoom = getSelectedRoom('dashMaPhong');
-    if(!currentRoom) return alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!");
-    const maPhong = currentRoom.MaPhong;
-    if(!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) return;
-    
-    let btn = event.target;
-    let oldText = btn.innerText;
-    btn.innerText = "⏳ Đang xóa sạch..."; btn.disabled = true;
+    return runDashboardAction('delete', async () => {
+        const currentRoom = getSelectedRoom('dashMaPhong');
+        if (!currentRoom) {
+            alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!");
+            return { status: 'no_room' };
+        }
+        const maPhong = currentRoom.MaPhong || currentRoom.ma_phong || 'PhongThi';
+        if (!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) {
+            return { status: 'cancelled' };
+        }
+        setDashboardActionState('delete', 'busy');
 
-    if(currentRoom) {
         let data = await staffRpc('rpc_reset_room_results', {
             p_ma_gv: gvData.ma_gv,
             p_truong_id: getRoomTargetSchoolId(currentRoom),
             p_phong_id: currentRoom.id
         });
-        if(!data || data.status !== 'success') {
+        if (!data || data.status !== 'success') {
             alert("❌ Lỗi máy chủ Supabase khi xóa: " + (data?.message || 'Lỗi không xác định'));
-        } else {
-            alert(`✅ Đã reset phòng: xóa ${data.ket_qua_deleted || 0} kết quả và ${data.submissions_deleted || 0} receipt bài làm.`);
+            return { status: 'error', error: data?.message };
         }
-    } else {
-        alert("❌ Lỗi hệ thống: Không xác định được ID của phòng thi này.");
-    }
-    
-    btn.innerText = oldText; btn.disabled = false;
-    taiDanhSachPhong();
-    fetchDashboard();
+        alert(`✅ Đã reset phòng: xóa ${data.ket_qua_deleted || 0} kết quả và ${data.submissions_deleted || 0} receipt bài làm.`);
+        taiDanhSachPhong();
+        fetchDashboard();
+        return { status: 'success', data };
+    }, { manualBusy: true });
 }
 
 function getActiveTargetSchoolId() {
@@ -3149,24 +3304,62 @@ function getActiveTargetSchoolId() {
 }
 
 async function khoiPhucChamDiemPhong() {
-    const currentRoom = getSelectedRoom('dashMaPhong');
-    if (!currentRoom) return alert("⚠️ Vui lòng chọn phòng thi cần khôi phục chấm điểm.");
-    const data = await staffRpc('rpc_grade_pending_room', {
-        p_ma_gv: gvData.ma_gv,
-        p_truong_id: getRoomTargetSchoolId(currentRoom),
-        p_phong_id: currentRoom.id
+    return runDashboardAction('regrade', async () => {
+        const currentRoom = getSelectedRoom('dashMaPhong');
+        if (!currentRoom) {
+            alert("⚠️ Vui lòng chọn phòng thi cần khôi phục chấm điểm.");
+            return { status: 'no_room' };
+        }
+        const data = await staffRpc('rpc_grade_pending_room', {
+            p_ma_gv: gvData.ma_gv,
+            p_truong_id: getRoomTargetSchoolId(currentRoom),
+            p_phong_id: currentRoom.id
+        });
+        if (!data || data.status !== 'success') {
+            alert("❌ Không thể khôi phục chấm điểm: " + (data?.message || 'Lỗi không xác định'));
+            return { status: 'error', error: data?.message };
+        }
+        alert(`✅ Đã xử lý ${data.attempted || 0} bài chờ: ${data.graded || 0} thành công, ${data.failed || 0} cần kiểm tra thêm.`);
+        fetchDashboard(true);
+        return { status: 'success', data };
     });
-    if (!data || data.status !== 'success') {
-        return alert("❌ Không thể khôi phục chấm điểm: " + (data?.message || 'Lỗi không xác định'));
-    }
-    alert(`✅ Đã xử lý ${data.attempted || 0} bài chờ: ${data.graded || 0} thành công, ${data.failed || 0} cần kiểm tra thêm.`);
-    fetchDashboard(true);
 }
 
-async function xuatExcel() { 
-    if(duLieuBangDiem.length === 0) return alert("Chưa có dữ liệu để tải."); 
-    
-    let exportData = new Array(); let currentRoom = getSelectedRoom('dashMaPhong');
+async function xuatExcel() {
+    return runDashboardAction('export', () => xuatExcelCore());
+}
+
+async function xuatExcelCore() {
+    let currentRoom = getSelectedRoom('dashMaPhong');
+    if(!currentRoom) {
+        alert("⚠️ Vui lòng chọn Mã Phòng Thi ở ô phía trên trước!");
+        return { status: 'no_room' };
+    }
+    if(duLieuBangDiem.length === 0) {
+        alert("Chưa có dữ liệu để tải.");
+        return { status: 'no_data' };
+    }
+
+    let ExcelJSLib;
+    try {
+        ExcelJSLib = await ensureExcelJsReady();
+    } catch (loaderErr) {
+        console.error("Lỗi tải ExcelJS:", loaderErr);
+        alert("❌ Không thể tải thư viện xử lý Excel: " + (loaderErr?.message || 'Lỗi kết nối'));
+        return { status: 'error', error: loaderErr };
+    }
+    if (!ExcelJSLib || !ExcelJSLib.Workbook) {
+        if (typeof window !== 'undefined' && window.ExcelJS && window.ExcelJS.Workbook) {
+            ExcelJSLib = window.ExcelJS;
+        } else {
+            alert("❌ Thư viện Excel chưa sẵn sàng. Vui lòng kiểm tra kết nối mạng.");
+            return { status: 'error', error: new Error('ExcelJS not ready') };
+        }
+    }
+
+    const maPhong = currentRoom.MaPhong || currentRoom.ma_phong || 'PhongThi';
+
+    let exportData = new Array();
     let defaultLop = currentRoom && currentRoom.DoiTuong !== "TatCa" ? currentRoom.DoiTuong : null; 
     let targetLop = currentDashFilter !== 'TatCa' ? currentDashFilter : defaultLop; 
 
@@ -3186,9 +3379,12 @@ async function xuatExcel() {
         let allowedClasses = currentDashFilter.split(',').map(s => s.trim());
         exportData = exportData.filter(d => allowedClasses.includes(String(d.Lop).trim())); 
     } 
-    if(exportData.length === 0) return alert("Không có dữ liệu cho lớp này.");
+    if(exportData.length === 0) {
+        alert("Không có dữ liệu cho lớp này.");
+        return { status: 'no_data' };
+    }
 
-    const workbook = new ExcelJS.Workbook(); const worksheet = workbook.addWorksheet('BangDiem'); 
+    const workbook = new ExcelJSLib.Workbook(); const worksheet = workbook.addWorksheet('BangDiem');
     // ĐÃ BỔ SUNG CỘT VI PHẠM VÀO EXCEL
     worksheet.columns = [ { header: 'STT', key: 'stt', width: 6 }, { header: 'SBD', key: 'sbd', width: 12 }, { header: 'Họ và Tên', key: 'name', width: 30 }, { header: 'Lớp', key: 'lop', width: 10 }, { header: 'Mã Đề', key: 'made', width: 10 }, { header: 'Tổng Điểm', key: 'total', width: 12 }, { header: 'Điểm P. I', key: 'p1', width: 12 }, { header: 'Điểm P. II', key: 'p2', width: 12 }, { header: 'Điểm P. III', key: 'p3', width: 12 }, { header: 'Vi Phạm', key: 'vipham', width: 10 }, { header: 'Thời gian nộp', key: 'time', width: 22 } ]; 
     
@@ -3274,7 +3470,8 @@ async function xuatExcel() {
     // --- KẾT THÚC ĐOẠN CẬP NHẬT ---
     const buffer = await workbook.xlsx.writeBuffer(); 
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }); 
-    const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url); 
+    const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = tenFile; a.click(); window.URL.revokeObjectURL(url);
+    return { status: 'success', file: tenFile };
 }
 
 // ==========================================================
