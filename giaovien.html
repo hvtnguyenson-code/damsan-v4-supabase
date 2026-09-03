@@ -219,6 +219,75 @@
             cursor: not-allowed;
             opacity: 0.75;
         }
+        .room-action-btn, .room-batch-action-btn {
+            transition: 0.2s ease;
+        }
+        .room-action-btn:disabled, .room-batch-action-btn:disabled, .radar-action-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.75;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        .radar-status-cell {
+            white-space: nowrap;
+            min-width: 110px;
+            text-align: center;
+        }
+        .radar-action-cell {
+            min-width: 250px;
+            white-space: nowrap;
+            text-align: center;
+        }
+        .radar-action-group {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            flex-direction: row;
+            flex-wrap: nowrap;
+        }
+        .radar-action-btn {
+            height: 32px;
+            padding: 0 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s ease;
+        }
+        .radar-action-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            filter: brightness(1.08);
+        }
+        .radar-action-open {
+            background: #27ae60;
+        }
+        .radar-action-lock {
+            background: #c0392b;
+        }
+        .radar-action-delete-exam {
+            background: #f39c12;
+        }
+        .radar-action-delete-all {
+            background: #c0392b;
+        }
+        @media (max-width: 720px) {
+            .radar-action-group {
+                flex-direction: column;
+                gap: 5px;
+                width: 100%;
+            }
+            .radar-action-btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -537,7 +606,7 @@
                             <select id="ctrlMaPhong" style="flex: 1; padding: 10px; border: 2px solid #1a73e8; border-radius: 6px; font-size: 14px; font-weight: bold; outline: none; background: #fff;">
                                 <option value="">-- Bấm để chọn Mã Phòng --</option>
                             </select>
-                            <button onclick="taiDanhSachPhong()" style="padding: 10px 15px; background: #1f2937; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; min-width: 120px;">🔄 Tải lại</button>
+                            <button id="roomReloadBtn" class="room-action-btn" onclick="reloadRoomListManually()" style="padding: 10px 15px; background: #1f2937; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; min-width: 120px;">🔄 Tải lại</button>
                         </div></div>
                         <div class="flex-mobile-col" style="display: flex; gap: 15px; margin-bottom: 15px;">
                             <div class="input-group" style="flex: 2; background: #e8f0fe; padding: 15px; border-radius: 8px; border-left: 5px solid #1a73e8; margin-bottom: 0;"><label style="color: #1a73e8;">Tên Đợt Kiểm Tra (Tùy chọn):</label><input type="text" id="ctrlTenDot" placeholder="VD: Kiểm tra 15 phút..." style="border-color: #1a73e8;"></div>
@@ -546,19 +615,19 @@
                         <div class="input-group" style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 5px solid #f39c12;"><label style="color: #d35400;">Giao bài cho Lớp:</label><select id="ctrlDoiTuong" style="border-color: #f39c12; font-weight:bold;"><option value="TatCa">⏳ Đang tải...</option></select></div>
                         
                         <div class="btn-group">
-                            <button style="background: #27ae60;" onclick="dieuKhien('MO_PHONG')">🟢 Mở Phòng (Đếm giờ)</button>
-                            <button style="background: #c0392b;" onclick="dieuKhien('THU_BAI')">🔴 Khóa Phòng & Ép Thu Bài</button>
+                            <button id="roomOpenBtn" class="room-action-btn" style="background: #27ae60;" onclick="dieuKhien('MO_PHONG')">🟢 Mở Phòng (Đếm giờ)</button>
+                            <button id="roomLockBtn" class="room-action-btn" style="background: #c0392b;" onclick="dieuKhien('THU_BAI')">🔴 Khóa Phòng & Ép Thu Bài</button>
                         </div>
                         <div class="btn-group" style="margin-top: 10px;">
-                            <button style="background: #3498db;" onclick="dieuKhien('CONG_BO_DIEM')">📊 Công Bố Điểm Tổng</button>
-                            <button style="background: #8e44ad;" onclick="dieuKhien('XEM_DAP_AN')">👁️ Công Bố Đáp Án</button>
-                            <button style="background: #f39c12;" onclick="xemTruocDeThi()">🔍 Xem trước Đề trong phòng</button>
+                            <button id="roomPublishScoreBtn" class="room-action-btn" style="background: #3498db;" onclick="dieuKhien('CONG_BO_DIEM')">📊 Công Bố Điểm Tổng</button>
+                            <button id="roomPublishAnswerBtn" class="room-action-btn" style="background: #8e44ad;" onclick="dieuKhien('XEM_DAP_AN')">👁️ Công Bố Đáp Án</button>
+                            <button id="roomPreviewBtn" class="room-action-btn" style="background: #f39c12;" onclick="xemTruocDeThi()">🔍 Xem trước Đề trong phòng</button>
                         </div>
                         <p id="ctrlLog" style="margin-top: 15px; font-weight: bold; color: #1a73e8; text-align: center; font-size: 16px;"></p>
 
                         <div style="margin-top: 30px; border-top: 2px dashed #ccc; padding-top: 20px;">
                             <h3 style="color: #2c3e50; text-align:center;">📡 Radar Tình Trạng Các Phòng</h3>
-                            <button style="width:100%; background:#95a5a6; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-bottom: 10px;" onclick="fetchRadar()">🔄 Quét lại Radar</button>
+                            <button id="roomRadarRefreshBtn" class="room-action-btn" style="width:100%; background:#95a5a6; color:white; padding:8px; border:none; border-radius:4px; cursor:pointer; font-weight:bold; margin-bottom: 10px;" onclick="refreshRadarManually()">🔄 Quét lại Radar</button>
                             <div class="table-responsive">
                                 <table><thead><tr><th>Mã Phòng</th><th>Tên Đợt</th><th>Lớp</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác nhanh</th></tr></thead><tbody id="radarBody"><tr><td colspan="6">Bấm quét để tải...</td></tr></tbody></table>
                             </div>
@@ -812,6 +881,6 @@
             }
         }
     </script>
-    <script src="giaovien.js?v=20260903-flex-lite-006"></script>
+    <script src="giaovien.js?v=20260903-flex-lite-007"></script>
 </body>
 </html>
