@@ -129,7 +129,11 @@ const dashBody = dashMatch[1];
 assert(dashBody.includes('let pArr = new Array();'), 'REG-03b: fetchDashboard declares pArr');
 assert(dashBody.includes('rpc_lay_ket_qua_phong_gv'), 'REG-03c: fetchDashboard pushes grade-result RPC');
 assert(dashBody.includes('let myFetchId = ++globalFetchDashId;'), 'REG-03d: fetchDashboard declares myFetchId');
-assert(dashBody.includes('if (myFetchId !== globalFetchDashId) return;'), 'REG-03e: fetchDashboard checks stale fetch ID');
+assert(
+  dashBody.includes('if (myFetchId !== globalFetchDashId)') &&
+    dashBody.includes("return { status: 'stale' };"),
+  'REG-03e: fetchDashboard returns structured stale status when fetch ID is stale'
+);
 
 // REG-04: Preview rendering integrity
 const previewMatch = gvJs.match(/function\s+renderPreviewContent\s*\([^)]*\)\s*\{([\s\S]*?\n)\}/);
