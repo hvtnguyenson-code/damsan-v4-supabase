@@ -3153,7 +3153,8 @@ async function fetchRadar() {
             truong_id: d.truong_id,
             id: d.id,
             assessment_type: d.assessment_type || 'LEGACY',
-            scoring_config: d.scoring_config || {}
+            scoring_config: d.scoring_config || {},
+            CreatedAt: d.created_at
         }));
         
         let tbody = document.getElementById('radarBody');
@@ -4802,6 +4803,61 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
     return data;
 }
 
+// ==========================================================
+// CHRONOLOGICAL ROOM ORDERING (FLEX-LITE-008)
+// ==========================================================
+
+function parseRoomCreatedAtMs(val) {
+    if (val === null || val === undefined || val === '') return null;
+    if (typeof val === 'number') {
+        return Number.isFinite(val) ? val : null;
+    }
+    if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (!trimmed) return null;
+        if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+            const num = Number(trimmed);
+            return Number.isFinite(num) ? num : null;
+        }
+        const ms = Date.parse(trimmed);
+        return Number.isFinite(ms) ? ms : null;
+    }
+    if (val instanceof Date) {
+        const ms = val.getTime();
+        return Number.isFinite(ms) ? ms : null;
+    }
+    return null;
+}
+
+function sortRoomsNewestFirstByCreatedAt(rooms) {
+    if (!Array.isArray(rooms)) return [];
+    if (rooms.length <= 1) return [...rooms];
+
+    const copy = [...rooms];
+
+    const hasAllValidCreatedAt = copy.every(r => {
+        if (!r || typeof r !== 'object') return false;
+        const raw = r.created_at !== undefined ? r.created_at : r.CreatedAt;
+        return parseRoomCreatedAtMs(raw) !== null;
+    });
+
+    if (!hasAllValidCreatedAt) {
+        return copy;
+    }
+
+    return copy
+        .map((item, index) => ({ item, index }))
+        .sort((a, b) => {
+            const timeA = parseRoomCreatedAtMs(a.item.created_at !== undefined ? a.item.created_at : a.item.CreatedAt);
+            const timeB = parseRoomCreatedAtMs(b.item.created_at !== undefined ? b.item.created_at : b.item.CreatedAt);
+            if (timeB !== timeA) {
+                return timeB - timeA;
+            }
+            return a.index - b.index;
+        })
+        .map(entry => entry.item);
+}
+
 async function rpcLayDanhSachPhongThi() {
     const monId = (activeWorkspaceMonId && activeWorkspaceMonId !== "ALL") ? activeWorkspaceMonId : null;
     const targetTruongId = gvData.quyen === 'Admin' && activeWorkspaceTruongId === 'ALL' ? null : activeWorkspaceTruongId;
@@ -4814,5 +4870,6 @@ async function rpcLayDanhSachPhongThi() {
     if (!data || data.status !== 'success') {
         throw new Error(data?.message || "Khong tai duoc danh sach phong thi");
     }
-    return data.rooms || new Array();
+    const rawRooms = data.rooms || new Array();
+    return sortRoomsNewestFirstByCreatedAt(rawRooms);
 }
