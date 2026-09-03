@@ -2145,38 +2145,41 @@ async function luuDeThiLenSupabase(deThiArray, assessmentConfig = null) {
 
 async function xemTruocDeThi() {
     const room = getSelectedRoom('ctrlMaPhong');
-    if(!room) return alert("⚠️ Vui lòng chọn phòng thi cụ thể trước khi xem trước đề!");
-
-    let btn = document.querySelector('button[onclick="xemTruocDeThi()"]');
-    let oldText = btn ? btn.innerText : "";
-    if (btn) { btn.innerText = "⏳..."; btn.disabled = true; }
-
-    try {
-        let data = await staffRpc('rpc_staff_exam_preview', { p_phong_id: room.id });
-        if (!data || data.status !== 'success') {
-            throw new Error(data?.message || "Không thể tải đề thi xem trước.");
-        }
-        let exams = data.exams || [];
-
-        if(exams.length === 0) {
-            console.warn("⚠️ Phòng này tồn tại nhưng bảng de_thi không có dữ liệu cho phong_id:", room.id);
-            return alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên.");
-        }
-
-        previewExamData = exams;
-        let uniqueMaDe = Array.from(new Set(exams.map(e => e.ma_de))).sort();
-        let selectHtml = '';
-        uniqueMaDe.forEach(md => { selectHtml += '<option value="' + md + '">MÃ ĐỀ: ' + md + '</option>'; });
-
-        document.getElementById('previewMaDeSelect').innerHTML = selectHtml;
-        document.getElementById('previewModal').style.display = 'flex';
-        renderPreviewContent();
-
-    } catch(e) {
-        alert("Lỗi khi tải đề thi: " + e.message);
-    } finally {
-        if (btn) { btn.innerText = oldText; btn.disabled = false; }
+    if (!room) {
+        alert("⚠️ Vui lòng chọn phòng thi cụ thể trước khi xem trước đề!");
+        return { status: 'no_room' };
     }
+
+    return runRoomControlAction('preview', async () => {
+        try {
+            let data = await staffRpc('rpc_staff_exam_preview', { p_phong_id: room.id });
+            if (!data || data.status !== 'success') {
+                const reason = data?.message || "Không thể tải đề thi xem trước.";
+                alert("Lỗi khi tải đề thi: " + reason);
+                return { status: 'error', error: new Error(reason) };
+            }
+            let exams = data.exams || [];
+
+            if (exams.length === 0) {
+                console.warn("⚠️ Phòng này tồn tại nhưng bảng de_thi không có dữ liệu cho phong_id:", room.id);
+                alert("Phòng này hiện tại Trống! Chưa có câu hỏi nào được trộn và đẩy lên.");
+                return { status: 'no_data' };
+            }
+
+            previewExamData = exams;
+            let uniqueMaDe = Array.from(new Set(exams.map(e => e.ma_de))).sort();
+            let selectHtml = '';
+            uniqueMaDe.forEach(md => { selectHtml += '<option value="' + md + '">MÃ ĐỀ: ' + md + '</option>'; });
+
+            document.getElementById('previewMaDeSelect').innerHTML = selectHtml;
+            document.getElementById('previewModal').style.display = 'flex';
+            renderPreviewContent();
+            return { status: 'success', data };
+        } catch (e) {
+            alert("Lỗi khi tải đề thi: " + e.message);
+            return { status: 'error', error: e };
+        }
+    });
 }
 
 function renderPreviewContent() {
@@ -2622,24 +2625,285 @@ async function loadMetaData() {
     }
 }
 
-async function dieuKhien(trangThai) {
+// ==========================================================
+// ROOM CONTROL ACTION STATE & RELIABILITY HELPERS (FLEX-LITE-007)
+// ==========================================================
+
+const ROOM_CONTROL_FEEDBACK_DELAY_MS = 800;
+const ROOM_CONTROL_NEUTRAL_STATUSES = new Set(['cancelled', 'no_room', 'no_data', 'no_selection', 'stale', 'skipped']);
+
+const ROOM_CONTROL_ACTIONS = {
+    reload: {
+        id: 'roomReloadBtn',
+        normal: '🔄 Tải lại',
+        busy: '⏳ Đang tải...',
+        success: '✅ Đã tải',
+        error: '❌ Tải lỗi'
+    },
+    open: {
+        id: 'roomOpenBtn',
+        normal: '🟢 Mở Phòng (Đếm giờ)',
+        busy: '⏳ Đang mở phòng...',
+        success: '✅ Đã mở phòng',
+        error: '❌ Mở phòng lỗi'
+    },
+    lock: {
+        id: 'roomLockBtn',
+        normal: '🔴 Khóa Phòng & Ép Thu Bài',
+        busy: '⏳ Đang khóa phòng...',
+        success: '✅ Đã khóa phòng',
+        error: '❌ Khóa phòng lỗi'
+    },
+    publish_score: {
+        id: 'roomPublishScoreBtn',
+        normal: '📊 Công Bố Điểm Tổng',
+        busy: '⏳ Đang công bố...',
+        success: '✅ Đã công bố điểm',
+        error: '❌ Công bố điểm lỗi'
+    },
+    publish_answer: {
+        id: 'roomPublishAnswerBtn',
+        normal: '👁️ Công Bố Đáp Án',
+        busy: '⏳ Đang công bố...',
+        success: '✅ Đã công bố đáp án',
+        error: '❌ Công bố đáp án lỗi'
+    },
+    preview: {
+        id: 'roomPreviewBtn',
+        normal: '🔍 Xem trước Đề trong phòng',
+        busy: '⏳ Đang tải đề...',
+        success: '✅ Đã mở xem trước',
+        error: '❌ Xem trước lỗi'
+    },
+    radar_refresh: {
+        id: 'roomRadarRefreshBtn',
+        normal: '🔄 Quét lại Radar',
+        busy: '⏳ Đang quét...',
+        success: '✅ Radar đã cập nhật',
+        error: '❌ Quét Radar lỗi'
+    },
+    batch_open: {
+        id: 'roomBatchOpenBtn',
+        normal: '🟢 Mở các phòng đã chọn',
+        busy: '⏳ Đang mở...',
+        success: '✅ Đã mở các phòng',
+        error: '❌ Mở phòng lỗi'
+    },
+    batch_lock: {
+        id: 'roomBatchLockBtn',
+        normal: '🔴 Khóa các phòng đã chọn',
+        busy: '⏳ Đang khóa...',
+        success: '✅ Đã khóa các phòng',
+        error: '❌ Khóa phòng lỗi'
+    }
+};
+
+const activeRoomControlActions = new Set();
+const activeRoomMutationIds = new Set();
+
+function setRoomControlActionStateOnElement(btn, actionKeyOrBtnId, state, customLabels = null) {
+    if (!btn) return;
+    let cfg = ROOM_CONTROL_ACTIONS[actionKeyOrBtnId] || customLabels;
+    if (!cfg) return;
+
+    if (state === 'busy') {
+        btn.innerText = cfg.busy;
+        btn.disabled = true;
+        if (btn.setAttribute) {
+            btn.setAttribute('aria-busy', 'true');
+            btn.setAttribute('data-action-state', 'busy');
+        }
+    } else if (state === 'success') {
+        btn.innerText = cfg.success;
+        btn.disabled = true;
+        if (btn.removeAttribute) btn.removeAttribute('aria-busy');
+        if (btn.setAttribute) btn.setAttribute('data-action-state', 'success');
+    } else if (state === 'error') {
+        btn.innerText = cfg.error;
+        btn.disabled = true;
+        if (btn.removeAttribute) btn.removeAttribute('aria-busy');
+        if (btn.setAttribute) btn.setAttribute('data-action-state', 'error');
+    } else {
+        btn.innerText = cfg.normal;
+        btn.disabled = false;
+        if (btn.removeAttribute) btn.removeAttribute('aria-busy');
+        if (btn.setAttribute) btn.setAttribute('data-action-state', 'normal');
+    }
+}
+
+function setRoomControlActionState(actionKeyOrBtnId, state, customLabels = null) {
+    let btn = null;
+    let cfg = ROOM_CONTROL_ACTIONS[actionKeyOrBtnId];
+    if (cfg) {
+        btn = document.getElementById(cfg.id);
+    } else if (customLabels) {
+        cfg = customLabels;
+        btn = document.getElementById(customLabels.id || actionKeyOrBtnId);
+    } else {
+        btn = document.getElementById(actionKeyOrBtnId);
+    }
+    if (btn) {
+        setRoomControlActionStateOnElement(btn, actionKeyOrBtnId, state, customLabels);
+    }
+}
+
+function finishRoomControlAction(actionKeyOrBtnId, outcome, customLabels = null, targetBtn = null, actionToken = null) {
+    if (ROOM_CONTROL_NEUTRAL_STATUSES.has(outcome)) {
+        activeRoomControlActions.delete(actionKeyOrBtnId);
+        if (targetBtn) {
+            setRoomControlActionStateOnElement(targetBtn, actionKeyOrBtnId, 'normal', customLabels);
+        } else {
+            setRoomControlActionState(actionKeyOrBtnId, 'normal', customLabels);
+        }
+        return;
+    }
+    const state = (outcome === 'success') ? 'success' : 'error';
+    if (targetBtn) {
+        setRoomControlActionStateOnElement(targetBtn, actionKeyOrBtnId, state, customLabels);
+    } else {
+        setRoomControlActionState(actionKeyOrBtnId, state, customLabels);
+    }
+    setTimeout(() => {
+        activeRoomControlActions.delete(actionKeyOrBtnId);
+        if (targetBtn) {
+            if (actionToken && targetBtn.getAttribute && targetBtn.getAttribute('data-action-token') !== actionToken) {
+                return;
+            }
+            setRoomControlActionStateOnElement(targetBtn, actionKeyOrBtnId, 'normal', customLabels);
+        } else {
+            setRoomControlActionState(actionKeyOrBtnId, 'normal', customLabels);
+        }
+    }, ROOM_CONTROL_FEEDBACK_DELAY_MS);
+}
+
+async function runRoomControlAction(actionKey, actionFn, options = {}) {
+    if (activeRoomControlActions.has(actionKey)) {
+        return { status: 'skipped', reason: 'already_running' };
+    }
+
+    const targetRoomIds = options.roomIds ? (Array.isArray(options.roomIds) ? options.roomIds : [options.roomIds]).map(String) : [];
+    if (targetRoomIds.length > 0) {
+        const hasBusyRoom = targetRoomIds.some(id => activeRoomMutationIds.has(id));
+        if (hasBusyRoom) {
+            return { status: 'skipped', reason: 'room_busy' };
+        }
+        targetRoomIds.forEach(id => activeRoomMutationIds.add(id));
+    }
+
+    activeRoomControlActions.add(actionKey);
+
+    let targetBtn = null;
+    let cfg = ROOM_CONTROL_ACTIONS[actionKey];
+    if (cfg) {
+        targetBtn = document.getElementById(cfg.id);
+    } else if (options.customLabels) {
+        targetBtn = document.getElementById(options.customLabels.id || actionKey);
+    } else {
+        targetBtn = document.getElementById(actionKey);
+    }
+
+    const actionToken = 'tok-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    if (targetBtn && targetBtn.setAttribute) {
+        targetBtn.setAttribute('data-action-token', actionToken);
+    }
+
+    if (!options.manualBusy) {
+        if (targetBtn) {
+            setRoomControlActionStateOnElement(targetBtn, actionKey, 'busy', options.customLabels);
+        } else {
+            setRoomControlActionState(actionKey, 'busy', options.customLabels);
+        }
+    }
+
+    let outcome = 'error';
+    let result = null;
     try {
-        const cachedRoom = getSelectedRoom('ctrlMaPhong');
-        if(!cachedRoom) return alert("Vui lòng chọn phòng thi cụ thể!");
-        const maPhong = cachedRoom.MaPhong;
-        document.getElementById('ctrlLog').innerText = "⏳ Đang truyền lệnh..."; 
-        
+        result = await actionFn();
+        if (result && ROOM_CONTROL_NEUTRAL_STATUSES.has(result.status)) {
+            outcome = result.status;
+        } else if (result && result.status === 'success') {
+            outcome = 'success';
+        } else if (result && result.status === 'error') {
+            outcome = 'error';
+        } else if (result === false) {
+            outcome = 'error';
+        } else {
+            outcome = 'error';
+        }
+        return result;
+    } catch (err) {
+        outcome = 'error';
+        console.error(`Lỗi room control action ${actionKey}:`, err);
+        return { status: 'error', error: err };
+    } finally {
+        if (targetRoomIds.length > 0) {
+            targetRoomIds.forEach(id => activeRoomMutationIds.delete(id));
+        }
+        finishRoomControlAction(actionKey, outcome, options.customLabels, targetBtn, actionToken);
+    }
+}
+
+async function reloadRoomListManually() {
+    return runRoomControlAction('reload', async () => {
+        const res = await taiDanhSachPhong();
+        if (res && res.status === 'error') return { status: 'error', error: res.error };
+        return { status: 'success' };
+    });
+}
+
+async function refreshRadarManually() {
+    return runRoomControlAction('radar_refresh', async () => {
+        const res = await fetchRadar();
+        if (res && res.status === 'error') return { status: 'error', error: res.error };
+        return { status: 'success' };
+    });
+}
+
+function renderRadarActionCell(r) {
+    if (!r) return '';
+    const isMoPhong = r.TrangThai === "MO_PHONG";
+    const quickText = isMoPhong ? "Khóa" : "Mở lại";
+    const quickAction = isMoPhong ? "THU_BAI" : "MO_PHONG";
+    const quickModifier = isMoPhong ? "radar-action-lock" : "radar-action-open";
+
+    return `<div class="radar-action-group">` +
+        `<button id="roomQuickStateBtn-${r.id}" class="radar-action-btn ${quickModifier}" onclick="dieuKhienFast('${r.id}', '${quickAction}')">${quickText}</button>` +
+        `<button id="roomDeleteExamBtn-${r.id}" class="radar-action-btn radar-action-delete-exam" onclick="xoaDeTrongPhong('${r.id}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>` +
+        `<button id="roomDeleteAllBtn-${r.id}" class="radar-action-btn radar-action-delete-all" onclick="xoaPhongHoanToan('${r.id}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>` +
+    `</div>`;
+}
+
+async function dieuKhien(trangThai) {
+    const actionKeyMap = {
+        'MO_PHONG': 'open',
+        'THU_BAI': 'lock',
+        'CONG_BO_DIEM': 'publish_score',
+        'XEM_DAP_AN': 'publish_answer'
+    };
+    const actionKey = actionKeyMap[trangThai];
+    if (!actionKey) return { status: 'error', error: new Error('Unknown command: ' + trangThai) };
+
+    const cachedRoom = getSelectedRoom('ctrlMaPhong');
+    if (!cachedRoom) {
+        alert("Vui lòng chọn phòng thi cụ thể!");
+        return { status: 'no_room' };
+    }
+
+    return runRoomControlAction(actionKey, async () => {
+        const logEl = document.getElementById('ctrlLog');
+        if (logEl) logEl.innerText = "⏳ Đang truyền lệnh...";
+
         let updateData = { trang_thai: trangThai };
-        
+
         if (trangThai === 'MO_PHONG') {
-            const tenDot = document.getElementById('ctrlTenDot').value.trim(); 
-            const tg = document.getElementById('ctrlThoiGian').value; 
-            const doiTuongSelect = document.getElementById('ctrlDoiTuong').value; 
-            
-            updateData.thoi_gian_mo = Date.now(); 
+            const tenDot = (document.getElementById('ctrlTenDot')?.value || '').trim();
+            const tg = document.getElementById('ctrlThoiGian')?.value || 45;
+            const doiTuongSelect = document.getElementById('ctrlDoiTuong')?.value || 'TatCa';
+
+            updateData.thoi_gian_mo = Date.now();
             updateData.ten_dot = tenDot;
             updateData.thoi_gian = tg;
-            
+
             let currentRoom = cachedRoom;
             if (currentRoom && currentRoom.DoiTuong && currentRoom.DoiTuong.includes(',') && doiTuongSelect === "TatCa") {
                 // Bỏ qua update để giữ nguyên danh sách lớp ghép
@@ -2647,108 +2911,136 @@ async function dieuKhien(trangThai) {
                 updateData.doi_tuong = doiTuongSelect;
             }
         }
-        
+
         let phong_id = cachedRoom.id;
-        await rpcDieuKhienPhongThi(
-            phong_id,
-            trangThai,
-            updateData.doi_tuong ?? null,
-            updateData.ten_dot ?? null,
-            updateData.thoi_gian ?? null,
-            trangThai === 'MO_PHONG'
-        );
-        
-        document.getElementById('ctrlLog').innerText = `✅ THÀNH CÔNG!`; 
-        fetchRadar(); 
-    } catch(e) {
-        console.error(e);
-        document.getElementById('ctrlLog').innerText = `❌ Lỗi: ` + e.message;
-    }
+        try {
+            await rpcDieuKhienPhongThi(
+                phong_id,
+                trangThai,
+                updateData.doi_tuong ?? null,
+                updateData.ten_dot ?? null,
+                updateData.thoi_gian ?? null,
+                trangThai === 'MO_PHONG'
+            );
+
+            if (logEl) logEl.innerText = `✅ THÀNH CÔNG!`;
+            fetchRadar();
+            return { status: 'success' };
+        } catch (e) {
+            console.error(e);
+            if (logEl) logEl.innerText = `❌ Lỗi: ` + e.message;
+            return { status: 'error', error: e };
+        }
+    }, { roomIds: [cachedRoom.id] });
 }
 
 async function dieuKhienFast(roomId, trangThai) {
-    try {
-        let room = (allRoomsData || new Array()).find(r => String(r.id) === String(roomId));
+    const btnId = `roomQuickStateBtn-${roomId}`;
+    const customLabels = trangThai === 'MO_PHONG' ? {
+        id: btnId, normal: 'Mở lại', busy: '⏳ Đang mở...', success: '✅ Đã mở', error: '❌ Mở lỗi'
+    } : {
+        id: btnId, normal: 'Khóa', busy: '⏳ Đang khóa...', success: '✅ Đã khóa', error: '❌ Khóa lỗi'
+    };
+
+    return runRoomControlAction(btnId, async () => {
+        let room = (allRoomsData || []).find(r => String(r.id) === String(roomId));
         if (!room || !room.id) throw new Error("Không xác định được ID phòng thi. Hãy bấm làm mới danh sách phòng rồi thử lại.");
 
-        let updateData = {trang_thai: trangThai};
-        if(trangThai === 'MO_PHONG') {
-            updateData.thoi_gian_mo = Date.now(); 
+        let updateData = { trang_thai: trangThai };
+        if (trangThai === 'MO_PHONG') {
+            updateData.thoi_gian_mo = Date.now();
             let checkbox = document.querySelector(`.chk-Room[value="${room.id}"]`);
-            if(checkbox) {
-                let doiTuongInput = checkbox.closest('tr').querySelector('.fast-doituong');
+            if (checkbox) {
+                let doiTuongInput = checkbox.closest('tr')?.querySelector('.fast-doituong');
                 if (doiTuongInput) updateData.doi_tuong = doiTuongInput.value;
             }
         }
 
-        await rpcDieuKhienPhongThi(
-            room.id,
-            trangThai,
-            updateData.doi_tuong ?? null,
-            null,
-            null,
-            trangThai === 'MO_PHONG'
-        );
-        fetchRadar(); 
-    } catch(e) {
-        console.error("Lỗi điều khiển nhanh:", e);
-        alert("Lỗi khi điều khiển phòng! Chi tiết: " + e.message);
-    }
+        try {
+            await rpcDieuKhienPhongThi(
+                room.id,
+                trangThai,
+                updateData.doi_tuong ?? null,
+                null,
+                null,
+                trangThai === 'MO_PHONG'
+            );
+            fetchRadar();
+            return { status: 'success' };
+        } catch (e) {
+            console.error("Lỗi điều khiển nhanh:", e);
+            alert("Lỗi khi điều khiển phòng! Chi tiết: " + e.message);
+            return { status: 'error', error: e };
+        }
+    }, { roomIds: [roomId], customLabels });
 }
-
 
 async function xoaPhongHoanToan(roomId) {
     const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
     const maPhong = cached?.MaPhong || '';
-    if(!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) return; 
-    let btn = event.target;
-    let oldText = btn.innerText;
-    btn.innerText = "⏳..."; btn.disabled = true;
-
-    try {
-        if (!cached || !cached.id) throw new Error("Không tìm thấy phòng thi trong danh sách.");
-        const data = await staffRpc('rpc_xoa_phong_thi', {
-            p_ma_gv:     gvData.ma_gv,
-            p_truong_id: getRoomTargetSchoolId(cached),
-            p_phong_id:  cached.id
-        });
-        if (data && data.status !== 'success') throw new Error(data.message || 'Xóa thất bại');
-        fetchRadar();
-        alert("Đã xóa sạch dữ liệu phòng thi!");
-    } catch(e) {
-        alert("Lỗi khi xóa: " + e.message);
-        btn.innerText = oldText; btn.disabled = false;
+    if (!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) {
+        return { status: 'cancelled' };
     }
+
+    const btnId = `roomDeleteAllBtn-${roomId}`;
+    const customLabels = {
+        id: btnId, normal: 'Xóa Sạch', busy: '⏳ Đang xóa...', success: '✅ Đã xóa', error: '❌ Xóa lỗi'
+    };
+
+    return runRoomControlAction(btnId, async () => {
+        try {
+            if (!cached || !cached.id) throw new Error("Không tìm thấy phòng thi trong danh sách.");
+            const data = await staffRpc('rpc_xoa_phong_thi', {
+                p_ma_gv:     gvData.ma_gv,
+                p_truong_id: getRoomTargetSchoolId(cached),
+                p_phong_id:  cached.id
+            });
+            if (!data || data.status !== 'success') {
+                throw new Error(data?.message || 'Xóa thất bại');
+            }
+            fetchRadar();
+            alert("Đã xóa sạch dữ liệu phòng thi!");
+            return { status: 'success', data };
+        } catch (e) {
+            alert("Lỗi khi xóa: " + e.message);
+            return { status: 'error', error: e };
+        }
+    }, { roomIds: [roomId], customLabels });
 }
 
 async function xoaDeTrongPhong(roomId) {
     const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
     const maPhong = cached?.MaPhong || '';
-    if(!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã nạp trong phòng [${maPhong}]?\n(Chỉ được phép xóa khi phòng ở trạng thái CHỜ THI, chưa mở phòng và chưa có học sinh nộp bài)`)) return;
-    
-    let btn = event.target;
-    let oldText = (btn && btn.innerText) ? btn.innerText : "Xóa Đề";
-    if(btn) { btn.innerText = "⏳..."; btn.disabled = true; }
+    if (!confirm(`XÁC NHẬN: Bạn muốn xóa sạch các bộ Đề Thi đã nạp trong phòng [${maPhong}]?\n(Chỉ được phép xóa khi phòng ở trạng thái CHỜ THI, chưa mở phòng và chưa có học sinh nộp bài)`)) {
+        return { status: 'cancelled' };
+    }
 
-    try {
-        if(cached && cached.id) {
+    const btnId = `roomDeleteExamBtn-${roomId}`;
+    const customLabels = {
+        id: btnId, normal: 'Xóa Đề', busy: '⏳ Đang xóa...', success: '✅ Đã xóa đề', error: '❌ Xóa đề lỗi'
+    };
+
+    return runRoomControlAction(btnId, async () => {
+        try {
+            if (!cached || !cached.id) {
+                alert("❌ Không tìm thấy thông tin phòng thi trên máy chủ.");
+                return { status: 'error', error: new Error('Không tìm thấy thông tin phòng thi') };
+            }
             // Replaced adminRpc('exam_delete_only', { phong_id: cached.id }) with authoritative safe staffRpc for both Admin and teacher
             const data = await staffRpc('rpc_xoa_de_trong_phong', {
-                p_ma_gv: gvData.ma_gv,
+                p_ma_gv:     gvData.ma_gv,
                 p_truong_id: getRoomTargetSchoolId(cached),
-                p_phong_id: cached.id
+                p_phong_id:  cached.id
             });
             if (!data || data.status !== 'success') throw new Error(data?.message || 'Xóa đề thất bại.');
             alert(`✅ Đã xóa sạch đề thi trong phòng [${maPhong}] thành công!`);
-        } else {
-            alert("❌ Không tìm thấy thông tin phòng thi trên máy chủ.");
+            fetchRadar();
+            return { status: 'success', data };
+        } catch (e) {
+            alert("❌ Lỗi khi xóa đề: " + e.message);
+            return { status: 'error', error: e };
         }
-        fetchRadar();
-    } catch(e) {
-        alert("❌ Lỗi khi xóa đề: " + e.message);
-    } finally {
-        if(btn) { btn.innerText = oldText; btn.disabled = false; }
-    }
+    }, { roomIds: [roomId], customLabels });
 }
 
 async function capNhatNhanhPhong(roomId, field, value) {
@@ -2763,9 +3055,15 @@ async function tuDongKhoaPhongKhiHetGio(roomId) {
     try {
         await rpcDieuKhienPhongThi(roomId, 'THU_BAI', null, null, null, false);
         let r = allRoomsData.find(x => String(x.id) === String(roomId));
-        if(r) r.TrangThai = 'THU_BAI';
+        if (r) r.TrangThai = 'THU_BAI';
+        let actTd = document.getElementById(`td-act-${roomId}`);
+        if (actTd && r) {
+            actTd.innerHTML = renderRadarActionCell(r);
+        }
+        return { status: 'success' };
     } catch (e) {
         console.error("Lỗi tự khóa phòng:", e);
+        return { status: 'error', error: e };
     }
 }
 
@@ -2808,28 +3106,20 @@ function khoiDongDongHoGiaoVien() {
                 let sttTd = document.getElementById(`td-stt-${roomId}`);
                 if(sttTd) sttTd.innerHTML = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>";
 
-                let actTd = document.getElementById(`td-act-${roomId}`);
-                if(actTd) {
-                    let r = allRoomsData.find(x => String(x.id) === String(roomId));
-                    let btnHtml = `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${roomId}', 'MO_PHONG')">Mở lại</button>`;
-                    let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${roomId}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
-                    let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${roomId}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
-                    actTd.innerHTML = `${btnHtml} ${btnXoaDe} ${btnXoa}`;
-                }
-
                 tuDongKhoaPhongKhiHetGio(roomId);
             } else {
                 let m = Math.floor(diff / 60000);
                 let s = Math.floor((diff % 60000) / 1000);
                 timerEl.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 
-                if (diff <= 300000) { 
-                    timerEl.style.color = "#d93025";
+                if (diff < 5 * 60 * 1000) {
+                    timerEl.style.color = "#e67e22";
                 }
             }
         });
     }, 1000);
 }
+
 
 async function fetchRadar() { 
     try {
@@ -2886,8 +3176,8 @@ async function fetchRadar() {
                 <label style="cursor:pointer; font-weight:bold; display:flex; align-items:center; gap:5px; margin-right:15px; color:#27ae60;">
                     <input type="checkbox" id="chkAllRooms" onchange="toggleAllRooms(this.checked)" style="transform: scale(1.3);"> CHỌN TẤT CẢ
                 </label>
-                <button onclick="dieuKhienNhomPhong('MO_PHONG')" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🟢 Mở các phòng đã chọn</button>
-                <button onclick="dieuKhienNhomPhong('THU_BAI')" style="background:#c0392b; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔴 Khóa các phòng đã chọn</button>
+                <button id="roomBatchOpenBtn" class="room-batch-action-btn" onclick="dieuKhienNhomPhong('MO_PHONG')" style="background:#27ae60; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🟢 Mở các phòng đã chọn</button>
+                <button id="roomBatchLockBtn" class="room-batch-action-btn" onclick="dieuKhienNhomPhong('THU_BAI')" style="background:#c0392b; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer; transition:0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">🔴 Khóa các phòng đã chọn</button>
                 <span id="batchActionLog" style="margin-left: 10px; font-style: italic; color: #d35400; font-weight: bold;"></span>
             `;
             containerElement.insertBefore(ctrlBar, tableElement);
@@ -2905,10 +3195,6 @@ async function fetchRadar() {
                 else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>"; 
                 else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bế Điểm</span>"; 
                 else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
-                
-                let btnHtml = (r.TrangThai === "MO_PHONG") ? `<button style="background:#c0392b; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.id}', 'THU_BAI')">Khóa</button>` : `<button style="background:#27ae60; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer;" onclick="dieuKhienFast('${r.id}', 'MO_PHONG')">Mở lại</button>`;
-                let btnXoaDe = `<button style="background:#f39c12; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaDeTrongPhong('${r.id}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>`;
-                let btnXoa = `<button style="background:#7f8c8d; color:white; border:none; padding:5px 8px; border-radius:4px; font-size:12px; cursor:pointer; margin-left:5px;" onclick="xoaPhongHoanToan('${r.id}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>`;
                 
                 let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
 
@@ -2932,7 +3218,7 @@ async function fetchRadar() {
                     timerHtml = `<div class="live-timer" data-room-id="${r.id}" data-start="${r.ThoiGianMo}" data-duration="${durationMin}" style="font-weight:bold; color:#1a73e8; font-variant-numeric: tabular-nums; font-size: 15px;">--:--</div><div style="font-size: 11px; color: #7f8c8d;">/${durationMin}p</div>`;
                 }
 
-                html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${timerHtml}</td><td id="td-stt-${r.id}">${sttHtml}</td><td id="td-act-${r.id}">${btnHtml} ${btnXoaDe} ${btnXoa}</td></tr>`; 
+                html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${timerHtml}</td><td id="td-stt-${r.id}" class="radar-status-cell">${sttHtml}</td><td id="td-act-${r.id}" class="radar-action-cell">${renderRadarActionCell(r)}</td></tr>`;
             }); 
         } 
         document.getElementById('radarBody').innerHTML = html; 
@@ -2946,9 +3232,11 @@ async function fetchRadar() {
         });
 
         khoiDongDongHoGiaoVien();
+        return { status: 'success' };
     } catch (err) {
         console.error("Lỗi tải Radar:", err);
         document.getElementById('radarBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; font-weight:bold;">❌ Lỗi tải dữ liệu phòng thi</td></tr>';
+        return { status: 'error', error: err };
     }
 }
 
@@ -2958,48 +3246,59 @@ function toggleAllRooms(isChecked) {
 }
 
 async function dieuKhienNhomPhong(trangThai) {
+    const actionKey = trangThai === 'MO_PHONG' ? 'batch_open' : 'batch_lock';
     let checkedBoxes = document.querySelectorAll('.chk-Room:checked');
-    if(checkedBoxes.length === 0) return alert("⚠️ Vui lòng tick chọn ít nhất 1 phòng thi ở bảng bên dưới để thao tác!");
+    if (checkedBoxes.length === 0) {
+        alert("⚠️ Vui lòng tick chọn ít nhất 1 phòng thi ở bảng bên dưới để thao tác!");
+        return { status: 'no_selection' };
+    }
 
     let actName = trangThai === 'MO_PHONG' ? 'MỞ CỬA' : 'KHÓA / THU BÀI';
-    if(!confirm(`Xác nhận thực hiện lệnh [ ${actName} ] đồng loạt cho ${checkedBoxes.length} phòng thi đã chọn?`)) return;
+    if (!confirm(`Xác nhận thực hiện lệnh [ ${actName} ] đồng loạt cho ${checkedBoxes.length} phòng thi đã chọn?`)) {
+        return { status: 'cancelled' };
+    }
 
-    let logSpan = document.getElementById('batchActionLog');
-    logSpan.innerText = "⏳ Máy chủ đang xử lý hàng loạt...";
+    const targetRoomIds = Array.from(checkedBoxes).map(cb => cb.value);
 
-    try {
-        let promises = new Array();
+    return runRoomControlAction(actionKey, async () => {
+        setRoomControlActionState(actionKey, 'busy');
+        let logSpan = document.getElementById('batchActionLog');
+        if (logSpan) logSpan.innerText = "⏳ Máy chủ đang xử lý hàng loạt...";
 
-        checkedBoxes.forEach(cb => {
-            let roomId = cb.value;
-            let tr = cb.closest('tr');
-            let selDoiTuong = tr.querySelector('.fast-doituong').value;
+        try {
+            let promises = targetRoomIds.map(roomId => {
+                let cb = document.querySelector(`.chk-Room[value="${roomId}"]`);
+                let tr = cb ? cb.closest('tr') : null;
+                let selDoiTuong = tr ? tr.querySelector('.fast-doituong')?.value : null;
 
-            promises.push(
-                rpcDieuKhienPhongThi(
+                return rpcDieuKhienPhongThi(
                     roomId,
                     trangThai,
                     trangThai === 'MO_PHONG' ? selDoiTuong : null,
                     null,
                     null,
                     trangThai === 'MO_PHONG'
-                )
-            );
-        });
+                );
+            });
 
-        await Promise.all(promises);
+            await Promise.all(promises);
 
-        logSpan.innerText = "✅ Cập nhật thành công toàn bộ!";
-        setTimeout(() => logSpan.innerText = "", 3000);
-        
-        fetchRadar(); 
+            if (logSpan) {
+                logSpan.innerText = "✅ Cập nhật thành công toàn bộ!";
+                setTimeout(() => { if (logSpan) logSpan.innerText = ""; }, 3000);
+            }
 
-    } catch(e) {
-        logSpan.innerText = "❌ Lỗi thực thi!";
-        console.error(e);
-        alert("Lỗi kết nối khi cập nhật đồng loạt: " + e.message);
-    }
+            fetchRadar();
+            return { status: 'success' };
+        } catch (e) {
+            if (logSpan) logSpan.innerText = "❌ Lỗi thực thi!";
+            console.error(e);
+            alert("Lỗi kết nối khi cập nhật đồng loạt: " + e.message);
+            return { status: 'error', error: e };
+        }
+    }, { roomIds: targetRoomIds, manualBusy: true });
 }
+
 
 async function taiDanhSachPhong() {
     let selectBoxTab2 = document.getElementById("ctrlMaPhong"); let selectBoxTab3 = document.getElementById("dashMaPhong");
@@ -3046,11 +3345,13 @@ async function taiDanhSachPhong() {
                 }
             };
         }
+        return { status: 'success' };
     } catch(e) {
         console.error("Lỗi tải DS phòng:", e);
         let errOpt = '<option value="">❌ Lỗi tải DS phòng</option>';
         if(selectBoxTab2) selectBoxTab2.innerHTML = errOpt;
         if(selectBoxTab3) selectBoxTab3.innerHTML = errOpt;
+        return { status: 'error', error: e };
     }
 }
 
