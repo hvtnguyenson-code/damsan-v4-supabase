@@ -789,11 +789,11 @@ async function runAllTests() {
   // E. VERSION / VISUAL / INVARIANTS
   // =======================================================================
 
-  // 25. Teacher exact: 20260903-flex-lite-007
-  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20260903-flex-lite-007');
+  // 25. Teacher exact: 20260903-flex-lite-008
+  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20260903-flex-lite-008');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-007'),
-      'giaovien.html must include giaovien.js?v=20260903-flex-lite-007');
+    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-008'),
+      'giaovien.html must include giaovien.js?v=20260903-flex-lite-008');
     assert(!gvHtmlSource.includes('giaovien.js?v=20260902-flex-lite-004'),
       'giaovien.html must not contain old 20260902-flex-lite-004');
     console.log('  -> PASSED');

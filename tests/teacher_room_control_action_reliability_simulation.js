@@ -338,10 +338,10 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260903-flex-lite-007 in giaovien.html');
+  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260903-flex-lite-008 in giaovien.html');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-007'),
-      'giaovien.html must include giaovien.js?v=20260903-flex-lite-007');
+    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-008'),
+      'giaovien.html must include giaovien.js?v=20260903-flex-lite-008');
     console.log('  -> PASSED');
   }
 
@@ -1258,17 +1258,17 @@ async function runAllTests() {
   // J. INVARIANTS (Tests 59 - 63)
   // =======================================================================
 
-  console.log('Test ROOM-ACT-59: Teacher exact version is 20260903-flex-lite-007 across all test suites');
+  console.log('Test ROOM-ACT-59: Teacher exact version is 20260903-flex-lite-008 across all test suites');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-007'));
+    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-008'));
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('giaovien.js?v=20260903-flex-lite-007'));
+    assert(adminTest.includes('giaovien.js?v=20260903-flex-lite-008'));
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('giaovien.js?v=20260903-flex-lite-007'));
+    assert(cspTest.includes('giaovien.js?v=20260903-flex-lite-008'));
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('giaovien.js?v=20260903-flex-lite-007'));
+    assert(scoreTest.includes('giaovien.js?v=20260903-flex-lite-008'));
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('giaovien.js?v=20260903-flex-lite-007'));
+    assert(dashTest.includes('giaovien.js?v=20260903-flex-lite-008'));
     console.log('  -> PASSED');
   }
 
