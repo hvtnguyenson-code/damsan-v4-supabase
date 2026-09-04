@@ -3229,6 +3229,9 @@ async function dieuKhien(trangThai) {
 
             if (logEl) logEl.innerText = `✅ THÀNH CÔNG!`;
             fetchRadar();
+            if (trangThai === 'THU_BAI') {
+                if (typeof fetchReceiptRoomCounts === 'function') void fetchReceiptRoomCounts(cachedRoom, 'control');
+            }
             return { status: 'success' };
         } catch (e) {
             console.error(e);
@@ -3310,6 +3313,7 @@ async function xoaPhongHoanToan(roomId) {
                 else if (row.parentNode && row.parentNode.removeChild) row.parentNode.removeChild(row);
             }
             allRoomsData = (allRoomsData || []).filter(r => String(r.id) !== String(roomId));
+            if (typeof clearReceiptStatusDisplay === 'function') clearReceiptStatusDisplay();
             let total = document.querySelectorAll ? document.querySelectorAll('.chk-Room').length : 0;
             let checked = document.querySelectorAll ? document.querySelectorAll('.chk-Room:checked').length : 0;
             let chkAll = document.getElementById('chkAllRooms');
@@ -3352,6 +3356,7 @@ async function xoaDeTrongPhong(roomId) {
             });
             if (!data || data.status !== 'success') throw new Error(data?.message || 'Xóa đề thất bại.');
             alert(`✅ Đã xóa sạch đề thi trong phòng [${maPhong}] thành công!`);
+            if (typeof clearReceiptStatusDisplay === 'function') clearReceiptStatusDisplay('control');
             fetchRadar();
             return { status: 'success', data };
         } catch (e) {
@@ -3610,6 +3615,305 @@ async function dieuKhienNhomPhong(trangThai) {
 }
 
 
+
+// ==========================================================
+// SUBMISSION-SAFETY-010C: TEACHER AUTHORITATIVE RECEIPT CHECK
+// ==========================================================
+
+let lastReceiptState = {
+    control: {
+        roomId: null,
+        received: null,
+        graded: null,
+        gradingError: null,
+        denominator: null,
+        checkError: false,
+        updatedAt: null
+    },
+    dashboard: {
+        roomId: null,
+        received: null,
+        graded: null,
+        gradingError: null,
+        denominator: null,
+        checkError: false,
+        updatedAt: null
+    }
+};
+
+let surfaceReqToken = {
+    control: 0,
+    dashboard: 0
+};
+
+const receiptStudentsBySchool = {};
+
+function getRoomEligibleStudentCount(room, rosterInput) {
+    if (!room) return null;
+    const schoolId = room.truong_id;
+
+    let isResolved = false;
+    let pool = [];
+
+    if (rosterInput && typeof rosterInput === 'object' && 'resolved' in rosterInput) {
+        if (!rosterInput.resolved) return null;
+        isResolved = true;
+        pool = Array.isArray(rosterInput.students) ? rosterInput.students : [];
+    } else if (Array.isArray(rosterInput)) {
+        isResolved = true;
+        pool = rosterInput;
+    } else if (schoolId && receiptStudentsBySchool[schoolId] && receiptStudentsBySchool[schoolId].resolved) {
+        isResolved = true;
+        pool = receiptStudentsBySchool[schoolId].students;
+    } else if (Array.isArray(allStudents) && allStudents.length > 0 && allStudents.every(s => s.truong_id && String(s.truong_id) === String(schoolId))) {
+        isResolved = true;
+        pool = allStudents;
+    } else {
+        return null;
+    }
+
+    if (!isResolved) return null;
+
+    let targetPool = pool;
+    if (schoolId) {
+        targetPool = targetPool.filter(s => s.truong_id && String(s.truong_id) === String(schoolId));
+    }
+
+    const doiTuong = (room.DoiTuong || room.doi_tuong || 'TatCa').trim();
+    if (!doiTuong || doiTuong === 'TatCa') {
+        return targetPool.length;
+    }
+
+    const tokens = doiTuong.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    const matched = targetPool.filter(s => {
+        const lop = String(s.Lop || s.lop || '').trim().toLowerCase();
+        const maHs = String(s.MaHS || s.ma_hs || '').trim().toLowerCase();
+        return tokens.includes(lop) || tokens.includes(maHs);
+    });
+    return matched.length;
+}
+
+async function ensureStudentsLoadedForRoom(room) {
+    const schoolId = room?.truong_id;
+    if (!schoolId) return { resolved: false, students: [] };
+    if (receiptStudentsBySchool[schoolId] && receiptStudentsBySchool[schoolId].resolved) {
+        return receiptStudentsBySchool[schoolId];
+    }
+    if (Array.isArray(allStudents) && allStudents.length > 0 && allStudents.every(s => s.truong_id && String(s.truong_id) === String(schoolId))) {
+        receiptStudentsBySchool[schoolId] = { resolved: true, students: allStudents };
+        return receiptStudentsBySchool[schoolId];
+    }
+    try {
+        const { data, error } = await sb.from('hoc_sinh').select('id, truong_id, ma_hs, ho_ten, lop, quyen').eq('truong_id', schoolId);
+        if (!error && Array.isArray(data)) {
+            receiptStudentsBySchool[schoolId] = {
+                resolved: true,
+                students: data.map(d => ({
+                    MaHS: d.ma_hs,
+                    HoTen: d.ho_ten,
+                    Lop: d.lop,
+                    Quyen: d.quyen,
+                    id: d.id,
+                    truong_id: d.truong_id
+                }))
+            };
+            return receiptStudentsBySchool[schoolId];
+        }
+    } catch (e) {
+        console.warn('Cannot preload students for receipt denominator:', e?.message);
+    }
+    return { resolved: false, students: [] };
+}
+
+function clearReceiptStatusDisplay(surface) {
+    const surfaces = (surface === 'control' || surface === 'dashboard') ? [surface] : ['control', 'dashboard'];
+    surfaces.forEach(s => {
+        surfaceReqToken[s]++;
+        lastReceiptState[s] = {
+            roomId: null,
+            received: null,
+            graded: null,
+            gradingError: null,
+            denominator: null,
+            checkError: false,
+            updatedAt: null
+        };
+        if (s === 'control') {
+            const box = document.getElementById('roomReceiptStatusCard');
+            const content = document.getElementById('receiptStatusContent');
+            if (box) box.style.display = 'none';
+            if (content) content.innerHTML = '';
+        } else if (s === 'dashboard') {
+            const dashBox = document.getElementById('dashReceiptStatusCard');
+            const dashContent = document.getElementById('dashReceiptStatusContent');
+            if (dashBox) dashBox.style.display = 'none';
+            if (dashContent) dashContent.innerHTML = '';
+        }
+    });
+}
+
+function renderReceiptStatusContent(state, room, surface = 'control', isError = false, isLoading = false) {
+    const isCtrl = (surface === 'control');
+    const box = document.getElementById(isCtrl ? 'roomReceiptStatusCard' : 'dashReceiptStatusCard');
+    const content = document.getElementById(isCtrl ? 'receiptStatusContent' : 'dashReceiptStatusContent');
+
+    if (!box || !content) return;
+
+    if (!room) {
+        box.style.display = 'none';
+        content.innerHTML = '';
+        return;
+    }
+
+    box.style.display = 'block';
+
+    if (isLoading) {
+        content.innerHTML = '<div style="color: #64748b;">⏳ Đang kiểm tra trạng thái nhận bài từ máy chủ...</div>';
+        return;
+    }
+
+    let html = '';
+
+    if (isError || state?.checkError) {
+        html += '<div style="color: #dc2626; font-weight: bold; margin-bottom: 8px;">⚠️ Chưa kiểm tra được trạng thái máy chủ.</div>';
+    }
+
+    if (state && state.received !== null) {
+        const rec = state.received;
+        const gra = state.graded;
+        const err = state.gradingError;
+        const Y = state.denominator;
+
+        const recStr = (Y !== null && typeof Y === 'number') ? `${rec} / ${Y}` : `${rec}`;
+        const graStr = (Y !== null && typeof Y === 'number') ? `${gra} / ${Y}` : `${gra}`;
+
+        html += '<div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 8px;">';
+        html += '<div><strong>Máy chủ đã nhận:</strong> <span style="font-weight: bold; color: #1e293b;">' + recStr + '</span></div>';
+        html += '<div><strong>Đã chấm:</strong> <span style="font-weight: bold; color: #1e293b;">' + graStr + '</span></div>';
+        if (err > 0) {
+            html += '<div style="color: #b91c1c; font-weight: bold;">⚠️ Lỗi chấm: ' + err + '</div>';
+        }
+        html += '</div>';
+
+        if (Y !== null && typeof Y === 'number' && Y > 0) {
+            if (rec >= Y) {
+                html += '<div style="color: #15803d; font-weight: bold;">✅ Đã nhận đủ bài của lớp.</div>';
+            } else {
+                const missing = Y - rec;
+                html += '<div style="color: #d97706; font-weight: bold;">⏳ Còn thiếu ' + missing + ' bài chưa được máy chủ xác nhận.</div>';
+            }
+        } else if (Y === null || typeof Y !== 'number') {
+            html += '<div style="color: #64748b; font-size: 13px;">ℹ️ Chưa xác định được sĩ số áp dụng cho phòng này.</div>';
+        }
+
+        if (rec > gra) {
+            const pendingGrading = rec - gra;
+            html += '<div style="color: #475569; font-size: 13px; margin-top: 4px;">ℹ️ Có ' + pendingGrading + ' bài đã nhận an toàn trên máy chủ, đang chờ hoàn tất chấm.</div>';
+        }
+    } else if (!isError) {
+        html += '<div style="color: #64748b;">Chưa có dữ liệu bài làm trên máy chủ.</div>';
+    }
+
+    content.innerHTML = html;
+}
+
+async function fetchReceiptRoomCounts(roomOrId, surface = 'control', isManual = false) {
+    const validSurface = (surface === 'dashboard') ? 'dashboard' : 'control';
+    const room = typeof roomOrId === 'object' && roomOrId !== null
+        ? roomOrId
+        : (allRoomsData || []).find(r => String(r.id) === String(roomOrId));
+
+    if (!room || !room.id) {
+        clearReceiptStatusDisplay(validSurface);
+        return { status: 'no_room' };
+    }
+
+    const roomId = room.id;
+    const token = ++surfaceReqToken[validSurface];
+
+    if (lastReceiptState[validSurface].roomId !== roomId) {
+        lastReceiptState[validSurface] = {
+            roomId: roomId,
+            received: null,
+            graded: null,
+            gradingError: null,
+            denominator: null,
+            checkError: false,
+            updatedAt: null
+        };
+        renderReceiptStatusContent(null, room, validSurface, false, true);
+    }
+
+    try {
+        const rosterRes = await ensureStudentsLoadedForRoom(room);
+        const denominator = getRoomEligibleStudentCount(room, rosterRes);
+
+        const { data, error } = await sb.rpc('rpc_submission_room_counts', { p_phong_id: roomId });
+
+        if (token !== surfaceReqToken[validSurface]) {
+            return { status: 'stale', roomId: roomId };
+        }
+        const activeSelId = (validSurface === 'control') ? 'ctrlMaPhong' : 'dashMaPhong';
+        const activeRoom = getSelectedRoom(activeSelId);
+        if (activeRoom && String(activeRoom.id) !== String(roomId)) {
+            return { status: 'stale', roomId: roomId };
+        }
+
+        if (error) throw error;
+
+        const counts = {
+            received: typeof data?.received === 'number' ? data.received : 0,
+            graded: typeof data?.graded === 'number' ? data.graded : 0,
+            gradingError: typeof data?.grading_error === 'number' ? data.grading_error : 0
+        };
+
+        lastReceiptState[validSurface] = {
+            roomId: roomId,
+            received: counts.received,
+            graded: counts.graded,
+            gradingError: counts.gradingError,
+            denominator: denominator,
+            checkError: false,
+            updatedAt: new Date()
+        };
+
+        renderReceiptStatusContent(lastReceiptState[validSurface], room, validSurface);
+        return { status: 'success', data: lastReceiptState[validSurface] };
+    } catch (err) {
+        if (token !== surfaceReqToken[validSurface]) {
+            return { status: 'stale', error: err };
+        }
+        const activeSelId = (validSurface === 'control') ? 'ctrlMaPhong' : 'dashMaPhong';
+        const activeRoom = getSelectedRoom(activeSelId);
+        if (activeRoom && String(activeRoom.id) !== String(roomId)) {
+            return { status: 'stale', error: err };
+        }
+
+        console.warn('rpc_submission_room_counts error:', err?.message);
+        lastReceiptState[validSurface].checkError = true;
+        renderReceiptStatusContent(lastReceiptState[validSurface], room, validSurface, true);
+        return { status: 'error', error: err };
+    }
+}
+
+async function refreshReceiptCountsManually(surface = 'control') {
+    const validSurface = (surface === 'dashboard') ? 'dashboard' : 'control';
+    const selId = (validSurface === 'control') ? 'ctrlMaPhong' : 'dashMaPhong';
+    const currentRoom = getSelectedRoom(selId);
+    if (!currentRoom) return { status: 'no_room' };
+    return fetchReceiptRoomCounts(currentRoom, validSurface, true);
+}
+
+if (typeof window !== 'undefined') {
+    window.fetchReceiptRoomCounts = fetchReceiptRoomCounts;
+    window.refreshReceiptCountsManually = refreshReceiptCountsManually;
+    window.clearReceiptStatusDisplay = clearReceiptStatusDisplay;
+    window.getRoomEligibleStudentCount = getRoomEligibleStudentCount;
+    window.ensureStudentsLoadedForRoom = ensureStudentsLoadedForRoom;
+    window.lastReceiptState = lastReceiptState;
+    window.receiptStudentsBySchool = receiptStudentsBySchool;
+}
+
 async function taiDanhSachPhong() {
     let selectBoxTab2 = document.getElementById("ctrlMaPhong"); let selectBoxTab3 = document.getElementById("dashMaPhong");
     if(selectBoxTab2) selectBoxTab2.innerHTML = '<option value="">⏳ Đang tải danh sách phòng...</option>';
@@ -3652,6 +3956,9 @@ async function taiDanhSachPhong() {
                         let sel = document.getElementById('ctrlDoiTuong');
                         if(sel) sel.value = r.DoiTuong || "TatCa";
                     }, 150);
+                    if (typeof fetchReceiptRoomCounts === 'function') void fetchReceiptRoomCounts(r, 'control');
+                } else {
+                    if (typeof clearReceiptStatusDisplay === 'function') clearReceiptStatusDisplay('control');
                 }
             };
         }
@@ -3824,7 +4131,13 @@ async function fetchDashboard(isAuto = false) {
         if (sInput && !isAuto) sInput.value = '';
 
         const currentRoom = getSelectedRoom('dashMaPhong');
-        if(!currentRoom) return { status: 'no_room' };
+        if(!currentRoom) {
+            if (typeof clearReceiptStatusDisplay === 'function') clearReceiptStatusDisplay('dashboard');
+            return { status: 'no_room' };
+        }
+        if (!isAuto && typeof fetchReceiptRoomCounts === 'function') {
+            void fetchReceiptRoomCounts(currentRoom, 'dashboard');
+        }
         if(!isAuto) document.getElementById('dashBody').innerHTML = '<tr><td colspan="10">⏳ Đang tải dữ liệu...</td></tr>';
         
         let pArr = new Array();
@@ -3903,6 +4216,7 @@ async function xoaDiemPhong() {
             return { status: 'error', error: data?.message };
         }
         alert(`✅ Đã reset phòng: xóa ${data.ket_qua_deleted || 0} kết quả và ${data.submissions_deleted || 0} receipt bài làm.`);
+        if (typeof clearReceiptStatusDisplay === 'function') clearReceiptStatusDisplay('dashboard');
         taiDanhSachPhong();
         fetchDashboard();
         return { status: 'success', data };
@@ -3932,6 +4246,7 @@ async function khoiPhucChamDiemPhong() {
         }
         alert(`✅ Đã xử lý ${data.attempted || 0} bài chờ: ${data.graded || 0} thành công, ${data.failed || 0} cần kiểm tra thêm.`);
         fetchDashboard(true);
+        if (typeof fetchReceiptRoomCounts === 'function') void fetchReceiptRoomCounts(currentRoom, 'dashboard');
         return { status: 'success', data };
     });
 }
