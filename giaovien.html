@@ -222,11 +222,21 @@
         .room-action-btn, .room-batch-action-btn {
             transition: 0.2s ease;
         }
-        .room-action-btn:disabled, .room-batch-action-btn:disabled, .radar-action-btn:disabled {
+        .room-action-btn:disabled, .room-batch-action-btn:disabled {
             cursor: not-allowed;
             opacity: 0.75;
             transform: none !important;
             box-shadow: none !important;
+        }
+        .radar-action-btn:disabled {
+            cursor: not-allowed;
+            opacity: 1 !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+        #radarBody tr, #radarBody td {
+            transition: none !important;
+            animation: none !important;
         }
         .radar-status-cell {
             white-space: nowrap;
@@ -259,24 +269,35 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            transition: 0.2s ease;
+            transition: none !important;
+            animation: none !important;
+            transform: none !important;
+            user-select: none;
         }
         .radar-action-btn:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+            transform: none !important;
+            box-shadow: none !important;
             filter: brightness(1.08);
         }
         .radar-action-open {
             background: #27ae60;
+            min-width: 64px;
+            text-align: center;
         }
         .radar-action-lock {
             background: #c0392b;
+            min-width: 64px;
+            text-align: center;
         }
         .radar-action-delete-exam {
             background: #f39c12;
+            min-width: 68px;
+            text-align: center;
         }
         .radar-action-delete-all {
             background: #c0392b;
+            min-width: 72px;
+            text-align: center;
         }
         @media (max-width: 720px) {
             .radar-action-group {
@@ -881,6 +902,6 @@
             }
         }
     </script>
-    <script src="giaovien.js?v=20260903-flex-lite-008"></script>
+    <script src="giaovien.js?v=20260903-flex-lite-009"></script>
 </body>
 </html>

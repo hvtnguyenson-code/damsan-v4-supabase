@@ -338,10 +338,10 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260903-flex-lite-008 in giaovien.html');
+  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260903-flex-lite-009 in giaovien.html');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-008'),
-      'giaovien.html must include giaovien.js?v=20260903-flex-lite-008');
+    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-009'),
+      'giaovien.html must include giaovien.js?v=20260903-flex-lite-009');
     console.log('  -> PASSED');
   }
 
@@ -1258,17 +1258,17 @@ async function runAllTests() {
   // J. INVARIANTS (Tests 59 - 63)
   // =======================================================================
 
-  console.log('Test ROOM-ACT-59: Teacher exact version is 20260903-flex-lite-008 across all test suites');
+  console.log('Test ROOM-ACT-59: Teacher exact version is 20260903-flex-lite-009 across all test suites');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-008'));
+    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-009'));
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('giaovien.js?v=20260903-flex-lite-008'));
+    assert(adminTest.includes('giaovien.js?v=20260903-flex-lite-009'));
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('giaovien.js?v=20260903-flex-lite-008'));
+    assert(cspTest.includes('giaovien.js?v=20260903-flex-lite-009'));
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('giaovien.js?v=20260903-flex-lite-008'));
+    assert(scoreTest.includes('giaovien.js?v=20260903-flex-lite-009'));
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('giaovien.js?v=20260903-flex-lite-008'));
+    assert(dashTest.includes('giaovien.js?v=20260903-flex-lite-009'));
     console.log('  -> PASSED');
   }
 
@@ -1328,7 +1328,7 @@ async function runAllTests() {
 
     const pAction = sandbox.dieuKhienFast('room-race-1', 'THU_BAI');
     await pAction;
-    assert.strictEqual(oldBtn.innerText, '✅ Đã khóa', 'Old button showed success feedback');
+    assert.strictEqual(oldBtn.innerText, 'Mở lại', 'Button toggled directly to "Mở lại" without transient success feedback');
 
     // Radar replaces button with new post-lock state
     const newBtn = {
@@ -1374,7 +1374,7 @@ async function runAllTests() {
 
     const pAction = sandbox.dieuKhienFast('room-race-2', 'MO_PHONG');
     await pAction;
-    assert.strictEqual(oldBtn.innerText, '✅ Đã mở', 'Old button showed success feedback');
+    assert.strictEqual(oldBtn.innerText, 'Khóa', 'Button toggled directly to "Khóa" without transient success feedback');
 
     // Radar replaces button with new post-open state
     const newBtn = {
