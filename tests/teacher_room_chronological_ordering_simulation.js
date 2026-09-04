@@ -18,8 +18,8 @@ const vm = require('vm');
 const assert = require('assert');
 
 const repoRoot = path.resolve(__dirname, '..');
-const migrationPath = path.join(repoRoot, 'supabase/migrations/20260903080001_teacher_room_chronological_ordering.sql');
-const roomControlMigrationPath = path.join(repoRoot, 'supabase/migrations/20260829000002_admin_control_plane.sql');
+const migrationPath = path.join(repoRoot, 'supabase/migrations/20260903161156_teacher_room_chronological_ordering.sql');
+const roomControlMigrationPath = path.join(repoRoot, 'supabase/migrations/20260829113750_admin_control_plane.sql');
 const gvJsPath = path.join(repoRoot, 'giaovien.js');
 const gvHtmlPath = path.join(repoRoot, 'giaovien.html');
 const hsHtmlPath = path.join(repoRoot, 'hoc_sinh.html');

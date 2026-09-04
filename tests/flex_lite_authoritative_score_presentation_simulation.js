@@ -477,8 +477,8 @@ console.log('Test SCORE-UI-18: Zero double-normalization code remains in client 
 // -------------------------------------------------------------------------
 console.log('Test SCORE-UI-19: Server Room List RPC metadata contract in migration');
 {
-    const migPath = path.join(__dirname, '..', 'supabase', 'migrations', '20260902070001_flex_lite_room_scoring_metadata_read.sql');
-    assert(fs.existsSync(migPath), 'SCORE-UI-19: Migration 20260902070001_flex_lite_room_scoring_metadata_read.sql must exist');
+    const migPath = path.join(__dirname, '..', 'supabase', 'migrations', '20260902135056_flex_lite_room_scoring_metadata_read.sql');
+    assert(fs.existsSync(migPath), 'SCORE-UI-19: Migration 20260902135056_flex_lite_room_scoring_metadata_read.sql must exist');
     const migSql = fs.readFileSync(migPath, 'utf8');
 
     assert(migSql.includes('public.rpc_lay_danh_sach_phong_thi_gv'), 'SCORE-UI-19: Defines rpc_lay_danh_sach_phong_thi_gv');

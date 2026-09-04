@@ -1433,7 +1433,7 @@ assert(migration01.includes('for share') && migration01.includes('for update'));
 assert(migration01.includes('references public.phong_thi(id) on delete cascade'));
 assert(migration01.includes('rpc_submission_receipt_status(\n  p_attempt_id uuid,\n  p_truong_id uuid,\n  p_phong_id uuid,\n  p_room_opened_at bigint') && migration01.includes("'reset_confirmed', false"));
 
-const migration03 = fs.readFileSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql', 'utf8').replace(/\r\n/g, '\n');
+const migration03 = fs.readFileSync('supabase/migrations/20260829155050_student_recovery_lifecycle_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(migration03.includes('create or replace function public.rpc_reset_room_results'));
 assert(migration03.includes("set trang_thai = 'CHO_THI', thoi_gian_mo = null"));
 
@@ -1441,7 +1441,7 @@ assert(migration03.includes("set trang_thai = 'CHO_THI', thoi_gian_mo = null"));
 // P0-007: STUDENT RESULT/PUBLICATION STATUS & SESSION HARDENING SUITE (R63 - R114)
 // =========================================================================
 
-const migContent = fs.readFileSync('supabase/migrations/20260830000001_student_result_publication_status_p0.sql', 'utf8');
+const migContent = fs.readFileSync('supabase/migrations/20260830133021_student_result_publication_status_p0.sql', 'utf8');
 const hsCode = fs.readFileSync('hoc_sinh.js', 'utf8');
 const gvCode = fs.readFileSync('giaovien.js', 'utf8');
 
@@ -1894,7 +1894,7 @@ recordR('R114');
 // P0-008A: SECURE TOKEN-BOUND STUDENT RPC SUITE (R115 - R137)
 // =========================================================================
 
-const mig008Content = fs.readFileSync('supabase/migrations/20260830000002_student_rpc_token_binding_p0_008a.sql', 'utf8');
+const mig008Content = fs.readFileSync('supabase/migrations/20260830144503_student_rpc_token_binding_p0_008a.sql', 'utf8');
 
 // R115: secure receive requires valid student token
 assert(mig008Content.includes("create or replace function public.rpc_hoc_sinh_receive_submission"), "R115: secure receive defined");
@@ -2187,7 +2187,7 @@ recordR('R137');
 const hsJs008b = fs.readFileSync('hoc_sinh.js', 'utf8');
 const swJs008b = fs.readFileSync('sw.js', 'utf8');
 const hsHtml008b = fs.readFileSync('hoc_sinh.html', 'utf8');
-const mig008bContent = fs.readFileSync('supabase/migrations/20260830000003_student_rpc_cutover_p0_008b.sql', 'utf8');
+const mig008bContent = fs.readFileSync('supabase/migrations/20260830160008_student_rpc_cutover_p0_008b.sql', 'utf8');
 
 // R138: hoc_sinh.js uses rpc_hoc_sinh_receive_submission
 assert(hsJs008b.includes("_supabase.rpc('rpc_hoc_sinh_receive_submission'"), "R138: hoc_sinh.js calls rpc_hoc_sinh_receive_submission");

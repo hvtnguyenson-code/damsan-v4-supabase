@@ -3,7 +3,7 @@ const assert = require('assert');
 const fs = require('fs');
 
 const client = fs.readFileSync('hoc_sinh.js', 'utf8');
-const migration = fs.readFileSync('supabase/migrations/20260829000001_student_password_change_rpc.sql', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/20260829031032_student_password_change_rpc.sql', 'utf8');
 
 const changeFunction = client.match(/async function capNhatMatKhau\(\) \{([\s\S]*?)\n\}/);
 assert(changeFunction, 'password change function must exist');
