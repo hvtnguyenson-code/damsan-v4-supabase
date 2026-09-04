@@ -674,10 +674,10 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
 // -------------------------------------------------------------------------
 (async () => {
     console.log('Test SESSION-RESULT-15: Version synchronization across hoc_sinh.js, sw.js, hoc_sinh.html');
-    const expectedVersion = '20260902-flex-lite-005';
-    assert(hsJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: hoc_sinh.js VERSION is 20260902-flex-lite-005');
-    assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20260902-flex-lite-005');
-    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20260902-flex-lite-005');
+    const expectedVersion = '20260904-submission-safety-010a';
+    assert(hsJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: hoc_sinh.js VERSION is 20260904-submission-safety-010a');
+    assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20260904-submission-safety-010a');
+    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20260904-submission-safety-010a');
     console.log('  -> PASSED');
 })()).then(() =>
 
@@ -1089,8 +1089,8 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
     assert(env.document.getElementById('result-section').classList.contains('active'), 'SESSION-RESULT-23: result-section activated after valid re-login recovery');
     assert.strictEqual(
         vm.runInContext('postReceiptLifecyclePollTimer !== null', env),
-        true,
-        'SESSION-RESULT-23: post-receipt lifecycle watcher restarted'
+        false,
+        'SESSION-RESULT-23: post-receipt lifecycle watcher quiet (010A quiescence)'
     );
 
     // 5. Clean up resources created during this test
