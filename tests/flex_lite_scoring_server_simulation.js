@@ -1,9 +1,9 @@
 // Deterministic simulation & static verification for FLEX-LITE server scoring foundation.
-// Validates supabase/migrations/20260901000001_flex_lite_scoring_foundation.sql. No network.
+// Validates supabase/migrations/20260902050404_flex_lite_scoring_foundation.sql. No network.
 const assert = require('assert');
 const fs = require('fs');
 
-const migrationPath = 'supabase/migrations/20260901000001_flex_lite_scoring_foundation.sql';
+const migrationPath = 'supabase/migrations/20260902050404_flex_lite_scoring_foundation.sql';
 assert(fs.existsSync(migrationPath), `Migration file not found: ${migrationPath}`);
 const migrationSql = fs.readFileSync(migrationPath, 'utf8');
 

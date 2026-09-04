@@ -1,7 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
-const migration = fs.readFileSync('supabase/migrations/20260829000002_admin_control_plane.sql', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/20260829113750_admin_control_plane.sql', 'utf8');
 const mustMatch = (pattern, label) => assert(pattern.test(migration), label);
 
 // S1-S2: a hashed-token-only session table is present.
@@ -288,14 +288,14 @@ for (let i = 104; i <= 121; i += 1) {
 const s06Coverage = {};
 const recordS06 = (id) => { s06Coverage[id] = true; };
 
-// S122: Forward migration 20260829000003_student_recovery_lifecycle_p0.sql exists and is non-empty
-assert(fs.existsSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql'), 'S122 migration 00003 must exist');
-const migration00003 = fs.readFileSync('supabase/migrations/20260829000003_student_recovery_lifecycle_p0.sql', 'utf8');
+// S122: Forward migration 20260829155050_student_recovery_lifecycle_p0.sql exists and is non-empty
+assert(fs.existsSync('supabase/migrations/20260829155050_student_recovery_lifecycle_p0.sql'), 'S122 migration 00003 must exist');
+const migration00003 = fs.readFileSync('supabase/migrations/20260829155050_student_recovery_lifecycle_p0.sql', 'utf8');
 assert(migration00003.length > 100, 'S122 migration 00003 must not be empty');
 recordS06('S122');
 
-// S123: Migration 00002 is untouched and retains its integrity
-assert(fs.existsSync('supabase/migrations/20260829000002_admin_control_plane.sql'), 'S123 migration 00002 exists');
+// S123: Migration 20260829113750 is untouched and retains its integrity
+assert(fs.existsSync('supabase/migrations/20260829113750_admin_control_plane.sql'), 'S123 migration 00002 exists');
 assert(migration.includes('rpc_admin_control'), 'S123 migration 00002 retains rpc_admin_control');
 recordS06('S123');
 

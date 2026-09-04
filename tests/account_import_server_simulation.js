@@ -2,8 +2,8 @@ const assert = require('assert');
 const fs = require('fs');
 const childProcess = require('child_process');
 
-const migrationPath = 'supabase/migrations/20260831000001_account_import_safety.sql';
-assert(fs.existsSync(migrationPath), 'Migration file 20260831000001_account_import_safety.sql must exist');
+const migrationPath = 'supabase/migrations/20260831081352_account_import_safety.sql';
+assert(fs.existsSync(migrationPath), 'Migration file 20260831081352_account_import_safety.sql must exist');
 const migration = fs.readFileSync(migrationPath, 'utf8');
 
 // ==========================================================

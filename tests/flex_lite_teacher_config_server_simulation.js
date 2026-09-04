@@ -1,9 +1,9 @@
 // Deterministic static verification & server simulation for Task002 SQL migration.
-// Validates supabase/migrations/20260902060001_flex_lite_teacher_config_overwrite_safety.sql.
+// Validates supabase/migrations/20260902104109_flex_lite_teacher_config_overwrite_safety.sql.
 const assert = require('assert');
 const fs = require('fs');
 
-const migrationPath = 'supabase/migrations/20260902060001_flex_lite_teacher_config_overwrite_safety.sql';
+const migrationPath = 'supabase/migrations/20260902104109_flex_lite_teacher_config_overwrite_safety.sql';
 assert(fs.existsSync(migrationPath), `Missing ${migrationPath}`);
 const sql = fs.readFileSync(migrationPath, 'utf8');
 
