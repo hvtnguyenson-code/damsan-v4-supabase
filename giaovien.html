@@ -645,6 +645,14 @@
                             <button id="roomPreviewBtn" class="room-action-btn" style="background: #f39c12;" onclick="xemTruocDeThi()">🔍 Xem trước Đề trong phòng</button>
                         </div>
                         <p id="ctrlLog" style="margin-top: 15px; font-weight: bold; color: #1a73e8; text-align: center; font-size: 16px;"></p>
+                        <!-- SUBMISSION-SAFETY-010C: Authoritative Server Receipt Check -->
+                        <div id="roomReceiptStatusCard" style="display: none; margin-top: 15px; padding: 15px; border-radius: 8px; background: #f8fafc; border: 1px solid #cbd5e1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                                <span style="font-weight: bold; color: #1e293b; font-size: 15px;">📥 Trạng thái nhận bài (Máy chủ)</span>
+                                <button id="btnRefreshReceiptCounts" type="button" class="room-action-btn" onclick="refreshReceiptCountsManually('control')" style="padding: 6px 14px; font-size: 13px; background: #1a73e8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; min-width: auto;">🔄 Làm mới trạng thái</button>
+                            </div>
+                            <div id="receiptStatusContent" style="font-size: 14px; line-height: 1.6; color: #334155;"></div>
+                        </div>
 
                         <div style="margin-top: 30px; border-top: 2px dashed #ccc; padding-top: 20px;">
                             <h3 style="color: #2c3e50; text-align:center;">📡 Radar Tình Trạng Các Phòng</h3>
@@ -674,6 +682,14 @@
                             <button id="dashRegradeBtn" class="dashboard-action-btn" style="background: #6c5ce7;" onclick="khoiPhucChamDiemPhong()">🛠️ Chấm lại bài đang chờ</button>
                             <button id="dashExportBtn" class="dashboard-action-btn" style="background: #16a085;" onclick="xuatExcel()">📥 Tải Excel</button>
                             <button id="dashDeleteResultsBtn" class="dashboard-action-btn" style="background: #c0392b;" onclick="xoaDiemPhong()">🗑️ Xóa điểm phòng này</button>
+                        </div>
+                        <!-- SUBMISSION-SAFETY-010C: Authoritative Server Receipt Check (Dashboard) -->
+                        <div id="dashReceiptStatusCard" style="display: none; margin-top: 15px; padding: 15px; border-radius: 8px; background: #f8fafc; border: 1px solid #cbd5e1;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                                <span style="font-weight: bold; color: #1e293b; font-size: 15px;">📥 Trạng thái nhận bài (Máy chủ)</span>
+                                <button id="btnRefreshDashReceiptCounts" type="button" class="dashboard-action-btn" onclick="refreshReceiptCountsManually('dashboard')" style="padding: 6px 14px; font-size: 13px; background: #1a73e8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: auto; margin: 0;">🔄 Làm mới trạng thái</button>
+                            </div>
+                            <div id="dashReceiptStatusContent" style="font-size: 14px; line-height: 1.6; color: #334155;"></div>
                         </div>
                         
                         <div id="analyticDashboard" style="display:none; margin-top: 20px;">
