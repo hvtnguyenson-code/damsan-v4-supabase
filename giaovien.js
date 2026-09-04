@@ -3377,10 +3377,6 @@ async function tuDongKhoaPhongKhiHetGio(roomId) {
             r.TrangThai = 'THU_BAI';
             syncRadarRoomRowDom(r);
         }
-        let actTd = document.getElementById(`td-act-${roomId}`);
-        if (actTd && r) {
-            actTd.innerHTML = renderRadarActionCell(r);
-        }
         return { status: 'success' };
     } catch (e) {
         console.error("Lỗi tự khóa phòng:", e);

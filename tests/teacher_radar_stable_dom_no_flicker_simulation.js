@@ -44,7 +44,8 @@ function createHarness(options = {}) {
   const metrics = {
     rpcCalls: [],
     alerts: [],
-    confirms: []
+    confirms: [],
+    innerHTMLWrites: []
   };
 
   function createMockElement(id, tagName = 'div') {
@@ -74,6 +75,8 @@ function createHarness(options = {}) {
 
       get innerHTML() { return _innerHTML; },
       set innerHTML(html) {
+        this.innerHTMLWriteCount = (this.innerHTMLWriteCount || 0) + 1;
+        metrics.innerHTMLWrites.push({ id: this.id, tagName: this.tagName, length: (html || '').length });
         _innerHTML = String(html || '');
         this.children.length = 0;
         if (!_innerHTML) return;
@@ -93,7 +96,8 @@ function createHarness(options = {}) {
 
           if (idMatch) {
             const childId = idMatch[1];
-            const childEl = elements[childId] || createMockElement(childId, tName);
+            // True browser behavior (Section 6): innerHTML destroys and recreates descendants
+            const childEl = createMockElement(childId, tName);
             elements[childId] = childEl;
 
             if (clsMatch) {
@@ -203,6 +207,11 @@ function createHarness(options = {}) {
             if (elements[k].classList && elements[k].classList.contains(cls)) return elements[k];
           }
         }
+        if (sel.includes('[id^="radar-row-"]') || sel.includes("tr[id^='radar-row-']")) {
+          for (const child of children) {
+            if (child.tagName === 'TR' && child.id && child.id.startsWith('radar-row-')) return child;
+          }
+        }
         return null;
       },
 
@@ -259,6 +268,8 @@ function createHarness(options = {}) {
   const radarBody = createMockElement('radarBody', 'tbody');
   elements['radarBody'] = radarBody;
   elements['chkAllRooms'] = createMockElement('chkAllRooms', 'input');
+  elements['ctrlMaPhong'] = createMockElement('ctrlMaPhong', 'select');
+  elements['ctrlLog'] = createMockElement('ctrlLog', 'div');
 
   const sandbox = {
     console,
@@ -356,7 +367,7 @@ function createHarness(options = {}) {
       }
       return { status: 'success', data: {} };
     },
-    getSelectedRoom: () => defaultRoom,
+    getSelectedRoom: (selId) => (selId && elements[selId]?.value ? allRooms.find(r => String(r.id) === String(elements[selId].value)) : null) || allRooms[0] || defaultRoom,
     getRoomTargetSchoolId: (room) => room?.truong_id || 'school-uuid-1',
     gvData: { ma_gv: 'GV001', truong_id: 'school-uuid-1', quyen: 'GiaoVien' },
     allRoomsData: allRooms,
@@ -796,20 +807,48 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-30: tuDongKhoaPhongKhiHetGio sets status to THU_BAI in allRoomsData and DOM');
+  console.log('Test STABLE-30: tuDongKhoaPhongKhiHetGio preserves exact DOM object identity and mutates in place');
   {
     const room = { id: 'room-al-1', MaPhong: 'AL1', TrangThai: 'MO_PHONG', ThoiGian: 45 };
     const { sandbox, elements } = createHarness({ allRooms: [room] });
 
     sandbox.reconcileRadarRooms([room]);
-    const btn = elements['roomQuickStateBtn-room-al-1'];
-    assert.strictEqual(btn.textContent, 'Khóa');
+    const rowBefore = elements['radar-row-room-al-1'];
+    const actionTdBefore = elements['td-act-room-al-1'];
+    const quickBefore = elements['roomQuickStateBtn-room-al-1'];
+    const deleteExamBefore = elements['roomDeleteExamBtn-room-al-1'];
+    const deleteAllBefore = elements['roomDeleteAllBtn-room-al-1'];
+
+    assert(rowBefore, 'rowBefore must exist');
+    assert(actionTdBefore, 'actionTdBefore must exist');
+    assert(quickBefore, 'quickBefore must exist');
+    assert(deleteExamBefore, 'deleteExamBefore must exist');
+    assert(deleteAllBefore, 'deleteAllBefore must exist');
+    assert.strictEqual(quickBefore.textContent, 'Khóa');
+
+    // Reset write counts after initial setup
+    actionTdBefore.innerHTMLWriteCount = 0;
+    rowBefore.innerHTMLWriteCount = 0;
 
     await sandbox.tuDongKhoaPhongKhiHetGio('room-al-1');
 
+    const rowAfter = elements['radar-row-room-al-1'];
+    const actionTdAfter = elements['td-act-room-al-1'];
+    const quickAfter = elements['roomQuickStateBtn-room-al-1'];
+    const deleteExamAfter = elements['roomDeleteExamBtn-room-al-1'];
+    const deleteAllAfter = elements['roomDeleteAllBtn-room-al-1'];
+
     assert.strictEqual(room.TrangThai, 'THU_BAI');
-    assert.strictEqual(btn.textContent, 'Mở lại');
-    assert.strictEqual(btn.classList.contains('radar-action-open'), true);
+    assert.strictEqual(rowAfter, rowBefore, 'Row DOM identity must be preserved across auto-lock');
+    assert.strictEqual(actionTdAfter, actionTdBefore, 'Action TD DOM identity must be preserved across auto-lock');
+    assert.strictEqual(quickAfter, quickBefore, 'Quick button DOM identity must be preserved across auto-lock');
+    assert.strictEqual(deleteExamAfter, deleteExamBefore, 'Delete exam button DOM identity must be preserved across auto-lock');
+    assert.strictEqual(deleteAllAfter, deleteAllBefore, 'Delete all button DOM identity must be preserved across auto-lock');
+
+    assert.strictEqual(quickBefore.textContent, 'Mở lại');
+    assert.strictEqual(quickBefore.classList.contains('radar-action-open'), true);
+    assert.strictEqual(actionTdBefore.innerHTMLWriteCount, 0, 'No td-act innerHTML write allowed during auto-lock');
+    assert.strictEqual(rowBefore.innerHTMLWriteCount, 0, 'No row innerHTML write allowed during auto-lock');
     console.log('  -> PASSED');
   }
 
@@ -892,16 +931,343 @@ async function runAllTests() {
   }
 
   // =======================================================================
-  // PART E: VERSION INVARIANTS & INTEGRATION (Tests 35 - 40)
+  // PART E: INNERHTML WRITE INSTRUMENTATION (Section 7)
   // =======================================================================
 
-  console.log('Test STABLE-35: giaovien.html loads giaovien.js?v=20260903-flex-lite-009');
+  console.log('Test STABLE-35: Zero innerHTML writes on quick open & quick lock');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-009'), 'Must load 009');
+    const room = { id: 'r-inst-1', MaPhong: 'RI1', TrangThai: 'THU_BAI', ThoiGian: 45 };
+    const { sandbox, elements, radarBody } = createHarness({ allRooms: [room] });
+
+    sandbox.reconcileRadarRooms([room]);
+    const row = elements['radar-row-r-inst-1'];
+    const actTd = elements['td-act-r-inst-1'];
+    const quickBtn = elements['roomQuickStateBtn-r-inst-1'];
+
+    // Reset counters after initial render
+    radarBody.innerHTMLWriteCount = 0;
+    row.innerHTMLWriteCount = 0;
+    actTd.innerHTMLWriteCount = 0;
+
+    // Quick open
+    await sandbox.dieuKhienFast('r-inst-1', 'MO_PHONG');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Quick open: radarBody innerHTML writes must be 0');
+    assert.strictEqual(row.innerHTMLWriteCount, 0, 'Quick open: row innerHTML writes must be 0');
+    assert.strictEqual(actTd.innerHTMLWriteCount, 0, 'Quick open: action-cell innerHTML writes must be 0');
+    assert.strictEqual(elements['roomQuickStateBtn-r-inst-1'], quickBtn);
+    assert.strictEqual(quickBtn.textContent, 'Khóa');
+
+    // Quick lock
+    await sandbox.dieuKhienFast('r-inst-1', 'THU_BAI');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Quick lock: radarBody innerHTML writes must be 0');
+    assert.strictEqual(row.innerHTMLWriteCount, 0, 'Quick lock: row innerHTML writes must be 0');
+    assert.strictEqual(actTd.innerHTMLWriteCount, 0, 'Quick lock: action-cell innerHTML writes must be 0');
+    assert.strictEqual(elements['roomQuickStateBtn-r-inst-1'], quickBtn);
+    assert.strictEqual(quickBtn.textContent, 'Mở lại');
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-36: Student HTML/JS and Service Worker are exact 20260902-flex-lite-005');
+  console.log('Test STABLE-36: Zero innerHTML writes on silent refresh, batch open/lock, auto-lock, and publish');
+  {
+    const r1 = { id: 'r-batch-1', MaPhong: 'RB1', TrangThai: 'THU_BAI', ThoiGian: 45, created_at: '2026-09-03T10:00:00Z' };
+    const r2 = { id: 'r-batch-2', MaPhong: 'RB2', TrangThai: 'THU_BAI', ThoiGian: 45, created_at: '2026-09-03T09:00:00Z' };
+    const { sandbox, elements, radarBody } = createHarness({
+      allRooms: [r1, r2],
+      mockStaffRpc: async (name, params) => {
+        if (name === 'rpc_lay_danh_sach_phong_thi_gv') {
+          return {
+            status: 'success',
+            rooms: [
+              { id: 'r-batch-1', ma_phong: 'RB1', trang_thai: r1.TrangThai, thoi_gian: 45, created_at: r1.created_at },
+              { id: 'r-batch-2', ma_phong: 'RB2', trang_thai: r2.TrangThai, thoi_gian: 45, created_at: r2.created_at }
+            ]
+          };
+        }
+        if (name === 'rpc_dieu_khien_phong_thi') {
+          const rid = params.p_room_id || params.p_phong_id;
+          const found = [r1, r2].find(x => String(x.id) === String(rid));
+          if (found) found.TrangThai = params.p_trang_thai;
+          return { status: 'success' };
+        }
+        return { status: 'success' };
+      }
+    });
+
+    sandbox.reconcileRadarRooms([r1, r2]);
+    const row1 = elements['radar-row-r-batch-1'];
+    const actTd1 = elements['td-act-r-batch-1'];
+    const row2 = elements['radar-row-r-batch-2'];
+    const actTd2 = elements['td-act-r-batch-2'];
+
+    radarBody.innerHTMLWriteCount = 0;
+    row1.innerHTMLWriteCount = 0;
+    actTd1.innerHTMLWriteCount = 0;
+    row2.innerHTMLWriteCount = 0;
+    actTd2.innerHTMLWriteCount = 0;
+
+    // 1. Silent refresh
+    await sandbox.refreshRadarDataSilently();
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Silent refresh: radarBody writes must be 0');
+    assert.strictEqual(row1.innerHTMLWriteCount, 0, 'Silent refresh: row1 writes must be 0');
+    assert.strictEqual(actTd1.innerHTMLWriteCount, 0, 'Silent refresh: actTd1 writes must be 0');
+
+    // 2. Batch open
+    elements['roomCheckbox-r-batch-1'].checked = true;
+    elements['roomCheckbox-r-batch-2'].checked = true;
+    await sandbox.dieuKhienNhomPhong('MO_PHONG');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Batch open: radarBody writes must be 0');
+    assert.strictEqual(row1.innerHTMLWriteCount, 0, 'Batch open: row1 writes must be 0');
+    assert.strictEqual(actTd1.innerHTMLWriteCount, 0, 'Batch open: actTd1 writes must be 0');
+    assert.strictEqual(row2.innerHTMLWriteCount, 0, 'Batch open: row2 writes must be 0');
+    assert.strictEqual(actTd2.innerHTMLWriteCount, 0, 'Batch open: actTd2 writes must be 0');
+
+    // 3. Batch lock
+    await sandbox.dieuKhienNhomPhong('THU_BAI');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Batch lock: radarBody writes must be 0');
+    assert.strictEqual(row1.innerHTMLWriteCount, 0, 'Batch lock: row1 writes must be 0');
+    assert.strictEqual(actTd1.innerHTMLWriteCount, 0, 'Batch lock: actTd1 writes must be 0');
+
+    // 4. Auto-lock on r1
+    await sandbox.tuDongKhoaPhongKhiHetGio('r-batch-1');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Auto-lock: radarBody writes must be 0');
+    assert.strictEqual(row1.innerHTMLWriteCount, 0, 'Auto-lock: row1 writes must be 0');
+    assert.strictEqual(actTd1.innerHTMLWriteCount, 0, 'Auto-lock: actTd1 writes must be 0');
+
+    // 5. Publish score (dieuKhien CONG_BO_DIEM)
+    elements['ctrlMaPhong'].value = 'r-batch-1';
+    await sandbox.dieuKhien('CONG_BO_DIEM');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Publish score: radarBody writes must be 0');
+    assert.strictEqual(row1.innerHTMLWriteCount, 0, 'Publish score: row1 writes must be 0');
+    assert.strictEqual(actTd1.innerHTMLWriteCount, 0, 'Publish score: actTd1 writes must be 0');
+
+    // 6. Publish answer (dieuKhien XEM_DAP_AN)
+    await sandbox.dieuKhien('XEM_DAP_AN');
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'Publish answer: radarBody writes must be 0');
+    assert.strictEqual(row1.innerHTMLWriteCount, 0, 'Publish answer: row1 writes must be 0');
+    assert.strictEqual(actTd1.innerHTMLWriteCount, 0, 'Publish answer: actTd1 writes must be 0');
+    console.log('  -> PASSED');
+  }
+
+  console.log('Test STABLE-37: Zero innerHTML writes on xoaDeTrongPhong and identity preservation');
+  {
+    const r1 = { id: 'del-exam-1', MaPhong: 'DE1', TrangThai: 'CHUA_THI', ThoiGian: 45 };
+    const r2 = { id: 'sibling-exam-2', MaPhong: 'SE2', TrangThai: 'MO_PHONG', ThoiGian: 45 };
+    const { sandbox, elements, radarBody } = createHarness({
+      allRooms: [r1, r2],
+      mockStaffRpc: async (name) => {
+        if (name === 'rpc_xoa_de_trong_phong') return { status: 'success' };
+        if (name === 'rpc_lay_danh_sach_phong_thi_gv') {
+          return { status: 'success', rooms: [
+            { id: 'del-exam-1', ma_phong: 'DE1', trang_thai: 'CHUA_THI', thoi_gian: 45 },
+            { id: 'sibling-exam-2', ma_phong: 'SE2', trang_thai: 'MO_PHONG', thoi_gian: 45 }
+          ] };
+        }
+        return { status: 'success' };
+      }
+    });
+
+    sandbox.reconcileRadarRooms([r1, r2]);
+    const row1Before = elements['radar-row-del-exam-1'];
+    const actTd1Before = elements['td-act-del-exam-1'];
+    const quick1Before = elements['roomQuickStateBtn-del-exam-1'];
+    const delExam1Before = elements['roomDeleteExamBtn-del-exam-1'];
+    const delAll1Before = elements['roomDeleteAllBtn-del-exam-1'];
+    const chk1Before = elements['roomCheckbox-del-exam-1'];
+
+    const row2Before = elements['radar-row-sibling-exam-2'];
+    const actTd2Before = elements['td-act-sibling-exam-2'];
+    const quick2Before = elements['roomQuickStateBtn-sibling-exam-2'];
+
+    radarBody.innerHTMLWriteCount = 0;
+    row1Before.innerHTMLWriteCount = 0;
+    actTd1Before.innerHTMLWriteCount = 0;
+    row2Before.innerHTMLWriteCount = 0;
+    actTd2Before.innerHTMLWriteCount = 0;
+
+    await sandbox.xoaDeTrongPhong('del-exam-1');
+
+    assert.strictEqual(radarBody.innerHTMLWriteCount, 0, 'xoaDeTrongPhong: radarBody writes must be 0');
+    assert.strictEqual(row1Before.innerHTMLWriteCount, 0, 'xoaDeTrongPhong: target row writes must be 0');
+    assert.strictEqual(actTd1Before.innerHTMLWriteCount, 0, 'xoaDeTrongPhong: target actTd writes must be 0');
+    assert.strictEqual(row2Before.innerHTMLWriteCount, 0, 'xoaDeTrongPhong: sibling row writes must be 0');
+    assert.strictEqual(actTd2Before.innerHTMLWriteCount, 0, 'xoaDeTrongPhong: sibling actTd writes must be 0');
+
+    // Assert exact DOM reference equality
+    assert.strictEqual(elements['radar-row-del-exam-1'], row1Before, 'Target row object must be identical');
+    assert.strictEqual(elements['td-act-del-exam-1'], actTd1Before, 'Target actTd object must be identical');
+    assert.strictEqual(elements['roomQuickStateBtn-del-exam-1'], quick1Before, 'Quick button object must be identical');
+    assert.strictEqual(elements['roomDeleteExamBtn-del-exam-1'], delExam1Before, 'Delete exam button object must be identical');
+    assert.strictEqual(elements['roomDeleteAllBtn-del-exam-1'], delAll1Before, 'Delete all button object must be identical');
+    assert.strictEqual(elements['roomCheckbox-del-exam-1'], chk1Before, 'Checkbox object must be identical');
+
+    assert.strictEqual(elements['radar-row-sibling-exam-2'], row2Before, 'Sibling row object must be identical');
+    assert.strictEqual(elements['td-act-sibling-exam-2'], actTd2Before, 'Sibling actTd object must be identical');
+    assert.strictEqual(elements['roomQuickStateBtn-sibling-exam-2'], quick2Before, 'Sibling quick button must be identical');
+    console.log('  -> PASSED');
+  }
+
+  // =======================================================================
+  // PART F: 20-CYCLE SEQUENTIAL OPEN/LOCK STRESS TEST (Section 8)
+  // =======================================================================
+
+  console.log('Test STABLE-38: 20 sequential open/lock stress cycles maintain 100% strict DOM identity and 0 innerHTML writes');
+  {
+    const targetRoom = {
+      id: 'stress-target',
+      MaPhong: 'ST01',
+      TrangThai: 'THU_BAI',
+      ThoiGian: 45,
+      ThoiGianMo: null,
+      created_at: '2026-09-03T12:00:00Z'
+    };
+    const sibling1 = {
+      id: 'stress-sib-1',
+      MaPhong: 'SIB01',
+      TrangThai: 'MO_PHONG',
+      ThoiGian: 45,
+      ThoiGianMo: Date.now() - 5000,
+      created_at: '2026-09-03T11:00:00Z'
+    };
+    const sibling2 = {
+      id: 'stress-sib-2',
+      MaPhong: 'SIB02',
+      TrangThai: 'THU_BAI',
+      ThoiGian: 45,
+      ThoiGianMo: null,
+      created_at: '2026-09-03T10:00:00Z'
+    };
+
+    const initialRooms = [targetRoom, sibling1, sibling2];
+    const { sandbox, elements, radarBody } = createHarness({
+      allRooms: initialRooms,
+      mockStaffRpc: async (name, params) => {
+        if (name === 'rpc_lay_danh_sach_phong_thi_gv') {
+          return {
+            status: 'success',
+            rooms: initialRooms.map(r => ({
+              id: r.id,
+              ma_phong: r.MaPhong,
+              trang_thai: r.TrangThai,
+              thoi_gian: r.ThoiGian,
+              thoi_gian_mo: r.ThoiGianMo,
+              created_at: r.created_at
+            }))
+          };
+        }
+        if (name === 'rpc_dieu_khien_phong_thi') {
+          const rid = params.p_room_id || params.p_phong_id;
+          const found = initialRooms.find(x => String(x.id) === String(rid));
+          if (found) {
+            found.TrangThai = params.p_trang_thai;
+            if (params.p_trang_thai === 'MO_PHONG') found.ThoiGianMo = Date.now();
+            else found.ThoiGianMo = null;
+          }
+          return { status: 'success' };
+        }
+        return { status: 'success' };
+      }
+    });
+
+    // Initial render
+    sandbox.reconcileRadarRooms(initialRooms);
+
+    // Capture exact object references for target room and sibling rooms
+    const originalTbody = radarBody;
+    const originalTargetRow = elements['radar-row-stress-target'];
+    const originalSib1Row = elements['radar-row-stress-sib-1'];
+    const originalSib2Row = elements['radar-row-stress-sib-2'];
+
+    const originalQuickBtn = elements['roomQuickStateBtn-stress-target'];
+    const originalDelExamBtn = elements['roomDeleteExamBtn-stress-target'];
+    const originalDelAllBtn = elements['roomDeleteAllBtn-stress-target'];
+    const originalCheckbox = elements['roomCheckbox-stress-target'];
+    const originalActionTd = elements['td-act-stress-target'];
+    const originalStatusSpan = elements['radarStatus-stress-target'];
+    const originalTimerLive = elements['radarTimerLive-stress-target'];
+    const originalTimerStatic = elements['radarTimerStatic-stress-target'];
+    const originalTimerSub = elements['radarTimerSub-stress-target'];
+
+    // Sibling 1 components
+    const originalSib1QuickBtn = elements['roomQuickStateBtn-stress-sib-1'];
+    const originalSib1Checkbox = elements['roomCheckbox-stress-sib-1'];
+
+    // Set initial checkbox state to verify preservation
+    originalCheckbox.checked = true;
+    originalSib1Checkbox.checked = false;
+
+    // Reset write counters after initial render
+    radarBody.innerHTMLWriteCount = 0;
+    originalTargetRow.innerHTMLWriteCount = 0;
+    originalActionTd.innerHTMLWriteCount = 0;
+    originalSib1Row.innerHTMLWriteCount = 0;
+    originalSib2Row.innerHTMLWriteCount = 0;
+
+    // Execute 20 SEQUENTIAL alternating mutations: MO_PHONG / THU_BAI
+    for (let cycle = 1; cycle <= 20; cycle++) {
+      const nextAction = (cycle % 2 === 1) ? 'MO_PHONG' : 'THU_BAI';
+      const expectedText = (nextAction === 'MO_PHONG') ? 'Khóa' : 'Mở lại';
+      const expectedClass = (nextAction === 'MO_PHONG') ? 'radar-action-lock' : 'radar-action-open';
+
+      const res = await sandbox.dieuKhienFast('stress-target', nextAction);
+      assert.strictEqual(res.status, 'success', `Cycle ${cycle}: mutation must succeed`);
+
+      // 1. Tbody identity
+      assert.strictEqual(radarBody, originalTbody, `Cycle ${cycle}: tbody DOM reference must remain ===`);
+
+      // 2. All 3 rows identities
+      assert.strictEqual(elements['radar-row-stress-target'], originalTargetRow, `Cycle ${cycle}: target row must remain ===`);
+      assert.strictEqual(elements['radar-row-stress-sib-1'], originalSib1Row, `Cycle ${cycle}: sib1 row must remain ===`);
+      assert.strictEqual(elements['radar-row-stress-sib-2'], originalSib2Row, `Cycle ${cycle}: sib2 row must remain ===`);
+
+      // 3. Target buttons & cells identities
+      assert.strictEqual(elements['roomQuickStateBtn-stress-target'], originalQuickBtn, `Cycle ${cycle}: quick button must remain ===`);
+      assert.strictEqual(elements['roomDeleteExamBtn-stress-target'], originalDelExamBtn, `Cycle ${cycle}: delete exam btn must remain ===`);
+      assert.strictEqual(elements['roomDeleteAllBtn-stress-target'], originalDelAllBtn, `Cycle ${cycle}: delete all btn must remain ===`);
+      assert.strictEqual(elements['roomCheckbox-stress-target'], originalCheckbox, `Cycle ${cycle}: checkbox must remain ===`);
+      assert.strictEqual(elements['td-act-stress-target'], originalActionTd, `Cycle ${cycle}: action td must remain ===`);
+      assert.strictEqual(elements['radarStatus-stress-target'], originalStatusSpan, `Cycle ${cycle}: status span must remain ===`);
+      assert.strictEqual(elements['radarTimerLive-stress-target'], originalTimerLive, `Cycle ${cycle}: live timer must remain ===`);
+      assert.strictEqual(elements['radarTimerStatic-stress-target'], originalTimerStatic, `Cycle ${cycle}: static timer must remain ===`);
+      assert.strictEqual(elements['radarTimerSub-stress-target'], originalTimerSub, `Cycle ${cycle}: sub timer must remain ===`);
+
+      // 4. Sibling elements identities
+      assert.strictEqual(elements['roomQuickStateBtn-stress-sib-1'], originalSib1QuickBtn, `Cycle ${cycle}: sib1 quick button must remain ===`);
+      assert.strictEqual(elements['roomCheckbox-stress-sib-1'], originalSib1Checkbox, `Cycle ${cycle}: sib1 checkbox must remain ===`);
+
+      // 5. Button state correctness
+      assert.strictEqual(originalQuickBtn.textContent, expectedText, `Cycle ${cycle}: quick button text must be ${expectedText}`);
+      assert(originalQuickBtn.classList.contains(expectedClass), `Cycle ${cycle}: quick button class must contain ${expectedClass}`);
+      assert(!originalQuickBtn.textContent.includes('⏳'), `Cycle ${cycle}: quick button must NOT have transient text`);
+      assert(!originalQuickBtn.textContent.includes('✅'), `Cycle ${cycle}: quick button must NOT have transient text`);
+
+      // 6. Chronological order unchanged
+      assert.strictEqual(radarBody.children[0], originalTargetRow, `Cycle ${cycle}: row 0 must be target`);
+      assert.strictEqual(radarBody.children[1], originalSib1Row, `Cycle ${cycle}: row 1 must be sib1`);
+      assert.strictEqual(radarBody.children[2], originalSib2Row, `Cycle ${cycle}: row 2 must be sib2`);
+
+      // 7. Checkbox selection preserved
+      assert.strictEqual(originalCheckbox.checked, true, `Cycle ${cycle}: target checkbox checked must be preserved`);
+      assert.strictEqual(originalSib1Checkbox.checked, false, `Cycle ${cycle}: sib1 checkbox checked must be preserved`);
+
+      // 8. Zero innerHTML writes on tbody, row, action td
+      assert.strictEqual(radarBody.innerHTMLWriteCount, 0, `Cycle ${cycle}: radarBody innerHTML writes must be 0`);
+      assert.strictEqual(originalTargetRow.innerHTMLWriteCount, 0, `Cycle ${cycle}: row innerHTML writes must be 0`);
+      assert.strictEqual(originalActionTd.innerHTMLWriteCount, 0, `Cycle ${cycle}: action td innerHTML writes must be 0`);
+    }
+    console.log('  -> PASSED (20/20 cycles strictly verified)');
+  }
+
+  // =======================================================================
+  // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
+  // =======================================================================
+
+  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20260904-flex-lite-009a');
+  {
+    assert(gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'), 'Must load 20260904-flex-lite-009a');
+    console.log('  -> PASSED');
+  }
+
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20260902-flex-lite-005');
   {
     assert(hsHtmlSource.includes('hoc_sinh.js?v=20260902-flex-lite-005'));
     assert(hsJsSource.includes("const VERSION = '20260902-flex-lite-005';"));
@@ -909,7 +1275,7 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-37: Other test suites are updated to 20260903-flex-lite-009');
+  console.log('Test STABLE-41: Other test suites are updated to 20260904-flex-lite-009a');
   {
     const suites = [
       'tests/account_import_exceljs_csp_simulation.js',
@@ -921,19 +1287,19 @@ async function runAllTests() {
     ];
     for (const s of suites) {
       const content = fs.readFileSync(path.join(repoRoot, s), 'utf8');
-      assert(content.includes('20260903-flex-lite-009'), `${s} must require 20260903-flex-lite-009`);
+      assert(content.includes('20260904-flex-lite-009a'), `${s} must require 20260904-flex-lite-009a`);
     }
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-38: CI workflow includes teacher_radar_stable_dom_no_flicker_simulation.js');
+  console.log('Test STABLE-42: CI workflow includes teacher_radar_stable_dom_no_flicker_simulation.js');
   {
     const ciFile = fs.readFileSync(path.join(repoRoot, '.github/workflows/submission_safety_ci.yml'), 'utf8');
     assert(ciFile.includes('node tests/teacher_radar_stable_dom_no_flicker_simulation.js'), 'CI workflow must include this test');
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-39: Authoritative scoring invariant: zero double-normalization code');
+  console.log('Test STABLE-43: Authoritative scoring invariant: zero double-normalization code');
   {
     const files = [gvJsSource, hsJsSource];
     const patterns = [
@@ -948,12 +1314,12 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Natural completion without process.exit(0)');
+  console.log('Test STABLE-44: Natural completion without process.exit(0)');
   {
     console.log('  -> PASSED');
   }
 
-  console.log('\n=== ALL 40 TEACHER RADAR STABLE DOM & ZERO-FLICKER TESTS PASSED SUCCESSFULLY ===');
+  console.log('\n=== ALL 44 TEACHER RADAR STABLE DOM & ZERO-FLICKER TESTS PASSED SUCCESSFULLY ===');
 }
 
 runAllTests().catch(err => {

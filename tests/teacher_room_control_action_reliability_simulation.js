@@ -271,7 +271,7 @@ function createHarness(options = {}) {
     });
   }
 
-  return { sandbox, elements, metrics, advanceTimers, pendingTimers };
+  return { sandbox, elements, metrics, advanceTimers, pendingTimers, createMockElement };
 }
 
 async function runAllTests() {
@@ -338,10 +338,10 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260903-flex-lite-009 in giaovien.html');
+  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260904-flex-lite-009a in giaovien.html');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-009'),
-      'giaovien.html must include giaovien.js?v=20260903-flex-lite-009');
+    assert(gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
+      'giaovien.html must include giaovien.js?v=20260904-flex-lite-009a');
     console.log('  -> PASSED');
   }
 
@@ -1241,14 +1241,18 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-58: tuDongKhoaPhongKhiHetGio uses renderRadarActionCell (no duplicated markup)');
+  console.log('Test ROOM-ACT-58: tuDongKhoaPhongKhiHetGio uses syncRadarRoomRowDom (zero action-cell replacement, preserves action button identity)');
   {
     const timerBody = gvJsSource.slice(
       gvJsSource.indexOf('async function tuDongKhoaPhongKhiHetGio'),
-      gvJsSource.indexOf('async function fetchRadar()')
+      gvJsSource.indexOf('function khoiDongDongHoGiaoVien()')
     );
-    assert(timerBody.includes('renderRadarActionCell(r)'),
-      'Timer path must use renderRadarActionCell(r)');
+    assert(timerBody.includes('syncRadarRoomRowDom(r)'),
+      'Timer path must use syncRadarRoomRowDom(r)');
+    assert(!timerBody.includes('actTd.innerHTML'),
+      'Timer path must NOT assign innerHTML to td-act');
+    assert(!timerBody.includes('renderRadarActionCell(r)'),
+      'Timer path must NOT invoke renderRadarActionCell for existing room update');
     assert(!timerBody.includes("onclick=\"dieuKhienFast('${roomId}', 'MO_PHONG')\">Mở lại</button>"),
       'Timer path must not leave duplicated button markup');
     console.log('  -> PASSED');
@@ -1258,17 +1262,17 @@ async function runAllTests() {
   // J. INVARIANTS (Tests 59 - 63)
   // =======================================================================
 
-  console.log('Test ROOM-ACT-59: Teacher exact version is 20260903-flex-lite-009 across all test suites');
+  console.log('Test ROOM-ACT-59: Teacher exact version is 20260904-flex-lite-009a across all test suites');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260903-flex-lite-009'));
+    assert(gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'));
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('giaovien.js?v=20260903-flex-lite-009'));
+    assert(adminTest.includes('giaovien.js?v=20260904-flex-lite-009a'));
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('giaovien.js?v=20260903-flex-lite-009'));
+    assert(cspTest.includes('giaovien.js?v=20260904-flex-lite-009a'));
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('giaovien.js?v=20260903-flex-lite-009'));
+    assert(scoreTest.includes('giaovien.js?v=20260904-flex-lite-009a'));
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('giaovien.js?v=20260903-flex-lite-009'));
+    assert(dashTest.includes('giaovien.js?v=20260904-flex-lite-009a'));
     console.log('  -> PASSED');
   }
 
@@ -1405,21 +1409,24 @@ async function runAllTests() {
       ThoiGianMo: Date.now() - (60 * 60 * 1000),
       ThoiGian: 45
     };
-    const { sandbox, elements } = createHarness({
+    const { sandbox, elements, createMockElement } = createHarness({
       allRooms: [room],
       defaultRoom: room
     });
 
-    elements['td-stt-room-autolock-99'] = { id: 'td-stt-room-autolock-99', innerHTML: '' };
-    const actTd = elements['td-act-room-autolock-99'] = { id: 'td-act-room-autolock-99', innerHTML: '' };
+    elements['td-stt-room-autolock-99'] = createMockElement('td-stt-room-autolock-99');
+    const actTd = elements['td-act-room-autolock-99'] = createMockElement('td-act-room-autolock-99');
+    const quickBtn = elements['roomQuickStateBtn-room-autolock-99'] = createMockElement('roomQuickStateBtn-room-autolock-99', 'button');
+    quickBtn.innerText = 'Khóa';
+    quickBtn.classList.add('radar-action-lock');
 
     const res = await sandbox.tuDongKhoaPhongKhiHetGio('room-autolock-99');
     assert.strictEqual(res.status, 'success', 'tuDongKhoaPhongKhiHetGio must return success');
     assert.strictEqual(room.TrangThai, 'THU_BAI', 'allRoomsData room state must be updated to THU_BAI');
-    assert(actTd.innerHTML.includes('Mở lại'), 'Action cell must display "Mở lại"');
-    assert(actTd.innerHTML.includes('radar-action-open'), 'Action button must have radar-action-open class');
-    assert(actTd.innerHTML.includes("dieuKhienFast('room-autolock-99', 'MO_PHONG')"), 'Action onclick must be MO_PHONG');
-    assert(!actTd.innerHTML.includes("dieuKhienFast('room-autolock-99', 'THU_BAI')"), 'Must NOT offer stale THU_BAI');
+    assert.strictEqual(quickBtn.innerText, 'Mở lại', 'Action button must display "Mở lại"');
+    assert(quickBtn.classList.contains('radar-action-open'), 'Action button must have radar-action-open class');
+    assert.strictEqual(quickBtn.attributes['onclick'], "dieuKhienFast('room-autolock-99', 'MO_PHONG')", 'Action onclick must be MO_PHONG');
+    assert.strictEqual(actTd.innerHTML, '', 'actTd.innerHTML must NOT be rewritten');
     console.log('  -> PASSED');
   }
 
