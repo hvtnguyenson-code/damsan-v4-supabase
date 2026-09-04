@@ -988,26 +988,26 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ORDER-39: Version invariants: teacher exact 20260904-flex-lite-009a; student/SW exact 005');
+  console.log('Test ORDER-39: Version invariants: teacher exact 20260904-submission-safety-010c; student/SW exact 010a');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
-      'giaovien.html must include giaovien.js?v=20260904-flex-lite-009a');
+    assert(gvHtmlSource.includes('giaovien.js?v=20260904-submission-safety-010c'),
+      'giaovien.html must include giaovien.js?v=20260904-submission-safety-010c');
 
-    // Verify all other test suites require exact 009a
+    // Verify all other test suites require exact 010c
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('20260904-flex-lite-009a'), 'account_import_exceljs_csp must require 009a');
+    assert(cspTest.includes('20260904-submission-safety-010c'), 'account_import_exceljs_csp must require 010c');
 
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('20260904-flex-lite-009a'), 'admin_frontend_session must require 009a');
+    assert(adminTest.includes('20260904-submission-safety-010c'), 'admin_frontend_session must require 010c');
 
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('20260904-flex-lite-009a'), 'score_presentation must require 009a');
+    assert(scoreTest.includes('20260904-submission-safety-010c'), 'score_presentation must require 010c');
 
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('20260904-flex-lite-009a'), 'teacher_dashboard must require 009a');
+    assert(dashTest.includes('20260904-submission-safety-010c'), 'teacher_dashboard must require 010c');
 
     const roomActTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_room_control_action_reliability_simulation.js'), 'utf8');
-    assert(roomActTest.includes('20260904-flex-lite-009a'), 'teacher_room_control must require 009a');
+    assert(roomActTest.includes('20260904-submission-safety-010c'), 'teacher_room_control must require 010c');
 
     // Student / SW remains exact 005
     assert(hsHtmlSource.includes('hoc_sinh.js?v=20260904-submission-safety-010a'),
