@@ -1,4 +1,4 @@
-const VERSION = '20260902-flex-lite-005';
+const VERSION = '20260904-submission-safety-010a';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
@@ -13,9 +13,11 @@ const ASSETS = [
   'https://cdn-icons-png.flaticon.com/512/3413/3413535.png'
 ];
 
-// 1. CÃƒÂ i Ã„â€˜Ã¡ÂºÂ·t vÃƒÂ  lÃ†Â°u cache ban Ã„â€˜Ã¡ÂºÂ§u
+// 1. Cài đặt và lưu cache ban đầu
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // BuÃ¡Â»â„¢c SW mÃ¡Â»â€ºi kÃƒÂ­ch hoÃ¡ÂºÂ¡t ngay lÃ¡ÂºÂ­p tÃ¡Â»Â©c
+  // SUBMISSION-SAFETY-010A: Không gọi self.skipWaiting() vô điều kiện ở đây
+  // để tránh kích hoạt và reload giữa chừng khi học sinh đang làm bài hoặc nộp bài.
+  // Service Worker mới sẽ chờ tin nhắn SKIP_WAITING từ hoc_sinh.js khi an toàn.
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);

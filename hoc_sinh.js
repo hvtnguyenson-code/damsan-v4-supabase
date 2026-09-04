@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260902-flex-lite-005';
+const VERSION = '20260904-submission-safety-010a';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -63,6 +63,12 @@ function handleStudentInvalidSession(customMessage = null, options = {}) {
     }
     if (typeof dongTatCaRealtimeHocSinh === 'function') {
         dongTatCaRealtimeHocSinh();
+    }
+    if (typeof clearSubmissionRetryTimer === 'function') {
+        clearSubmissionRetryTimer();
+    }
+    if (typeof clearAutoSubmitInitialSendTimer === 'function') {
+        clearAutoSubmitInitialSendTimer();
     }
     clearStudentAuthSession();
 
@@ -163,6 +169,55 @@ function voHieuHoaCongCuDev() {
     });
 }
 
+// SUBMISSION-SAFETY-010A: Safe PWA update helpers
+let swUpdatePending = false;
+let swRegistration = null;
+let deferredReloadNeeded = false;
+let refreshing = false;
+
+function isAppInSafeStateForUpdate() {
+    if (isExamActive) return false;
+    if (isSubmitting) return false;
+    if (typeof isGradingSubmission !== 'undefined' && isGradingSubmission) return false;
+    const snapshot = (typeof getFinalSnapshot === 'function') ? getFinalSnapshot() : null;
+    if (snapshot) {
+        if (snapshot.state === SUBMISSION_STATE.FINAL_PENDING) return false;
+        if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED) return false;
+    }
+    return true;
+}
+
+function promptOrApplyUpdate(reg) {
+    swRegistration = reg;
+    swUpdatePending = true;
+    if (isAppInSafeStateForUpdate()) {
+        const waitingWorker = reg.waiting || reg.installing;
+        if (waitingWorker) {
+            try { waitingWorker.postMessage({ type: 'SKIP_WAITING' }); } catch(e) {}
+        }
+    } else {
+        console.log('Update available but exam or submission lifecycle is active. Deferring activation until safe state.');
+    }
+}
+
+function checkAndApplyPendingUpdate() {
+    if (!isAppInSafeStateForUpdate()) return;
+    if (deferredReloadNeeded) {
+        deferredReloadNeeded = false;
+        if (!refreshing) {
+            refreshing = true;
+            window.location.reload();
+        }
+        return;
+    }
+    if (swUpdatePending && swRegistration) {
+        const waitingWorker = swRegistration.waiting;
+        if (waitingWorker) {
+            try { waitingWorker.postMessage({ type: 'SKIP_WAITING' }); } catch(e) {}
+        }
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // 0. ĐĂNG KÝ SERVICE WORKER ĐỂ KÍCH HOẠT PWA
     if ('serviceWorker' in navigator) {
@@ -170,14 +225,14 @@ document.addEventListener('DOMContentLoaded', () => {
         navigator.serviceWorker.register('./sw.js?v=' + VERSION, { updateViaCache: 'none' })
             .then(reg => {
                 console.log('SW Registered', reg);
-                
+                swRegistration = reg;
+
                 // Lắng nghe sự kiện tìm thấy bản cập nhật mới
                 reg.onupdatefound = () => {
                     const installingWorker = reg.installing;
                     installingWorker.onstatechange = () => {
                         if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            console.log('Đã tìm thấy bản cập nhật mới, đang kích hoạt...');
-                            installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                            promptOrApplyUpdate(reg);
                         }
                     };
                 };
@@ -186,15 +241,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 reg.update();
 
                 if (reg.waiting) {
-                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    promptOrApplyUpdate(reg);
                 }
             })
             .catch(err => console.log('SW Failed', err));
 
-        // Tự động load lại trang khi có SW mới chiếm quyền
+        // Tự động reload trang 1 LẦN DUY NHẤT khi Service Worker mới chiếm quyền điều khiển
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
             if (refreshing) return;
+            if (!isAppInSafeStateForUpdate()) {
+                console.warn('Service worker controller changed during active exam or pending submission. Reload deferred.');
+                deferredReloadNeeded = true;
+                return;
+            }
             refreshing = true;
             window.location.reload();
         });
@@ -403,6 +463,8 @@ async function dangXuatHS() {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
         pendingStudentPasswordProof = null;
         dungPostReceiptLifecycleWatcher(); // P0-006A: Dung watcher khi dang xuat
+        if (typeof clearSubmissionRetryTimer === 'function') clearSubmissionRetryTimer();
+        if (typeof clearAutoSubmitInitialSendTimer === 'function') clearAutoSubmitInitialSendTimer();
         const token = getStudentToken();
         if (token && !state.isOffline) {
             try {
@@ -477,17 +539,29 @@ window.addEventListener('online', () => {
     let btnSubmit = document.getElementById('btn-submit-exam');
     if (btnSubmit) { btnSubmit.style.opacity = '1'; btnSubmit.style.cursor = 'pointer'; }
     setTimeout(() => { if (!state.isOffline && banner.className === 'online') { banner.className = ''; } }, 4000);
-    // P0-006A: Khi co mang lai, kich hoat lifecycle check
-    void _postReceiptLifecycleTick();
-    void resumeSavedSubmission().then(recovered => {
-        if (!recovered && state.hs_id) timPhongThiTuDong();
-    });
+    if (typeof clearSubmissionRetryTimer === 'function') clearSubmissionRetryTimer();
+    submissionRetryCount = 0;
+    const currentSnap = getFinalSnapshot();
+    if (currentSnap && currentSnap.state === SUBMISSION_STATE.FINAL_PENDING) {
+        void resumeSavedSubmission().then(recovered => {
+            if (!recovered && state.hs_id) timPhongThiTuDong();
+        });
+    } else if (!currentSnap) {
+        void resumeSavedSubmission().then(recovered => {
+            if (!recovered && state.hs_id) timPhongThiTuDong();
+        });
+    }
 });
 
-// P0-006A: Khi PWA tro lai foreground - visibilitychange fallback
+// SUBMISSION-SAFETY-010A: Visibilitychange foreground handling with quiescence
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && !isExamActive) {
-        void _postReceiptLifecycleTick();
+    if (document.visibilityState !== 'visible' || isExamActive) return;
+    const currentSnap = (typeof getFinalSnapshot === 'function') ? getFinalSnapshot() : null;
+    if (currentSnap) {
+        if (currentSnap.state === SUBMISSION_STATE.FINAL_PENDING && !state.isOffline) {
+            void resumeSavedSubmission();
+        }
+        return;
     }
 });
 
@@ -911,6 +985,9 @@ function safeJS(str) {
 function showSection(sectionId) {
     document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
     document.getElementById(sectionId).classList.add('active');
+    if (sectionId === 'login-section' || sectionId === 'room-section') {
+        if (typeof checkAndApplyPendingUpdate === 'function') checkAndApplyPendingUpdate();
+    }
 }
 
 async function login() {
@@ -1216,8 +1293,7 @@ async function joinRoom(maPhongAuto = null) {
             showSection('result-section');
             // Kết quả được kiểm tra thủ công qua HTTP; sau receipt không giữ WebSocket học sinh.
             dongTatCaRealtimeHocSinh();
-            // P0-006A: Khoi dong lifecycle watcher
-            batDauPostReceiptLifecycleWatcher();
+            teardownStudentBackgroundAfterReceipt();
             checkTeacherCommand(true);
             return;
         }
@@ -1949,6 +2025,7 @@ async function reconcileSavedSubmission(snapshot) {
 }
 
 async function resumeSavedSubmission() {
+    if (typeof clearSubmissionRetryTimer === 'function') clearSubmissionRetryTimer();
     if (studentSessionInvalidated) return true;
     let snapshot = getFinalSnapshot();
     if (!snapshot && state.hs_id && state.truong_id) {
@@ -2017,9 +2094,100 @@ function lockExamForFinalSubmission(message) {
     if (btn) btn.innerText = message;
 }
 
+// SUBMISSION-SAFETY-010A: Core Verified Snapshot Persistence
+function persistFinalSnapshotVerified(snapshot) {
+    try {
+        if (!snapshot || typeof snapshot !== 'object') {
+            throw new Error('Snapshot không hợp lệ');
+        }
+        const key = submissionKeys().final;
+        const serialized = JSON.stringify(snapshot);
+        localStorage.setItem(key, serialized);
+
+        const readBack = localStorage.getItem(key);
+        if (!readBack) {
+            throw new Error('Dữ liệu đọc lại từ bộ nhớ rỗng');
+        }
+
+        let parsed;
+        try {
+            parsed = JSON.parse(readBack);
+        } catch (pe) {
+            throw new Error('Không thể phân tích dữ liệu đọc lại: ' + pe.message);
+        }
+
+        if (!parsed || typeof parsed !== 'object') {
+            throw new Error('Dữ liệu đọc lại không phải là đối tượng hợp lệ');
+        }
+
+        if (!parsed.attempt_id || parsed.attempt_id !== snapshot.attempt_id) {
+            throw new Error('attempt_id không khớp sau khi lưu');
+        }
+        if (!parsed.phong_id || parsed.phong_id !== snapshot.phong_id) {
+            throw new Error('phong_id không khớp sau khi lưu');
+        }
+        if (!parsed.hs_id || parsed.hs_id !== snapshot.hs_id) {
+            throw new Error('hs_id không khớp sau khi lưu');
+        }
+        if (parsed.room_opened_at === undefined || parsed.room_opened_at === null || parsed.room_opened_at !== snapshot.room_opened_at) {
+            throw new Error('room_opened_at không khớp sau khi lưu');
+        }
+        if (parsed.ma_de === undefined || parsed.ma_de !== snapshot.ma_de) {
+            throw new Error('ma_de không khớp sau khi lưu');
+        }
+        if (!parsed.state || parsed.state !== snapshot.state) {
+            throw new Error('state không khớp sau khi lưu');
+        }
+        if (!Array.isArray(parsed.raw_answers)) {
+            throw new Error('raw_answers không phải là mảng sau khi lưu');
+        }
+        if (JSON.stringify(parsed.raw_answers) !== JSON.stringify(snapshot.raw_answers)) {
+            throw new Error('raw_answers không trùng khớp sau khi lưu');
+        }
+
+        return true;
+    } catch (err) {
+        console.error('persistFinalSnapshotVerified thất bại:', err);
+        alert("Không thể tạo bản chốt an toàn trên thiết bị.\nBài CHƯA được nộp. Không đóng hoặc tải lại trang.\nHãy báo giáo viên để kiểm tra.");
+        return false;
+    }
+}
+
 function finalizeSubmissionOnce(autoSubmit = false) {
-    let snapshot = getFinalSnapshot();
-    if (!snapshot) {
+    const finalKey = submissionKeys().final;
+    const existingRaw = localStorage.getItem(finalKey);
+    let snapshot = null;
+
+    if (existingRaw) {
+        try {
+            const candidate = JSON.parse(existingRaw);
+            const isValidCandidate = candidate &&
+                typeof candidate === 'object' &&
+                Boolean(candidate.attempt_id) &&
+                candidate.phong_id === state.phong_id &&
+                candidate.hs_id === state.hs_id &&
+                candidate.room_opened_at !== undefined &&
+                candidate.room_opened_at !== null &&
+                candidate.room_opened_at === state.room_opened_at &&
+                candidate.ma_de !== undefined &&
+                candidate.ma_de === state.ma_de &&
+                candidate.state &&
+                [SUBMISSION_STATE.FINAL_PENDING, SUBMISSION_STATE.SERVER_RECEIVED, SUBMISSION_STATE.GRADED].includes(candidate.state) &&
+                Array.isArray(candidate.raw_answers);
+
+            if (isValidCandidate) {
+                snapshot = candidate;
+            } else {
+                console.error('Existing final snapshot in localStorage is malformed or context mismatched:', candidate);
+                alert("Không thể tạo bản chốt an toàn trên thiết bị.\nBài CHƯA được nộp. Không đóng hoặc tải lại trang.\nHãy báo giáo viên để kiểm tra.");
+                return false;
+            }
+        } catch (e) {
+            console.error('Existing final snapshot in localStorage could not be parsed:', e);
+            alert("Không thể tạo bản chốt an toàn trên thiết bị.\nBài CHƯA được nộp. Không đóng hoặc tải lại trang.\nHãy báo giáo viên để kiểm tra.");
+            return false;
+        }
+    } else {
         snapshot = {
             version: 1,
             state: SUBMISSION_STATE.FINAL_PENDING,
@@ -2033,10 +2201,23 @@ function finalizeSubmissionOnce(autoSubmit = false) {
             client_submitted_at: new Date().toISOString(),
             auto_submit: Boolean(autoSubmit)
         };
-        localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot));
+        const ok = persistFinalSnapshotVerified(snapshot);
+        if (!ok) {
+            return false;
+        }
+        submissionRetryCount = 0;
     }
+
     lockExamForFinalSubmission(state.isOffline ? '⏳ ĐÃ CHỐT BÀI — ĐANG CHỜ MẠNG...' : '⏳ ĐANG GỬI BÀI ĐÃ CHỐT...');
-    if (!state.isOffline) receiveFinalSubmission();
+    if (!state.isOffline) {
+        if (autoSubmit) {
+            scheduleAutoSubmitInitialSend();
+        } else {
+            clearAutoSubmitInitialSendTimer();
+            receiveFinalSubmission();
+        }
+    }
+    return true;
 }
 
 function khoiPhucFinalSnapshot(snapshot) {
@@ -2046,91 +2227,251 @@ function khoiPhucFinalSnapshot(snapshot) {
     khoiPhucBaiLamNhap();
 }
 
+let autoSubmitInitialSendTimer = null;
+
+function clearAutoSubmitInitialSendTimer() {
+    if (autoSubmitInitialSendTimer) {
+        clearTimeout(autoSubmitInitialSendTimer);
+        autoSubmitInitialSendTimer = null;
+    }
+}
+
+function getAutoSubmitInitialJitterMs() {
+    return Math.floor(Math.random() * 7001);
+}
+
+function scheduleAutoSubmitInitialSend(delayMs) {
+    if (autoSubmitInitialSendTimer) return;
+    const delay = (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : getAutoSubmitInitialJitterMs();
+    autoSubmitInitialSendTimer = setTimeout(async () => {
+        autoSubmitInitialSendTimer = null;
+        if (state.isOffline || studentSessionInvalidated || isSubmitting) return;
+        const currentSnap = getFinalSnapshot();
+        if (!currentSnap || currentSnap.state !== SUBMISSION_STATE.FINAL_PENDING) return;
+        await receiveFinalSubmission();
+    }, delay);
+}
+
+function teardownStudentBackgroundAfterReceipt() {
+    dongTatCaRealtimeHocSinh();
+    dungPostReceiptLifecycleWatcher();
+    clearSubmissionRetryTimer();
+    clearAutoSubmitInitialSendTimer();
+    if (examTimer) {
+        clearInterval(examTimer);
+        examTimer = null;
+    }
+    tatAntiCheat();
+}
+
 function showReceivedState(receipt) {
+    teardownStudentBackgroundAfterReceipt();
     document.getElementById('finish_name').innerText = state.ho_ten;
     showSection('result-section');
     document.getElementById('score-display-area').style.display = 'none';
     document.getElementById('review-content').innerHTML = `<div style="text-align:center; margin-top:30px; padding:20px; background:#e6f4ea; border-radius:8px;"><h3>✅ MÁY CHỦ ĐÃ NHẬN BÀI</h3><p>Mã xác nhận: <b>${safeHTML(receipt.submission_id)}</b></p><p>Thời gian máy chủ nhận: <b>${safeHTML(dinhDangThoiGianVN(receipt.received_at))}</b></p><p>Hệ thống đang xử lý kết quả. Bạn có thể bấm “Tải lại kết quả thủ công” sau.</p><button onclick="checkTeacherCommand(false)">🔄 KIỂM TRA KẾT QUẢ</button></div>`;
     try { document.exitFullscreen(); } catch (e) { }
-    // P0-006A: Khoi dong post-receipt lifecycle watcher
-    batDauPostReceiptLifecycleWatcher();
+}
+
+// SUBMISSION-SAFETY-010A: RPC Timeout and Delayed Retry (Low Background Load)
+const RECEIVE_RPC_TIMEOUT_MS = 9000;
+const MAX_SUBMISSION_RETRIES = 6;
+let delayedSubmissionRetryTimer = null;
+let submissionRetryCount = 0;
+
+function clearSubmissionRetryTimer() {
+    if (delayedSubmissionRetryTimer) {
+        clearTimeout(delayedSubmissionRetryTimer);
+        delayedSubmissionRetryTimer = null;
+    }
+}
+
+function getDelayedRetryDelayMs() {
+    return 12000 + Math.floor(Math.random() * 8001);
+}
+
+function scheduleDelayedSubmissionRetry(delayMs) {
+    if (delayedSubmissionRetryTimer) return;
+    if (submissionRetryCount >= MAX_SUBMISSION_RETRIES) {
+        console.warn('Reached maximum automatic delayed submission retries (' + MAX_SUBMISSION_RETRIES + '). Stopping automatic retry loop.');
+        const retryMsg = document.getElementById('retry-status-msg');
+        if (retryMsg) {
+            retryMsg.style.display = '';
+            retryMsg.innerText = '⚠️ Bài đã được chốt an toàn trên thiết bị nhưng máy chủ chưa xác nhận. Không đóng hoặc xóa dữ liệu trình duyệt. Hãy báo giáo viên.';
+        }
+        return;
+    }
+    const delay = (typeof delayMs === 'number' && delayMs > 0) ? delayMs : getDelayedRetryDelayMs();
+    delayedSubmissionRetryTimer = setTimeout(async () => {
+        delayedSubmissionRetryTimer = null;
+        if (state.isOffline || studentSessionInvalidated || isSubmitting) return;
+        const snapshot = getFinalSnapshot();
+        if (!snapshot || snapshot.state !== SUBMISSION_STATE.FINAL_PENDING) return;
+        submissionRetryCount++;
+        await receiveFinalSubmission();
+    }, delay);
+}
+
+function callRpcWithTimeout(rpcPromise, timeoutMs = RECEIVE_RPC_TIMEOUT_MS) {
+    if (!timeoutMs || timeoutMs <= 0) return rpcPromise;
+    let timerId = null;
+    let completed = false;
+    const promise = Promise.resolve(rpcPromise);
+
+    return new Promise((resolve, reject) => {
+        let isSync = true;
+        promise.then(
+            res => {
+                completed = true;
+                if (timerId) clearTimeout(timerId);
+                resolve(res);
+            },
+            err => {
+                completed = true;
+                if (timerId) clearTimeout(timerId);
+                reject(err);
+            }
+        );
+
+        timerId = setTimeout(() => {
+            if (isSync) return;
+            if (!completed) {
+                reject(new Error('RPC_TIMEOUT'));
+            }
+        }, timeoutMs);
+        isSync = false;
+    });
 }
 
 async function receiveFinalSubmission() {
+    clearAutoSubmitInitialSendTimer();
     const snapshot = getFinalSnapshot();
     if (!snapshot || isSubmitting || state.isOffline) return;
     if (snapshot.state === SUBMISSION_STATE.GRADED) return;
     const existingReceipt = getSubmissionReceipt();
     if (snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED && existingReceipt?.submission_id) {
+        clearSubmissionRetryTimer();
+        submissionRetryCount = 0;
         requestGrading(existingReceipt.submission_id);
         return;
     }
     const token = getStudentToken();
     if (!token) {
-        isSubmitting = false;
+        clearSubmissionRetryTimer();
         console.warn('Student token unavailable for receive submission; keeping final snapshot for recovery.');
         clearStudentAuthSession();
         alert('Phiên đăng nhập đã hết hạn. Bài đã chốt được bảo toàn; vui lòng đăng nhập lại để tiếp tục nộp bài.');
         showSection('login-section');
         return;
     }
+
     isSubmitting = true;
+    let shouldScheduleRetry = false;
     let lastError = null;
-    for (let attempt = 1; attempt <= 4; attempt++) {
-        const { data, error } = await _supabase.rpc('rpc_hoc_sinh_receive_submission', {
-            p_student_token: token,
-            p_attempt_id: snapshot.attempt_id,
-            p_phong_id: snapshot.phong_id,
-            p_ma_de: snapshot.ma_de,
-            p_raw_answers: snapshot.raw_answers,
-            p_client_submitted_at: snapshot.client_submitted_at,
-            p_room_opened_at: snapshot.room_opened_at
-        });
+    try {
+        let res = null;
+        try {
+            res = await callRpcWithTimeout(_supabase.rpc('rpc_hoc_sinh_receive_submission', {
+                p_student_token: token,
+                p_attempt_id: snapshot.attempt_id,
+                p_phong_id: snapshot.phong_id,
+                p_ma_de: snapshot.ma_de,
+                p_raw_answers: snapshot.raw_answers,
+                p_client_submitted_at: snapshot.client_submitted_at,
+                p_room_opened_at: snapshot.room_opened_at
+            }), RECEIVE_RPC_TIMEOUT_MS);
+        } catch (rpcErr) {
+            lastError = rpcErr?.message || 'Lỗi mạng hoặc timeout';
+            console.warn('Receive submission transport/timeout error:', lastError);
+            const retryMsg = document.getElementById('retry-status-msg');
+            if (retryMsg) {
+                retryMsg.style.display = '';
+                retryMsg.innerText = '⚠️ Bài đã chốt vẫn được lưu trên thiết bị. Hệ thống sẽ thử gửi lại khi có mạng; không tạo bài mới.';
+            }
+            shouldScheduleRetry = true;
+            return;
+        }
+
+        const { data, error } = res || {};
         if (!error && data && data.status === 'received' && data.submission_id && data.received_at) {
+            clearSubmissionRetryTimer();
+            clearAutoSubmitInitialSendTimer();
+            submissionRetryCount = 0;
             const receipt = { ...data, state: SUBMISSION_STATE.SERVER_RECEIVED };
             localStorage.setItem(submissionKeys().receipt, JSON.stringify(receipt));
             snapshot.state = SUBMISSION_STATE.SERVER_RECEIVED;
             localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot));
-            isSubmitting = false;
-            dongTatCaRealtimeHocSinh();
+            teardownStudentBackgroundAfterReceipt();
             showReceivedState(receipt);
             requestGrading(receipt.submission_id);
             return;
         }
+
         if (!error && data?.code === 'invalid_session') {
-            isSubmitting = false;
+            clearSubmissionRetryTimer();
+            clearAutoSubmitInitialSendTimer();
             console.warn('Session expired during receive submission; preserving final snapshot.');
             clearStudentAuthSession();
             alert('Phiên đăng nhập đã hết hạn. Bài đã chốt được bảo toàn; vui lòng đăng nhập lại để tiếp tục nộp bài.');
             showSection('login-section');
             return;
         }
+
         if (!error && data?.code === 'room_attempt_changed') {
+            clearSubmissionRetryTimer();
+            clearAutoSubmitInitialSendTimer();
+            submissionRetryCount = 0;
             const archived = archiveFinalSnapshot(snapshot, 'room_attempt_changed');
-            isSubmitting = false;
             if (!archived) {
                 console.warn('Room attempt changed but final evidence could not be archived; active keys preserved.');
                 alert('Không thể tạo bản sao khôi phục an toàn. Bài đã chốt vẫn được giữ trên thiết bị; vui lòng báo giám thị trước khi bắt đầu lượt mới.');
                 return;
             }
             clearActiveSubmissionKeys();
-            // P0-006: Reset lifecycle state so student can enter next attempt cleanly
             state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
             state.cau_hoi = []; state.user_result = null; cheatCount = 0;
             dongTatCaRealtimeHocSinh();
-            dungPostReceiptLifecycleWatcher(); // P0-006A
+            dungPostReceiptLifecycleWatcher();
             alert('Lượt thi này đã được giáo viên reset. Bản chốt cũ không được gửi lại; hãy vào lượt thi mới khi phòng được mở.');
             showSection('room-section');
             timPhongThiTuDong();
             return;
         }
-        lastError = error?.message || data?.message || 'Không nhận được receipt từ máy chủ';
-        if (attempt < 4) await new Promise(resolve => setTimeout(resolve, 750 + Math.floor(Math.random() * 2250)));
+
+        if (!error && data && (data.status === 'error' || data.code)) {
+            clearSubmissionRetryTimer();
+            clearAutoSubmitInitialSendTimer();
+            const errMsg = data.message || 'Lỗi xử lý nộp bài từ máy chủ.';
+            console.error('Authoritative rejection during receive submission:', data);
+            const retryMsg = document.getElementById('retry-status-msg');
+            if (retryMsg) {
+                retryMsg.style.display = '';
+                retryMsg.innerText = '⚠️ ' + errMsg + ' Bài đã chốt vẫn được lưu an toàn trên thiết bị. Hãy báo giáo viên.';
+            }
+            alert(errMsg + '\nBài đã chốt vẫn được lưu an toàn trên thiết bị. Hãy báo giáo viên.');
+            return;
+        }
+
+        lastError = error?.message || 'Không nhận được receipt từ máy chủ';
+        console.error('Receive submission pending:', lastError);
+        const retryMsg = document.getElementById('retry-status-msg');
+        if (retryMsg) {
+            retryMsg.style.display = '';
+            retryMsg.innerText = '⚠️ Bài đã chốt vẫn được lưu trên thiết bị. Hệ thống sẽ thử gửi lại khi có mạng; không tạo bài mới.';
+        }
+        shouldScheduleRetry = true;
+    } catch (unexpectedEx) {
+        console.error('Unexpected exception during receive submission:', unexpectedEx);
+        shouldScheduleRetry = true;
+    } finally {
+        isSubmitting = false;
+        if (shouldScheduleRetry) {
+            const currentSnap = getFinalSnapshot();
+            if (currentSnap && currentSnap.state === SUBMISSION_STATE.FINAL_PENDING && !state.isOffline && !studentSessionInvalidated) {
+                scheduleDelayedSubmissionRetry();
+            }
+        }
     }
-    isSubmitting = false;
-    const retryMsg = document.getElementById('retry-status-msg');
-    if (retryMsg) { retryMsg.style.display = ''; retryMsg.innerText = '⚠️ Bài đã chốt vẫn được lưu trên thiết bị. Hệ thống sẽ thử gửi lại khi có mạng; không tạo bài mới.'; }
-    console.error('Receive submission pending:', lastError);
 }
 
 async function requestGrading(submissionId) {
@@ -2147,12 +2488,19 @@ async function requestGrading(submissionId) {
         }
         if (error || !data || data.status !== 'graded') throw error || new Error(data?.message || 'Grading pending');
         const snapshot = getFinalSnapshot();
-        if (snapshot) { snapshot.state = SUBMISSION_STATE.GRADED; localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot)); }
+        if (snapshot) {
+            snapshot.state = SUBMISSION_STATE.GRADED;
+            localStorage.setItem(submissionKeys().final, JSON.stringify(snapshot));
+            if (typeof clearSubmissionRetryTimer === 'function') clearSubmissionRetryTimer();
+            submissionRetryCount = 0;
+        }
         if (cheatCount > 0 && token) await _supabase.rpc('rpc_hoc_sinh_update_violation', { p_student_token: token, p_phong_id: state.phong_id, p_so_lan: cheatCount });
-        checkTeacherCommand(true);
     } catch (e) {
         console.warn('Submission received; grading remains pending:', e.message);
-    } finally { isGradingSubmission = false; }
+    } finally {
+        isGradingSubmission = false;
+        if (typeof checkAndApplyPendingUpdate === 'function') checkAndApplyPendingUpdate();
+    }
 }
 async function checkTeacherCommand(isAuto = false) {
     if (state.isOffline) {

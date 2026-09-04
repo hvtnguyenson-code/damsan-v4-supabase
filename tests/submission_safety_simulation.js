@@ -214,7 +214,37 @@ const testHocSinhCode = clientSource + `
   joinRoom,
   login,
   setPendingProof: (p) => { pendingStudentPasswordProof = p; },
-  getPendingProof: () => pendingStudentPasswordProof
+  getPendingProof: () => pendingStudentPasswordProof,
+  persistFinalSnapshotVerified,
+  finalizeSubmissionOnce,
+  callRpcWithTimeout,
+  scheduleDelayedSubmissionRetry,
+  clearSubmissionRetryTimer,
+  getDelayedRetryDelayMs,
+  getDelayedRetryTimer: () => delayedSubmissionRetryTimer,
+  getSubmissionRetryCount: () => submissionRetryCount,
+  setSubmissionRetryCount: (c) => { submissionRetryCount = c; },
+  getIsSubmitting: () => isSubmitting,
+  setIsSubmitting: (v) => { isSubmitting = v; },
+  lockExamForFinalSubmission,
+  getIsExamActive: () => isExamActive,
+  setIsExamActive: (v) => { isExamActive = v; },
+  promptOrApplyUpdate,
+  checkAndApplyPendingUpdate,
+  isAppInSafeStateForUpdate,
+  getSwUpdatePending: () => swUpdatePending,
+  getDeferredReloadNeeded: () => deferredReloadNeeded,
+  setDeferredReloadNeeded: (v) => { deferredReloadNeeded = v; },
+  getRefreshing: () => refreshing,
+  autoSubmitInitialSendTimer: () => autoSubmitInitialSendTimer,
+  clearAutoSubmitInitialSendTimer,
+  scheduleAutoSubmitInitialSend,
+  getAutoSubmitInitialJitterMs,
+  teardownStudentBackgroundAfterReceipt,
+  setRealtimeChannel: (ch) => { realtimeChannel = ch; },
+  setRealtimeResultChannel: (ch) => { realtimeResultChannel = ch; },
+  getRealtimeChannel: () => realtimeChannel,
+  getRealtimeResultChannel: () => realtimeResultChannel
 };
 `;
 
@@ -224,6 +254,7 @@ function createStudentEnvironment() {
   sessionStore.set('damSan_StudentToken', 'test-student-session-token');
   sessionStore.set('damSan_StudentTokenExpiresAt', new Date(Date.now() + 86400000).toISOString());
   const domElements = {};
+  const mockLocation = { reload: () => {}, hostname: 'localhost' };
 
   const mockElement = (id = '') => ({
     id,
@@ -232,6 +263,9 @@ function createStudentEnvironment() {
     value: '',
     style: {},
     appendChild: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dataset: {},
     classList: {
       _classes: new Set(),
       add(c) { this._classes.add(c); },
@@ -254,6 +288,7 @@ function createStudentEnvironment() {
   let intervalIdCounter = 0;
   const windowEventHandlers = {};
   const documentEventHandlers = {};
+  const swEventHandlers = {};
 
   const mockSupabase = {
     rpc: async (name, params) => {
@@ -357,6 +392,7 @@ function createStudentEnvironment() {
         if (!documentEventHandlers[event]) documentEventHandlers[event] = [];
         documentEventHandlers[event].push(handler);
       },
+      removeEventListener: () => {},
       visibilityState: 'visible',
       exitFullscreen: () => {}
     },
@@ -365,9 +401,45 @@ function createStudentEnvironment() {
         if (!windowEventHandlers[event]) windowEventHandlers[event] = [];
         windowEventHandlers[event].push(handler);
       },
-      location: { reload: () => {} }
+      removeEventListener: () => {},
+      location: mockLocation,
+      matchMedia: () => ({ matches: false }),
+      navigator: {
+        onLine: true,
+        userAgent: 'Mozilla/5.0 NodeTest',
+        standalone: false,
+        serviceWorker: {
+          addEventListener: (event, handler) => {
+            if (!swEventHandlers[event]) swEventHandlers[event] = [];
+            swEventHandlers[event].push(handler);
+          },
+          register: async () => ({
+            onupdatefound: null,
+            update: () => {},
+            waiting: null
+          }),
+          controller: {}
+        }
+      }
     },
-    navigator: { onLine: true },
+    location: mockLocation,
+    navigator: {
+      onLine: true,
+      userAgent: 'Mozilla/5.0 NodeTest',
+      standalone: false,
+      serviceWorker: {
+        addEventListener: (event, handler) => {
+          if (!swEventHandlers[event]) swEventHandlers[event] = [];
+          swEventHandlers[event].push(handler);
+        },
+        register: async () => ({
+          onupdatefound: null,
+          update: () => {},
+          waiting: null
+        }),
+        controller: {}
+      }
+    },
     localStorage: {
       getItem: (k) => localStore.has(k) ? localStore.get(k) : null,
       setItem: (k, v) => localStore.set(k, String(v)),
@@ -436,6 +508,11 @@ function createStudentEnvironment() {
     },
     dispatchDocumentEvent: (event, ...args) => {
       const list = documentEventHandlers[event] || [];
+      for (const fn of list) fn(...args);
+    },
+    swEventHandlers,
+    dispatchSwEvent: (event, ...args) => {
+      const list = swEventHandlers[event] || [];
       for (const fn of list) fn(...args);
     }
   };
@@ -764,14 +841,14 @@ recordR('R44');
 // R45-R57: P0-006A Post-Receipt Lifecycle Watcher Invariants
 // ==========================================================
 
-// R45: SERVER_RECEIVED / showReceivedState thực sự khởi động post-receipt watcher
+// R45: batDauPostReceiptLifecycleWatcher helper creates lifecycle channel and 12s poll timer in isolation
 const envR45 = createStudentEnvironment();
 envR45.api.setState({ phong_id: 'room-r45', room_opened_at: 45000, hs_id: 'hs-45', truong_id: 'school-45' });
-envR45.api.showReceivedState({ submission_id: 'sub-45', received_at: '2026-08-30T10:00:00Z' });
+envR45.api.batDauPostReceiptLifecycleWatcher();
 const r45Channel = envR45.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r45');
-assert(r45Channel && r45Channel.subscribed, 'R45: showReceivedState must subscribe post-receipt-lifecycle channel');
+assert(r45Channel && r45Channel.subscribed, 'R45: batDauPostReceiptLifecycleWatcher in isolation must subscribe post-receipt-lifecycle channel');
 const r45Poll = envR45.intervals.find(i => i.ms === 12000 && !i.cleared);
-assert(r45Poll, 'R45: showReceivedState must start 12s lifecycle poll timer');
+assert(r45Poll, 'R45: batDauPostReceiptLifecycleWatcher in isolation must start 12s lifecycle poll timer');
 recordR('R45');
 
 // R46: Invoke production realtime callback: generation old -> null kích hoạt checkTeacherCommand(true) / authoritative reconciliation path
@@ -916,7 +993,7 @@ assert.strictEqual(envR49.localStore.has('final_damsan_room-r49_hs-49'), false, 
 assert.strictEqual(envR49.localStore.has('recovery_damsan_room-r49_hs-49_att-r49'), true, 'R49: polling archived snapshot');
 recordR('R49');
 
-// R50: Dispatch/call captured visibilitychange handler khi visible -> lifecycle check chạy
+// R50: _postReceiptLifecycleTick helper directly runs lifecycle check in isolation
 const envR50 = createStudentEnvironment();
 const snapR50 = {
   version: 1,
@@ -933,7 +1010,6 @@ const snapR50 = {
 };
 envR50.localStore.set('final_damsan_room-r50_hs-50', JSON.stringify(snapR50));
 envR50.api.setState({ phong_id: 'room-r50', room_opened_at: 50000, hs_id: 'hs-50', truong_id: 'school-50' });
-envR50.sandbox.document.visibilityState = 'visible';
 
 envR50.mockSupabase._fromData = {
   phong_thi: { id: 'room-r50', trang_thai: 'CHO_THI', thoi_gian_mo: 50999 },
@@ -941,11 +1017,11 @@ envR50.mockSupabase._fromData = {
 };
 envR50.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
 
-envR50.dispatchDocumentEvent('visibilitychange');
+await envR50.api._postReceiptLifecycleTick();
 await new Promise(resolve => setTimeout(resolve, 20));
 
-assert.strictEqual(envR50.localStore.has('final_damsan_room-r50_hs-50'), false, 'R50: visibilitychange triggered lifecycle check and cleared active snapshot');
-assert.strictEqual(envR50.localStore.has('recovery_damsan_room-r50_hs-50_att-r50'), true, 'R50: snapshot archived on visibilitychange');
+assert.strictEqual(envR50.localStore.has('final_damsan_room-r50_hs-50'), false, 'R50: _postReceiptLifecycleTick triggered lifecycle check and cleared active snapshot');
+assert.strictEqual(envR50.localStore.has('recovery_damsan_room-r50_hs-50_att-r50'), true, 'R50: snapshot archived on _postReceiptLifecycleTick');
 recordR('R50');
 
 // R51: Dispatch/call captured online handler -> lifecycle recovery/check chạy
@@ -1346,7 +1422,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20260902-flex-lite-005');
+assert.strictEqual(clientVersion, '20260904-submission-safety-010a');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -2176,7 +2252,7 @@ assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: match
 recordR('R145');
 
 // R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
-const expectedVersion = '20260902-flex-lite-005';
+const expectedVersion = '20260904-submission-safety-010a';
 assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
 assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
 assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");
@@ -2328,11 +2404,1021 @@ assert(recoveredReceiptR152, "R152: receipt saved after successful recovery");
 assert.strictEqual(recoveredReceiptR152.submission_id, 'sub-recovered-152', "R152: submission_id saved");
 recordR('R152');
 
-for (let i = 25; i <= 152; i++) {
+// ==========================================================
+// SUBMISSION-SAFETY-010A: Behavioral Verification (R153-R175)
+// ==========================================================
+
+// R153: persistFinalSnapshotVerified succeeds after write/readback and exact data match
+const envR153 = createStudentEnvironment();
+const snapR153 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-153',
+  phong_id: 'room-153',
+  hs_id: 'hs-153',
+  truong_id: 'sch-153',
+  room_opened_at: 1000,
+  ma_de: '153',
+  raw_answers: [{ cau: 1, chon: 'A' }],
+  client_submitted_at: '2026-09-04T00:00:00.000Z',
+  auto_submit: false
+};
+envR153.api.setState({ hs_id: 'hs-153', truong_id: 'sch-153', phong_id: 'room-153' });
+const ok153 = envR153.api.persistFinalSnapshotVerified(snapR153);
+assert.strictEqual(ok153, true, "R153: persistFinalSnapshotVerified returns true on exact match");
+const readBack153 = JSON.parse(envR153.localStore.get('final_damsan_room-153_hs-153'));
+assert.deepStrictEqual(readBack153, snapR153, "R153: read-back matches snapshot exactly");
+recordR('R153');
+
+// R154: localStorage.setItem throws: no exam lock, receive RPC count 0, draft/evidence retained
+const envR154 = createStudentEnvironment();
+envR154.api.setState({ hs_id: 'hs-154', truong_id: 'sch-154', phong_id: 'room-154', room_opened_at: 1000, ma_de: '154' });
+envR154.api.setIsExamActive(true);
+envR154.localStore.set('nhap_damsan_room-154_hs-154', JSON.stringify({ answers: { 0: 'B' } }));
+envR154.sandbox.localStorage.setItem = () => { throw new Error('QUOTA_EXCEEDED'); };
+
+let receiveCallsR154 = 0;
+envR154.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') receiveCallsR154++;
+  return { data: null, error: null };
+};
+
+const ok154 = envR154.api.finalizeSubmissionOnce(false);
+assert.strictEqual(ok154, false, "R154: finalizeSubmissionOnce returns false when setItem throws");
+assert.strictEqual(envR154.api.getIsExamActive(), true, "R154: exam not locked when storage fails");
+assert.strictEqual(receiveCallsR154, 0, "R154: receive RPC not called when storage fails");
+assert(envR154.localStore.has('nhap_damsan_room-154_hs-154'), "R154: draft evidence retained under real key");
+recordR('R154');
+
+// R155: read-back is missing/corrupt: no exam lock, no receive RPC
+const envR155 = createStudentEnvironment();
+envR155.api.setState({ hs_id: 'hs-155', truong_id: 'sch-155', phong_id: 'room-155', room_opened_at: 1000, ma_de: '155' });
+envR155.api.setIsExamActive(true);
+let writeCount155 = 0;
+envR155.sandbox.localStorage.setItem = (k, v) => { writeCount155++; };
+envR155.sandbox.localStorage.getItem = (k) => {
+  if (writeCount155 === 0) return null; // initial existing-final read returns null
+  return "corrupt-non-json{{{"; // read-back fails
+};
+
+let receiveCallsR155 = 0;
+envR155.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') receiveCallsR155++;
+  return { data: null, error: null };
+};
+
+const ok155 = envR155.api.finalizeSubmissionOnce(false);
+assert.strictEqual(ok155, false, "R155: finalizeSubmissionOnce returns false when read-back is corrupt");
+assert.strictEqual(envR155.api.getIsExamActive(), true, "R155: exam not locked when read-back corrupt");
+assert.strictEqual(receiveCallsR155, 0, "R155: receive RPC not called when read-back corrupt");
+assert(writeCount155 >= 1, "R155: setItem write was attempted before read-back failed");
+recordR('R155');
+
+// R156: raw_answers read-back differs: fail safe, no receive RPC
+const envR156 = createStudentEnvironment();
+envR156.api.setState({ hs_id: 'hs-156', truong_id: 'sch-156', phong_id: 'room-156', room_opened_at: 1000, ma_de: '156' });
+envR156.api.setIsExamActive(true);
+let storedVal156 = null;
+envR156.sandbox.localStorage.setItem = (k, v) => { storedVal156 = v; };
+envR156.sandbox.localStorage.getItem = () => {
+  if (!storedVal156) return null;
+  const parsed = JSON.parse(storedVal156);
+  parsed.raw_answers = [{ cau: 99, chon: 'TAMPERED' }];
+  return JSON.stringify(parsed);
+};
+
+let receiveCallsR156 = 0;
+envR156.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') receiveCallsR156++;
+  return { data: null, error: null };
+};
+
+const ok156 = envR156.api.finalizeSubmissionOnce(false);
+assert.strictEqual(ok156, false, "R156: fail safe when raw_answers differ on read-back");
+assert.strictEqual(receiveCallsR156, 0, "R156: receive RPC not called when raw_answers differ");
+recordR('R156');
+
+// R157: valid FINAL must exist in localStorage before lockExamForFinalSubmission is called
+const envR157 = createStudentEnvironment();
+envR157.api.setState({ hs_id: 'hs-157', truong_id: 'sch-157', phong_id: 'room-157', room_opened_at: 1000, ma_de: '157' });
+let finalExistedBeforeLock157 = false;
+envR157.sandbox.lockExamForFinalSubmission = () => {
+  const raw = envR157.localStore.get('final_damsan_room-157_hs-157');
+  if (raw) {
+    try {
+      const p = JSON.parse(raw);
+      if (p.attempt_id && p.state === 'FINAL_PENDING') finalExistedBeforeLock157 = true;
+    } catch(e) {}
+  }
+};
+envR157.api.finalizeSubmissionOnce(false);
+assert.strictEqual(finalExistedBeforeLock157, true, "R157: verified final snapshot was in localStorage before lockExam was invoked");
+recordR('R157');
+
+// R158: existing valid FINAL reuses SAME attempt_id and raw_answers
+const envR158 = createStudentEnvironment();
+const existingSnap158 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'attempt-reused-158',
+  phong_id: 'room-158',
+  hs_id: 'hs-158',
+  truong_id: 'sch-158',
+  room_opened_at: 1000,
+  ma_de: '158',
+  raw_answers: [{ cau: 1, chon: 'ORIGINAL_158' }],
+  client_submitted_at: '2026-09-04T00:00:00.000Z'
+};
+envR158.api.setState({ hs_id: 'hs-158', truong_id: 'sch-158', phong_id: 'room-158', room_opened_at: 1000, ma_de: '158' });
+envR158.localStore.set('final_damsan_room-158_hs-158', JSON.stringify(existingSnap158));
+
+let receiveParams158 = null;
+envR158.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') receiveParams158 = params;
+  return { data: { status: 'received', submission_id: 'sub-158', received_at: '2026-09-04T00:01:00.000Z' }, error: null };
+};
+
+envR158.api.finalizeSubmissionOnce(false);
+assert(receiveParams158, "R158: receive submission was called");
+assert.strictEqual(receiveParams158.p_attempt_id, 'attempt-reused-158', "R158: same attempt_id reused");
+assert.deepStrictEqual(receiveParams158.p_raw_answers, [{ cau: 1, chon: 'ORIGINAL_158' }], "R158: same raw_answers reused");
+recordR('R158');
+
+// R159: existing malformed/context-mismatched FINAL is not overwritten with a new attempt
+const envR159 = createStudentEnvironment();
+const mismatchedSnap159 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'attempt-mismatched-159',
+  phong_id: 'OTHER_ROOM',
+  hs_id: 'hs-159',
+  truong_id: 'sch-159',
+  room_opened_at: 9999,
+  ma_de: '999',
+  raw_answers: [{ cau: 1, chon: 'X' }]
+};
+envR159.api.setState({ hs_id: 'hs-159', truong_id: 'sch-159', phong_id: 'room-159', room_opened_at: 1000, ma_de: '159' });
+envR159.localStore.set('final_damsan_room-159_hs-159', JSON.stringify(mismatchedSnap159));
+
+const ok159 = envR159.api.finalizeSubmissionOnce(false);
+assert.strictEqual(ok159, false, "R159: finalizeSubmissionOnce returns false on context mismatch");
+const after159 = JSON.parse(envR159.localStore.get('final_damsan_room-159_hs-159'));
+assert.strictEqual(after159.attempt_id, 'attempt-mismatched-159', "R159: original snapshot preserved, not overwritten with new attempt");
+recordR('R159');
+
+// R160: receive RPC timeout: direct test of real callRpcWithTimeout + receiveFinalSubmission behavior
+const envR160 = createStudentEnvironment();
+const snap160 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-160',
+  phong_id: 'room-160',
+  hs_id: 'hs-160',
+  truong_id: 'sch-160',
+  room_opened_at: 1000,
+  ma_de: '160',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR160.api.setState({ hs_id: 'hs-160', truong_id: 'sch-160', phong_id: 'room-160', room_opened_at: 1000, ma_de: '160' });
+envR160.localStore.set('final_damsan_room-160_hs-160', JSON.stringify(snap160));
+
+// 1. Direct test of the REAL callRpcWithTimeout implementation using controlled fake timer
+let timeoutCb160 = null;
+envR160.sandbox.setTimeout = (fn) => { timeoutCb160 = fn; return 1; };
+let slowRpcResolve = null;
+const slowRpcPromise = new Promise(resolve => { slowRpcResolve = resolve; });
+let timeoutErr = null;
+const timeoutCall = envR160.api.callRpcWithTimeout(slowRpcPromise, 50);
+if (typeof timeoutCb160 === 'function') timeoutCb160();
+try {
+  await timeoutCall;
+} catch (err) {
+  timeoutErr = err;
+}
+assert(timeoutErr && timeoutErr.message === 'RPC_TIMEOUT', "R160: real callRpcWithTimeout rejects RPC_TIMEOUT");
+slowRpcResolve({ data: { status: 'received' }, error: null });
+await new Promise(r => setImmediate(r));
+assert.strictEqual(timeoutErr.message, 'RPC_TIMEOUT', "R160: later resolution does not change timed-out status");
+
+// 2. Test receiveFinalSubmission single RPC and scheduled retry
+let rpcCount160 = 0;
+let scheduledDelay160 = null;
+envR160.sandbox.setTimeout = (fn, ms) => {
+  if (ms > 10000) scheduledDelay160 = ms;
+  return 12345;
+};
+
+envR160.sandbox.callRpcWithTimeout = async () => {
+  rpcCount160++;
+  throw new Error('RPC_TIMEOUT');
+};
+
+await envR160.api.receiveFinalSubmission();
+
+assert.strictEqual(rpcCount160, 1, "R160: exactly ONE RPC launched");
+assert.strictEqual(envR160.api.getIsSubmitting(), false, "R160: isSubmitting reset to false");
+const snapAfter160 = JSON.parse(envR160.localStore.get('final_damsan_room-160_hs-160'));
+assert.strictEqual(snapAfter160.state, 'FINAL_PENDING', "R160: state remains FINAL_PENDING");
+assert(scheduledDelay160 >= 12000 && scheduledDelay160 <= 20000, "R160: delayed retry timer scheduled in jitter range");
+recordR('R160');
+
+// R161: timed-out underlying Promise may later resolve, but client does NOT launch multiple immediate RPCs
+const envR161 = createStudentEnvironment();
+const snap161 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-161',
+  phong_id: 'room-161',
+  hs_id: 'hs-161',
+  truong_id: 'sch-161',
+  room_opened_at: 1000,
+  ma_de: '161',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR161.api.setState({ hs_id: 'hs-161', truong_id: 'sch-161', phong_id: 'room-161', room_opened_at: 1000, ma_de: '161' });
+envR161.localStore.set('final_damsan_room-161_hs-161', JSON.stringify(snap161));
+
+let rpcInvocations161 = 0;
+let resolveLateRpc161 = null;
+envR161.mockSupabase.rpc = (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    rpcInvocations161++;
+    return new Promise((resolve) => {
+      resolveLateRpc161 = resolve;
+    });
+  }
+  return Promise.resolve({ data: null, error: null });
+};
+
+envR161.sandbox.setTimeout = () => 999;
+envR161.sandbox.callRpcWithTimeout = () => {
+  return new Promise((_, reject) => {
+    setImmediate(() => reject(new Error('RPC_TIMEOUT')));
+  });
+};
+
+await envR161.api.receiveFinalSubmission();
+
+assert.strictEqual(rpcInvocations161, 1, "R161: exactly 1 RPC launched prior to timeout");
+assert.strictEqual(envR161.api.getIsSubmitting(), false, "R161: isSubmitting is false");
+
+if (resolveLateRpc161) {
+  resolveLateRpc161({ data: { status: 'received', submission_id: 'sub-late', received_at: '2026-09-04T00:00:00.000Z' }, error: null });
+}
+await new Promise(r => setImmediate(r));
+
+assert.strictEqual(rpcInvocations161, 1, "R161: NO second immediate RPC was launched even after slow RPC resolved");
+recordR('R161');
+
+// R162: delayed retry delay is within configured jitter range (12000-20000 ms), not fixed 10000 ms
+const envR162 = createStudentEnvironment();
+for (let i = 0; i < 50; i++) {
+  const d = envR162.api.getDelayedRetryDelayMs();
+  assert(d >= 12000 && d <= 20000, "R162: delay outside 12000-20000 ms");
+  assert.notStrictEqual(d, 10000, "R162: delay must not be fixed 10000 ms");
+}
+recordR('R162');
+
+// R163: 35 simulated students/retry schedules do not all receive an identical fixed retry instant (deterministic mock)
+const envR163 = createStudentEnvironment();
+const delays163 = new Set();
+const originalMathRandom163 = envR163.sandbox.Math.random;
+try {
+  for (let i = 0; i < 35; i++) {
+    envR163.sandbox.Math.random = () => i / 35;
+    const d = envR163.api.getDelayedRetryDelayMs();
+    assert(d >= 12000 && d <= 20000, "R163: delay must be within 12000-20000 ms");
+    assert.notStrictEqual(d, 10000, "R163: delay must not be fixed 10000 ms");
+    delays163.add(d);
+  }
+  assert.strictEqual(delays163.size, 35, "R163: all 35 students receive distinct, distributed retry delays");
+} finally {
+  envR163.sandbox.Math.random = originalMathRandom163;
+}
+recordR('R163');
+
+// R164: one delayed retry invocation performs exactly ONE RPC
+const envR164 = createStudentEnvironment();
+const snap164 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-164',
+  phong_id: 'room-164',
+  hs_id: 'hs-164',
+  truong_id: 'sch-164',
+  room_opened_at: 1000,
+  ma_de: '164',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR164.api.setState({ hs_id: 'hs-164', truong_id: 'sch-164', phong_id: 'room-164', room_opened_at: 1000, ma_de: '164' });
+envR164.localStore.set('final_damsan_room-164_hs-164', JSON.stringify(snap164));
+
+let rpcCount164 = 0;
+envR164.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    rpcCount164++;
+    return { data: { status: 'received', submission_id: 'sub-164', received_at: '2026-09-04T00:00:00.000Z' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+let retryCallback164 = null;
+envR164.sandbox.setTimeout = (fn) => {
+  retryCallback164 = fn;
+  return 1;
+};
+
+envR164.api.scheduleDelayedSubmissionRetry(15000);
+assert(typeof retryCallback164 === 'function', "R164: retry callback captured");
+
+await retryCallback164();
+assert.strictEqual(rpcCount164, 1, "R164: exactly ONE RPC fired by delayed retry invocation");
+recordR('R164');
+
+// R165: same attempt_id/raw_answers reused after delayed retry
+const envR165 = createStudentEnvironment();
+const snap165 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-immutable-165',
+  phong_id: 'room-165',
+  hs_id: 'hs-165',
+  truong_id: 'sch-165',
+  room_opened_at: 1000,
+  ma_de: '165',
+  raw_answers: [{ cau: 1, chon: 'ORIGINAL_165' }]
+};
+envR165.api.setState({ hs_id: 'hs-165', truong_id: 'sch-165', phong_id: 'room-165', room_opened_at: 1000, ma_de: '165' });
+envR165.localStore.set('final_damsan_room-165_hs-165', JSON.stringify(snap165));
+
+let receivedParams165 = null;
+envR165.mockSupabase.rpc = async (name, params) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    receivedParams165 = params;
+    return { data: { status: 'received', submission_id: 'sub-165', received_at: '2026-09-04T00:00:00.000Z' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+let retryCb165 = null;
+envR165.sandbox.setTimeout = (fn) => { retryCb165 = fn; return 1; };
+envR165.api.scheduleDelayedSubmissionRetry(15000);
+await retryCb165();
+
+assert(receivedParams165, "R165: received params recorded");
+assert.strictEqual(receivedParams165.p_attempt_id, 'att-immutable-165', "R165: same attempt_id reused");
+assert.deepStrictEqual(receivedParams165.p_raw_answers, [{ cau: 1, chon: 'ORIGINAL_165' }], "R165: same raw_answers reused");
+recordR('R165');
+
+// R166: duplicate scheduling attempts create only ONE active retry timer
+const envR166 = createStudentEnvironment();
+let timerCount166 = 0;
+envR166.sandbox.setTimeout = () => {
+  timerCount166++;
+  return timerCount166;
+};
+
+envR166.api.scheduleDelayedSubmissionRetry(15000);
+envR166.api.scheduleDelayedSubmissionRetry(15000);
+envR166.api.scheduleDelayedSubmissionRetry(15000);
+
+assert.strictEqual(timerCount166, 1, "R166: duplicate scheduleDelayedSubmissionRetry calls create only ONE timer");
+recordR('R166');
+
+// R167: after maximum 6 automatic delayed retries: no further timer, FINAL_PENDING remains, server receipt is not invented
+const envR167 = createStudentEnvironment();
+const snap167 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-167',
+  phong_id: 'room-167',
+  hs_id: 'hs-167',
+  truong_id: 'sch-167',
+  room_opened_at: 1000,
+  ma_de: '167',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR167.api.setState({ hs_id: 'hs-167', truong_id: 'sch-167', phong_id: 'room-167', room_opened_at: 1000, ma_de: '167' });
+envR167.localStore.set('final_damsan_room-167_hs-167', JSON.stringify(snap167));
+
+envR167.api.setSubmissionRetryCount(6);
+
+let timerScheduled167 = false;
+envR167.sandbox.setTimeout = () => { timerScheduled167 = true; return 1; };
+
+envR167.api.scheduleDelayedSubmissionRetry(15000);
+
+assert.strictEqual(timerScheduled167, false, "R167: no further timer scheduled after 6 retries");
+const snapAfter167 = JSON.parse(envR167.localStore.get('final_damsan_room-167_hs-167'));
+assert.strictEqual(snapAfter167.state, 'FINAL_PENDING', "R167: FINAL_PENDING preserved");
+assert.strictEqual(envR167.localStore.has('receipt_damsan_room-167_hs-167'), false, "R167: no receipt invented");
+const retryMsgEl = envR167.sandbox.document.getElementById('retry-status-msg');
+assert(retryMsgEl.innerText.includes('Hãy báo giáo viên'), "R167: teacher report warning message displayed");
+recordR('R167');
+
+// R168: invalid_session: no retry timer, FINAL preserved, login recovery maintained
+const envR168 = createStudentEnvironment();
+const snap168 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-168',
+  phong_id: 'room-168',
+  hs_id: 'hs-168',
+  truong_id: 'sch-168',
+  room_opened_at: 1000,
+  ma_de: '168',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR168.api.setState({ hs_id: 'hs-168', truong_id: 'sch-168', phong_id: 'room-168', room_opened_at: 1000, ma_de: '168' });
+envR168.localStore.set('final_damsan_room-168_hs-168', JSON.stringify(snap168));
+
+let currentSection168 = 'exam-section';
+envR168.sandbox.showSection = (s) => { currentSection168 = s; };
+
+envR168.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    return { data: { status: 'error', code: 'invalid_session', message: 'Phiên đăng nhập đã hết hạn.' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+await envR168.api.receiveFinalSubmission();
+
+assert.strictEqual(envR168.api.getDelayedRetryTimer(), null, "R168: no delayed retry timer on invalid_session");
+const snapAfter168 = JSON.parse(envR168.localStore.get('final_damsan_room-168_hs-168'));
+assert.strictEqual(snapAfter168.state, 'FINAL_PENDING', "R168: FINAL_PENDING preserved");
+assert.strictEqual(currentSection168, 'login-section', "R168: navigated to login-section for re-auth");
+recordR('R168');
+
+// R169: room_attempt_changed: existing archive/reset semantics remain correct
+const envR169 = createStudentEnvironment();
+const snap169 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-169',
+  phong_id: 'room-169',
+  hs_id: 'hs-169',
+  truong_id: 'sch-169',
+  room_opened_at: 1000,
+  ma_de: '169',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR169.api.setState({ hs_id: 'hs-169', truong_id: 'sch-169', phong_id: 'room-169', room_opened_at: 1000, ma_de: '169' });
+envR169.localStore.set('final_damsan_room-169_hs-169', JSON.stringify(snap169));
+
+let currentSection169 = 'exam-section';
+envR169.sandbox.showSection = (s) => { currentSection169 = s; };
+
+envR169.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    return { data: { status: 'error', code: 'room_attempt_changed', message: 'Lượt thi đã reset.' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+await envR169.api.receiveFinalSubmission();
+
+assert.strictEqual(envR169.api.getDelayedRetryTimer(), null, "R169: no retry timer on room_attempt_changed");
+assert.strictEqual(envR169.localStore.has('final_damsan_room-169_hs-169'), false, "R169: active final key cleared");
+assert(envR169.localStore.has('recovery_damsan_room-169_hs-169_att-169'), "R169: snapshot safely archived in recovery key");
+assert.strictEqual(currentSection169, 'room-section', "R169: navigated to room-section");
+recordR('R169');
+
+// R170: structured terminal application error: no endless retry, FINAL preserved
+const envR170 = createStudentEnvironment();
+const snap170 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-170',
+  phong_id: 'room-170',
+  hs_id: 'hs-170',
+  truong_id: 'sch-170',
+  room_opened_at: 1000,
+  ma_de: '170',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR170.api.setState({ hs_id: 'hs-170', truong_id: 'sch-170', phong_id: 'room-170', room_opened_at: 1000, ma_de: '170' });
+envR170.localStore.set('final_damsan_room-170_hs-170', JSON.stringify(snap170));
+
+envR170.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    return { data: { status: 'error', code: 'submission_conflict', message: 'Xung đột bài nộp.' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+await envR170.api.receiveFinalSubmission();
+
+assert.strictEqual(envR170.api.getDelayedRetryTimer(), null, "R170: no delayed retry timer on structured terminal error");
+const snapAfter170 = JSON.parse(envR170.localStore.get('final_damsan_room-170_hs-170'));
+assert.strictEqual(snapAfter170.state, 'FINAL_PENDING', "R170: FINAL_PENDING preserved");
+recordR('R170');
+
+// R171: valid receipt requires BOTH submission_id and received_at
+const envR171 = createStudentEnvironment();
+const snap171 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-171',
+  phong_id: 'room-171',
+  hs_id: 'hs-171',
+  truong_id: 'sch-171',
+  room_opened_at: 1000,
+  ma_de: '171',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR171.api.setState({ hs_id: 'hs-171', truong_id: 'sch-171', phong_id: 'room-171', room_opened_at: 1000, ma_de: '171' });
+envR171.localStore.set('final_damsan_room-171_hs-171', JSON.stringify(snap171));
+
+envR171.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    return { data: { status: 'received', submission_id: 'sub-missing-date' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+await envR171.api.receiveFinalSubmission();
+
+const snapAfter171 = JSON.parse(envR171.localStore.get('final_damsan_room-171_hs-171'));
+assert.strictEqual(snapAfter171.state, 'FINAL_PENDING', "R171: receipt missing received_at rejected; remains FINAL_PENDING");
+assert.strictEqual(envR171.localStore.has('receipt_damsan_room-171_hs-171'), false, "R171: invalid receipt not saved");
+assert.notStrictEqual(envR171.api.getDelayedRetryTimer(), null, "R171: retry scheduled when receipt is incomplete");
+recordR('R171');
+
+// R172: valid receipt clears retry timer/counter and transitions SERVER_RECEIVED
+const envR172 = createStudentEnvironment();
+const snap172 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-172',
+  phong_id: 'room-172',
+  hs_id: 'hs-172',
+  truong_id: 'sch-172',
+  room_opened_at: 1000,
+  ma_de: '172',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR172.api.setState({ hs_id: 'hs-172', truong_id: 'sch-172', phong_id: 'room-172', room_opened_at: 1000, ma_de: '172' });
+envR172.localStore.set('final_damsan_room-172_hs-172', JSON.stringify(snap172));
+
+envR172.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    return { data: { status: 'received', submission_id: 'sub-valid-172', received_at: '2026-09-04T00:05:00.000Z' }, error: null };
+  }
+  if (name === 'rpc_hoc_sinh_grade_submission') {
+    return { data: { status: 'graded' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+envR172.sandbox.setTimeout = (fn, ms) => 7777;
+
+envR172.api.setSubmissionRetryCount(3);
+envR172.api.scheduleDelayedSubmissionRetry(15000);
+assert.strictEqual(envR172.api.getDelayedRetryTimer(), 7777, "R172: retry timer active before receive");
+
+await envR172.api.receiveFinalSubmission();
+
+assert.strictEqual(envR172.api.getDelayedRetryTimer(), null, "R172: retry timer cleared");
+assert.strictEqual(envR172.api.getSubmissionRetryCount(), 0, "R172: retry count reset to 0");
+const snapAfter172 = JSON.parse(envR172.localStore.get('final_damsan_room-172_hs-172'));
+assert.strictEqual(snapAfter172.state, 'SERVER_RECEIVED', "R172: valid receipt clears retry timer/counter and transitions SERVER_RECEIVED");
+const receipt172 = JSON.parse(envR172.localStore.get('receipt_damsan_room-172_hs-172'));
+assert.strictEqual(receipt172.submission_id, 'sub-valid-172', "R172: exact mocked submission_id saved");
+assert.strictEqual(receipt172.received_at, '2026-09-04T00:05:00.000Z', "R172: exact mocked received_at saved");
+recordR('R172');
+
+// R173: Service Worker controllerchange during active exam does not reload
+const envR173 = createStudentEnvironment();
+envR173.dispatchDocumentEvent('DOMContentLoaded');
+envR173.api.setIsExamActive(true);
+let reloadCount173 = 0;
+envR173.sandbox.window.location.reload = () => { reloadCount173++; };
+
+envR173.dispatchSwEvent('controllerchange');
+
+assert.strictEqual(reloadCount173, 0, "R173: window.location.reload NOT called during exam");
+assert.strictEqual(envR173.api.getDeferredReloadNeeded(), true, "R173: reload deferred until idle");
+recordR('R173');
+
+// R174: Service Worker controllerchange during FINAL_PENDING does not reload
+const envR174 = createStudentEnvironment();
+envR174.dispatchDocumentEvent('DOMContentLoaded');
+envR174.api.setIsExamActive(false);
+const snap174 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-174',
+  phong_id: 'room-174',
+  hs_id: 'hs-174',
+  truong_id: 'sch-174',
+  room_opened_at: 1000,
+  ma_de: '174',
+  raw_answers: []
+};
+envR174.api.setState({ hs_id: 'hs-174', truong_id: 'sch-174', phong_id: 'room-174' });
+envR174.localStore.set('final_damsan_room-174_hs-174', JSON.stringify(snap174));
+
+let reloadCount174 = 0;
+envR174.sandbox.window.location.reload = () => { reloadCount174++; };
+
+envR174.dispatchSwEvent('controllerchange');
+
+assert.strictEqual(reloadCount174, 0, "R174: reload NOT called during FINAL_PENDING");
+assert.strictEqual(envR174.api.getDeferredReloadNeeded(), true, "R174: reload deferred");
+recordR('R174');
+
+// R175: safe idle state may apply deferred SW update/reload
+const envR175 = createStudentEnvironment();
+envR175.dispatchDocumentEvent('DOMContentLoaded');
+envR175.api.setIsExamActive(false);
+envR175.api.setState({ hs_id: 'hs-175', truong_id: 'sch-175', phong_id: 'room-175' });
+let reloadCount175 = 0;
+envR175.sandbox.window.location.reload = () => { reloadCount175++; };
+
+envR175.dispatchSwEvent('controllerchange');
+
+assert.strictEqual(reloadCount175, 1, "R175: deferred reload executed when entering safe idle state");
+recordR('R175');
+
+// R176: DRAFT stored in final_damsan_* is rejected and not sent
+const envR176 = createStudentEnvironment();
+envR176.api.setState({ hs_id: 'hs-176', truong_id: 'sch-176', phong_id: 'room-176', room_opened_at: 1000, ma_de: '176' });
+envR176.api.setIsExamActive(true);
+const draftInFinalSnap176 = {
+  version: 1,
+  state: 'DRAFT',
+  attempt_id: 'att-draft-176',
+  phong_id: 'room-176',
+  hs_id: 'hs-176',
+  truong_id: 'sch-176',
+  room_opened_at: 1000,
+  ma_de: '176',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR176.localStore.set('final_damsan_room-176_hs-176', JSON.stringify(draftInFinalSnap176));
+let rpcCount176 = 0;
+envR176.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') rpcCount176++;
+  return { data: null, error: null };
+};
+
+const ok176 = envR176.api.finalizeSubmissionOnce(false);
+assert.strictEqual(ok176, false, "R176: DRAFT in final snapshot rejected");
+assert.strictEqual(rpcCount176, 0, "R176: receive RPC not called");
+assert.strictEqual(envR176.api.getIsExamActive(), true, "R176: exam not locked on invalid candidate");
+const after176 = JSON.parse(envR176.localStore.get('final_damsan_room-176_hs-176'));
+assert.strictEqual(after176.state, 'DRAFT', "R176: evidence preserved, not overwritten with new attempt");
+recordR('R176');
+
+// R177: manual submit sends receive immediately after verified persistence
+const envR177 = createStudentEnvironment();
+envR177.api.setState({ hs_id: 'hs-177', truong_id: 'sch-177', phong_id: 'room-177', room_opened_at: 1000, ma_de: '177' });
+envR177.api.setIsExamActive(true);
+let rpcCount177 = 0;
+envR177.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') rpcCount177++;
+  return { data: { status: 'received', submission_id: 'sub-177', received_at: '2026-09-04T00:00:00.000Z' }, error: null };
+};
+
+const ok177 = envR177.api.finalizeSubmissionOnce(false);
+assert.strictEqual(ok177, true, "R177: finalizeSubmissionOnce succeeds");
+assert.strictEqual(envR177.api.getIsExamActive(), false, "R177: exam locked immediately");
+assert.strictEqual(rpcCount177, 1, "R177: receive RPC called immediately without initial jitter");
+assert.strictEqual(envR177.api.autoSubmitInitialSendTimer(), null, "R177: no auto-submit timer for manual submission");
+recordR('R177');
+
+// R178: auto-submit persists + locks immediately but receive RPC count remains 0 before initial jitter timer fires
+const envR178 = createStudentEnvironment();
+envR178.api.setState({ hs_id: 'hs-178', truong_id: 'sch-178', phong_id: 'room-178', room_opened_at: 1000, ma_de: '178' });
+envR178.api.setIsExamActive(true);
+let rpcCount178 = 0;
+envR178.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') rpcCount178++;
+  return { data: { status: 'received', submission_id: 'sub-178', received_at: '2026-09-04T00:00:00.000Z' }, error: null };
+};
+
+let initialTimerDelay178 = null;
+let initialTimerCallback178 = null;
+envR178.sandbox.setTimeout = (fn, ms) => {
+  initialTimerCallback178 = fn;
+  initialTimerDelay178 = ms;
+  return 17800;
+};
+
+const ok178 = envR178.api.finalizeSubmissionOnce(true);
+assert.strictEqual(ok178, true, "R178: auto-submit finalizeSubmissionOnce succeeds");
+assert.strictEqual(envR178.api.getIsExamActive(), false, "R178: exam locked immediately at deadline");
+assert.strictEqual(rpcCount178, 0, "R178: receive RPC NOT called before initial jitter timer fires");
+const snap178 = JSON.parse(envR178.localStore.get('final_damsan_room-178_hs-178'));
+assert.strictEqual(snap178.state, 'FINAL_PENDING', "R178: FINAL snapshot persisted immediately");
+assert(initialTimerDelay178 >= 0 && initialTimerDelay178 <= 7000, "R178: initial send timer delay within 0-7000ms");
+assert.strictEqual(envR178.api.autoSubmitInitialSendTimer(), 17800, "R178: timer recorded in active handle");
+recordR('R178');
+
+// R179: auto-submit timer delay is within 0–7000 ms
+const envR179 = createStudentEnvironment();
+for (let i = 0; i < 50; i++) {
+  const delay = envR179.api.getAutoSubmitInitialJitterMs();
+  assert(delay >= 0 && delay <= 7000, "R179: delay must be within 0-7000 ms");
+}
+recordR('R179');
+
+// R180: 35 deterministic auto-submit clients obtain distributed initial-send delays
+const envR180 = createStudentEnvironment();
+const delays180 = new Set();
+const origRandom180 = envR180.sandbox.Math.random;
+try {
+  for (let i = 0; i < 35; i++) {
+    envR180.sandbox.Math.random = () => i / 35;
+    const d = envR180.api.getAutoSubmitInitialJitterMs();
+    assert(d >= 0 && d <= 7000, "R180: delay within range");
+    delays180.add(d);
+  }
+  assert.strictEqual(delays180.size, 35, "R180: all 35 auto-submit delays are distributed across 0-7000 ms");
+} finally {
+  envR180.sandbox.Math.random = origRandom180;
+}
+recordR('R180');
+
+// R181: one auto-submit timer callback creates exactly one receive RPC
+const envR181 = createStudentEnvironment();
+envR181.api.setState({ hs_id: 'hs-181', truong_id: 'sch-181', phong_id: 'room-181', room_opened_at: 1000, ma_de: '181' });
+let rpcCount181 = 0;
+envR181.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') rpcCount181++;
+  return { data: { status: 'received', submission_id: 'sub-181', received_at: '2026-09-04T00:00:00.000Z' }, error: null };
+};
+
+let timerCb181 = null;
+envR181.sandbox.setTimeout = (fn) => { timerCb181 = fn; return 1; };
+envR181.api.finalizeSubmissionOnce(true);
+
+assert.strictEqual(rpcCount181, 0, "R181: 0 RPC before timer callback");
+assert(typeof timerCb181 === 'function', "R181: timer callback exists");
+await timerCb181();
+assert.strictEqual(rpcCount181, 1, "R181: exactly ONE receive RPC executed by auto-submit timer callback");
+recordR('R181');
+
+// R182: valid receipt clears initial auto-submit timer
+const envR182 = createStudentEnvironment();
+envR182.api.setState({ hs_id: 'hs-182', truong_id: 'sch-182', phong_id: 'room-182', room_opened_at: 1000, ma_de: '182' });
+envR182.sandbox.setTimeout = () => 18200;
+envR182.api.scheduleAutoSubmitInitialSend(3000);
+assert.strictEqual(envR182.api.autoSubmitInitialSendTimer(), 18200, "R182: initial timer set");
+
+envR182.api.teardownStudentBackgroundAfterReceipt();
+assert.strictEqual(envR182.api.autoSubmitInitialSendTimer(), null, "R182: initial auto-submit timer cleared on receipt teardown");
+recordR('R182');
+
+// R183: valid receipt tears down room/result realtime channels
+const envR183 = createStudentEnvironment();
+const ch1 = envR183.sandbox._supabase.channel('room-ch');
+const ch2 = envR183.sandbox._supabase.channel('result-ch');
+ch1.subscribe();
+ch2.subscribe();
+envR183.api.setRealtimeChannel(ch1);
+envR183.api.setRealtimeResultChannel(ch2);
+assert.strictEqual(ch1.subscribed, true, "R183: room channel subscribed");
+assert.strictEqual(ch2.subscribed, true, "R183: result channel subscribed");
+
+envR183.api.teardownStudentBackgroundAfterReceipt();
+assert.strictEqual(envR183.removedChannels.length >= 2, true, "R183: channels removed on teardown");
+assert.strictEqual(envR183.api.getRealtimeChannel(), null, "R183: realtimeChannel cleared");
+assert.strictEqual(envR183.api.getRealtimeResultChannel(), null, "R183: realtimeResultChannel cleared");
+recordR('R183');
+
+// R184: valid receipt tears down post-receipt realtime + 12s polling timer
+const envR184 = createStudentEnvironment();
+envR184.api.setState({ phong_id: 'room-184', room_opened_at: 1000 });
+envR184.api.batDauPostReceiptLifecycleWatcher();
+assert(envR184.intervals.some(i => i.ms === 12000 && !i.cleared), "R184: 12s polling timer was active");
+
+envR184.api.teardownStudentBackgroundAfterReceipt();
+assert(envR184.intervals.every(i => i.ms !== 12000 || i.cleared), "R184: 12s polling timer cleared");
+recordR('R184');
+
+// R185: showReceivedState does NOT call batDauPostReceiptLifecycleWatcher
+const envR185 = createStudentEnvironment();
+envR185.api.setState({ phong_id: 'room-185', room_opened_at: 1000, ho_ten: 'Student 185' });
+const mockReceipt185 = { submission_id: 'sub-185', received_at: '2026-09-04T00:00:00.000Z' };
+
+envR185.api.showReceivedState(mockReceipt185);
+
+assert(envR185.intervals.every(i => i.ms !== 12000 || i.cleared), "R185: no 12s post-receipt poll timer created by showReceivedState");
+assert.strictEqual(envR185.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, "R185: no post-receipt channel active");
+recordR('R185');
+
+// R186: SERVER_RECEIVED online event does not restart background polling/realtime
+const envR186 = createStudentEnvironment();
+const snap186 = {
+  version: 1,
+  state: 'SERVER_RECEIVED',
+  attempt_id: 'att-186',
+  phong_id: 'room-186',
+  hs_id: 'hs-186',
+  truong_id: 'sch-186',
+  room_opened_at: 1000,
+  ma_de: '186',
+  raw_answers: []
+};
+envR186.api.setState({ hs_id: 'hs-186', truong_id: 'sch-186', phong_id: 'room-186' });
+envR186.localStore.set('final_damsan_room-186_hs-186', JSON.stringify(snap186));
+
+envR186.dispatchWindowEvent('online');
+
+assert.strictEqual(envR186.mockChannels.some(c => c.subscribed), false, "R186: no realtime channels started on online");
+assert(envR186.intervals.every(i => i.ms !== 12000 || i.cleared), "R186: no post-receipt lifecycle polling started on online");
+recordR('R186');
+
+// R187: FINAL_PENDING online recovery still attempts safe submission
+const envR187 = createStudentEnvironment();
+const snap187 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-187',
+  phong_id: 'room-187',
+  hs_id: 'hs-187',
+  truong_id: 'sch-187',
+  room_opened_at: 1000,
+  ma_de: '187',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR187.api.setState({ hs_id: 'hs-187', truong_id: 'sch-187', phong_id: 'room-187', room_opened_at: 1000, ma_de: '187' });
+envR187.localStore.set('final_damsan_room-187_hs-187', JSON.stringify(snap187));
+
+let rpcCalls187 = 0;
+envR187.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') rpcCalls187++;
+  if (name === 'rpc_hoc_sinh_submission_receipt_status') return { data: { status: 'missing', reset_confirmed: false, room_exists: true }, error: null };
+  return { data: { status: 'received', submission_id: 'sub-187', received_at: '2026-09-04T00:00:00.000Z' }, error: null };
+};
+
+envR187.dispatchWindowEvent('online');
+await new Promise(r => setTimeout(r, 50));
+
+assert(rpcCalls187 >= 1, "R187: receive submission attempted on online recovery");
+recordR('R187');
+
+// R188: manual checkTeacherCommand(false) remains callable after background teardown
+const envR188 = createStudentEnvironment();
+envR188.api.setState({ hs_id: 'hs-188', truong_id: 'sch-188', phong_id: 'room-188' });
+envR188.mockSupabase._fromData = {
+  phong_thi: { id: 'room-188', trang_thai: 'CONG_BO_DIEM', thoi_gian_mo: 1000 },
+  ket_qua: { id: 'kq-188', diem: 9.0 }
+};
+envR188.api.teardownStudentBackgroundAfterReceipt();
+
+let checkError = null;
+try {
+  await envR188.api.checkTeacherCommand(false);
+} catch (err) {
+  checkError = err;
+}
+assert.strictEqual(checkError, null, "R188: checkTeacherCommand succeeds after teardown");
+assert.strictEqual(envR188.getEl('final_score_val').innerText, '9.00', "R188: score displayed successfully from manual check");
+recordR('R188');
+
+// R189: successful grading does not automatically start publication/result polling
+const envR189 = createStudentEnvironment();
+envR189.api.setState({ hs_id: 'hs-189', truong_id: 'sch-189', phong_id: 'room-189' });
+const snap189 = {
+  version: 1,
+  state: 'SERVER_RECEIVED',
+  attempt_id: 'att-189',
+  phong_id: 'room-189',
+  hs_id: 'hs-189',
+  truong_id: 'sch-189',
+  room_opened_at: 1000,
+  ma_de: '189',
+  raw_answers: []
+};
+envR189.localStore.set('final_damsan_room-189_hs-189', JSON.stringify(snap189));
+
+let checkTeacherCommandCalls189 = 0;
+envR189.sandbox.checkTeacherCommand = () => { checkTeacherCommandCalls189++; };
+
+envR189.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_grade_submission') {
+    return { data: { status: 'graded' }, error: null };
+  }
+  return { data: null, error: null };
+};
+
+await envR189.sandbox.requestGrading('sub-189');
+
+const snapAfter189 = JSON.parse(envR189.localStore.get('final_damsan_room-189_hs-189'));
+assert.strictEqual(snapAfter189.state, 'GRADED', "R189: local snapshot transitioned to GRADED");
+assert.strictEqual(checkTeacherCommandCalls189, 0, "R189: checkTeacherCommand was NOT automatically invoked after grading");
+recordR('R189');
+
+// R190: SERVER_RECEIVED + visibilitychange to visible: zero result-status RPC, zero receive RPC, zero Realtime channel, zero 12s polling, FINAL remains SERVER_RECEIVED
+const envR190 = createStudentEnvironment();
+const snapR190 = {
+  version: 1,
+  state: 'SERVER_RECEIVED',
+  attempt_id: 'att-r190',
+  truong_id: 'school-190',
+  phong_id: 'room-r190',
+  hs_id: 'hs-190',
+  ma_de: '101',
+  room_opened_at: 190000,
+  raw_answers: [{ chon: 'A' }],
+  client_submitted_at: '2026-09-04T10:00:00Z',
+  auto_submit: false
+};
+envR190.localStore.set('final_damsan_room-r190_hs-190', JSON.stringify(snapR190));
+envR190.api.setState({ phong_id: 'room-r190', room_opened_at: 190000, hs_id: 'hs-190', truong_id: 'school-190' });
+envR190.sandbox.document.visibilityState = 'visible';
+
+envR190.dispatchDocumentEvent('visibilitychange');
+await new Promise(resolve => setTimeout(resolve, 50));
+
+const receiveRpcCalls190 = envR190.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission' || c.name === 'rpc_receive_submission');
+const resultStatusRpcCalls190 = envR190.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_result_status' || c.name === 'rpc_hoc_sinh_submission_receipt_status');
+assert.strictEqual(receiveRpcCalls190.length, 0, 'R190: zero receive RPC on visibilitychange for SERVER_RECEIVED');
+assert.strictEqual(resultStatusRpcCalls190.length, 0, 'R190: zero result-status RPC on visibilitychange for SERVER_RECEIVED');
+assert.strictEqual(envR190.rpcCalls.length, 0, 'R190: zero RPC calls overall on visibilitychange for SERVER_RECEIVED');
+assert.strictEqual(envR190.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R190: zero Realtime channel subscribed');
+assert(envR190.intervals.every(i => i.ms !== 12000 || i.cleared), 'R190: zero 12s polling timer active');
+const snapAfter190 = JSON.parse(envR190.localStore.get('final_damsan_room-r190_hs-190'));
+assert.strictEqual(snapAfter190.state, 'SERVER_RECEIVED', 'R190: FINAL remains SERVER_RECEIVED');
+recordR('R190');
+
+// R191: GRADED + visibilitychange to visible: zero automatic Supabase RPC, zero Realtime/polling
+const envR191 = createStudentEnvironment();
+const snapR191 = {
+  version: 1,
+  state: 'GRADED',
+  attempt_id: 'att-r191',
+  truong_id: 'school-191',
+  phong_id: 'room-r191',
+  hs_id: 'hs-191',
+  ma_de: '101',
+  room_opened_at: 191000,
+  raw_answers: [{ chon: 'B' }],
+  client_submitted_at: '2026-09-04T10:00:00Z',
+  auto_submit: false
+};
+envR191.localStore.set('final_damsan_room-r191_hs-191', JSON.stringify(snapR191));
+envR191.api.setState({ phong_id: 'room-r191', room_opened_at: 191000, hs_id: 'hs-191', truong_id: 'school-191' });
+envR191.sandbox.document.visibilityState = 'visible';
+
+envR191.dispatchDocumentEvent('visibilitychange');
+await new Promise(resolve => setTimeout(resolve, 50));
+
+assert.strictEqual(envR191.rpcCalls.length, 0, 'R191: zero automatic Supabase RPC on visibilitychange for GRADED');
+assert.strictEqual(envR191.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R191: zero Realtime channel subscribed');
+assert(envR191.intervals.every(i => i.ms !== 12000 || i.cleared), 'R191: zero 12s polling timer active');
+const snapAfter191 = JSON.parse(envR191.localStore.get('final_damsan_room-r191_hs-191'));
+assert.strictEqual(snapAfter191.state, 'GRADED', 'R191: FINAL remains GRADED');
+recordR('R191');
+
+// R192: FINAL_PENDING + visibilitychange to visible while online: safe submission recovery may occur, same attempt_id/raw_answers, no post-receipt lifecycle watcher created
+const envR192 = createStudentEnvironment();
+const snapR192 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-r192',
+  truong_id: 'school-192',
+  phong_id: 'room-r192',
+  hs_id: 'hs-192',
+  ma_de: '101',
+  room_opened_at: 192000,
+  raw_answers: [{ chon: 'C' }],
+  client_submitted_at: '2026-09-04T10:00:00Z',
+  auto_submit: false
+};
+envR192.localStore.set('final_damsan_room-r192_hs-192', JSON.stringify(snapR192));
+envR192.api.setState({ phong_id: 'room-r192', room_opened_at: 192000, hs_id: 'hs-192', truong_id: 'school-192', isOffline: false });
+
+envR192.mockSupabase._nopBaiResult = {
+  data: {
+    status: 'received',
+    submission_id: 'sub-192',
+    received_at: '2026-09-04T10:00:05Z',
+    state: 'SERVER_RECEIVED'
+  },
+  error: null
+};
+envR192.sandbox.document.visibilityState = 'visible';
+
+envR192.dispatchDocumentEvent('visibilitychange');
+await new Promise(resolve => setTimeout(resolve, 50));
+
+const receiveCall192 = envR192.rpcCalls.find(c => c.name === 'rpc_hoc_sinh_receive_submission' || c.name === 'rpc_receive_submission');
+assert(receiveCall192, 'R192: receive submission RPC must be invoked on visibilitychange for FINAL_PENDING while online');
+assert.strictEqual(receiveCall192.params.p_attempt_id, 'att-r192', 'R192: same attempt_id preserved during foreground recovery');
+assert.deepStrictEqual(receiveCall192.params.p_raw_answers, [{ chon: 'C' }], 'R192: same raw_answers preserved during foreground recovery');
+assert(envR192.intervals.every(i => i.ms !== 12000 || i.cleared), 'R192: no post-receipt 12s poll timer created');
+assert.strictEqual(envR192.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R192: no post-receipt Realtime channel subscribed');
+recordR('R192');
+
+for (let i = 25; i <= 192; i++) {
   assert(rCoverage['R' + i], "missing coverage for R" + i);
 }
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R152; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R192; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);

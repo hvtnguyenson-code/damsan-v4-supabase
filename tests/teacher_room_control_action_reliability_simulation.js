@@ -1276,16 +1276,16 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-60: Student HTML/JS exact version is 20260902-flex-lite-005');
+  console.log('Test ROOM-ACT-60: Student HTML/JS exact version is 20260904-submission-safety-010a');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20260902-flex-lite-005'));
-    assert(hsJsSource.includes("const VERSION = '20260902-flex-lite-005';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20260904-submission-safety-010a'));
+    assert(hsJsSource.includes("const VERSION = '20260904-submission-safety-010a';"));
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-61: sw.js exact version is 20260902-flex-lite-005');
+  console.log('Test ROOM-ACT-61: sw.js exact version is 20260904-submission-safety-010a');
   {
-    assert(swJsSource.includes("const VERSION = '20260902-flex-lite-005';"));
+    assert(swJsSource.includes("const VERSION = '20260904-submission-safety-010a';"));
     console.log('  -> PASSED');
   }
 

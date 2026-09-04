@@ -1010,12 +1010,12 @@ async function runAllTests() {
     assert(roomActTest.includes('20260904-flex-lite-009a'), 'teacher_room_control must require 009a');
 
     // Student / SW remains exact 005
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20260902-flex-lite-005'),
-      'hoc_sinh.html must remain 20260902-flex-lite-005');
-    assert(hsJsSource.includes("const VERSION = '20260902-flex-lite-005';"),
-      'hoc_sinh.js must remain 20260902-flex-lite-005');
-    assert(swJsSource.includes("const VERSION = '20260902-flex-lite-005';"),
-      'sw.js must remain 20260902-flex-lite-005');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20260904-submission-safety-010a'),
+      'hoc_sinh.html must remain 20260904-submission-safety-010a');
+    assert(hsJsSource.includes("const VERSION = '20260904-submission-safety-010a';"),
+      'hoc_sinh.js must remain 20260904-submission-safety-010a');
+    assert(swJsSource.includes("const VERSION = '20260904-submission-safety-010a';"),
+      'sw.js must remain 20260904-submission-safety-010a');
     console.log('  -> PASSED');
   }
 

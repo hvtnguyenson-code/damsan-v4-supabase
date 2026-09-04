@@ -426,16 +426,16 @@ console.log('Test SCORE-UI-14: SHORT_ONLY puts full score into P3');
 }
 
 // -------------------------------------------------------------------------
-// SCORE-UI-15: Version cache invalidation matches 20260902-flex-lite-004 for teacher and 20260902-flex-lite-005 for student
+// SCORE-UI-15: Version cache invalidation matches 20260902-flex-lite-004 for teacher and 20260904-submission-safety-010a for student
 // -------------------------------------------------------------------------
 console.log('Test SCORE-UI-15: Version cache invalidation across all files');
 {
     const teacherVersion = '20260904-flex-lite-009a';
-    const studentVersion = '20260902-flex-lite-005';
+    const studentVersion = '20260904-submission-safety-010a';
     assert(gvHtmlSource.includes(`giaovien.js?v=${teacherVersion}`), 'SCORE-UI-15: giaovien.html must include giaovien.js?v=20260904-flex-lite-009a');
-    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${studentVersion}`), 'SCORE-UI-15: hoc_sinh.html must include hoc_sinh.js?v=20260902-flex-lite-005');
-    assert(hsJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: hoc_sinh.js must define const VERSION = 20260902-flex-lite-005');
-    assert(swJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: sw.js must define const VERSION = 20260902-flex-lite-005');
+    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${studentVersion}`), 'SCORE-UI-15: hoc_sinh.html must include hoc_sinh.js?v=20260904-submission-safety-010a');
+    assert(hsJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: hoc_sinh.js must define const VERSION = 20260904-submission-safety-010a');
+    assert(swJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: sw.js must define const VERSION = 20260904-submission-safety-010a');
     console.log('  -> PASSED');
 }
 
