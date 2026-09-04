@@ -42,6 +42,7 @@ jobs:
           node tests/teacher_dashboard_action_reliability_simulation.js
           node tests/teacher_room_control_action_reliability_simulation.js
           node tests/teacher_room_chronological_ordering_simulation.js
+          node tests/teacher_radar_stable_dom_no_flicker_simulation.js
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then

@@ -2792,6 +2792,8 @@ async function runRoomControlAction(actionKey, actionFn, options = {}) {
 
     activeRoomControlActions.add(actionKey);
 
+    const hasVisualFeedback = options.visualFeedback !== false;
+
     let targetBtn = null;
     let cfg = ROOM_CONTROL_ACTIONS[actionKey];
     if (cfg) {
@@ -2807,7 +2809,7 @@ async function runRoomControlAction(actionKey, actionFn, options = {}) {
         targetBtn.setAttribute('data-action-token', actionToken);
     }
 
-    if (!options.manualBusy) {
+    if (hasVisualFeedback && !options.manualBusy) {
         if (targetBtn) {
             setRoomControlActionStateOnElement(targetBtn, actionKey, 'busy', options.customLabels);
         } else {
@@ -2839,7 +2841,11 @@ async function runRoomControlAction(actionKey, actionFn, options = {}) {
         if (targetRoomIds.length > 0) {
             targetRoomIds.forEach(id => activeRoomMutationIds.delete(id));
         }
-        finishRoomControlAction(actionKey, outcome, options.customLabels, targetBtn, actionToken);
+        if (hasVisualFeedback) {
+            finishRoomControlAction(actionKey, outcome, options.customLabels, targetBtn, actionToken);
+        } else {
+            activeRoomControlActions.delete(actionKey);
+        }
     }
 }
 
@@ -2871,6 +2877,304 @@ function renderRadarActionCell(r) {
         `<button id="roomDeleteExamBtn-${r.id}" class="radar-action-btn radar-action-delete-exam" onclick="xoaDeTrongPhong('${r.id}')" title="Chỉ xóa đề thi, giữ lại phòng">Xóa Đề</button>` +
         `<button id="roomDeleteAllBtn-${r.id}" class="radar-action-btn radar-action-delete-all" onclick="xoaPhongHoanToan('${r.id}')" title="Xóa toàn bộ phòng và dữ liệu">Xóa Sạch</button>` +
     `</div>`;
+}
+
+function getRadarStatusHtml(stt) {
+    if (stt === "MO_PHONG") return "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>";
+    if (stt === "THU_BAI") return "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>";
+    if (stt === "CONG_BO_DIEM") return "<span style='color:#3498db;font-weight:bold;'>📊 Công bố Điểm</span>";
+    if (stt === "XEM_DAP_AN") return "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>";
+    return stt || '';
+}
+
+function renderRadarRoomRowHtml(r) {
+    let sttHtml = getRadarStatusHtml(r.TrangThai);
+    let durationMin = r.ThoiGian || 45;
+    let isMo = (r.TrangThai === "MO_PHONG");
+    let displayVal = r.DoiTuong === 'TatCa' ? '🌎 Tất cả' : r.DoiTuong;
+    let truongTag = (typeof gvData !== 'undefined' && gvData && gvData.quyen === 'Admin') ? `<div style="font-size:10px; color:#7f8c8d; margin-top:2px;">🏫 ${r.TenTruong}</div>` : '';
+
+    return `<tr id="radar-row-${r.id}" data-room-id="${r.id}">` +
+        `<td>` +
+            `<div style="display:flex; align-items:center; gap:8px;">` +
+                `<input type="checkbox" id="roomCheckbox-${r.id}" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> ` +
+                `<b id="radarCode-${r.id}">${r.MaPhong}</b>` +
+            `</div>` +
+        `</td>` +
+        `<td style="color:#1a73e8;font-weight:bold;"><span id="radarTenDot-${r.id}">${r.TenDotKiemTra || "-"}</span></td>` +
+        `<td>` +
+            `<div id="radarTarget-${r.id}" style="display:flex; align-items:center; justify-content:center; flex-direction:column;">` +
+                `<div id="radarDoiTuongBtn-${r.id}" style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;" ` +
+                     `onclick="moModalChonLop('${r.id}', '${r.DoiTuong}')" title="${r.DoiTuong} (Bấm để chỉnh sửa)">` +
+                    `${displayVal} ✏️` +
+                `</div>` +
+                `${truongTag}` +
+                `<input type="hidden" id="fastDoiTuong-${r.id}" class="fast-doituong" value="${r.DoiTuong}">` +
+            `</div>` +
+        `</td>` +
+        `<td>` +
+            `<div id="radarTimer-${r.id}" class="radar-timer-container">` +
+                `<span id="radarTimerStatic-${r.id}" style="font-weight:bold; ${isMo && r.ThoiGianMo ? 'display:none;' : ''}">${durationMin}p</span>` +
+                `<div id="radarTimerLive-${r.id}" class="live-timer ${isMo && r.ThoiGianMo ? '' : 'locked'}" data-room-id="${r.id}" data-start="${r.ThoiGianMo || ''}" data-duration="${durationMin}" style="font-weight:bold; color:#1a73e8; font-variant-numeric: tabular-nums; font-size: 15px; ${isMo && r.ThoiGianMo ? '' : 'display:none;'}">--:--</div>` +
+                `<div id="radarTimerSub-${r.id}" style="font-size: 11px; color: #7f8c8d; ${isMo && r.ThoiGianMo ? '' : 'display:none;'}">/${durationMin}p</div>` +
+            `</div>` +
+        `</td>` +
+        `<td id="td-stt-${r.id}" class="radar-status-cell"><span id="radarStatus-${r.id}">${sttHtml}</span></td>` +
+        `<td id="td-act-${r.id}" class="radar-action-cell">${renderRadarActionCell(r)}</td>` +
+    `</tr>`;
+}
+
+function renderRadarRoomRow(room) {
+    if (typeof document === 'undefined') return null;
+    const temp = document.createElement('tbody');
+    temp.innerHTML = renderRadarRoomRowHtml(room);
+    const tr = temp.firstElementChild || (temp.children ? temp.children[0] : null);
+    if (tr) return tr;
+    const fallbackTr = document.createElement('tr');
+    fallbackTr.id = `radar-row-${room.id}`;
+    if (fallbackTr.setAttribute) fallbackTr.setAttribute('data-room-id', room.id);
+    return fallbackTr;
+}
+
+function syncRadarRoomRowDom(room) {
+    if (!room || !room.id) return null;
+    const rid = String(room.id);
+    const row = document.getElementById(`radar-row-${rid}`);
+
+    // 1. Room code
+    const codeEl = document.getElementById(`radarCode-${rid}`);
+    if (codeEl && room.MaPhong && codeEl.textContent !== room.MaPhong) {
+        codeEl.textContent = room.MaPhong;
+    }
+
+    // 2. Exam name
+    const tenDotEl = document.getElementById(`radarTenDot-${rid}`);
+    if (tenDotEl && (room.TenDotKiemTra !== undefined || room.ten_dot !== undefined)) {
+        const val = room.TenDotKiemTra || room.ten_dot || "-";
+        if (tenDotEl.textContent !== val) tenDotEl.textContent = val;
+    }
+
+    // 3. Target / Class
+    const doiTuongVal = room.DoiTuong || room.doi_tuong || 'TatCa';
+    const doiTuongBtn = document.getElementById(`radarDoiTuongBtn-${rid}`);
+    if (doiTuongBtn) {
+        const displayVal = doiTuongVal === 'TatCa' ? '🌎 Tất cả' : doiTuongVal;
+        const newText = `${displayVal} ✏️`;
+        if (doiTuongBtn.textContent !== newText) doiTuongBtn.textContent = newText;
+        doiTuongBtn.title = `${doiTuongVal} (Bấm để chỉnh sửa)`;
+        if (doiTuongBtn.setAttribute) doiTuongBtn.setAttribute('onclick', `moModalChonLop('${rid}', '${doiTuongVal}')`);
+    }
+    const fastInput = document.getElementById(`fastDoiTuong-${rid}`);
+    if (fastInput && fastInput.value !== doiTuongVal) {
+        fastInput.value = doiTuongVal;
+    }
+
+    // 4. Timer container
+    const isMo = (room.TrangThai === "MO_PHONG");
+    const durationMin = room.ThoiGian || room.thoi_gian || 45;
+    const staticEl = document.getElementById(`radarTimerStatic-${rid}`);
+    const liveEl = document.getElementById(`radarTimerLive-${rid}`);
+    const subEl = document.getElementById(`radarTimerSub-${rid}`);
+
+    if (isMo && room.ThoiGianMo) {
+        if (staticEl && staticEl.style) staticEl.style.display = 'none';
+        if (liveEl) {
+            if (liveEl.style) {
+                liveEl.style.display = '';
+                liveEl.style.color = '#1a73e8';
+            }
+            if (liveEl.setAttribute) {
+                liveEl.setAttribute('data-room-id', rid);
+                liveEl.setAttribute('data-start', room.ThoiGianMo);
+                liveEl.setAttribute('data-duration', durationMin);
+            }
+            if (liveEl.classList && liveEl.classList.remove) liveEl.classList.remove('locked');
+        }
+        if (subEl) {
+            if (subEl.style) subEl.style.display = '';
+            subEl.textContent = `/${durationMin}p`;
+        }
+    } else {
+        if (staticEl) {
+            if (staticEl.style) staticEl.style.display = '';
+            staticEl.textContent = `${durationMin}p`;
+        }
+        if (liveEl) {
+            if (liveEl.style) liveEl.style.display = 'none';
+            if (liveEl.classList && liveEl.classList.add) liveEl.classList.add('locked');
+        }
+        if (subEl && subEl.style) {
+            subEl.style.display = 'none';
+        }
+    }
+
+    // 5. Status indicator
+    const sttSpan = document.getElementById(`radarStatus-${rid}`);
+    if (sttSpan) {
+        const expectedStt = getRadarStatusHtml(room.TrangThai);
+        if (sttSpan.innerHTML !== expectedStt) {
+            sttSpan.innerHTML = expectedStt;
+        }
+    } else {
+        const sttTd = document.getElementById(`td-stt-${rid}`);
+        if (sttTd) {
+            sttTd.innerHTML = getRadarStatusHtml(room.TrangThai);
+        }
+    }
+
+    // 6. Quick action button - IN-PLACE text & class update ONLY
+    const quickBtn = document.getElementById(`roomQuickStateBtn-${rid}`);
+    if (quickBtn) {
+        const isMoPhong = (room.TrangThai === "MO_PHONG");
+        const quickText = isMoPhong ? "Khóa" : "Mở lại";
+        const quickAction = isMoPhong ? "THU_BAI" : "MO_PHONG";
+        const addClass = isMoPhong ? "radar-action-lock" : "radar-action-open";
+        const removeClass = isMoPhong ? "radar-action-open" : "radar-action-lock";
+
+        if (quickBtn.textContent !== quickText && quickBtn.innerText !== quickText) {
+            if (quickBtn.textContent !== undefined) quickBtn.textContent = quickText;
+            if (quickBtn.innerText !== undefined) quickBtn.innerText = quickText;
+        }
+        if (quickBtn.classList) {
+            if (quickBtn.classList.remove) quickBtn.classList.remove(removeClass);
+            if (quickBtn.classList.add) quickBtn.classList.add(addClass);
+        }
+        if (quickBtn.setAttribute) {
+            quickBtn.setAttribute('onclick', `dieuKhienFast('${rid}', '${quickAction}')`);
+        }
+        quickBtn.onclick = () => dieuKhienFast(rid, quickAction);
+    } else {
+        const actTd = document.getElementById(`td-act-${rid}`);
+        if (actTd) {
+            actTd.innerHTML = renderRadarActionCell(room);
+        }
+    }
+
+    return row;
+}
+
+function reconcileRadarRooms(nextRooms) {
+    const tbody = document.getElementById('radarBody');
+    if (!tbody) return;
+
+    if (!nextRooms || nextRooms.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>';
+        return;
+    }
+
+    // Collect existing rows keyed by room id
+    const existingRows = new Map();
+    const children = tbody.children ? Array.from(tbody.children) : [];
+    children.forEach(child => {
+        if (child.id && child.id.startsWith('radar-row-')) {
+            const rid = child.id.substring('radar-row-'.length);
+            existingRows.set(rid, child);
+        }
+    });
+
+    const nextIds = new Set(nextRooms.map(r => String(r.id)));
+
+    // 1. Remove rows for deleted rooms
+    for (const [rid, rowEl] of existingRows.entries()) {
+        if (!nextIds.has(rid)) {
+            if (rowEl.remove) rowEl.remove();
+            else if (rowEl.parentNode && rowEl.parentNode.removeChild) rowEl.parentNode.removeChild(rowEl);
+            existingRows.delete(rid);
+        }
+    }
+
+    // 2. Clear any placeholder if we have valid rooms
+    if (tbody.children && tbody.children.length > 0 && existingRows.size === 0) {
+        tbody.innerHTML = '';
+    }
+
+    // 3. Iterate nextRooms in canonical order (newest first)
+    for (let i = 0; i < nextRooms.length; i++) {
+        const room = nextRooms[i];
+        const rid = String(room.id);
+        let rowEl = existingRows.get(rid);
+
+        if (!rowEl) {
+            // Genuinely new room: create row
+            rowEl = renderRadarRoomRow(room);
+            const currentRows = (tbody.children ? Array.from(tbody.children) : []).filter(el => el.id && el.id.startsWith('radar-row-'));
+            const refNode = currentRows[i] || null;
+            if (refNode && tbody.insertBefore) {
+                tbody.insertBefore(rowEl, refNode);
+            } else if (tbody.appendChild) {
+                tbody.appendChild(rowEl);
+            }
+            existingRows.set(rid, rowEl);
+
+            // Bind checkbox
+            const cb = (rowEl.querySelector ? rowEl.querySelector('.chk-Room') : null) || document.getElementById(`roomCheckbox-${rid}`);
+            if (cb && cb.addEventListener) {
+                cb.addEventListener('change', function() {
+                    let total = document.querySelectorAll ? document.querySelectorAll('.chk-Room').length : 0;
+                    let checked = document.querySelectorAll ? document.querySelectorAll('.chk-Room:checked').length : 0;
+                    let chkAll = document.getElementById('chkAllRooms');
+                    if (chkAll) chkAll.checked = (total > 0 && total === checked);
+                });
+            }
+        } else {
+            // Existing room: sync in place
+            syncRadarRoomRowDom(room);
+
+            // Order check: if not at index i, move without recreating
+            const currentRows = (tbody.children ? Array.from(tbody.children) : []).filter(el => el.id && el.id.startsWith('radar-row-'));
+            if (currentRows[i] !== rowEl) {
+                const refNode = currentRows[i] || null;
+                if (refNode && tbody.insertBefore) {
+                    tbody.insertBefore(rowEl, refNode);
+                } else if (tbody.appendChild) {
+                    tbody.appendChild(rowEl);
+                }
+            }
+        }
+    }
+}
+
+async function refreshRadarDataSilently() {
+    try {
+        let data = await rpcLayDanhSachPhongThi();
+        let now = Date.now();
+        if (data) {
+            for (let r of data) {
+                if (r.trang_thai === 'MO_PHONG' && r.thoi_gian_mo) {
+                    let duration = r.thoi_gian || 45;
+                    let startTime = parseTimeSafely(r.thoi_gian_mo);
+                    if (startTime > 0) {
+                        let endTime = startTime + (duration * 60 * 1000);
+                        if (now >= endTime) {
+                            r.trang_thai = 'THU_BAI';
+                            rpcDieuKhienPhongThi(r.id, 'THU_BAI', null, null, null, false).then();
+                        }
+                    }
+                }
+            }
+        }
+
+        allRoomsData = (data || []).map(d => ({
+            MaPhong: d.ma_phong,
+            TenDotKiemTra: d.ten_dot,
+            DoiTuong: d.doi_tuong,
+            ThoiGian: d.thoi_gian,
+            TrangThai: d.trang_thai,
+            ThoiGianMo: d.thoi_gian_mo,
+            TenTruong: d.ten_truong || (d.truong_hoc ? d.truong_hoc.ten_truong : 'Hệ thống'),
+            truong_id: d.truong_id,
+            id: d.id,
+            assessment_type: d.assessment_type || 'LEGACY',
+            scoring_config: d.scoring_config || {},
+            CreatedAt: d.created_at
+        }));
+
+        reconcileRadarRooms(allRoomsData);
+        return { status: 'success' };
+    } catch (err) {
+        console.error("Lỗi cập nhật Radar ngầm:", err);
+        return { status: 'error', error: err };
+    }
 }
 
 async function dieuKhien(trangThai) {
@@ -2936,11 +3240,6 @@ async function dieuKhien(trangThai) {
 
 async function dieuKhienFast(roomId, trangThai) {
     const btnId = `roomQuickStateBtn-${roomId}`;
-    const customLabels = trangThai === 'MO_PHONG' ? {
-        id: btnId, normal: 'Mở lại', busy: '⏳ Đang mở...', success: '✅ Đã mở', error: '❌ Mở lỗi'
-    } : {
-        id: btnId, normal: 'Khóa', busy: '⏳ Đang khóa...', success: '✅ Đã khóa', error: '❌ Khóa lỗi'
-    };
 
     return runRoomControlAction(btnId, async () => {
         let room = (allRoomsData || []).find(r => String(r.id) === String(roomId));
@@ -2965,14 +3264,22 @@ async function dieuKhienFast(roomId, trangThai) {
                 null,
                 trangThai === 'MO_PHONG'
             );
-            fetchRadar();
+
+            // In-place direct model update and row sync (zero redraw)
+            room.TrangThai = trangThai;
+            if (trangThai === 'MO_PHONG') {
+                room.ThoiGianMo = updateData.thoi_gian_mo;
+            }
+            syncRadarRoomRowDom(room);
+            refreshRadarDataSilently().then();
+
             return { status: 'success' };
         } catch (e) {
             console.error("Lỗi điều khiển nhanh:", e);
             alert("Lỗi khi điều khiển phòng! Chi tiết: " + e.message);
             return { status: 'error', error: e };
         }
-    }, { roomIds: [roomId], customLabels });
+    }, { roomIds: [roomId], visualFeedback: false });
 }
 
 async function xoaPhongHoanToan(roomId) {
@@ -2983,9 +3290,6 @@ async function xoaPhongHoanToan(roomId) {
     }
 
     const btnId = `roomDeleteAllBtn-${roomId}`;
-    const customLabels = {
-        id: btnId, normal: 'Xóa Sạch', busy: '⏳ Đang xóa...', success: '✅ Đã xóa', error: '❌ Xóa lỗi'
-    };
 
     return runRoomControlAction(btnId, async () => {
         try {
@@ -2998,6 +3302,23 @@ async function xoaPhongHoanToan(roomId) {
             if (!data || data.status !== 'success') {
                 throw new Error(data?.message || 'Xóa thất bại');
             }
+
+            // Remove only target row directly from DOM (zero flicker, zero unrelated row rebuild)
+            const row = document.getElementById(`radar-row-${roomId}`);
+            if (row) {
+                if (row.remove) row.remove();
+                else if (row.parentNode && row.parentNode.removeChild) row.parentNode.removeChild(row);
+            }
+            allRoomsData = (allRoomsData || []).filter(r => String(r.id) !== String(roomId));
+            let total = document.querySelectorAll ? document.querySelectorAll('.chk-Room').length : 0;
+            let checked = document.querySelectorAll ? document.querySelectorAll('.chk-Room:checked').length : 0;
+            let chkAll = document.getElementById('chkAllRooms');
+            if (chkAll) chkAll.checked = (total > 0 && total === checked);
+            if (allRoomsData.length === 0) {
+                let tbody = document.getElementById('radarBody');
+                if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>';
+            }
+
             fetchRadar();
             alert("Đã xóa sạch dữ liệu phòng thi!");
             return { status: 'success', data };
@@ -3005,7 +3326,7 @@ async function xoaPhongHoanToan(roomId) {
             alert("Lỗi khi xóa: " + e.message);
             return { status: 'error', error: e };
         }
-    }, { roomIds: [roomId], customLabels });
+    }, { roomIds: [roomId], visualFeedback: false });
 }
 
 async function xoaDeTrongPhong(roomId) {
@@ -3016,9 +3337,6 @@ async function xoaDeTrongPhong(roomId) {
     }
 
     const btnId = `roomDeleteExamBtn-${roomId}`;
-    const customLabels = {
-        id: btnId, normal: 'Xóa Đề', busy: '⏳ Đang xóa...', success: '✅ Đã xóa đề', error: '❌ Xóa đề lỗi'
-    };
 
     return runRoomControlAction(btnId, async () => {
         try {
@@ -3040,7 +3358,7 @@ async function xoaDeTrongPhong(roomId) {
             alert("❌ Lỗi khi xóa đề: " + e.message);
             return { status: 'error', error: e };
         }
-    }, { roomIds: [roomId], customLabels });
+    }, { roomIds: [roomId], visualFeedback: false });
 }
 
 async function capNhatNhanhPhong(roomId, field, value) {
@@ -3055,7 +3373,10 @@ async function tuDongKhoaPhongKhiHetGio(roomId) {
     try {
         await rpcDieuKhienPhongThi(roomId, 'THU_BAI', null, null, null, false);
         let r = allRoomsData.find(x => String(x.id) === String(roomId));
-        if (r) r.TrangThai = 'THU_BAI';
+        if (r) {
+            r.TrangThai = 'THU_BAI';
+            syncRadarRoomRowDom(r);
+        }
         let actTd = document.getElementById(`td-act-${roomId}`);
         if (actTd && r) {
             actTd.innerHTML = renderRadarActionCell(r);
@@ -3100,11 +3421,16 @@ function khoiDongDongHoGiaoVien() {
                 timerEl.innerText = "00:00";
                 timerEl.style.color = "#d93025";
 
-                let parentTd = timerEl.parentElement;
-                if(parentTd) parentTd.innerHTML = `<span style="color:#d93025; font-weight:bold;">Hết giờ</span><div style="font-size: 11px; color: #7f8c8d;">/${durationMin}p</div>`;
+                let staticEl = document.getElementById(`radarTimerStatic-${roomId}`);
+                let subEl = document.getElementById(`radarTimerSub-${roomId}`);
+                if (staticEl && staticEl.style) staticEl.style.display = 'none';
+                if (subEl && subEl.style) {
+                    subEl.style.display = '';
+                    subEl.textContent = `/${durationMin}p`;
+                }
 
-                let sttTd = document.getElementById(`td-stt-${roomId}`);
-                if(sttTd) sttTd.innerHTML = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>";
+                let sttSpan = document.getElementById(`radarStatus-${roomId}`);
+                if (sttSpan) sttSpan.innerHTML = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>";
 
                 tuDongKhoaPhongKhiHetGio(roomId);
             } else {
@@ -3121,10 +3447,10 @@ function khoiDongDongHoGiaoVien() {
 }
 
 
-async function fetchRadar() { 
+async function fetchRadar() {
     try {
         let data = await rpcLayDanhSachPhongThi();
-        
+
         let now = Date.now();
         if (data) {
             for (let r of data) {
@@ -3134,8 +3460,8 @@ async function fetchRadar() {
                     if (startTime > 0) {
                         let endTime = startTime + (duration * 60 * 1000);
                         if (now >= endTime) {
-                            r.trang_thai = 'THU_BAI'; 
-                            rpcDieuKhienPhongThi(r.id, 'THU_BAI', null, null, null, false).then(); 
+                            r.trang_thai = 'THU_BAI';
+                            rpcDieuKhienPhongThi(r.id, 'THU_BAI', null, null, null, false).then();
                         }
                     }
                 }
@@ -3156,12 +3482,12 @@ async function fetchRadar() {
             scoring_config: d.scoring_config || {},
             CreatedAt: d.created_at
         }));
-        
+
         let tbody = document.getElementById('radarBody');
-        let tableElement = tbody.parentNode;
-        let containerElement = tableElement.parentNode;
-        
-        if(!document.getElementById('radarControlBar')) {
+        let tableElement = tbody ? tbody.parentNode : null;
+        let containerElement = tableElement ? tableElement.parentNode : null;
+
+        if(containerElement && tableElement && !document.getElementById('radarControlBar')) {
             let ctrlBar = document.createElement('div');
             ctrlBar.id = 'radarControlBar';
             ctrlBar.style.marginBottom = '15px';
@@ -3184,59 +3510,46 @@ async function fetchRadar() {
             containerElement.insertBefore(ctrlBar, tableElement);
         }
 
-        let chkAll = document.getElementById('chkAllRooms');
-        if(chkAll) chkAll.checked = false;
+        const hasExistingKeyedRows = tbody && tbody.querySelector && !!tbody.querySelector('tr[id^="radar-row-"]');
 
-        let html = ''; 
-        if(allRoomsData.length === 0) { html = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>'; } 
-        else { 
-            allRoomsData.forEach(r => { 
-                let sttHtml = r.TrangThai; 
-                if(r.TrangThai === "MO_PHONG") sttHtml = "<span style='color:green;font-weight:bold;'>🟢 Đang Thi</span>"; 
-                else if(r.TrangThai === "THU_BAI") sttHtml = "<span style='color:red;font-weight:bold;'>🔴 Đã Khóa</span>"; 
-                else if(r.TrangThai === "CONG_BO_DIEM") sttHtml = "<span style='color:#3498db;font-weight:bold;'>📊 Công bế Điểm</span>"; 
-                else if(r.TrangThai === "XEM_DAP_AN") sttHtml = "<span style='color:#8e44ad;font-weight:bold;'>👁️ Công bố Đ.Án</span>"; 
-                
-                let idCell = `<div style="display:flex; align-items:center; gap:8px;"><input type="checkbox" class="chk-Room" value="${r.id}" style="transform: scale(1.3); cursor:pointer;"> <b>${r.MaPhong}</b></div>`;
+        if (!hasExistingKeyedRows) {
+            let chkAll = document.getElementById('chkAllRooms');
+            if(chkAll) chkAll.checked = false;
 
-                let displayVal = r.DoiTuong === 'TatCa' ? '🌎 Tất cả' : r.DoiTuong;
-                let truongTag = gvData.quyen === 'Admin' ? `<div style="font-size:10px; color:#7f8c8d; margin-top:2px;">🏫 ${r.TenTruong}</div>` : '';
-                
-                let doiTuongCell = `
-                    <div style="display:flex; align-items:center; justify-content:center; flex-direction:column;">
-                        <div style="padding:6px 10px; border:1px dashed #1a73e8; border-radius:6px; background:#f8faff; cursor:pointer; font-weight:bold; font-size:13px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1a73e8; transition: 0.2s;" 
-                             onclick="moModalChonLop('${r.id}', '${r.DoiTuong}')" title="${r.DoiTuong} (Bấm để chỉnh sửa)">
-                            ${displayVal} ✏️
-                        </div>
-                        ${truongTag}
-                        <input type="hidden" class="fast-doituong" value="${r.DoiTuong}">
-                    </div>
-                `;
+            let html = '';
+            if(allRoomsData.length === 0) {
+                html = '<tr><td colspan="6" style="text-align:center;">Chưa có phòng nào đang mở trong Không gian làm việc này</td></tr>';
+            } else {
+                allRoomsData.forEach(r => {
+                    // renderRadarRoomRowHtml uses canonical renderRadarActionCell(r)
+                    html += renderRadarRoomRowHtml(r);
+                });
+            }
+            if (tbody) tbody.innerHTML = html;
 
-                let durationMin = r.ThoiGian || 45;
-                let timerHtml = `<b>${durationMin}p</b>`;
-                if (r.TrangThai === "MO_PHONG" && r.ThoiGianMo) {
-                    timerHtml = `<div class="live-timer" data-room-id="${r.id}" data-start="${r.ThoiGianMo}" data-duration="${durationMin}" style="font-weight:bold; color:#1a73e8; font-variant-numeric: tabular-nums; font-size: 15px;">--:--</div><div style="font-size: 11px; color: #7f8c8d;">/${durationMin}p</div>`;
-                }
-
-                html += `<tr><td>${idCell}</td><td style="color:#1a73e8;font-weight:bold;">${r.TenDotKiemTra||"-"}</td><td>${doiTuongCell}</td><td>${timerHtml}</td><td id="td-stt-${r.id}" class="radar-status-cell">${sttHtml}</td><td id="td-act-${r.id}" class="radar-action-cell">${renderRadarActionCell(r)}</td></tr>`;
-            }); 
-        } 
-        document.getElementById('radarBody').innerHTML = html; 
-
-        document.querySelectorAll('.chk-Room').forEach(cb => {
-            cb.addEventListener('change', function() {
-                let total = document.querySelectorAll('.chk-Room').length;
-                let checked = document.querySelectorAll('.chk-Room:checked').length;
-                document.getElementById('chkAllRooms').checked = (total > 0 && total === checked);
-            });
-        });
+            if (document.querySelectorAll) {
+                document.querySelectorAll('.chk-Room').forEach(cb => {
+                    if (cb.addEventListener) {
+                        cb.addEventListener('change', function() {
+                            let total = document.querySelectorAll('.chk-Room').length;
+                            let checked = document.querySelectorAll('.chk-Room:checked').length;
+                            let chkAll = document.getElementById('chkAllRooms');
+                            if (chkAll) chkAll.checked = (total > 0 && total === checked);
+                        });
+                    }
+                });
+            }
+        } else {
+            // Subsequent load: reconcile keyed DOM in place (zero row redraw, zero flicker)
+            reconcileRadarRooms(allRoomsData);
+        }
 
         khoiDongDongHoGiaoVien();
         return { status: 'success' };
     } catch (err) {
         console.error("Lỗi tải Radar:", err);
-        document.getElementById('radarBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; font-weight:bold;">❌ Lỗi tải dữ liệu phòng thi</td></tr>';
+        let tbody = document.getElementById('radarBody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; font-weight:bold;">❌ Lỗi tải dữ liệu phòng thi</td></tr>';
         return { status: 'error', error: err };
     }
 }
