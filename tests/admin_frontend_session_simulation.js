@@ -489,10 +489,10 @@ recordB3('F125');
 assert(taiFileBody.includes('document.body.appendChild(a)') && taiFileBody.includes('document.body.removeChild(a)') && taiFileBody.includes('setTimeout'), 'F126 taiFileMau robust blob download');
 recordB3('F126');
 
-// F127: giaovien.html accepts .xlsx only and has cache bust 20260904-submission-safety-010c
+// F127: giaovien.html accepts .xlsx only and has cache bust 20260906-logout-session-race-028a
 const htmlSource = fs.readFileSync('giaovien.html', 'utf8');
 assert(htmlSource.includes('id="fileExcelHS" accept=".xlsx"') && htmlSource.includes('id="fileExcelGV" accept=".xlsx"'), 'F127 giaovien.html accepts .xlsx only');
-assert(htmlSource.includes('giaovien.js?v=20260904-submission-safety-010c'), 'F127 cache bust query updated to 20260904-submission-safety-010c');
+assert(htmlSource.includes('giaovien.js?v=20260906-logout-session-race-028a'), 'F127 cache bust query updated to 20260906-logout-session-race-028a');
 recordB3('F127');
 
 // F128: docFileExcelVaNap validates file extension .xlsx
