@@ -4,6 +4,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let gvData = null;
+let gvLogoutInProgress = false;
 let activeWorkspaceMonId = null;
 let activeWorkspaceTruongId = null;
 
@@ -400,6 +401,32 @@ function clearControlSessions() {
     clearStaffSession();
 }
 
+function stopGvBackgroundWorkForLogout() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+    if (teacherTimerInterval) {
+        clearInterval(teacherTimerInterval);
+        teacherTimerInterval = null;
+    }
+    if (window.autoDashTimeout) {
+        clearTimeout(window.autoDashTimeout);
+        window.autoDashTimeout = null;
+    }
+    if (window.autoRadarTimeout) {
+        clearTimeout(window.autoRadarTimeout);
+        window.autoRadarTimeout = null;
+    }
+    if (ketQuaChannel) {
+        const channel = ketQuaChannel;
+        ketQuaChannel = null;
+        try {
+            Promise.resolve(sb.removeChannel(channel)).catch(() => {});
+        } catch (_) {}
+    }
+}
+
 function isAccountManagementActive() {
     return Boolean(
         document.getElementById('quanLyTK')
@@ -415,6 +442,7 @@ function clearAccountRuntimeState() {
 }
 
 function clearGvSessionAndReturnToLogin(message) {
+    if (gvLogoutInProgress) return;
     clearAccountRuntimeState();
     clearControlSessions();
     sessionStorage.removeItem('damSan_GVSession');
@@ -430,6 +458,7 @@ function ensureControlSession(role) {
         : 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.';
     const token = role === 'admin' ? getAdminToken() : getStaffToken();
     if (!token) {
+        if (gvLogoutInProgress) throw new Error('logout_in_progress');
         clearGvSessionAndReturnToLogin(message);
         throw new Error(message);
     }
@@ -440,6 +469,7 @@ async function adminRpc(action, payload) {
     const token = ensureControlSession('admin');
     const { data, error } = await sb.rpc('rpc_admin_control', { p_admin_token: token, p_action: action, p_payload: payload || {} });
     if (data?.code === 'admin_session_invalid') {
+        if (gvLogoutInProgress) throw new Error('logout_in_progress');
         clearGvSessionAndReturnToLogin('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
         throw new Error('admin_session_invalid');
     }
@@ -456,6 +486,7 @@ async function adminImportAccounts(kind, rows) {
         p_rows: rows
     });
     if (data?.code === 'admin_session_invalid') {
+        if (gvLogoutInProgress) throw new Error('logout_in_progress');
         clearGvSessionAndReturnToLogin('Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.');
         throw new Error('admin_session_invalid');
     }
@@ -470,6 +501,7 @@ async function staffRpc(rpcName, args) {
     const token = ensureControlSession('staff');
     const { data, error } = await sb.rpc(rpcName, { p_staff_token: token, ...args });
     if (data?.code === 'staff_session_invalid') {
+        if (gvLogoutInProgress) throw new Error('logout_in_progress');
         clearGvSessionAndReturnToLogin('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
         throw new Error('staff_session_invalid');
     }
@@ -735,20 +767,35 @@ async function thucHienDoiMatKhau() {
 }
 
 async function dangXuatGV() {
-    if(confirm("Bạn có chắc chắn muốn đăng xuất?")) {
-        const staffToken = sessionStorage.getItem('damSan_StaffToken');
-        const adminToken = sessionStorage.getItem('damSan_AdminToken');
-        const requests = [];
-        if (staffToken) requests.push(sb.rpc('rpc_staff_logout', { p_staff_token: staffToken }));
-        if (adminToken) requests.push(sb.rpc('rpc_admin_logout', { p_admin_token: adminToken }));
+    if (!confirm("Bạn có chắc chắn muốn đăng xuất?")) return;
+    if (gvLogoutInProgress) return;
+
+    gvLogoutInProgress = true;
+
+    // Capture raw tokens before local cleanup so server-side revocation can still run.
+    const staffToken = sessionStorage.getItem('damSan_StaffToken');
+    const adminToken = sessionStorage.getItem('damSan_AdminToken');
+
+    // Stop polling/realtime first, then make the browser locally signed out immediately.
+    // This prevents background RPCs from racing a token that has just been revoked.
+    stopGvBackgroundWorkForLogout();
+    clearControlSessions();
+    clearAccountRuntimeState();
+    sessionStorage.removeItem('damSan_GVSession');
+    localStorage.removeItem('damSan_Workspace');
+    localStorage.removeItem('damSan_WorkspaceSchool');
+    window.tempGvData = null;
+    window.tempGvCurrentPasswordHash = null;
+
+    const requests = [];
+    if (staffToken) requests.push(sb.rpc('rpc_staff_logout', { p_staff_token: staffToken }));
+    if (adminToken) requests.push(sb.rpc('rpc_admin_logout', { p_admin_token: adminToken }));
+
+    try {
         await Promise.allSettled(requests);
+    } finally {
+        // Idempotent final cleanup: remote revoke failure must never restore local auth state.
         clearControlSessions();
-        clearAccountRuntimeState();
-        sessionStorage.removeItem('damSan_GVSession');
-        localStorage.removeItem('damSan_Workspace');
-        localStorage.removeItem('damSan_WorkspaceSchool');
-        window.tempGvData = null;
-        window.tempGvCurrentPasswordHash = null;
         location.reload();
     }
 }

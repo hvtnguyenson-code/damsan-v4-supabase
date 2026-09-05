@@ -30,6 +30,7 @@ jobs:
         run: |
           node tests/admin_control_plane_server_simulation.js
           node tests/admin_frontend_session_simulation.js
+          node tests/logout_session_race_simulation.js
           node tests/account_import_server_simulation.js
           node tests/account_import_excel_loader_simulation.js
           node tests/account_import_exceljs_csp_simulation.js
