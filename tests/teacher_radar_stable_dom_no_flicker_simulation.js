@@ -1261,9 +1261,9 @@ async function runAllTests() {
   // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
   // =======================================================================
 
-  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20260904-submission-safety-010c');
+  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20260906-logout-session-race-028a');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260904-submission-safety-010c'), 'Must load 20260904-submission-safety-010c');
+    assert(gvHtmlSource.includes('giaovien.js?v=20260906-logout-session-race-028a'), 'Must load 20260906-logout-session-race-028a');
     console.log('  -> PASSED');
   }
 
@@ -1275,7 +1275,7 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-41: Other test suites are updated to 20260904-submission-safety-010c');
+  console.log('Test STABLE-41: Other test suites are updated to 20260906-logout-session-race-028a');
   {
     const suites = [
       'tests/account_import_exceljs_csp_simulation.js',
@@ -1287,7 +1287,7 @@ async function runAllTests() {
     ];
     for (const s of suites) {
       const content = fs.readFileSync(path.join(repoRoot, s), 'utf8');
-      assert(content.includes('20260904-submission-safety-010c'), `${s} must require 20260904-submission-safety-010c`);
+      assert(content.includes('20260906-logout-session-race-028a'), `${s} must require 20260906-logout-session-race-028a`);
     }
     console.log('  -> PASSED');
   }

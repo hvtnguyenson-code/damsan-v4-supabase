@@ -33,7 +33,7 @@
  *           Never hard-coded 35.
  * C010C-13: Roster load failure keeps denominator unknown (never renders as /0).
  * C010C-14: Teacher cache-bust release delivery invariant:
- *           giaovien.html loads giaovien.js?v=20260904-submission-safety-010c
+ *           giaovien.html loads giaovien.js?v=20260906-logout-session-race-028a
  *           and does NOT load giaovien.js?v=20260904-flex-lite-009a.
  */
 
@@ -794,20 +794,20 @@ async function runTests() {
 
   // -------------------------------------------------------------
   // Test C010C-14: Teacher cache-bust release delivery invariant
-  // giaovien.html must load exactly giaovien.js?v=20260904-submission-safety-010c
+  // giaovien.html must load exactly giaovien.js?v=20260906-logout-session-race-028a
   // and must NOT load giaovien.js?v=20260904-flex-lite-009a
   // -------------------------------------------------------------
   {
     assert.ok(
-      gvHtmlSource.includes('giaovien.js?v=20260904-submission-safety-010c'),
-      'giaovien.html must load exactly giaovien.js?v=20260904-submission-safety-010c'
+      gvHtmlSource.includes('giaovien.js?v=20260906-logout-session-race-028a'),
+      'giaovien.html must load exactly giaovien.js?v=20260906-logout-session-race-028a'
     );
     assert.ok(
       !gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
       'giaovien.html must NOT load stale giaovien.js?v=20260904-flex-lite-009a'
     );
 
-    console.log('PASS: C010C-14 - giaovien.html loads exactly 20260904-submission-safety-010c.');
+    console.log('PASS: C010C-14 - giaovien.html loads exactly 20260906-logout-session-race-028a.');
   }
 
   console.log('\nALL 14 SUBMISSION-SAFETY-010C TESTS PASSED SUCCESSFULLY!\n');
