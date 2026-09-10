@@ -4,7 +4,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'ai_exam.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'ai_exam.js'), 'utf8');
-const sql = fs.readFileSync(path.join(root, 'supabase', 'migrations', '20260910080000_ai_exam_review_ui_guard_031b2.sql'), 'utf8');
+const sql = fs.readFileSync(path.join(root, 'supabase', 'migrations', '20260910074529_ai_exam_review_ui_guard_031b2.sql'), 'utf8');
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
 function must(source, regex, message) { assert(regex.test(source), message); }
