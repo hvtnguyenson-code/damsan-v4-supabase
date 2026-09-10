@@ -52,6 +52,7 @@ jobs:
             --disable-gpu \
             --disable-dev-shm-usage \
             --disable-background-timer-throttling \
+            --virtual-time-budget=90000 \
             --dump-dom http://127.0.0.1:8765/tests/browser_ocr_runtime_probe.html \
             >/tmp/ocr-dom.txt 2>/tmp/ocr-chrome.log
           CHROME_EXIT=$?
