@@ -31,8 +31,10 @@ jobs:
           node --check knowledge_ai_hardening.js
           node --check ai_exam.js
           node --check ai_exam_resilience.js
+          node --check ai_exam_copy_feedback.js
           node --check tests/browser_ocr_runtime_probe.js
           node --check tests/run_browser_ocr_probe.mjs
+          node --check tests/ai_exam_copy_feedback_simulation.js
       - name: Browser OCR runtime probe
         run: |
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
@@ -96,6 +98,7 @@ jobs:
           node tests/ai_exam_generation_bridge_simulation.js
           node tests/knowledge_web_ai_handoff_simulation.js
           node tests/ai_exam_review_ui_simulation.js
+          node tests/ai_exam_copy_feedback_simulation.js
           node tests/ai_authoring_navigation_resilience_simulation.js
           node tests/knowledge_ocr_usability_gate_simulation.js
       - name: Whitespace errors in branch diff
