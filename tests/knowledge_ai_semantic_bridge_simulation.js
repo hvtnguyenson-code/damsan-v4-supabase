@@ -75,8 +75,16 @@ must(edge, /crypto\.getRandomValues\(bytes\)/i,
   'K030C-22 capability uses cryptographic randomness');
 must(edge, /sha256Hex\(capability\)/i,
   'K030C-23 only capability digest goes to persistence RPC');
-must(edge, /from\("staff_sessions"\)[\s\S]*token_hash[\s\S]*expires_at[\s\S]*revoked_at/i,
-  'K030C-24 create handoff validates the opaque staff session');
+must(edge, /from\("staff_sessions"\)/i,
+  'K030C-24a create handoff validates against staff_sessions');
+must(edge, /\.select\("gv_id,expires_at,revoked_at"\)/i,
+  'K030C-24b staff validation reads expiry and revocation state');
+must(edge, /\.eq\("token_hash", tokenHash\)/i,
+  'K030C-24c opaque staff token is SHA-256 bound');
+must(edge, /\.is\("revoked_at", null\)/i,
+  'K030C-24d revoked staff sessions are rejected');
+must(edge, /new Date\(session\.expires_at\)\.getTime\(\) <= Date\.now\(\)/i,
+  'K030C-24e expired staff sessions are rejected');
 must(edge, /action === "create_analysis_handoff"/i,
   'K030C-25 staff create action exists');
 must(edge, /action === "get_analysis_input"/i,
