@@ -107,3 +107,4 @@ jobs:
             git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
           else
             git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check HEAD^...HEAD
+          fi
