@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://xcervjnwlchwfqvbeahy.supabase.co; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI phân tích kho tri thức - Đam San V4</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *{box-sizing:border-box} body{margin:0;font-family:'Segoe UI',Tahoma,sans-serif;background:#f4f6f8;color:#1f2937}
+    header{background:linear-gradient(135deg,#4f46e5,#312e81);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;gap:16px;align-items:center}
+    h1{margin:0;font-size:21px} header p{margin:5px 0 0;font-size:13px;opacity:.9}.nav{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .nav a{background:#fff;color:#312e81;text-decoration:none;padding:9px 12px;border-radius:7px;font-weight:700;font-size:13px}
+    main{max-width:1120px;margin:22px auto;padding:0 16px 36px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+    h2{margin:0 0 8px;font-size:18px}.sub{font-size:13px;color:#64748b;line-height:1.55;margin:0 0 14px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
+    select,input,textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;background:#fff} textarea{min-height:190px;resize:vertical;font-family:Consolas,monospace;font-size:12px;line-height:1.45}
+    .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}
+    .primary{background:#4f46e5;color:#fff}.secondary{background:#e2e8f0;color:#334155}.success{background:#15803d;color:#fff}.danger{background:#b91c1c;color:#fff}
+    .notice{display:none;padding:12px 14px;border-radius:8px;margin-bottom:16px;font-weight:600}.notice.ok{display:block;background:#dcfce7;color:#166534;border:1px solid #bbf7d0}.notice.error{display:block;background:#fee2e2;color:#991b1b;border:1px solid #fecaca}.notice.info{display:block;background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe}
+    .statusline{font-size:12px;color:#475569;margin-top:8px}.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}.step{border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:12px;background:#f8fafc}.step strong{display:block;margin-bottom:3px}
+    .pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;background:#e0e7ff;color:#3730a3}.mono{font-family:Consolas,monospace;font-size:12px;word-break:break-all}
+    @media(max-width:760px){header{align-items:flex-start;padding:15px}.grid{grid-template-columns:1fr}.steps{grid-template-columns:1fr 1fr}.card{padding:15px}.nav{justify-content:flex-start}}
+  </style>
+</head>
+<body>
+<header>
+  <div><h1>AI phân tích Kho tri thức</h1><p>Đưa tài liệu đã đọc sang ChatGPT/Gemini web mà không cần API trả phí.</p></div>
+  <div class="nav"><a href="knowledge.html">Kho tri thức</a><a href="giaovien.html">Cổng giáo viên</a></div>
+</header>
+<main>
+  <div id="notice" class="notice"></div>
+  <section class="card">
+    <div class="steps">
+      <div class="step"><strong>1. Chọn tài liệu</strong><span>EXTRACTED / ANALYZE</span></div>
+      <div class="step"><strong>2. Tạo gói AI</strong><span>Nguồn + quy tắc hệ thống</span></div>
+      <div class="step"><strong>3. ChatGPT/Gemini</strong><span>Dán prompt, lấy JSON</span></div>
+      <div class="step"><strong>4. Nộp JSON</strong><span>Server kiểm định và lưu revision</span></div>
+    </div>
+    <h2>Tài liệu cần phân tích</h2>
+    <p class="sub">Chỉ tài liệu đã được bộ đọc cơ học xử lý xong mới xuất hiện ở đây. Không cần tự chia bài, đánh dấu trang hay tạo metadata.</p>
+    <div class="grid">
+      <div class="field"><label for="documentSelect">Tài liệu</label><select id="documentSelect"><option value="">Đang tải...</option></select></div>
+      <div class="field"><label for="provider">Nguồn AI</label><select id="provider"><option value="CHATGPT_WEB">ChatGPT web</option><option value="GEMINI_WEB">Gemini web</option><option value="OTHER_WEB_AI">AI web khác</option></select></div>
+    </div>
+    <div class="actions">
+      <button id="btnBuild" class="primary">Tạo gói phân tích AI</button>
+      <button id="btnRefresh" class="secondary">Làm mới danh sách</button>
+      <button id="btnChatGPT" class="secondary">Mở ChatGPT</button>
+      <button id="btnGemini" class="secondary">Mở Gemini</button>
+    </div>
+    <div id="handoffStatus" class="statusline"></div>
+  </section>
+
+  <section class="card">
+    <h2>Prompt nguồn cho AI</h2>
+    <p class="sub">Bấm “Sao chép prompt”, chuyển sang ChatGPT/Gemini và dán nguyên văn. AI phải trả về duy nhất một JSON theo <span class="pill">DAMSAN_KNOWLEDGE_V1</span>.</p>
+    <textarea id="promptBox" readonly placeholder="Gói AI sẽ xuất hiện ở đây..."></textarea>
+    <div class="actions"><button id="btnCopyPrompt" class="primary">Sao chép prompt</button></div>
+  </section>
+
+  <section class="card">
+    <h2>JSON kết quả từ AI</h2>
+    <p class="sub">Dán nguyên JSON AI trả về. Hệ thống sẽ kiểm tra schema, provenance, confidence và chỉ kích hoạt revision khi vượt quality gate phía server.</p>
+    <div class="grid"><div class="field"><label for="modelName">Tên model — tùy chọn</label><input id="modelName" placeholder="Ví dụ: GPT-5.6 Sol, Gemini 2.5 Pro"></div><div></div></div>
+    <textarea id="resultBox" placeholder='{"schema_version":"DAMSAN_KNOWLEDGE_V1", ...}'></textarea>
+    <div class="actions"><button id="btnPaste" class="secondary">Dán từ clipboard</button><button id="btnSubmit" class="success">Kiểm định và lưu vào Kho tri thức</button></div>
+    <div id="resultStatus" class="statusline"></div>
+  </section>
+</main>
+<script src="knowledge_ai_web.js?v=20260910-knowledge-web-ai-031b1"></script>
+</body>
+</html>
