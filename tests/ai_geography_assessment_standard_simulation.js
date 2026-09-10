@@ -4,7 +4,7 @@ const assert = require('assert');
 
 const overlay = fs.readFileSync('ai_exam_assessment_profile.js','utf8');
 const html = fs.readFileSync('ai_exam.html','utf8');
-const migration = fs.readFileSync('supabase/migrations/20260910142000_geography_assessment_standard_037.sql','utf8');
+const migration = fs.readFileSync('supabase/migrations/20260910150516_geography_assessment_standard_037.sql','utf8');
 const docs = fs.readFileSync('docs/GEOGRAPHY_ASSESSMENT_STANDARD_037.md','utf8');
 
 assert(overlay.includes('DIA_LI_TNTHPT_2025_PLUS_V1'), '037 profile id missing from prompt compiler');
