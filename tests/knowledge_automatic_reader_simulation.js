@@ -56,8 +56,13 @@ assert(!/where j\.status = 'QUEUED'\s*\n\s*order by/i.test(queueSql),
 console.log('K030B2-11..12 queue stage safety: PASSED');
 
 must(edge, /SUPABASE_SERVICE_ROLE_KEY/, 'K030B2-13 edge uses server service credential');
-must(edge, /from\("staff_sessions"\)[\s\S]*token_hash[\s\S]*expires_at[\s\S]*revoked_at/i,
-  'K030B2-14 edge validates opaque staff session');
+assert(
+  /\.from\("staff_sessions"\)/.test(edge) &&
+  /\.eq\("token_hash", tokenHash\)/.test(edge) &&
+  /\.is\("revoked_at", null\)/.test(edge) &&
+  /new Date\(session\.expires_at\)\.getTime\(\) <= Date\.now\(\)/.test(edge),
+  'K030B2-14 edge validates opaque staff session hash, revocation and expiry'
+);
 must(edge, /document\.owner_gv_id !== actor\.id \|\| document\.truong_id !== actor\.truong_id/i,
   'K030B2-15 edge binds extraction to owned document');
 must(edge, /createSignedUploadUrl\(storagePath\)/i, 'K030B2-16 artifact uses signed upload capability');
