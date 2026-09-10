@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const migration = fs.readFileSync(path.join(root, 'supabase', 'migrations', '20260910073500_knowledge_web_ai_handoff_031b1.sql'), 'utf8');
+const migration = fs.readFileSync(path.join(root, 'supabase', 'migrations', '20260910073815_knowledge_web_ai_handoff_031b1.sql'), 'utf8');
 const html = fs.readFileSync(path.join(root, 'knowledge_ai.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'knowledge_ai_web.js'), 'utf8');
 
