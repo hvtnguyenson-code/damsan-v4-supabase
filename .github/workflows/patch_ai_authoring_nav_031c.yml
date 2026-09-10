@@ -21,17 +21,22 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           path = Path('giaovien.html')
-          text = path.read_text(encoding='utf-8')
-          marker = '''                            <button id="btnSubDirect" class="active" onclick="switchSubTabTaoDe('direct'); closeSidebarMobile()">⚡ Tạo Đề Thi Online</button>'''
-          insertion = marker + '''\n                            <button id="btnSubKnowledgeAI" onclick="window.location.href='knowledge.html'; closeSidebarMobile()">🧠 Kho tri thức AI</button>\n                            <button id="btnSubKnowledgeAnalyze" onclick="window.location.href='knowledge_ai.html'; closeSidebarMobile()">✨ AI phân tích nguồn</button>\n                            <button id="btnSubAiExam" onclick="window.location.href='ai_exam.html'; closeSidebarMobile()">🤖 Tạo đề bằng AI</button>'''
-          if 'id="btnSubAiExam"' in text:
+          data = path.read_bytes()
+          marker = '''                            <button id="btnSubDirect" class="active" onclick="switchSubTabTaoDe('direct'); closeSidebarMobile()">⚡ Tạo Đề Thi Online</button>'''.encode('utf-8')
+          newline = b'\r\n' if b'\r\n' in data else b'\n'
+          extra = newline.join([
+              '''                            <button id="btnSubKnowledgeAI" onclick="window.location.href='knowledge.html'; closeSidebarMobile()">🧠 Kho tri thức AI</button>'''.encode('utf-8'),
+              '''                            <button id="btnSubKnowledgeAnalyze" onclick="window.location.href='knowledge_ai.html'; closeSidebarMobile()">✨ AI phân tích nguồn</button>'''.encode('utf-8'),
+              '''                            <button id="btnSubAiExam" onclick="window.location.href='ai_exam.html'; closeSidebarMobile()">🤖 Tạo đề bằng AI</button>'''.encode('utf-8'),
+          ])
+          if b'id="btnSubAiExam"' in data:
               print('AI navigation already present; no change required.')
           else:
-              if text.count(marker) != 1:
-                  raise SystemExit(f'Expected exactly one teacher sidebar marker, found {text.count(marker)}')
-              path.write_text(text.replace(marker, insertion, 1), encoding='utf-8', newline='')
+              if data.count(marker) != 1:
+                  raise SystemExit(f'Expected exactly one teacher sidebar marker, found {data.count(marker)}')
+              path.write_bytes(data.replace(marker, marker + newline + extra, 1))
           PY
-          git diff --check
+          git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check
           if git diff --quiet -- giaovien.html; then
             echo "No patch needed"
             exit 0
