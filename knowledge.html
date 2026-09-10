@@ -16,6 +16,7 @@
     header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     header h1 { font-size: 21px; margin: 0; }
     header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+    .header-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 5px; }
     .back { color: #0d47a1; background: white; text-decoration: none; font-weight: 700; border-radius: 7px; padding: 9px 13px; white-space: nowrap; }
     main { max-width: 1120px; margin: 22px auto; padding: 0 16px 36px; }
     .notice { display: none; padding: 13px 15px; border-radius: 8px; margin-bottom: 16px; font-weight: 600; }
@@ -61,6 +62,8 @@
       header { align-items: flex-start; padding: 15px; }
       header h1 { font-size: 17px; }
       .session { display: none; }
+      .header-nav { justify-content: flex-start; }
+      .back { padding: 7px 9px; font-size: 12px; }
       main { margin-top: 15px; }
       .card { padding: 15px; }
       .upload-item { align-items: flex-start; flex-direction: column; }
@@ -75,7 +78,11 @@
     </div>
     <div>
       <div id="sessionInfo" class="session"></div>
-      <a class="back" href="giaovien.html">← Cổng giáo viên</a>
+      <div class="header-nav">
+        <a class="back" href="knowledge_ai.html">✨ AI phân tích nguồn</a>
+        <a class="back" href="ai_exam.html">🤖 Tạo đề bằng AI</a>
+        <a class="back" href="giaovien.html">← Cổng giáo viên</a>
+      </div>
     </div>
   </header>
 
@@ -103,7 +110,7 @@
         <button id="btnClearSelection" class="secondary" type="button">Bỏ danh sách đã chọn</button>
       </div>
       <div id="uploadQueue" class="upload-queue"></div>
-      <div class="pipeline-note">030B2 thực hiện phần cơ học của pipeline: PDF.js đọc lớp chữ, Mammoth đọc DOCX, bộ đọc DOC 97–2003 xử lý tệp .doc, và Tesseract OCR tiếng Việt + tiếng Anh chỉ chạy trên các trang PDF thiếu lớp chữ. AI phân tích ngữ nghĩa/chia bài-mục sẽ được nối ở 030C.</div>
+      <div class="pipeline-note">Pipeline hiện tại: PDF.js đọc lớp chữ, Mammoth đọc DOCX, bộ đọc DOC 97–2003 xử lý tệp .doc, và Tesseract OCR tiếng Việt + tiếng Anh chỉ chạy trên các trang PDF thiếu lớp chữ. Sau khi trạng thái thành `EXTRACTED`, dùng “AI phân tích nguồn” để biên dịch sang tri thức có cấu trúc; khi có active revision, tài liệu có thể được dùng trực tiếp ở “Tạo đề bằng AI”.</div>
     </section>
 
     <section class="card">
