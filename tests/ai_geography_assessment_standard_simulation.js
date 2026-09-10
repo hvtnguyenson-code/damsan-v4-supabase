@@ -3,8 +3,12 @@ const vm = require('vm');
 const assert = require('assert');
 
 const overlay = fs.readFileSync('ai_exam_assessment_profile.js','utf8');
+const scopeOverlay = fs.readFileSync('ai_exam_knowledge_scope.js','utf8');
+const bookOverlay = fs.readFileSync('knowledge_ai_book_structure.js','utf8');
 const html = fs.readFileSync('ai_exam.html','utf8');
+const knowledgeHtml = fs.readFileSync('knowledge_ai.html','utf8');
 const migration = fs.readFileSync('supabase/migrations/20260910150516_geography_assessment_standard_037.sql','utf8');
+const scopeMigration = fs.readFileSync('supabase/migrations/20260910152210_knowledge_book_lesson_scope_036.sql','utf8');
 const docs = fs.readFileSync('docs/GEOGRAPHY_ASSESSMENT_STANDARD_037.md','utf8');
 
 assert(overlay.includes('DIA_LI_TNTHPT_2025_PLUS_V1'), '037 profile id missing from prompt compiler');
@@ -64,4 +68,35 @@ assert(docs.includes('vqa.moet.gov.vn/vi/news/thong-bao/cau-truc-dinh-dang-de-th
 assert(docs.includes('vqa.moet.gov.vn/vi/news/tin-tuc-su-kien/de-thi-tham-khao-ky-thi-tot-nghiep-thpt-tu-nam-2025-159.html'), 'official reference exam source missing');
 assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(docs) && /Bình Phước/.test(docs), 'provincial benchmark corpus not documented');
 
-console.log('PASS ai_geography_assessment_standard_simulation');
+// 036 — whole-book / lesson scope contract.
+assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'), '036 lesson-scope overlay missing from exam UI');
+assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-book-lesson-scope-036'), '036 book-structure overlay missing from semantic-analysis UI');
+assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'), '036 scope schema missing from browser request');
+assert(scopeOverlay.includes('rpc_knowledge_scope_catalog_read'), '036 browser must use protected lesson catalog RPC');
+assert(scopeOverlay.includes('knowledge-lesson-check'), '036 lesson selector UI missing');
+assert(scopeOverlay.includes("mode: 'LESSONS'"), '036 lesson-only request mode missing');
+assert(/tick ô này nếu thật sự muốn dùng toàn bộ tài liệu/.test(scopeOverlay), 'multi-lesson document must not be silently selected in full');
+
+assert(scopeMigration.includes('_knowledge_scope_key_036'), '036 stable lesson scope key missing');
+assert(scopeMigration.includes('_ai_exam_normalize_scope_036'), '036 server scope normalization missing');
+assert(scopeMigration.includes('rpc_knowledge_scope_catalog_read'), '036 secure scope catalog missing');
+assert(scopeMigration.includes('_ai_exam_scope_allows_unit_036'), '036 server pack scope filter missing');
+assert(scopeMigration.includes('rpc_ai_exam_knowledge_pack_service'), '036 scoped knowledge pack override missing');
+assert(scopeMigration.includes('_ai_exam_scope_quality_gate_036'), '036 draft provenance scope gate missing');
+assert(scopeMigration.includes('knowledge_source_ref_outside_scope'), '036 out-of-scope source ref rejection missing');
+assert(scopeMigration.includes('_ai_exam_quality_gate_037'), '036 must preserve the 037 assessment quality gate');
+
+assert(bookOverlay.includes('lesson_code') && bookOverlay.includes('lesson_title'), '036 semantic prompt must require lesson metadata');
+assert(bookOverlay.includes('BAI_01'), '036 semantic prompt must define stable lesson codes');
+assert(/không gộp kiến thức của hai bài khác nhau/i.test(bookOverlay), '036 semantic prompt must preserve lesson boundaries');
+const bookContext = {
+  kaiBuildPrompt: () => 'BASE\nSOURCE PACKAGE:{"x":1}',
+  console,
+};
+vm.createContext(bookContext);
+vm.runInContext(bookOverlay, bookContext);
+const bookPrompt = bookContext.kaiBuildPrompt({}, []);
+assert(bookPrompt.includes('CẤU TRÚC SÁCH / CHƯƠNG / BÀI'), '036 book structure rules not injected');
+assert(bookPrompt.indexOf('lesson_code') < bookPrompt.indexOf('SOURCE PACKAGE:'), '036 structure rules must precede source package');
+
+console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036');

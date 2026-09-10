@@ -15,12 +15,12 @@
 <main>
   <div id="notice" class="notice"></div>
   <section class="card">
-    <h2>1. Thiết lập đề</h2><p class="sub">Chọn tài liệu đã có active revision, cấu trúc đề và phòng đích. Với profile Tốt nghiệp, hệ thống mặc định 18 câu P1 + 4 câu P2 + 6 câu P3 theo cấu trúc từ năm 2025; vẫn có thể giảm số câu cho bài luyện rút gọn.</p>
+    <h2>1. Thiết lập đề</h2><p class="sub">Chọn đúng bài học cần dùng trong tài liệu đã có active revision, cấu trúc đề và phòng đích. Với profile Tốt nghiệp, hệ thống mặc định 18 câu P1 + 4 câu P2 + 6 câu P3 theo cấu trúc từ năm 2025; vẫn có thể giảm số câu cho bài luyện rút gọn.</p>
     <div class="grid"><div class="field"><label for="roomCode">Mã phòng</label><input id="roomCode" maxlength="120" placeholder="Ví dụ: DL12_001"></div><div class="field"><label for="profile">Loại bài kiểm tra</label><select id="profile"><option value="TOT_NGHIEP">Tốt nghiệp — P1/P2/P3</option><option value="MCQ_ONLY">Chỉ trắc nghiệm 4 lựa chọn</option><option value="TRUE_FALSE_ONLY">Chỉ Đúng/Sai</option><option value="SHORT_ONLY">Chỉ trả lời ngắn</option><option value="CUSTOM">Tùy chỉnh trọng số</option><option value="LEGACY">Legacy</option></select></div></div>
     <div class="grid4" style="margin-top:12px"><div class="field"><label for="p1Count">Số câu P1</label><input id="p1Count" type="number" min="0" max="300" value="18"></div><div class="field"><label for="p2Count">Số câu P2</label><input id="p2Count" type="number" min="0" max="300" value="4"></div><div class="field"><label for="p3Count">Số câu P3</label><input id="p3Count" type="number" min="0" max="300" value="6"></div><div class="field"><label for="variantCount">Số mã đề</label><input id="variantCount" type="number" min="1" max="8" value="4"></div></div>
     <div id="customWeights" class="grid4 hidden" style="margin-top:12px"><div class="field"><label for="w1">Trọng số P1</label><input id="w1" type="number" min="0" max="10" step="0.01" value="4"></div><div class="field"><label for="w2">Trọng số P2</label><input id="w2" type="number" min="0" max="10" step="0.01" value="4"></div><div class="field"><label for="w3">Trọng số P3</label><input id="w3" type="number" min="0" max="10" step="0.01" value="2"></div><div class="field"><label>Tổng</label><input id="weightSum" readonly value="10"></div></div>
-    <div class="field" style="margin-top:12px"><label for="requirements">Yêu cầu nội dung / mức độ / phong cách</label><textarea id="requirements" placeholder="Ví dụ: Bài 1–5; NB 40%, TH 30%, VD 30%; văn phong tự nhiên; tránh đáp án dài nổi bật..."></textarea></div>
-    <div class="field" style="margin-top:12px"><label>Tài liệu nguồn đã kích hoạt</label><div id="knowledgeDocs" class="docs"><div class="doc">Đang tải...</div></div></div>
+    <div class="field" style="margin-top:12px"><label for="requirements">Yêu cầu nội dung / mức độ / phong cách</label><textarea id="requirements" placeholder="Ví dụ: NB 40%, TH 30%, VD 30%; văn phong tự nhiên; tránh đáp án dài nổi bật..."></textarea></div>
+    <div class="field" style="margin-top:12px"><label>Tài liệu / bài học nguồn đã kích hoạt</label><div id="knowledgeDocs" class="docs"><div class="doc">Đang tải...</div></div></div>
     <div class="actions"><button id="btnCreate" class="primary">Tạo gói ra đề AI</button><button id="btnRefreshDocs" class="secondary">Làm mới tài liệu</button><button id="btnChatGPT" class="secondary">Mở ChatGPT</button><button id="btnGemini" class="secondary">Mở Gemini</button></div><div id="generationStatus" class="statusline"></div>
   </section>
 
@@ -35,6 +35,7 @@
 <script src="ai_exam.js?v=20260910-ai-exam-ui-031b2"></script>
 <script src="ai_exam_resilience.js?v=20260910-ai-exam-resilience-031c"></script>
 <script src="ai_exam_assessment_profile.js?v=20260910-geography-assessment-037"></script>
+<script src="ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036"></script>
 <script src="ai_exam_copy_feedback.js?v=20260910-ai-exam-copy-feedback-035"></script>
 </body>
 </html>
