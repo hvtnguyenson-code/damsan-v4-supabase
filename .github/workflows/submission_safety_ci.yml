@@ -27,6 +27,7 @@ jobs:
           node --check knowledge.js
           node --check knowledge_reader.js
           node --check knowledge_ai_web.js
+          node --check ai_exam.js
       - name: Submission safety simulation
         run: node tests/submission_safety_simulation.js
       - name: Account import regression simulations
@@ -53,6 +54,7 @@ jobs:
           node tests/knowledge_ai_semantic_bridge_simulation.js
           node tests/ai_exam_generation_bridge_simulation.js
           node tests/knowledge_web_ai_handoff_simulation.js
+          node tests/ai_exam_review_ui_simulation.js
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
