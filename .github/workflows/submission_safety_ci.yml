@@ -31,6 +31,40 @@ jobs:
           node --check knowledge_ai_hardening.js
           node --check ai_exam.js
           node --check ai_exam_resilience.js
+      - name: Browser OCR runtime probe
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium not found on runner"
+            exit 1
+          fi
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/ocr-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8765/tests/browser_ocr_runtime_probe.html >/dev/null; then break; fi
+            sleep 1
+          done
+          set +e
+          timeout 150s "$CHROME" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-timer-throttling \
+            --dump-dom http://127.0.0.1:8765/tests/browser_ocr_runtime_probe.html \
+            >/tmp/ocr-dom.txt 2>/tmp/ocr-chrome.log
+          CHROME_EXIT=$?
+          set -e
+          echo "=== OCR browser DOM ==="
+          cat /tmp/ocr-dom.txt || true
+          echo "=== Chrome diagnostics ==="
+          tail -n 120 /tmp/ocr-chrome.log || true
+          if [ "$CHROME_EXIT" -ne 0 ]; then
+            echo "Chrome OCR probe exited with $CHROME_EXIT"
+            exit "$CHROME_EXIT"
+          fi
+          grep -q 'data-result="PASS"' /tmp/ocr-dom.txt
       - name: Submission safety simulation
         run: node tests/submission_safety_simulation.js
       - name: Account import regression simulations
