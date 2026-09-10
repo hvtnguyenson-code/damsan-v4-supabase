@@ -1,0 +1,43 @@
+name: Temporary AI authoring nav patch 031C
+
+on:
+  push:
+    branches:
+      - 'feat/ai-authoring-navigation-031c'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/ai-authoring-navigation-031c
+          fetch-depth: 0
+      - name: Insert AI authoring entries into teacher sidebar
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('giaovien.html')
+          text = path.read_text(encoding='utf-8')
+          marker = '''                            <button id="btnSubDirect" class="active" onclick="switchSubTabTaoDe('direct'); closeSidebarMobile()">⚡ Tạo Đề Thi Online</button>'''
+          insertion = marker + '''\n                            <button id="btnSubKnowledgeAI" onclick="window.location.href='knowledge.html'; closeSidebarMobile()">🧠 Kho tri thức AI</button>\n                            <button id="btnSubKnowledgeAnalyze" onclick="window.location.href='knowledge_ai.html'; closeSidebarMobile()">✨ AI phân tích nguồn</button>\n                            <button id="btnSubAiExam" onclick="window.location.href='ai_exam.html'; closeSidebarMobile()">🤖 Tạo đề bằng AI</button>'''
+          if 'id="btnSubAiExam"' in text:
+              print('AI navigation already present; no change required.')
+          else:
+              if text.count(marker) != 1:
+                  raise SystemExit(f'Expected exactly one teacher sidebar marker, found {text.count(marker)}')
+              path.write_text(text.replace(marker, insertion, 1), encoding='utf-8', newline='')
+          PY
+          git diff --check
+          if git diff --quiet -- giaovien.html; then
+            echo "No patch needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add giaovien.html
+          git commit -m "feat(ai): expose knowledge and exam authoring in teacher sidebar"
+          git push origin HEAD:feat/ai-authoring-navigation-031c
