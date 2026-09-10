@@ -3,6 +3,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const migrationPath = path.join(root, 'supabase', 'migrations', '20260910065405_knowledge_ai_semantic_bridge_030c.sql');
+const compatPath = path.join(root, 'supabase', 'migrations', '20260910193600_knowledge_ai_payload_shape_compat_034.sql');
 const edgePath = path.join(root, 'supabase', 'functions', 'knowledge-ai-bridge', 'index.ts');
 const docPath = path.join(root, 'docs', 'KNOWLEDGE_030C_AI_SEMANTIC_BRIDGE.md');
 
@@ -13,11 +14,12 @@ function must(source, regex, message) {
   assert(regex.test(source), message);
 }
 
-for (const file of [migrationPath, edgePath, docPath]) {
+for (const file of [migrationPath, compatPath, edgePath, docPath]) {
   assert(fs.existsSync(file), `K030C required file exists: ${path.relative(root, file)}`);
 }
 
 const sql = fs.readFileSync(migrationPath, 'utf8');
+const compat = fs.readFileSync(compatPath, 'utf8');
 const edge = fs.readFileSync(edgePath, 'utf8');
 const doc = fs.readFileSync(docPath, 'utf8');
 
@@ -115,5 +117,26 @@ must(doc, /single mandatory teacher decision/i,
 must(doc, /does not hard-code OpenAI, Google, Anthropic/i,
   'K030C-37 bridge is provider-neutral');
 console.log('K030C-34..37 architecture invariants: PASSED');
+
+console.log('=== KNOWLEDGE-034 WEB-AI PAYLOAD SHAPE COMPATIBILITY ===');
+must(compat, /create or replace function public\._knowledge_normalize_ai_units\(p_units jsonb\)/i,
+  'K034-01 normalization helper exists');
+must(compat, /when 'array' then jsonb_build_object\('path', v_unit->'hierarchy'\)/i,
+  'K034-02 hierarchy array is normalized to canonical object path');
+must(compat, /when 'string' then jsonb_build_object\('text', v_unit->>'content'\)/i,
+  'K034-03 content string is normalized to canonical object text');
+must(compat, /v_provenance->>'page_number'/i,
+  'K034-04 physical page provenance is projected to page_start/page_end');
+must(compat, /v_units := public\._knowledge_normalize_ai_units\(p_payload->'units'\)/i,
+  'K034-05 bridge normalizes before deterministic validation and commit');
+must(compat, /unit_content_invalid/i,
+  'K034-06 invalid content shape returns deterministic client-safe code');
+must(compat, /unit_hierarchy_invalid/i,
+  'K034-07 invalid hierarchy shape returns deterministic client-safe code');
+must(compat, /rpc_knowledge_commit_analysis_service/i,
+  'K034-08 normalized payload still uses canonical atomic commit RPC');
+must(compat, /validator_version','034'/i,
+  'K034-09 validation report records compatibility validator version');
+console.log('K034-01..09 Web-AI payload shape compatibility: PASSED');
 
 console.log('PASS: KNOWLEDGE-030C AI semantic bridge structural simulation');
