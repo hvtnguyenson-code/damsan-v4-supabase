@@ -3,7 +3,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const migrationPath = path.join(root, 'supabase', 'migrations', '20260910065405_knowledge_ai_semantic_bridge_030c.sql');
-const compatPath = path.join(root, 'supabase', 'migrations', '20260910193600_knowledge_ai_payload_shape_compat_034.sql');
+const compatPath = path.join(root, 'supabase', 'migrations', '20260910124105_knowledge_ai_payload_shape_compat_034.sql');
 const edgePath = path.join(root, 'supabase', 'functions', 'knowledge-ai-bridge', 'index.ts');
 const docPath = path.join(root, 'docs', 'KNOWLEDGE_030C_AI_SEMANTIC_BRIDGE.md');
 
