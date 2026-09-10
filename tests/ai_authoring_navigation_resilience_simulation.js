@@ -21,7 +21,7 @@ console.log('A031C-01..04 teacher navigation: PASSED');
 must(knowledge, /href="knowledge_ai\.html"/, 'A031C-05 Knowledge Library links to AI analysis');
 must(knowledge, /href="ai_exam\.html"/, 'A031C-06 Knowledge Library links to AI exam authoring');
 must(knowledge, /href="giaovien\.html"/, 'A031C-07 Knowledge Library preserves teacher return path');
-must(knowledge, /Sau khi trạng thái thành `EXTRACTED`[\s\S]*AI phân tích nguồn[\s\S]*active revision[\s\S]*Tạo đề bằng AI/, 'A031C-08 pipeline copy matches actual workflow');
+must(knowledge, /chỉ được chuyển sang `EXTRACTED` khi đã có văn bản đủ dùng[\s\S]*AI phân tích nguồn/i, 'A031C-08 pipeline copy preserves usable-source gate before AI analysis');
 console.log('A031C-05..08 knowledge workflow navigation: PASSED');
 
 must(examHtml, /ai_exam_resilience\.js\?v=20260910-ai-exam-resilience-031c/, 'A031C-09 resilience script is cache-busted and loaded');
