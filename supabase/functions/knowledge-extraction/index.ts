@@ -273,6 +273,48 @@ async function completeArtifact(req: Request, body: JsonObject, actor: StaffActo
   });
 }
 
+async function failExtraction(req: Request, body: JsonObject, actor: StaffActor) {
+  const owned = await requireOwnedJob(actor, body);
+  const errorCode = cleanString(body.error_code, 80) || "browser_extraction_failed";
+  const errorMessage = cleanString(body.error_message, 500) || "Không thể đọc nội dung tài liệu.";
+
+  if (owned.job_status === "FAILED" && owned.pipeline_status === "FAILED") {
+    return json(req, 200, {
+      status: "success",
+      action: "fail_extraction",
+      idempotent: true,
+      document_id: owned.document_id,
+      job_id: owned.job_id,
+      pipeline_status: "FAILED",
+    });
+  }
+
+  ensureExtractionEligible(owned);
+  const { data, error } = await admin.rpc("rpc_knowledge_fail_extraction_service", {
+    p_job_id: owned.job_id,
+    p_error_code: errorCode,
+    p_error_message: errorMessage,
+  });
+  if (error || !data || data.status !== "success") {
+    console.error("knowledge extraction failure commit failed", error ?? data);
+    return json(req, 500, {
+      status: "error",
+      code: "extraction_failure_commit_failed",
+      message: "Không thể ghi nhận trạng thái đọc thất bại.",
+    });
+  }
+
+  return json(req, 200, {
+    status: "success",
+    action: "fail_extraction",
+    idempotent: Boolean(data.idempotent),
+    document_id: data.document_id,
+    job_id: data.job_id,
+    pipeline_status: data.pipeline_status,
+    error_code: data.error_code || errorCode,
+  });
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(req) });
   if (req.method !== "POST") return json(req, 405, { status: "error", code: "method_not_allowed", message: "Chỉ hỗ trợ POST." });
@@ -303,6 +345,7 @@ Deno.serve(async (req: Request) => {
     const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
     if (action === "prepare_artifact") return await prepareArtifact(req, body, actor);
     if (action === "complete_artifact") return await completeArtifact(req, body, actor);
+    if (action === "fail_extraction") return await failExtraction(req, body, actor);
     return json(req, 400, { status: "error", code: "action_invalid", message: "Thao tác không hợp lệ." });
   } catch (error) {
     const code = error instanceof Error ? error.message : "unexpected_error";
