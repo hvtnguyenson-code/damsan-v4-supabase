@@ -53,7 +53,7 @@ assert(docs.includes('vqa.moet.gov.vn/vi/news/tin-tuc-su-kien/de-thi-tham-khao-k
 assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(docs) && /Bình Phước/.test(docs),'provincial benchmark corpus not documented');
 
 assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'),'036 lesson-scope overlay missing from exam UI');
-assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-book-lesson-scope-036'),'036 book-structure overlay missing from semantic-analysis UI');
+assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay cache version missing from semantic-analysis UI');
 assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'),'036 scope schema missing from browser request');
 assert(scopeOverlay.includes('rpc_knowledge_scope_catalog_read'),'036 browser must use protected lesson catalog RPC');
 assert(scopeOverlay.includes('knowledge-lesson-check'),'036 lesson selector UI missing');
