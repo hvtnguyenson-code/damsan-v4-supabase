@@ -6,7 +6,7 @@ const migrationPath = path.join(
   '..',
   'supabase',
   'migrations',
-  '20260910043000_ai_knowledge_ingestion_foundation.sql'
+  '20260910041643_ai_knowledge_ingestion_foundation.sql'
 );
 const architecturePath = path.join(__dirname, '..', 'docs', 'KNOWLEDGE_AI_PIPELINE.md');
 
