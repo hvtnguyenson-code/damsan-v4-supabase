@@ -18,8 +18,8 @@ function must(source, regex, message) {
 console.log('=== KNOWLEDGE-032 OCR USABILITY HARDENING ===');
 
 must(readerHardening, /createWorker\(\['vie', 'eng'\], 1/i, 'K032-01 OCR uses explicit Vietnamese + English language array');
-must(readerHardening, /Khởi tạo OCR tiếng Việt \+ tiếng Anh bằng CDN mặc định/i, 'K032-02 default CDN is attempted first');
-must(readerHardening, /thử lại bằng đường dẫn dự phòng/i, 'K032-03 OCR has a pinned fallback path');
+must(readerHardening, /id:\s*'default-v7'[\s\S]*?options:\s*\{\}/i, 'K032-02 a default Tesseract v7 profile remains available before compatibility fallback');
+must(readerHardening, /workerPath:[\s\S]*tesseract\.js@[\s\S]*corePath:[\s\S]*tesseract-core-lstm\.wasm\.js/i, 'K032-03 OCR retains an explicit pinned compatibility fallback path');
 must(readerHardening, /extractedChars <= 0/i, 'K032-04 zero extracted text is rejected in browser');
 must(readerHardening, /unresolved\.length >= pageCount/i, 'K032-05 all unresolved PDF pages are rejected in browser');
 must(readerHardening, /error\.code = 'extraction_no_usable_text'/i, 'K032-06 browser returns a specific unusable-extraction code');
