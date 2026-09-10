@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://xcervjnwlchwfqvbeahy.supabase.co wss://xcervjnwlchwfqvbeahy.supabase.co; img-src 'self' data: blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kho tri thức AI - Đam San V4</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f6f8; color: #1f2937; }
+    header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    header h1 { font-size: 21px; margin: 0; }
+    header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+    .back { color: #0d47a1; background: white; text-decoration: none; font-weight: 700; border-radius: 7px; padding: 9px 13px; white-space: nowrap; }
+    main { max-width: 1120px; margin: 22px auto; padding: 0 16px 36px; }
+    .notice { display: none; padding: 13px 15px; border-radius: 8px; margin-bottom: 16px; font-weight: 600; }
+    .notice.error { display: block; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .notice.ok { display: block; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.04); padding: 20px; margin-bottom: 18px; }
+    .card h2 { margin: 0 0 7px; font-size: 18px; }
+    .card .sub { color: #64748b; font-size: 13px; line-height: 1.5; margin: 0 0 15px; }
+    .dropzone { border: 2px dashed #93c5fd; background: #eff6ff; border-radius: 12px; min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 22px; text-align: center; cursor: pointer; transition: .15s ease; }
+    .dropzone.dragover { border-color: #1d4ed8; background: #dbeafe; }
+    .dropzone strong { color: #1d4ed8; font-size: 16px; }
+    .dropzone small { color: #64748b; margin-top: 8px; }
+    .dropzone input { display: none; }
+    .hint-row { margin-top: 15px; }
+    .hint-row label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .hint-row textarea { width: 100%; resize: vertical; min-height: 70px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font: inherit; }
+    .hint-row .help { font-size: 12px; color: #64748b; margin-top: 5px; }
+    .actions { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+    button { border: 0; border-radius: 7px; padding: 10px 15px; font-weight: 700; cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .65; }
+    .primary { background: #1a73e8; color: white; }
+    .secondary { background: #e2e8f0; color: #334155; }
+    .upload-queue { margin-top: 15px; display: grid; gap: 8px; }
+    .upload-item { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; display: flex; gap: 10px; justify-content: space-between; align-items: center; }
+    .upload-item .meta { min-width: 0; }
+    .upload-item .name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .upload-item .status { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .badge { display: inline-block; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .QUEUED, .EXTRACTING, .OCR, .ANALYZING { background: #fef3c7; color: #92400e; }
+    .READY, .AUTO_ACCEPTED { background: #dcfce7; color: #166534; }
+    .FAILED, .REJECTED { background: #fee2e2; color: #991b1b; }
+    .NEEDS_REVIEW, .UNASSESSED { background: #e2e8f0; color: #475569; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; min-width: 880px; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 10px 8px; text-align: left; font-size: 13px; vertical-align: top; }
+    th { color: #475569; background: #f8fafc; position: sticky; top: 0; }
+    .muted { color: #64748b; }
+    .empty { text-align: center; color: #64748b; padding: 25px 8px; }
+    .session { font-size: 12px; color: #e0f2fe; text-align: right; }
+    @media (max-width: 720px) {
+      header { align-items: flex-start; padding: 15px; }
+      header h1 { font-size: 17px; }
+      .session { display: none; }
+      main { margin-top: 15px; }
+      .card { padding: 15px; }
+      .upload-item { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Kho tri thức AI — Đam San V4</h1>
+      <p>Tải tài liệu nguyên bản. Hệ thống chịu trách nhiệm đọc, OCR khi cần và phân tích ở các bước tiếp theo.</p>
+    </div>
+    <div>
+      <div id="sessionInfo" class="session"></div>
+      <a class="back" href="giaovien.html">← Cổng giáo viên</a>
+    </div>
+  </header>
+
+  <main>
+    <div id="notice" class="notice"></div>
+
+    <section class="card">
+      <h2>1. Nạp tài liệu nguồn</h2>
+      <p class="sub">Chấp nhận PDF, PDF scan, DOC và DOCX; tối đa 50 MiB mỗi tệp. Không cần chia bài, gắn trang, đặt mã bài hay chuyển sang JSON.</p>
+
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Chọn tài liệu nguồn">
+        <strong>Thả tài liệu vào đây hoặc bấm để chọn</strong>
+        <small>Có thể chọn nhiều tệp. File nguyên bản được lưu trong Storage riêng tư.</small>
+        <input id="knowledgeFiles" type="file" multiple accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+      </div>
+
+      <div class="hint-row">
+        <label for="knowledgeHint">Gợi ý cho AI — tùy chọn</label>
+        <textarea id="knowledgeHint" placeholder="Ví dụ: Đây là SGK Địa lí 12 Kết nối tri thức. Có thể để trống hoàn toàn."></textarea>
+        <div class="help">Gợi ý chỉ hỗ trợ suy luận; không phải metadata bắt buộc và không thay thế việc hệ thống tự phân tích tài liệu.</div>
+      </div>
+
+      <div class="actions">
+        <button id="btnUpload" class="primary" type="button">Tải lên và đưa vào hàng đợi đọc</button>
+        <button id="btnClearSelection" class="secondary" type="button">Bỏ danh sách đã chọn</button>
+      </div>
+      <div id="uploadQueue" class="upload-queue"></div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div>
+          <h2>2. Trạng thái kho tri thức</h2>
+          <p class="sub" style="margin-bottom:0;">Trang tự làm mới khi còn tài liệu đang xử lý. Ở 030B1, trạng thái sau khi tải là QUEUED; bộ đọc/OCR sẽ được nối vào hàng đợi ở 030B2.</p>
+        </div>
+        <button id="btnRefresh" class="secondary" type="button">Làm mới</button>
+      </div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Tài liệu</th>
+              <th>Loại</th>
+              <th>Khối</th>
+              <th>Trang</th>
+              <th>Pipeline</th>
+              <th>Chất lượng</th>
+              <th>Revision</th>
+              <th>Cập nhật</th>
+            </tr>
+          </thead>
+          <tbody id="knowledgeBody"><tr><td colspan="8" class="empty">Đang tải...</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="knowledge.js?v=20260910-knowledge-upload-030b1"></script>
+</body>
+</html>
