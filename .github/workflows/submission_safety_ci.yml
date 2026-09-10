@@ -23,8 +23,9 @@ jobs:
         run: |
           node --check hoc_sinh.js
           node --check giaovien.js
-          node --check knowledge.js
           node --check sw.js
+          node --check knowledge.js
+          node --check knowledge_reader.js
       - name: Submission safety simulation
         run: node tests/submission_safety_simulation.js
       - name: Account import regression simulations
@@ -47,6 +48,7 @@ jobs:
           node tests/teacher_radar_stable_dom_no_flicker_simulation.js
           node tests/knowledge_ingestion_foundation_simulation.js
           node tests/knowledge_upload_gateway_simulation.js
+          node tests/knowledge_automatic_reader_simulation.js
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
