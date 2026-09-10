@@ -1,7 +1,7 @@
 # Direct GitHub Execution Workflow
 
-**Task:** DEV-AUTOMATION-000  
-**Repository:** `hvtnguyenson-code/damsan-v4-supabase`  
+**Task:** DEV-AUTOMATION-000
+**Repository:** `hvtnguyenson-code/damsan-v4-supabase`
 **Canonical local clone:** `D:\Kiem_tra_Online_V4_Supabase`
 
 ## 1. Purpose
