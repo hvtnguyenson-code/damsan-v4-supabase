@@ -5,6 +5,10 @@ const profiles = [
     options: {}
   },
   {
+    id: 'refresh-default-v7',
+    options: { cacheMethod: 'refresh' }
+  },
+  {
     id: 'pinned-simd-v7',
     options: {
       workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@v7.0.0/dist/worker.min.js',
@@ -36,16 +40,28 @@ function timeout(promise, ms, label) {
 function makeCanvas() {
   const canvas = document.createElement('canvas');
   canvas.width = 1500;
-  canvas.height = 420;
+  canvas.height = 2100;
   const ctx = canvas.getContext('2d', { alpha: false });
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = '#000000';
   ctx.font = '700 72px Arial, sans-serif';
-  ctx.fillText('VI TRI DIA LI VIET NAM 12345', 55, 160);
+  ctx.fillText('VI TRI DIA LI VIET NAM 12345', 55, 180);
   ctx.font = '52px Arial, sans-serif';
-  ctx.fillText('Dia li lop 12 - kiem tra OCR', 55, 270);
+  ctx.fillText('Dia li lop 12 - kiem tra OCR', 55, 300);
+  ctx.fillText('Pham vi lanh tho va vi tri dia li', 55, 410);
   return canvas;
+}
+
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('canvas.toBlob returned null')), 'image/png');
+  });
+}
+
+function usableText(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return { text, ok: text.length >= 12 && /VIET|VIỆT|DIA|ĐỊA/i.test(text) };
 }
 
 const attempts = [];
@@ -60,10 +76,23 @@ for (const profile of profiles) {
       ...profile.options,
       logger: () => {}
     }), 45000, `${profile.id} createWorker`);
-    const recognized = await timeout(worker.recognize(makeCanvas()), 45000, `${profile.id} recognize`);
-    const text = String(recognized?.data?.text || '').replace(/\s+/g, ' ').trim();
-    const ok = text.length >= 12 && /VIET|VIỆT|DIA|ĐỊA/i.test(text);
-    attempts.push({ id: profile.id, ok, text: text.slice(0, 220) });
+
+    const canvas = makeCanvas();
+    const canvasResult = await timeout(worker.recognize(canvas), 45000, `${profile.id} recognize canvas`);
+    const canvasText = usableText(canvasResult?.data?.text);
+
+    const blob = await canvasBlob(canvas);
+    const blobResult = await timeout(worker.recognize(blob), 45000, `${profile.id} recognize blob`);
+    const blobText = usableText(blobResult?.data?.text);
+
+    const ok = canvasText.ok && blobText.ok;
+    attempts.push({
+      id: profile.id,
+      ok,
+      canvas_text: canvasText.text.slice(0, 220),
+      blob_text: blobText.text.slice(0, 220),
+      blob_bytes: blob.size
+    });
     if (ok) {
       passed = true;
       winner = profile.id;
