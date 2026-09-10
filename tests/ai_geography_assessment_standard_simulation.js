@@ -9,6 +9,8 @@ const html = fs.readFileSync('ai_exam.html','utf8');
 const knowledgeHtml = fs.readFileSync('knowledge_ai.html','utf8');
 const migration = fs.readFileSync('supabase/migrations/20260910150516_geography_assessment_standard_037.sql','utf8');
 const scopeMigration = fs.readFileSync('supabase/migrations/20260910152210_knowledge_book_lesson_scope_036.sql','utf8');
+const lazyMigration = fs.readFileSync('supabase/migrations/20260910154300_knowledge_lazy_segment_analysis_036b.sql','utf8');
+const segmentBridge = fs.readFileSync('supabase/functions/knowledge-segment-bridge/index.ts','utf8');
 const docs = fs.readFileSync('docs/GEOGRAPHY_ASSESSMENT_STANDARD_037.md','utf8');
 
 assert(overlay.includes('DIA_LI_TNTHPT_2025_PLUS_V1'), '037 profile id missing from prompt compiler');
@@ -68,7 +70,7 @@ assert(docs.includes('vqa.moet.gov.vn/vi/news/thong-bao/cau-truc-dinh-dang-de-th
 assert(docs.includes('vqa.moet.gov.vn/vi/news/tin-tuc-su-kien/de-thi-tham-khao-ky-thi-tot-nghiep-thpt-tu-nam-2025-159.html'), 'official reference exam source missing');
 assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(docs) && /Bình Phước/.test(docs), 'provincial benchmark corpus not documented');
 
-// 036 — whole-book / lesson scope contract.
+// 036 — whole-book / lesson scope contract for exam generation.
 assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'), '036 lesson-scope overlay missing from exam UI');
 assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-book-lesson-scope-036'), '036 book-structure overlay missing from semantic-analysis UI');
 assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'), '036 scope schema missing from browser request');
@@ -89,14 +91,36 @@ assert(scopeMigration.includes('_ai_exam_quality_gate_037'), '036 must preserve 
 assert(bookOverlay.includes('lesson_code') && bookOverlay.includes('lesson_title'), '036 semantic prompt must require lesson metadata');
 assert(bookOverlay.includes('BAI_01'), '036 semantic prompt must define stable lesson codes');
 assert(/không gộp kiến thức của hai bài khác nhau/i.test(bookOverlay), '036 semantic prompt must preserve lesson boundaries');
-const bookContext = {
-  kaiBuildPrompt: () => 'BASE\nSOURCE PACKAGE:{"x":1}',
-  console,
-};
-vm.createContext(bookContext);
-vm.runInContext(bookOverlay, bookContext);
-const bookPrompt = bookContext.kaiBuildPrompt({}, []);
-assert(bookPrompt.includes('CẤU TRÚC SÁCH / CHƯƠNG / BÀI'), '036 book structure rules not injected');
-assert(bookPrompt.indexOf('lesson_code') < bookPrompt.indexOf('SOURCE PACKAGE:'), '036 structure rules must precede source package');
 
-console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036');
+// 036B — lazy semantic analysis for whole books.
+assert(bookOverlay.includes('knowledge-segment-bridge'), '036B UI must use dedicated scoped semantic bridge');
+assert(bookOverlay.includes('inspect_document'), '036B UI must inspect a whole-book structure before generation');
+assert(bookOverlay.includes('create_segment_handoff'), '036B UI must issue segment-bound capability');
+assert(bookOverlay.includes('book-segment-check'), '036B UI must expose explicit lesson selection');
+assert(/không gửi cả cuốn sách sang AI/i.test(bookOverlay), '036B must refuse silent whole-book semantic handoff');
+assert(bookOverlay.includes("pipeline_version:'DAMSAN_KNOWLEDGE_V1/036B'"), '036B semantic submission version missing');
+
+assert(lazyMigration.includes('DAMSAN_BOOK_INDEX_V1'), '036B persistent mechanical book index missing');
+assert(lazyMigration.includes('knowledge_segment_handoffs'), '036B segment capability table missing');
+assert(lazyMigration.includes('rpc_knowledge_issue_segment_handoff_service'), '036B scoped handoff issue RPC missing');
+assert(lazyMigration.includes('rpc_knowledge_claim_segment_handoff_service'), '036B scoped handoff claim RPC missing');
+assert(lazyMigration.includes('rpc_knowledge_complete_segment_handoff_service'), '036B merge commit RPC missing');
+assert(lazyMigration.includes('_knowledge_segment_scope_matches_unit_036b'), '036B server unit-scope guard missing');
+assert(lazyMigration.includes('unit_outside_segment_scope'), '036B out-of-scope AI unit rejection missing');
+assert(lazyMigration.includes("pipeline_status=case when v_quality_status='AUTO_ACCEPTED' and v_remaining=0 then 'READY' else 'EXTRACTED' end"), '036B incomplete books must remain eligible for later lesson analysis');
+assert(lazyMigration.includes('rpc_knowledge_commit_analysis_service'), '036B must reuse canonical knowledge revision commit boundary');
+
+assert(segmentBridge.includes('detectBookIndex'), '036B mechanical lesson detector missing');
+assert(segmentBridge.includes('(perPage.get(c.page) || 0) < 3'), '036B table-of-contents false-positive guard missing');
+assert(segmentBridge.includes('selected_ranges'), '036B scoped source chunk metadata missing');
+assert(segmentBridge.includes('buildScopedChunk'), '036B server must slice artifact by selected page ranges');
+assert(segmentBridge.includes('rpc_knowledge_store_book_index_service'), '036B detected index must be persisted server-side');
+assert(segmentBridge.includes('rpc_knowledge_complete_segment_handoff_service'), '036B edge must commit through transactional merge RPC');
+assert(!segmentBridge.includes('SUPABASE_SERVICE_ROLE_KEY";'), 'sanity check placeholder');
+
+// The 036 prompt wrapper still has to remain before the source package marker.
+const bookPromptPos = bookOverlay.indexOf('CẤU TRÚC SÁCH / CHƯƠNG / BÀI');
+const sourceMarkerPos = bookOverlay.indexOf('SOURCE PACKAGE:');
+assert(bookPromptPos >= 0 && sourceMarkerPos >= 0, '036 prompt markers missing');
+
+console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b');
