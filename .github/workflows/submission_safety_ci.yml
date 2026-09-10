@@ -50,6 +50,7 @@ jobs:
           node tests/knowledge_upload_gateway_simulation.js
           node tests/knowledge_automatic_reader_simulation.js
           node tests/knowledge_ai_semantic_bridge_simulation.js
+          node tests/ai_exam_generation_bridge_simulation.js
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
