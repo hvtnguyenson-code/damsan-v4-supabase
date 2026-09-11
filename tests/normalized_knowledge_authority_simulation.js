@@ -5,6 +5,7 @@ const vm = require('vm');
 const migration = fs.readFileSync('supabase/migrations/20260911164000_normalized_knowledge_authority_038_039.sql','utf8');
 const authorityPackMigration = fs.readFileSync('supabase/migrations/20260911165000_assessment_authority_pack_039a.sql','utf8');
 const autoLinkMigration = fs.readFileSync('supabase/migrations/20260911165500_assessment_authority_unique_profile_link_039b.sql','utf8');
+const explicitBindingMigration = fs.readFileSync('supabase/migrations/20260911170000_explicit_authority_binding_039c.sql','utf8');
 const bridge = fs.readFileSync('supabase/functions/knowledge-normalized-source/index.ts','utf8');
 const knowledgeUi = fs.readFileSync('knowledge_normalized_source.js','utf8');
 const knowledgeHtml = fs.readFileSync('knowledge.html','utf8');
@@ -33,14 +34,14 @@ assert(/KHÔNG phải tóm tắt ngắn/.test(bridge), '038 knowledge normalizat
 assert(/không sao chép câu hỏi/i.test(bridge), '038 benchmark normalization must forbid verbatim reuse');
 assert(!/openai\.com\/v1|generativelanguage\.googleapis\.com|anthropic\.com\/v1/i.test(bridge), '038 bridge must not call a paid model API');
 
-assert(knowledgeHtml.includes('knowledge_normalized_source.js?v=20260911-normalized-source-038'), '038 knowledge UI script missing');
+assert(knowledgeHtml.includes('knowledge_normalized_source.js?v=20260911-explicit-authority-039c'), '039C knowledge UI cache-bust missing');
 assert(knowledgeUi.includes("<option value=\"10\">Khối 10</option>"), '038 grade 10 option missing');
 assert(knowledgeUi.includes("<option value=\"11\">Khối 11</option>"), '038 grade 11 option missing');
 assert(knowledgeUi.includes("<option value=\"12\">Khối 12</option>"), '038 grade 12 option missing');
 const normalizedGradeSelect = /<select id="normalizedGrade">([\s\S]*?)<\/select>/.exec(knowledgeUi)?.[1] || '';
 assert(normalizedGradeSelect && !/Tất cả khối/i.test(normalizedGradeSelect), '038 must not offer All grades for normalized-source identity');
 assert(knowledgeUi.includes('ASSESSMENT_RULE') && knowledgeUi.includes('ASSESSMENT_BENCHMARK'), '038 authority source-role selectors missing');
-assert(knowledgeUi.includes('Tài liệu/khối/vai trò đã thay đổi'), '038 import must detect metadata drift after prompt generation');
+assert(knowledgeUi.includes('Tài liệu/khối/vai trò/căn cứ đích đã thay đổi'), '039C import must detect authority-binding drift after prompt generation');
 
 // 039: assessment rules and benchmarks are a separate authority plane.
 assert(migration.includes('create table if not exists public.assessment_authority_profiles'), '039 authority profile registry missing');
@@ -64,10 +65,26 @@ assert(authorityPackMigration.includes("s.source_kind='ASSESSMENT_BENCHMARK' and
 assert(authorityPackMigration.includes('limit 240'), '039A browser authority corpus must be bounded');
 assert(authorityPackMigration.includes("'authority_pack'"), '039A teacher resolver must return separate authority pack');
 
-assert(autoLinkMigration.includes('_assessment_auto_link_unique_profile_039'), '039B deterministic authority auto-link trigger missing');
-assert(autoLinkMigration.includes('v_profile_count<>1'), '039B must refuse implicit linkage when subject/grade profile is ambiguous');
-assert(autoLinkMigration.includes("new.source_role not in ('ASSESSMENT_RULE','ASSESSMENT_BENCHMARK')"), '039B auto-link must only apply to authority source roles');
-assert(autoLinkMigration.includes('AUTO_LINK_UNIQUE_PROFILE_039B'), '039B audit marker missing');
+// 039B existed as a temporary convenience, but 039C must explicitly supersede it.
+assert(autoLinkMigration.includes('_assessment_auto_link_unique_profile_039'), '039B historical auto-link migration missing');
+assert(explicitBindingMigration.includes('drop trigger if exists trg_knowledge_documents_authority_autolink_039b'), '039C must disable implicit unique-profile auto-link trigger');
+assert(explicitBindingMigration.includes('drop function if exists public._assessment_auto_link_unique_profile_039()'), '039C must disable implicit unique-profile auto-link function');
+assert(explicitBindingMigration.includes('authority_profile_id text null') && explicitBindingMigration.includes('authority_code text null'), '039C explicit binding columns missing');
+assert(explicitBindingMigration.includes('rpc_assessment_authority_slots'), '039C authority slot catalogue RPC missing');
+assert(explicitBindingMigration.includes('rpc_knowledge_set_authority_binding'), '039C explicit teacher binding RPC missing');
+assert(explicitBindingMigration.includes('authority_slot_already_bound'), '039C must refuse silent replacement of an occupied authority slot');
+assert(explicitBindingMigration.includes('EXPLICIT_BINDING_039C'), '039C audit marker missing');
+assert(explicitBindingMigration.includes('_knowledge_document_authority_guard_039c'), '039C document authority canonicalization guard missing');
+assert(explicitBindingMigration.includes('_assessment_profile_source_guard_039c'), '039C legacy AI-profile linkage defensive guard missing');
+assert(explicitBindingMigration.includes('if new.profile_id is distinct from v_doc.authority_profile_id then return null; end if;'), '039C must ignore AI-supplied linkage to a different profile');
+assert(explicitBindingMigration.includes("'assessment_profile_ids',jsonb_build_array(new.authority_profile_id)"), '039C persisted manifest must be canonicalized from server binding');
+
+assert(knowledgeUi.includes('id="normalizedAuthoritySlot"'), '039C explicit authority-slot selector missing');
+assert(knowledgeUi.includes("rpc_assessment_authority_slots"), '039C browser must load declared authority slots from server');
+assert(knowledgeUi.includes("rpc_knowledge_set_authority_binding"), '039C browser must persist explicit binding before prompt/import');
+assert(knowledgeUi.includes('Hệ thống không tự gắn theo suy đoán'), '039C explicit-selection UX missing');
+assert(knowledgeUi.includes('AUTHORITY BINDING DO HỆ THỐNG/GIÁO VIÊN CHỐT'), '039C prompt must carry teacher-selected authority identity');
+assert(knowledgeUi.includes('AI không có quyền tự chọn profile khác'), '039C prompt must forbid AI-selected profile identity');
 
 assert(examHtml.includes('id="gradeSelect"'), '039 mandatory grade selector missing from exam UI');
 assert(examHtml.includes('id="assessmentAuthorityPanel"'), '039 authority evidence panel missing');
@@ -81,4 +98,4 @@ assert(examUi.includes("doc.source_role === 'KNOWLEDGE_SOURCE'"), '039 browser m
 assert(examUi.includes('Hãy chọn khối 10, 11 hoặc 12'), '039 grade-required UX missing');
 assert(examUi.includes('el.disabled = true'), '039 official count lock UX missing');
 
-console.log('PASS normalized knowledge 038 + assessment authority 039/039A/039B');
+console.log('PASS normalized knowledge 038 + assessment authority 039/039A/039B->039C explicit binding');
