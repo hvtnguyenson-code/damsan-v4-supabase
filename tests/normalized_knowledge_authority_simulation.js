@@ -34,7 +34,7 @@ assert(/KHÔNG phải tóm tắt ngắn/.test(bridge), '038 knowledge normalizat
 assert(/không sao chép câu hỏi/i.test(bridge), '038 benchmark normalization must forbid verbatim reuse');
 assert(!/openai\.com\/v1|generativelanguage\.googleapis\.com|anthropic\.com\/v1/i.test(bridge), '038 bridge must not call a paid model API');
 
-assert(knowledgeHtml.includes('knowledge_normalized_source.js?v=20260911-explicit-authority-039c'), '039C knowledge UI cache-bust missing');
+assert(knowledgeHtml.includes('knowledge_normalized_source.js?v=20260912-subject-binding-040a'), '040A knowledge UI cache-bust missing');
 assert(knowledgeUi.includes("<option value=\"10\">Khối 10</option>"), '038 grade 10 option missing');
 assert(knowledgeUi.includes("<option value=\"11\">Khối 11</option>"), '038 grade 11 option missing');
 assert(knowledgeUi.includes("<option value=\"12\">Khối 12</option>"), '038 grade 12 option missing');
