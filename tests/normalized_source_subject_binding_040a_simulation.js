@@ -22,7 +22,7 @@ assert(ui.includes("rpc_knowledge_set_subject_grade"), '040A browser must persis
 assert(ui.includes('AI không được tự đoán'), '040A UX must state subject is not inferred by AI');
 assert(ui.includes('payload.mon_id !== preparedSubjectId'), '040A import must reject subject drift after prompt generation');
 assert(ui.includes("data?.selected_metadata?.subject_name !== payload.subject_name"), '040A prompt must verify server subject identity');
-assert(ui.includes('Tài liệu/môn/khối/vai trò/căn cứ đích đã thay đổi'), '040A drift error must include subject');
+assert(ui.includes('môn học cũng đã thay đổi'), '040A drift error must explicitly mention subject drift');
 
 assert(bridge.includes('subject_name: subject'), '040A prompt bridge must emit explicit subject_name');
 assert(bridge.includes('manifest.subject_name = subject'), '040A import bridge must canonicalize subject_name');
