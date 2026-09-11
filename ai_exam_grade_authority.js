@@ -6,8 +6,11 @@
   const baseSpec = aieSpec;
   const baseLoadDocuments = aieLoadDocuments;
   const baseProfileChange = window.aieProfileChange;
+  const baseBuildPrompt = window.aieBuildPrompt;
   let authorityEpoch = 0;
   let currentAuthority = null;
+  let currentAuthorityPack = null;
+  let currentAuthorityKey = '';
 
   function esc(value) {
     return String(value ?? '')
@@ -21,6 +24,12 @@
   function gradeOrZero() {
     const value = Number(document.getElementById('gradeSelect')?.value || 0);
     return [10, 11, 12].includes(value) ? value : 0;
+  }
+
+  function selectedAuthorityKey() {
+    const grade = gradeOrZero();
+    const profile = document.getElementById('profile')?.value || '';
+    return grade && profile ? `${grade}|${profile}` : '';
   }
 
   function requireGrade() {
@@ -40,7 +49,7 @@
     return document.getElementById('assessmentAuthorityPanel');
   }
 
-  function renderAuthority(authority, loading = false) {
+  function renderAuthority(authority, authorityPack = null, loading = false) {
     const panel = authorityPanel();
     if (!panel) return;
     if (loading) {
@@ -66,9 +75,12 @@
     const blueprintText = Number.isFinite(Number(blueprint.p1))
       ? `Blueprint: P1=${Number(blueprint.p1)} · P2=${Number(blueprint.p2)} · P3=${Number(blueprint.p3)}${blueprint.minutes ? ` · ${Number(blueprint.minutes)} phút` : ''}`
       : '';
+    const packTotal = Number(authorityPack?.total_units || 0);
+    const packReturned = Number(authorityPack?.returned_units || 0);
+    const packText = packTotal ? ` · authority corpus=${packReturned}/${packTotal} units` : '';
     panel.className = `authority-panel ${sourceState === 'VERIFIED_SOURCES' ? 'ok' : 'warn'}`;
     panel.innerHTML = `<div class="authority-head"><strong>CĂN CỨ RA ĐỀ</strong><span>${esc(authority.profile_id || '')} · v${esc(authority.profile_version || '')}</span></div>
-      <div>${esc(sourceStateLabel(sourceState))}${blueprintText ? ` · ${esc(blueprintText)}` : ''}</div>
+      <div>${esc(sourceStateLabel(sourceState))}${blueprintText ? ` · ${esc(blueprintText)}` : ''}${esc(packText)}</div>
       ${sourceItems ? `<ul>${sourceItems}</ul>` : ''}
       <div class="authority-hash">Snapshot: ${esc(authority.snapshot_hash || '-')}</div>`;
   }
@@ -90,8 +102,11 @@
   async function refreshAuthority() {
     const epoch = ++authorityEpoch;
     currentAuthority = null;
+    currentAuthorityPack = null;
+    currentAuthorityKey = '';
     const grade = gradeOrZero();
     const profile = document.getElementById('profile')?.value || '';
+    const requestedKey = selectedAuthorityKey();
     if (!grade || !profile) {
       renderAuthority(null);
       return null;
@@ -102,7 +117,7 @@
       renderAuthority(null);
       return null;
     }
-    renderAuthority(null, true);
+    renderAuthority(null, null, true);
     try {
       const { data, error } = await aieSb.rpc('rpc_assessment_authority_resolve', {
         p_staff_token: session.token,
@@ -111,11 +126,13 @@
         p_grade: grade,
         p_assessment_type: profile
       });
-      if (epoch !== authorityEpoch) return null;
+      if (epoch !== authorityEpoch || requestedKey !== selectedAuthorityKey()) return null;
       if (error) throw error;
       if (!data || data.status !== 'success') throw new Error(data?.code || data?.message || 'Không resolve được assessment authority.');
       currentAuthority = data.authority || null;
-      renderAuthority(currentAuthority);
+      currentAuthorityPack = data.authority_pack || { total_units: 0, units: [] };
+      currentAuthorityKey = requestedKey;
+      renderAuthority(currentAuthority, currentAuthorityPack);
       applyCountLock(currentAuthority);
       return currentAuthority;
     } catch (error) {
@@ -173,6 +190,37 @@
 
   aieLoadDocuments = loadGradeDocuments;
 
+  window.aieBuildPrompt = function aieBuildPrompt039(input, units, localSpec) {
+    let prompt = baseBuildPrompt(input, units, localSpec);
+    const serverAuthority = input?.request?.exam_spec?.assessment_authority || null;
+    const key = `${Number(input?.request?.exam_spec?.grade || 0)}|${input?.request?.exam_spec?.assessment_type || ''}`;
+    const pack = currentAuthorityKey === key ? currentAuthorityPack : null;
+    const authorityPackage = {
+      schema_version: 'DAMSAN_ASSESSMENT_AUTHORITY_PACKAGE_V1',
+      assessment_authority: serverAuthority,
+      source_state: serverAuthority?.source_state || pack?.source_state || 'NONE',
+      total_source_units: Number(pack?.total_units || 0),
+      truncated: pack?.truncated === true,
+      authority_units: Array.isArray(pack?.units) ? pack.units : []
+    };
+    const authorityBlock = [
+      '',
+      'ASSESSMENT AUTHORITY PACKAGE — QUY ĐỊNH CÁCH RA ĐỀ:',
+      '1. Đây là lớp quy tắc/phương pháp, KHÔNG phải nguồn kiến thức để trả lời câu hỏi.',
+      '2. ASSESSMENT_RULE có quyền ưu tiên cao hơn ASSESSMENT_BENCHMARK. authority_rank nhỏ hơn có quyền cao hơn khi có khác biệt.',
+      '3. Benchmark chỉ dùng để học cấu trúc, dạng stimulus, thao tác nhận thức và kỹ thuật viết câu. CẤM sao chép stem, phương án, số liệu hoặc đáp án từ benchmark sang đề mới nếu nội dung đó không có trong KNOWLEDGE PACKAGE.',
+      '4. Nếu machine assessment profile mâu thuẫn với một rule nguồn có thẩm quyền cao hơn, không tự chọn tùy tiện: ưu tiên quy định chính thức và giữ output trong giới hạn deterministic gate của server.',
+      '5. source_refs của câu hỏi chỉ được trỏ tới KNOWLEDGE PACKAGE; không dùng unit_key của authority/benchmark làm nguồn kiến thức câu hỏi.',
+      JSON.stringify(authorityPackage),
+      ''
+    ].join('\n');
+    const marker = '\nKNOWLEDGE PACKAGE:';
+    if (prompt.includes(marker)) prompt = prompt.replace(marker, `${authorityBlock}${marker}`);
+    else prompt = `${prompt}${authorityBlock}`;
+    if (prompt.length > AIE_MAX_PROMPT_CHARS) throw new Error('Gói ra đề quá lớn sau khi ghép nguồn căn cứ. Hãy giảm phạm vi kiến thức hoặc tinh gọn benchmark.');
+    return prompt;
+  };
+
   window.aieProfileChange = function aieProfileChange039() {
     if (typeof baseProfileChange === 'function') baseProfileChange();
     refreshAuthority();
@@ -181,6 +229,8 @@
   function gradeChanged() {
     const grade = gradeOrZero();
     currentAuthority = null;
+    currentAuthorityPack = null;
+    currentAuthorityKey = '';
     for (const id of ['p1Count', 'p2Count', 'p3Count']) {
       const el = document.getElementById(id);
       if (el) el.title = '';
