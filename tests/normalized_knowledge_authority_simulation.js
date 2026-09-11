@@ -4,6 +4,7 @@ const vm = require('vm');
 
 const migration = fs.readFileSync('supabase/migrations/20260911164000_normalized_knowledge_authority_038_039.sql','utf8');
 const authorityPackMigration = fs.readFileSync('supabase/migrations/20260911165000_assessment_authority_pack_039a.sql','utf8');
+const autoLinkMigration = fs.readFileSync('supabase/migrations/20260911165500_assessment_authority_unique_profile_link_039b.sql','utf8');
 const bridge = fs.readFileSync('supabase/functions/knowledge-normalized-source/index.ts','utf8');
 const knowledgeUi = fs.readFileSync('knowledge_normalized_source.js','utf8');
 const knowledgeHtml = fs.readFileSync('knowledge.html','utf8');
@@ -36,7 +37,8 @@ assert(knowledgeHtml.includes('knowledge_normalized_source.js?v=20260911-normali
 assert(knowledgeUi.includes("<option value=\"10\">Khối 10</option>"), '038 grade 10 option missing');
 assert(knowledgeUi.includes("<option value=\"11\">Khối 11</option>"), '038 grade 11 option missing');
 assert(knowledgeUi.includes("<option value=\"12\">Khối 12</option>"), '038 grade 12 option missing');
-assert(!/normalizedGrade[^\n]*Tất cả khối/.test(knowledgeUi), '038 must not offer All grades for normalized-source identity');
+const normalizedGradeSelect = /<select id="normalizedGrade">([\s\S]*?)<\/select>/.exec(knowledgeUi)?.[1] || '';
+assert(normalizedGradeSelect && !/Tất cả khối/i.test(normalizedGradeSelect), '038 must not offer All grades for normalized-source identity');
 assert(knowledgeUi.includes('ASSESSMENT_RULE') && knowledgeUi.includes('ASSESSMENT_BENCHMARK'), '038 authority source-role selectors missing');
 assert(knowledgeUi.includes('Tài liệu/khối/vai trò đã thay đổi'), '038 import must detect metadata drift after prompt generation');
 
@@ -62,6 +64,11 @@ assert(authorityPackMigration.includes("s.source_kind='ASSESSMENT_BENCHMARK' and
 assert(authorityPackMigration.includes('limit 240'), '039A browser authority corpus must be bounded');
 assert(authorityPackMigration.includes("'authority_pack'"), '039A teacher resolver must return separate authority pack');
 
+assert(autoLinkMigration.includes('_assessment_auto_link_unique_profile_039'), '039B deterministic authority auto-link trigger missing');
+assert(autoLinkMigration.includes('v_profile_count<>1'), '039B must refuse implicit linkage when subject/grade profile is ambiguous');
+assert(autoLinkMigration.includes("new.source_role not in ('ASSESSMENT_RULE','ASSESSMENT_BENCHMARK')"), '039B auto-link must only apply to authority source roles');
+assert(autoLinkMigration.includes('AUTO_LINK_UNIQUE_PROFILE_039B'), '039B audit marker missing');
+
 assert(examHtml.includes('id="gradeSelect"'), '039 mandatory grade selector missing from exam UI');
 assert(examHtml.includes('id="assessmentAuthorityPanel"'), '039 authority evidence panel missing');
 assert(examHtml.includes('ai_exam_grade_authority.js?v=20260911-grade-authority-039'), '039 grade/authority overlay missing');
@@ -74,4 +81,4 @@ assert(examUi.includes("doc.source_role === 'KNOWLEDGE_SOURCE'"), '039 browser m
 assert(examUi.includes('Hãy chọn khối 10, 11 hoặc 12'), '039 grade-required UX missing');
 assert(examUi.includes('el.disabled = true'), '039 official count lock UX missing');
 
-console.log('PASS normalized knowledge 038 + assessment authority 039/039A');
+console.log('PASS normalized knowledge 038 + assessment authority 039/039A/039B');
