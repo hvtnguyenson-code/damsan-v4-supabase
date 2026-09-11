@@ -60,7 +60,7 @@ assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(doc
 assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'),'036 lesson-scope overlay missing from exam UI');
 assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay missing from semantic-analysis UI');
 assert(knowledgeHtml.includes('r=036b2'),'036B2 cache-bust marker missing from semantic-analysis UI');
-assert(knowledgeHtml.includes('knowledge_ai_book_repair.js?v=20260911-whole-book-toc-036b5a1'),'036B5A1 repair/diagnostic cache-bust missing from semantic-analysis UI');
+assert(knowledgeHtml.includes('knowledge_ai_book_repair.js?v=20260911-ocr-toc-recovery-036b5b'),'036B5B repair cache-bust missing from semantic-analysis UI');
 assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'),'036 scope schema missing from browser request');
 assert(scopeOverlay.includes('rpc_knowledge_scope_catalog_read'),'036 browser must use protected lesson catalog RPC');
 assert(scopeOverlay.includes('knowledge-lesson-check'),'036 lesson selector UI missing');
@@ -88,19 +88,20 @@ assert(bookOverlay.includes('LARGE_DOCUMENT_PAGE_THRESHOLD'),'036B2 large-docume
 assert(/Đã chặn tạo prompt toàn cuốn/.test(bookOverlay),'036B2 unsafe whole-book fallback must be blocked');
 assert(/Chưa nhận diện được cấu trúc Bài/.test(bookOverlay),'036B2 visible detector failure diagnostic missing');
 
-assert(bookRepair.includes('knowledge-book-index-v2'),'036B4 UI must use robust TOC-block repair bridge');
-assert(bookRepair.includes("action:'repair_book_index'"),'036B4 UI must request server-side book-index repair');
-assert(bookRepair.includes('MutationObserver'),'036B4 repair must react to book-index UI changes');
-assert(bookRepair.includes('LARGE_DOCUMENT_PAGE_THRESHOLD'),'036B4 must recheck large documents even when an earlier partial index exists');
-assert(/Không gửi nội dung sách sang AI/.test(bookRepair),'036B4 repair UX must state that source content is not sent to AI');
-assert(/vẫn chặn gửi toàn cuốn/.test(bookRepair),'036B4 repair failure must preserve whole-book safety gate');
+assert(bookRepair.includes('knowledge-book-index-v2'),'036B5B UI must use book-index repair bridge');
+assert(bookRepair.includes("action:'repair_book_index'"),'036B5B UI must request server-side book-index repair');
+assert(bookRepair.includes('MutationObserver'),'036B5B repair must react to book-index UI changes');
+assert(bookRepair.includes('LARGE_DOCUMENT_PAGE_THRESHOLD'),'036B5B must recheck large documents even when an earlier partial index exists');
+assert(/036B5B đang khôi phục các dòng mục lục bị OCR làm phẳng/.test(bookRepair),'036B5B OCR-TOC recovery UX missing');
+assert(/Không gửi nội dung sách sang AI/.test(bookRepair),'036B5B repair UX must state that source content is not sent to AI');
+assert(/vẫn chặn gửi toàn cuốn/.test(bookRepair),'036B5B repair failure must preserve whole-book safety gate');
 
-assert(bookRepair.includes('knowledge-book-index-diagnostics'),'036B5A UI must use the read-only production diagnostic bridge');
+assert(bookRepair.includes('knowledge-book-index-diagnostics'),'036B5A UI must retain the read-only production diagnostic bridge');
 assert(bookRepair.includes("action:'diagnose_book_index'"),'036B5A UI must request bounded server-side diagnostics');
 assert(bookRepair.includes('compactDiagnostic'),'036B5A UI must compact diagnostics before browser exposure');
 assert(bookRepair.includes('__DAMSAN_BOOK_DIAGNOSTIC_036B5A__'),'036B5A compact diagnostic browser handle missing');
 assert(bookRepair.includes('Sao chép chẩn đoán 036B5A'),'036B5A copy action missing');
-assert(bookRepair.includes("hit.mode === 'STRICT_RAW'") && bookRepair.includes('index > 3500'),'036B5A must expose structural evidence for the old 3500-character body-prefix hypothesis');
+assert(bookRepair.includes("hit.mode === 'STRICT_RAW'") && bookRepair.includes('index > 3500'),'036B5A must preserve structural evidence for the old 3500-character body-prefix hypothesis');
 assert(!/first_lines:\s*page\?\.first_lines/.test(bookRepair),'036B5A compact copy must not retain OCR line text');
 assert(!/context:\s*String\(hit\?\.context/.test(bookRepair),'036B5A compact copy must not retain OCR context text');
 assert(bookDiagnosticBridge.includes('read_only: true'),'036B5A server response must declare read-only operation');
@@ -128,15 +129,21 @@ assert(segmentBridge.includes('buildScopedChunk'),'036B server must slice artifa
 assert(segmentBridge.includes('rpc_knowledge_store_book_index_service'),'036B detected index must be persisted');
 assert(segmentBridge.includes('rpc_knowledge_complete_segment_handoff_service'),'036B edge must use transactional merge RPC');
 
-assert(bookIndexBridge.includes('detector_version:"036B4"'),'036B4 detector version missing');
-assert(bookIndexBridge.includes('TOC_BLOCK_CALIBRATED'),'036B4 must parse multiline/flattened TOC blocks');
-assert(bookIndexBridge.includes('parseTocBlocks'),'036B4 TOC block parser missing');
-assert(bookIndexBridge.includes('collectPrintedPageOffsets'),'036B4 printed-page calibration missing');
-assert(bookIndexBridge.includes('chooseOffset'),'036B4 offset consensus selector missing');
-assert(bookIndexBridge.includes('BOOK_INDEX_PARTIAL_REJECTED'),'036B4 must reject partial late-book indexes');
-assert(bookIndexBridge.includes('beginsNearFirstLesson'),'036B4 first-lesson plausibility gate missing');
-assert(bookIndexBridge.includes('contiguousRatio'),'036B4 sequence coverage gate missing');
-assert(bookIndexBridge.includes('rpc_knowledge_store_book_index_service'),'036B4 repaired index must use canonical persistence RPC');
-assert(bookIndexBridge.includes('staff_sessions') && bookIndexBridge.includes('staff_identity_mismatch'),'036B4 repair bridge must preserve custom staff authentication');
+assert(bookIndexBridge.includes('DETECTOR_VERSION = "036B5B"'),'036B5B detector version missing');
+assert(bookIndexBridge.includes('OCR_TOC_LINE_SEQUENCE'),'036B5B OCR-TOC sequence method missing');
+assert(bookIndexBridge.includes('foldOcrLines'),'036B5B must preserve OCR line boundaries for TOC recovery');
+assert(bookIndexBridge.includes('parseTocBlocks'),'036B5B must retain explicit TOC-block parsing');
+assert(bookIndexBridge.includes('parseTocLines'),'036B5B line/window TOC parser missing');
+assert(bookIndexBridge.includes('ORPHAN_NUMERIC_ROW'),'036B5B orphan numeric TOC row recovery missing');
+assert(bookIndexBridge.includes('selectMonotonicSequence'),'036B5B monotonic lesson/page sequence selection missing');
+assert(bookIndexBridge.includes('roman_lesson_tokens_ignored: true'),'036B5B must explicitly ignore Roman lesson tokens to prevent Vietnamese “vì” false positives');
+assert(bookIndexBridge.includes('collectPrintedPageOffsets'),'036B5B printed-page calibration missing');
+assert(bookIndexBridge.includes('chooseOffset'),'036B5B offset consensus selector missing');
+assert(bookIndexBridge.includes('BOOK_INDEX_PARTIAL_REJECTED'),'036B5B must reject partial late-book indexes');
+assert(bookIndexBridge.includes('beginsNearFirstLesson'),'036B5B first-lesson plausibility gate missing');
+assert(bookIndexBridge.includes('contiguousRatio'),'036B5B sequence coverage gate missing');
+assert(bookIndexBridge.includes('rpc_knowledge_store_book_index_service'),'036B5B repaired index must use canonical persistence RPC');
+assert(bookIndexBridge.includes('staff_sessions') && bookIndexBridge.includes('staff_identity_mismatch'),'036B5B repair bridge must preserve custom staff authentication');
+assert(!bookIndexBridge.includes('[IVXLCDM]'),'036B5B must not restore Roman-numeral lesson matching');
 
-console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b2 + toc_repair_036b4 + diagnostics_036b5a1');
+console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b2 + ocr_toc_recovery_036b5b + diagnostics_036b5a');
