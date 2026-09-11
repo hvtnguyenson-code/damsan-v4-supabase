@@ -353,7 +353,7 @@
         authorityProfile !== preparedAuthorityProfileId ||
         authorityCode !== preparedAuthorityCode
       )) {
-        throw new Error('Tài liệu/môn/khối/vai trò/căn cứ đích đã thay đổi sau khi tạo prompt. Hãy tạo lại prompt trước khi nhập JSONL để tránh gắn sai nguồn.');
+        throw new Error('Tài liệu/khối/vai trò/căn cứ đích đã thay đổi; môn học cũng đã thay đổi hoặc không còn khớp sau khi tạo prompt. Hãy tạo lại prompt trước khi nhập JSONL để tránh gắn sai nguồn.');
       }
       const input = document.getElementById('normalizedFile');
       const file = input?.files?.[0];
