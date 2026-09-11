@@ -1,8 +1,9 @@
-// 036B3 — auto-repair unresolved whole-book index using TOC + printed-page calibration.
+// 036B4 — re-check large-book indexes using multiline TOC blocks + printed-page calibration.
 (function () {
   'use strict';
 
-  const BOOK_INDEX_ENDPOINT = `${KAI_SUPABASE_URL}/functions/v1/knowledge-book-index`;
+  const BOOK_INDEX_ENDPOINT = `${KAI_SUPABASE_URL}/functions/v1/knowledge-book-index-v2`;
+  const LARGE_DOCUMENT_PAGE_THRESHOLD = 40;
   const attempted = new Set();
   let observer = null;
   let activeRequest = null;
@@ -25,21 +26,28 @@
     return data;
   }
 
+  function selectedPageCount(select) {
+    const text = select?.selectedOptions?.[0]?.textContent || '';
+    const match = /·\s*(\d+)\s*trang/i.exec(text);
+    return match ? Number(match[1]) : 0;
+  }
+
   function diagnosticText(detection) {
     if (!detection) return '';
     const tocCount = Number(detection.toc_entry_count || 0);
     const anchorCount = Number(detection.body_anchor_count || 0);
     const offset = detection.chosen_offset ?? detection.page_number_offset?.offset ?? '?';
     const source = detection.offset_source || 'none';
-    return `TOC=${tocCount} · anchors=${anchorCount} · offset=${offset} · source=${source}`;
+    const status = detection.status || '';
+    return `TOC=${tocCount} · anchors=${anchorCount} · offset=${offset} · source=${source}${status ? ` · ${status}` : ''}`;
   }
 
   function renderRepairing(panel) {
     if (!panel) return;
     panel.classList.remove('hidden');
     panel.classList.add('warning');
-    panel.innerHTML = '<div class="book-segment-head">Đang đối chiếu mục lục và số trang OCR...</div>' +
-      '<div class="book-segment-note">036B3 đang dựng lại chỉ mục bài bằng mục lục, số trang in và các heading Bài nhận diện được. Không gửi nội dung sách sang AI.</div>';
+    panel.innerHTML = '<div class="book-segment-head">Đang kiểm tra lại chỉ mục toàn cuốn...</div>' +
+      '<div class="book-segment-note">036B4 đang đọc các khối mục lục nhiều dòng và đối chiếu số trang in với trang PDF. Không gửi nội dung sách sang AI.</div>';
   }
 
   function renderRepairFailure(panel, error) {
@@ -47,17 +55,20 @@
     const diag = diagnosticText(error?.detection);
     panel.classList.remove('hidden');
     panel.classList.add('warning');
-    panel.innerHTML = '<div class="book-segment-head">Chưa dựng được chỉ mục bài — vẫn chặn gửi toàn cuốn</div>' +
-      '<div class="book-segment-note">Bộ sửa 036B3 chưa đủ bằng chứng để xác lập ranh giới bài an toàn. Không có fallback sang prompt 178 trang.</div>' +
+    panel.innerHTML = '<div class="book-segment-head">Chưa dựng được chỉ mục bài đầy đủ — vẫn chặn gửi toàn cuốn</div>' +
+      '<div class="book-segment-note">Bộ sửa 036B4 chưa đủ bằng chứng để xác lập toàn bộ ranh giới bài an toàn. Không fallback sang prompt toàn tài liệu.</div>' +
       `<div class="book-segment-diag">${diag || 'Không có diagnostic bổ sung.'}</div>`;
   }
 
   async function tryRepair() {
     const panel = document.getElementById('bookSegmentPanel');
     const select = document.getElementById('documentSelect');
-    if (!panel || !select || !panel.classList.contains('warning')) return;
+    if (!panel || !select) return;
     const documentId = select.value || '';
     if (!documentId || attempted.has(documentId) || activeRequest) return;
+    const pageCount = selectedPageCount(select);
+    const unresolved = panel.classList.contains('warning');
+    if (!unresolved && pageCount < LARGE_DOCUMENT_PAGE_THRESHOLD) return;
     const session = kaiRequireSession();
     if (!session) return;
 
@@ -72,12 +83,12 @@
       if ((document.getElementById('documentSelect')?.value || '') !== documentId) return;
       const count = Number(result?.book_index?.segment_count || 0);
       const diag = diagnosticText(result?.detection);
-      kaiNotice(`Đã dựng lại chỉ mục ${count} bài từ mục lục/số trang OCR${diag ? ` · ${diag}` : ''}. Đang kiểm tra lại phạm vi bài...`, 'ok');
+      kaiNotice(`Đã dựng lại chỉ mục ${count} bài${diag ? ` · ${diag}` : ''}. Đang nạp lại phạm vi bài...`, 'ok');
       setTimeout(() => {
         if ((document.getElementById('documentSelect')?.value || '') === documentId) {
           document.getElementById('documentSelect')?.dispatchEvent(new Event('change', { bubbles:true }));
         }
-      }, 50);
+      }, 80);
     }).catch((error) => {
       if ((document.getElementById('documentSelect')?.value || '') !== documentId) return;
       renderRepairFailure(panel, error);
