@@ -74,7 +74,7 @@
   <header>
     <div>
       <h1>Kho tri thức AI — Đam San V4</h1>
-      <p>Nạp tài liệu nguyên bản. Hệ thống tự đọc lớp chữ, phát hiện trang scan và chỉ OCR những trang cần thiết.</p>
+      <p>Giữ file gốc làm provenance; với SGK/PDF dài, ưu tiên chuẩn hóa bằng ChatGPT/Gemini thành DAMSAN_SOURCE_V2 trước khi dùng để ra đề.</p>
     </div>
     <div>
       <div id="sessionInfo" class="session"></div>
@@ -90,8 +90,8 @@
     <div id="notice" class="notice"></div>
 
     <section class="card">
-      <h2>1. Nạp và tự đọc tài liệu nguồn</h2>
-      <p class="sub">Chấp nhận PDF, PDF scan, DOC và DOCX; tối đa 50 MiB mỗi tệp. Không cần chia bài, gắn trang, đặt mã bài hay chuyển sang JSON. Với PDF, hệ thống giữ ranh giới từng trang; trang ít hoặc không có lớp chữ mới được đưa qua OCR.</p>
+      <h2>1. Nạp file gốc</h2>
+      <p class="sub">Chấp nhận PDF, PDF scan, DOC và DOCX; tối đa 50 MiB mỗi tệp. File gốc luôn được giữ làm nguồn đối chiếu. Bộ đọc cơ học vẫn hoạt động cho tài liệu ngắn/text sạch; với sách dài hoặc bố cục phức tạp, dùng khối “Nguồn AI chuẩn hóa” phía trên sau khi file đã xuất hiện trong kho.</p>
 
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Chọn tài liệu nguồn">
         <strong>Thả tài liệu vào đây hoặc bấm để chọn</strong>
@@ -102,22 +102,22 @@
       <div class="hint-row">
         <label for="knowledgeHint">Gợi ý cho AI — tùy chọn</label>
         <textarea id="knowledgeHint" placeholder="Ví dụ: Đây là SGK Địa lí 12 Kết nối tri thức. Có thể để trống hoàn toàn."></textarea>
-        <div class="help">Gợi ý chỉ hỗ trợ suy luận ở bước AI sau này; không phải metadata bắt buộc và không thay thế việc hệ thống tự phân tích.</div>
+        <div class="help">Gợi ý chỉ hỗ trợ pipeline cũ. Với DAMSAN_SOURCE_V2, khối và vai trò nguồn được chọn bằng trường bắt buộc riêng.</div>
       </div>
 
       <div class="actions">
-        <button id="btnUpload" class="primary" type="button">Tải lên và tự đọc tài liệu</button>
+        <button id="btnUpload" class="primary" type="button">Tải file gốc lên hệ thống</button>
         <button id="btnClearSelection" class="secondary" type="button">Bỏ danh sách đã chọn</button>
       </div>
       <div id="uploadQueue" class="upload-queue"></div>
-      <div class="pipeline-note">Pipeline hiện tại: PDF.js đọc lớp chữ, Mammoth đọc DOCX, bộ đọc DOC 97–2003 xử lý tệp .doc, và Tesseract OCR tiếng Việt + tiếng Anh chỉ chạy trên các trang PDF thiếu lớp chữ. Tài liệu chỉ được chuyển sang `EXTRACTED` khi đã có văn bản đủ dùng; nếu OCR không đọc được nội dung, file gốc vẫn được giữ và pipeline báo lỗi để thử lại. Sau đó dùng “AI phân tích nguồn” để biên dịch sang tri thức có cấu trúc.</div>
+      <div class="pipeline-note"><strong>Hai đường xử lý:</strong> (1) tài liệu ngắn/text sạch có thể đi qua PDF.js/Mammoth/Tesseract như trước; (2) SGK/PDF dài dùng ChatGPT/Gemini web làm document-normalization worker, xuất JSONL có schema, khối, bài, provenance và coverage để server kiểm định. Quy định ra đề và đề mẫu được nhập bằng vai trò riêng, không trộn vào nguồn kiến thức.</div>
     </section>
 
     <section class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
         <div>
           <h2>2. Trạng thái kho tri thức</h2>
-          <p class="sub" style="margin-bottom:0;">`EXTRACTED` nghĩa là nội dung đã được đọc và lưu thành artifact riêng tư, sẵn sàng chuyển sang bước `ANALYZE`. `PARTIAL` chỉ được giữ khi vẫn còn văn bản nguồn đủ dùng; tài liệu có 0 ký tự hoặc toàn bộ trang OCR chưa đọc được sẽ bị chặn.</p>
+          <p class="sub" style="margin-bottom:0;">Nguồn chuẩn hóa đạt coverage đầy đủ có thể trở thành active revision. `NEEDS_REVIEW` nghĩa là AI đã khai báo còn trang chưa chắc chắn; revision cũ vẫn được giữ cho đến khi có nguồn đạt gate.</p>
         </div>
         <button id="btnRefresh" class="secondary" type="button">Làm mới</button>
       </div>
@@ -144,5 +144,6 @@
   <script src="knowledge.js?v=20260910-knowledge-upload-030b1"></script>
   <script src="knowledge_reader.js?v=20260910-knowledge-reader-030b2"></script>
   <script src="knowledge_reader_hardening.js?v=20260910-knowledge-ocr-032"></script>
+  <script src="knowledge_normalized_source.js?v=20260911-explicit-authority-039c"></script>
 </body>
 </html>

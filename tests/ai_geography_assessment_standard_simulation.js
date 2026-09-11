@@ -42,7 +42,7 @@ assert(prompt.includes('"assessment_type":"TOT_NGHIEP"'),'server exam_spec must 
 assert(prompt.includes('ĐÚNG/SAI'),'Part II professional rules missing from compiled prompt');
 assert(prompt.includes('TRẢ LỜI NGẮN'),'Part III professional rules missing from compiled prompt');
 assert(/value="18"/.test(html) && /value="4"/.test(html) && /value="6"/.test(html),'official 18-4-6 defaults missing from UI');
-assert(html.includes('ai_exam_assessment_profile.js?v=20260910-geography-assessment-037'),'037 overlay script missing from UI');
+assert(html.includes('ai_exam_assessment_profile.js?v=20260911-assessment-authority-039'),'037/039 prompt overlay script missing from UI');
 
 assert(migration.includes('_ai_exam_apply_assessment_standard_037'),'server profile injector missing');
 assert(migration.includes("v_subject in ('địa lí','địa lý')"),'server subject binding missing');
