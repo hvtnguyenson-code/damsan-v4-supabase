@@ -1,11 +1,13 @@
-// 036/036B — whole-book structure guidance + lazy lesson-scoped semantic handoff.
+// 036/036B/036B2 — whole-book structure guidance + lazy lesson-scoped semantic handoff.
 (function () {
   'use strict';
 
   const KSEG_ENDPOINT = `${KAI_SUPABASE_URL}/functions/v1/knowledge-segment-bridge`;
+  const LARGE_DOCUMENT_PAGE_THRESHOLD = 40;
   const previousBuildPrompt = kaiBuildPrompt;
   const previousBuildPackage = kaiBuildPackage;
   const previousSubmitResult = kaiSubmitResult;
+  const previousLoadDocuments = kaiLoadDocuments;
   let segmentInspection = null;
   let segmentInspectionPromise = null;
   let segmentMode = false;
@@ -58,17 +60,30 @@
     const grid = select?.closest('.grid');
     if (grid) grid.insertAdjacentElement('afterend', panel);
     const style = document.createElement('style');
-    style.textContent = '.book-segment-panel{margin-top:12px;border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;padding:12px}.book-segment-panel.hidden{display:none}.book-segment-head{font-size:13px;font-weight:800;color:#312e81;margin-bottom:6px}.book-segment-note{font-size:12px;color:#475569;margin-bottom:8px}.book-segment-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:260px;overflow:auto}.book-segment-row{display:flex;gap:8px;align-items:flex-start;background:white;border:1px solid #e0e7ff;border-radius:7px;padding:8px}.book-segment-row input{width:auto;margin-top:3px}.book-segment-row strong{font-size:12px}.book-segment-row small{display:block;color:#64748b;font-size:11px;margin-top:2px}.book-segment-done{opacity:.72}.book-segment-badge{display:inline-block;margin-left:5px;border-radius:999px;padding:1px 6px;background:#dcfce7;color:#166534;font-size:10px}@media(max-width:760px){.book-segment-list{grid-template-columns:1fr}}';
+    style.textContent = '.book-segment-panel{margin-top:12px;border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;padding:12px}.book-segment-panel.hidden{display:none}.book-segment-panel.warning{border-color:#f59e0b;background:#fffbeb}.book-segment-panel.warning .book-segment-head{color:#92400e}.book-segment-head{font-size:13px;font-weight:800;color:#312e81;margin-bottom:6px}.book-segment-note{font-size:12px;color:#475569;margin-bottom:8px;line-height:1.5}.book-segment-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;max-height:300px;overflow:auto}.book-segment-row{display:flex;gap:8px;align-items:flex-start;background:white;border:1px solid #e0e7ff;border-radius:7px;padding:8px}.book-segment-row input{width:auto;margin-top:3px}.book-segment-row strong{font-size:12px}.book-segment-row small{display:block;color:#64748b;font-size:11px;margin-top:2px}.book-segment-done{opacity:.72}.book-segment-badge{display:inline-block;margin-left:5px;border-radius:999px;padding:1px 6px;background:#dcfce7;color:#166534;font-size:10px}.book-segment-diag{font-family:Consolas,monospace;font-size:11px;color:#78350f;white-space:normal}@media(max-width:760px){.book-segment-list{grid-template-columns:1fr}}';
     document.head.appendChild(style);
     return panel;
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function renderInspection(info) {
     const panel = ensurePanel();
     const segments = Array.isArray(info?.book_index?.segments) ? info.book_index.segments : [];
+    panel.classList.remove('warning');
     if (!info?.is_book || segments.length < 2) {
-      panel.classList.add('hidden');
-      panel.innerHTML = '';
+      const d = info?.detection || {};
+      const pageCount = Number(info?.page_count || 0);
+      const isLarge = Boolean(info?.large_document) || pageCount >= LARGE_DOCUMENT_PAGE_THRESHOLD;
+      panel.classList.remove('hidden');
+      panel.classList.add('warning');
+      panel.innerHTML = `<div class="book-segment-head">${isLarge ? 'Chưa nhận diện được cấu trúc Bài — đã chặn gửi toàn cuốn' : 'Không nhận diện được cấu trúc nhiều bài'}</div>
+        <div class="book-segment-note">${isLarge
+          ? `Tài liệu có ${pageCount || '?'} trang. Hệ thống sẽ không tự fallback sang prompt toàn tài liệu. Hãy sửa/kiểm tra bộ nhận diện trước khi tiếp tục.`
+          : 'Tài liệu chưa được xác định là sách nhiều bài; tài liệu nhỏ vẫn có thể dùng luồng phân tích thông thường.'}</div>
+        <div class="book-segment-diag">detector=${escapeHtml(d.detector_version || 'unknown')} · candidates=${Number(d.candidate_count || 0)} · selected=${Number(d.selected_count || 0)} · toc_pages=${escapeHtml(Array.isArray(d.toc_pages) ? d.toc_pages.join(',') : '')}</div>`;
       return;
     }
     const coverage = new Set((Array.isArray(info.semantic_coverage) ? info.semantic_coverage : []).map((x) => String(x).toUpperCase()));
@@ -82,8 +97,8 @@
         const range = Number(segment.page_start) === Number(segment.page_end)
           ? `trang ${Number(segment.page_start)}` : `trang ${Number(segment.page_start)}–${Number(segment.page_end)}`;
         return `<label class="book-segment-row${analyzed ? ' book-segment-done' : ''}">
-          <input type="checkbox" class="book-segment-check" value="${code.replace(/"/g,'&quot;')}">
-          <span><strong>${String(segment.title || code).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</strong>${analyzed ? '<span class="book-segment-badge">Đã phân tích</span>' : ''}<small>${range} · ${code}</small></span>
+          <input type="checkbox" class="book-segment-check" value="${escapeHtml(code)}">
+          <span><strong>${escapeHtml(segment.title || code)}</strong>${analyzed ? '<span class="book-segment-badge">Đã phân tích</span>' : ''}<small>${range} · ${escapeHtml(code)}</small></span>
         </label>`;
       }).join('')}</div>`;
   }
@@ -95,6 +110,7 @@
     segmentMode = false;
     const panel = ensurePanel();
     panel.classList.add('hidden');
+    panel.classList.remove('warning');
     panel.innerHTML = '';
     if (!session || !documentId) return null;
     panel.classList.remove('hidden');
@@ -111,8 +127,10 @@
       return info;
     }).catch((error) => {
       if ((document.getElementById('documentSelect')?.value || '') === documentId) {
-        panel.classList.add('hidden');
-        panel.innerHTML = '';
+        const doc = kaiDocuments.find((x) => String(x.id) === documentId);
+        const pageCount = Number(doc?.page_count || 0);
+        segmentInspection = { document_id:documentId, is_book:false, page_count:pageCount, large_document:pageCount >= LARGE_DOCUMENT_PAGE_THRESHOLD, detection:{status:'INSPECTION_FAILED'} };
+        renderInspection(segmentInspection);
         kaiNotice(`Không đọc được cấu trúc sách: ${error.message}`, 'error');
       }
       return null;
@@ -132,7 +150,7 @@
       const data = await segmentGateway({
         action:'get_analysis_input',
         capability_token:capability,
-        worker_id:'damsan-knowledge-segment-web-ui-036b',
+        worker_id:'damsan-knowledge-segment-web-ui-036b2',
         page_start:pageStart
       });
       if (!first) first = data;
@@ -145,7 +163,7 @@
     throw new Error('Phạm vi bài học vượt số chunk an toàn của phiên phân tích.');
   }
 
-  kaiBuildPackage = async function kaiBuildPackage036B() {
+  kaiBuildPackage = async function kaiBuildPackage036B2() {
     if (kaiBusy) return;
     const session = kaiRequireSession();
     if (!session) return;
@@ -153,7 +171,16 @@
     if (!documentId) return previousBuildPackage();
     if (segmentInspectionPromise) await segmentInspectionPromise;
     if (!segmentInspection || segmentInspection.document_id !== documentId) await inspectSelectedDocument();
-    if (!segmentInspection?.is_book) return previousBuildPackage();
+
+    if (!segmentInspection?.is_book) {
+      const doc = kaiDocuments.find((x) => String(x.id) === documentId);
+      const pageCount = Number(segmentInspection?.page_count || doc?.page_count || 0);
+      if (pageCount >= LARGE_DOCUMENT_PAGE_THRESHOLD) {
+        kaiNotice(`Tài liệu lớn ${pageCount} trang chưa nhận diện được cấu trúc bài. Đã chặn tạo prompt toàn cuốn để tránh gửi sai phạm vi sang AI.`, 'error');
+        return;
+      }
+      return previousBuildPackage();
+    }
 
     const segmentCodes = selectedSegmentCodes();
     if (!segmentCodes.length) {
@@ -194,7 +221,7 @@
     } finally { kaiSetBusy(false); }
   };
 
-  kaiSubmitResult = async function kaiSubmitResult036B() {
+  kaiSubmitResult = async function kaiSubmitResult036B2() {
     if (!segmentMode) return previousSubmitResult();
     if (kaiBusy) return;
     if (!kaiCapability) return kaiNotice('Capability phân tích đã hết hoặc bị mất. Hãy tạo lại gói cho bài đã chọn.', 'error');
@@ -209,7 +236,7 @@
       const model = document.getElementById('modelName').value.trim() || 'unspecified';
       const result = await segmentGateway({
         action:'submit_analysis', capability_token:kaiCapability, ai_provider:provider, ai_model:model,
-        pipeline_version:'DAMSAN_KNOWLEDGE_V1/036B', analysis
+        pipeline_version:'DAMSAN_KNOWLEDGE_V1/036B2', analysis
       });
       const active = result.active_revision ? `active revision ${result.active_revision}` : 'chưa kích hoạt tự động';
       const remaining = Number(result.remaining_segments || 0);
@@ -222,11 +249,18 @@
       segmentMode = false;
       segmentInspection = null;
       await kaiLoadDocuments();
-      ensurePanel().classList.add('hidden');
     } catch (error) {
       document.getElementById('resultStatus').textContent = '';
       kaiNotice(error.message || 'Không lưu được kết quả phân tích theo bài.', 'error');
     } finally { kaiSetBusy(false); }
+  };
+
+  kaiLoadDocuments = async function kaiLoadDocuments036B2() {
+    await previousLoadDocuments();
+    const select = document.getElementById('documentSelect');
+    if (!select || !kaiDocuments.length) return;
+    if (!select.value && kaiDocuments.length === 1) select.value = String(kaiDocuments[0].id || '');
+    if (select.value) await inspectSelectedDocument();
   };
 
   document.addEventListener('DOMContentLoaded', () => {

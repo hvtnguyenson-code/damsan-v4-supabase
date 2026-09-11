@@ -54,6 +54,7 @@ assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(doc
 
 assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'),'036 lesson-scope overlay missing from exam UI');
 assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay cache version missing from semantic-analysis UI');
+assert(knowledgeHtml.includes('r=036b2'),'036B2 cache-bust marker missing from semantic-analysis UI');
 assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'),'036 scope schema missing from browser request');
 assert(scopeOverlay.includes('rpc_knowledge_scope_catalog_read'),'036 browser must use protected lesson catalog RPC');
 assert(scopeOverlay.includes('knowledge-lesson-check'),'036 lesson selector UI missing');
@@ -76,7 +77,10 @@ assert(bookOverlay.includes('inspect_document'),'036B UI must inspect whole-book
 assert(bookOverlay.includes('create_segment_handoff'),'036B UI must issue segment-bound capability');
 assert(bookOverlay.includes('book-segment-check'),'036B UI must expose lesson selection');
 assert(/không gửi cả cuốn sách sang AI/i.test(bookOverlay),'036B must refuse silent whole-book handoff');
-assert(bookOverlay.includes("pipeline_version:'DAMSAN_KNOWLEDGE_V1/036B'"),'036B semantic submission version missing');
+assert(bookOverlay.includes("pipeline_version:'DAMSAN_KNOWLEDGE_V1/036B2'"),'036B2 semantic submission version missing');
+assert(bookOverlay.includes('LARGE_DOCUMENT_PAGE_THRESHOLD'),'036B2 large-document guard missing from browser');
+assert(/Đã chặn tạo prompt toàn cuốn/.test(bookOverlay),'036B2 unsafe whole-book fallback must be blocked');
+assert(/Chưa nhận diện được cấu trúc Bài/.test(bookOverlay),'036B2 visible detector failure diagnostic missing');
 
 assert(lazyMigration.includes('DAMSAN_BOOK_INDEX_V1'),'036B persistent mechanical book index missing');
 assert(lazyMigration.includes('knowledge_segment_handoffs'),'036B segment capability table missing');
@@ -89,10 +93,14 @@ assert(lazyMigration.includes("pipeline_status=case when v_quality_status='AUTO_
 assert(lazyMigration.includes('rpc_knowledge_commit_analysis_service'),'036B must reuse canonical knowledge commit boundary');
 
 assert(segmentBridge.includes('detectBookIndex'),'036B mechanical lesson detector missing');
-assert(segmentBridge.includes('(perPage.get(c.page) || 0) < 3'),'036B table-of-contents false-positive guard missing');
+assert(segmentBridge.includes('(perPage.get(c.page) || 0) < 3'),'036B table-of-contents false-positive guard compatibility marker missing');
+assert(segmentBridge.includes('detectBookIndexDetailed'),'036B2 detector diagnostics missing');
+assert(segmentBridge.includes('foldOcr'),'036B2 OCR-tolerant normalization missing');
+assert(segmentBridge.includes('detector_version: "036B2"'),'036B2 detector version missing');
+assert(segmentBridge.includes('large_document'),'036B2 large-document inspection metadata missing');
 assert(segmentBridge.includes('selected_ranges'),'036B scoped source chunk metadata missing');
 assert(segmentBridge.includes('buildScopedChunk'),'036B server must slice artifact by selected page ranges');
 assert(segmentBridge.includes('rpc_knowledge_store_book_index_service'),'036B detected index must be persisted');
 assert(segmentBridge.includes('rpc_knowledge_complete_segment_handoff_service'),'036B edge must use transactional merge RPC');
 
-console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b');
+console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b2');

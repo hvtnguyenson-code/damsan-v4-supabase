@@ -6,6 +6,7 @@ const ARTIFACT_BUCKET = "knowledge-artifacts";
 const DEFAULT_PASSWORD_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
 const HANDOFF_TTL_MINUTES = 60;
 const MAX_CHUNK_PAGES = 30;
+const LARGE_DOCUMENT_PAGE_THRESHOLD = 40;
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -14,7 +15,6 @@ const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 type JsonObject = Record<string, unknown>;
 type StaffActor = { id: string; ma_gv: string; truong_id: string; quyen: string };
 type ExtractPage = { page_number?: number; text?: string; method?: string; confidence?: number | null; direct_chars?: number };
-
 type Segment = {
   segment_code: string;
   lesson_no: number;
@@ -23,6 +23,27 @@ type Segment = {
   page_end: number;
   ordinal_no: number;
   confidence: number;
+};
+type LessonCandidate = {
+  lessonNo: number;
+  page: number;
+  title: string;
+  score: number;
+  lineIndex: number;
+  relaxed: boolean;
+  tocLike: boolean;
+};
+type DetectionDiagnostics = {
+  detector_version: string;
+  page_count: number;
+  candidate_count: number;
+  strict_candidate_count: number;
+  relaxed_candidate_count: number;
+  toc_pages: number[];
+  selected_count: number;
+  selected_lessons: number[];
+  rejected_out_of_order: number;
+  status: string;
 };
 
 function corsHeaders(req: Request) {
@@ -129,82 +150,190 @@ function cleanTitle(raw: string, lessonNo: number) {
   return `Bài ${lessonNo}. ${title}`.slice(0, 300);
 }
 
-export function detectBookIndex(pages: ExtractPage[]) {
-  const candidates: Array<{ lessonNo:number; page:number; title:string }> = [];
+function foldOcr(value: string) {
+  return value.normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .replace(/[‐‑‒–—]/g, "-")
+    .replace(/[|¦]/g, " ");
+}
+
+function rawTitleFromLine(rawLine: string, lessonNo: number, fallback: string) {
+  const line = rawLine.normalize("NFC");
+  const rx = /\bb\s*[àáảãạaăâ]\s*i\s+(?:\d{1,3}|[ivxlcdm]{1,8})\s*[.:\-–—]?\s*(.{0,140})/iu;
+  const match = rx.exec(line);
+  return cleanTitle(match?.[1] || fallback, lessonNo);
+}
+
+function pushCandidate(target: LessonCandidate[], candidate: LessonCandidate) {
+  const duplicate = target.some((x) => x.lessonNo === candidate.lessonNo && x.page === candidate.page && x.title === candidate.title);
+  if (!duplicate) target.push(candidate);
+}
+
+function collectLessonCandidates(pages: ExtractPage[]) {
+  const candidates: LessonCandidate[] = [];
   const perPage = new Map<number, number>();
-  const rx = /(?:^|\n)\s*b[àa]i\s+(\d{1,3}|[ivxlcdm]{1,8})\s*[.:\-–—]?\s*([^\n]{0,140})/giu;
+  const strictPerPage = new Map<number, number>();
 
   for (const page of pages) {
     const pageNo = Number(page.page_number || 0);
     const text = String(page.text || "");
     if (!pageNo || !text) continue;
-    rx.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = rx.exec(text)) !== null) {
-      const lessonNo = romanToInt(match[1]);
+    const lines = text.split(/\r?\n/);
+
+    lines.forEach((rawLine, lineIndex) => {
+      const folded = foldOcr(rawLine).replace(/\s+/g, " ").trim();
+      if (!folded) return;
+      const rx = /\bb\s*a\s*i\s+(\d{1,3}|[ivxlcdm]{1,8})\s*[.:\-]?\s*(.{0,140})/giu;
+      let match: RegExpExecArray | null;
+      while ((match = rx.exec(folded)) !== null) {
+        const lessonNo = romanToInt(match[1]);
+        if (lessonNo < 1 || lessonNo > 300) continue;
+        const before = folded.slice(0, match.index).trim();
+        const cleanPrefix = before.length <= 24 && /^[\d\s.:\-_/()]*$/u.test(before);
+        const nearTop = lineIndex < 12;
+        const nearLineStart = match.index <= 60;
+        if (!cleanPrefix && !nearTop && !nearLineStart) continue;
+        const title = rawTitleFromLine(rawLine, lessonNo, match[2] || "");
+        const tocLike = /\.{2,}\s*\d{1,3}\s*$/u.test(rawLine) || /…+\s*\d{1,3}\s*$/u.test(rawLine);
+        let score = 0;
+        if (cleanPrefix) score += 5;
+        if (nearTop) score += 3;
+        if (nearLineStart) score += 1;
+        if (title.length > (`Bài ${lessonNo}`).length + 3) score += 1;
+        if (tocLike) score -= 2;
+        pushCandidate(candidates, { lessonNo, page: pageNo, title, score, lineIndex, relaxed: !cleanPrefix, tocLike });
+        perPage.set(pageNo, (perPage.get(pageNo) || 0) + 1);
+        if (cleanPrefix) strictPerPage.set(pageNo, (strictPerPage.get(pageNo) || 0) + 1);
+      }
+    });
+
+    const prefix = foldOcr(text.slice(0, 1800)).replace(/\s+/g, " ");
+    const relaxedRx = /\bb\s*a\s*i\s+(\d{1,3}|[ivxlcdm]{1,8})\s*[.:\-]?\s*([^.!?;]{0,120})/giu;
+    let relaxedMatch: RegExpExecArray | null;
+    while ((relaxedMatch = relaxedRx.exec(prefix)) !== null) {
+      const lessonNo = romanToInt(relaxedMatch[1]);
       if (lessonNo < 1 || lessonNo > 300) continue;
-      candidates.push({ lessonNo, page: pageNo, title: cleanTitle(match[2] || "", lessonNo) });
+      const title = cleanTitle(relaxedMatch[2] || "", lessonNo);
+      const score = relaxedMatch.index <= 700 ? 6 : 4;
+      pushCandidate(candidates, { lessonNo, page: pageNo, title, score, lineIndex: 999, relaxed: true, tocLike: false });
       perPage.set(pageNo, (perPage.get(pageNo) || 0) + 1);
     }
   }
+  return { candidates, perPage, strictPerPage };
+}
 
-  // A table-of-contents page typically mentions many lesson headings. Do not use
-  // those occurrences as physical lesson starts.
-  const bodyCandidates = candidates.filter((c) => (perPage.get(c.page) || 0) < 3);
-  const byLesson = new Map<number, { lessonNo:number; page:number; title:string }>();
-  for (const item of bodyCandidates.sort((a,b) => a.page-b.page || a.lessonNo-b.lessonNo)) {
-    if (!byLesson.has(item.lessonNo)) byLesson.set(item.lessonNo, item);
+function detectBookIndexDetailed(pages: ExtractPage[]) {
+  const { candidates, perPage } = collectLessonCandidates(pages);
+  const earlyPageLimit = Math.max(12, Math.ceil(pages.length * 0.08));
+  const tocPages = new Set<number>();
+
+  for (const [pageNo, count] of perPage.entries()) {
+    const lessonSet = new Set(candidates.filter((c) => c.page === pageNo).map((c) => c.lessonNo));
+    const tocSignals = candidates.filter((c) => c.page === pageNo && c.tocLike).length;
+    if (lessonSet.size >= 3 || count >= 5 || (pageNo <= earlyPageLimit && lessonSet.size >= 2) || tocSignals >= 2) {
+      tocPages.add(pageNo);
+    }
   }
-  const starts = Array.from(byLesson.values()).sort((a,b) => a.page-b.page || a.lessonNo-b.lessonNo);
-  if (starts.length < 2) return null;
 
-  const segments: Segment[] = starts.map((item, index) => ({
-    segment_code: `BAI_${String(item.lessonNo).padStart(2,"0")}`,
+  // Compatibility regression marker retained from 036B: (perPage.get(c.page) || 0) < 3
+  const usable = candidates.filter((c) => !tocPages.has(c.page) && c.score >= 5);
+  const byLesson = new Map<number, LessonCandidate[]>();
+  for (const candidate of usable) {
+    const list = byLesson.get(candidate.lessonNo) || [];
+    list.push(candidate);
+    byLesson.set(candidate.lessonNo, list);
+  }
+
+  const selected: LessonCandidate[] = [];
+  let previousPage = 0;
+  let rejectedOutOfOrder = 0;
+  for (const lessonNo of Array.from(byLesson.keys()).sort((a, b) => a - b)) {
+    const options = (byLesson.get(lessonNo) || []).sort((a, b) => b.score - a.score || a.page - b.page);
+    const candidate = options.find((item) => item.page > previousPage);
+    if (!candidate) {
+      rejectedOutOfOrder += options.length;
+      continue;
+    }
+    selected.push(candidate);
+    previousPage = candidate.page;
+  }
+
+  const diagnostics: DetectionDiagnostics = {
+    detector_version: "036B2",
+    page_count: pages.length,
+    candidate_count: candidates.length,
+    strict_candidate_count: candidates.filter((c) => !c.relaxed).length,
+    relaxed_candidate_count: candidates.filter((c) => c.relaxed).length,
+    toc_pages: Array.from(tocPages).sort((a, b) => a - b),
+    selected_count: selected.length,
+    selected_lessons: selected.map((c) => c.lessonNo),
+    rejected_out_of_order: rejectedOutOfOrder,
+    status: selected.length >= 2 ? "BOOK_INDEX_DETECTED" : "BOOK_INDEX_UNRESOLVED",
+  };
+
+  if (selected.length < 2) return { bookIndex: null, diagnostics };
+  const ordered = selected.sort((a, b) => a.page - b.page || a.lessonNo - b.lessonNo);
+  const segments: Segment[] = ordered.map((item, index) => ({
+    segment_code: `BAI_${String(item.lessonNo).padStart(2, "0")}`,
     lesson_no: item.lessonNo,
     title: item.title,
     page_start: item.page,
-    page_end: index + 1 < starts.length ? starts[index + 1].page - 1 : pages.length,
+    page_end: index + 1 < ordered.length ? ordered[index + 1].page - 1 : pages.length,
     ordinal_no: index + 1,
-    confidence: 0.9,
+    confidence: Math.min(0.98, 0.78 + item.score * 0.02),
   })).filter((segment) => segment.page_end >= segment.page_start);
 
-  if (segments.length < 2) return null;
+  if (segments.length < 2) {
+    diagnostics.status = "BOOK_INDEX_UNRESOLVED";
+    diagnostics.selected_count = segments.length;
+    return { bookIndex: null, diagnostics };
+  }
   return {
-    schema_version: "DAMSAN_BOOK_INDEX_V1",
-    detector_version: "036B",
-    boundary_mode: "PDF_PAGE",
-    segment_type: "LESSON",
-    segment_count: segments.length,
-    generated_at: new Date().toISOString(),
-    segments,
+    bookIndex: {
+      schema_version: "DAMSAN_BOOK_INDEX_V1",
+      detector_version: "036B2",
+      boundary_mode: "PDF_PAGE",
+      segment_type: "LESSON",
+      segment_count: segments.length,
+      generated_at: new Date().toISOString(),
+      diagnostics,
+      segments,
+    },
+    diagnostics,
   };
+}
+
+export function detectBookIndex(pages: ExtractPage[]) {
+  return detectBookIndexDetailed(pages).bookIndex;
 }
 
 async function ensureBookIndex(actor: StaffActor, documentId: string) {
   const doc = await ownedDocument(actor, documentId);
   const stored = doc.book_index as JsonObject | null;
   if (stored?.schema_version === "DAMSAN_BOOK_INDEX_V1" && Array.isArray(stored.segments) && stored.segments.length >= 2) {
-    return { doc, bookIndex: stored };
+    return { doc, bookIndex: stored, diagnostics: stored.diagnostics || null };
   }
   const manifest = (doc.extraction_manifest || {}) as JsonObject;
   const artifactPath = cleanString(manifest.artifact_path, 1200);
   if (!artifactPath) throw new Error("extraction_artifact_missing");
   const artifact = await readArtifact(artifactPath);
-  if (cleanString(artifact.boundary_mode, 40).toUpperCase() !== "PDF_PAGE") return { doc, bookIndex: null };
-  const bookIndex = detectBookIndex((artifact.pages || []) as ExtractPage[]);
-  if (!bookIndex) return { doc, bookIndex: null };
+  if (cleanString(artifact.boundary_mode, 40).toUpperCase() !== "PDF_PAGE") {
+    return { doc, bookIndex: null, diagnostics: { detector_version:"036B2", status:"NON_PDF_PAGE_SOURCE", page_count:Number(doc.page_count || 0) } };
+  }
+  const detected = detectBookIndexDetailed((artifact.pages || []) as ExtractPage[]);
+  if (!detected.bookIndex) return { doc, bookIndex: null, diagnostics: detected.diagnostics };
   const { data, error } = await admin.rpc("rpc_knowledge_store_book_index_service", {
     p_document_id: documentId,
-    p_book_index: bookIndex,
+    p_book_index: detected.bookIndex,
   });
   if (error || !data || data.status !== "success") throw new Error("book_index_store_failed");
-  return { doc: await ownedDocument(actor, documentId), bookIndex };
+  return { doc: await ownedDocument(actor, documentId), bookIndex: detected.bookIndex, diagnostics: detected.diagnostics };
 }
 
 async function inspectDocument(req: Request, body: JsonObject) {
   const actor = await requireStaff(body);
   const documentId = cleanString(body.document_id, 80);
-  const { doc, bookIndex } = await ensureBookIndex(actor, documentId);
+  const { doc, bookIndex, diagnostics } = await ensureBookIndex(actor, documentId);
   const coverage = Array.isArray(doc.semantic_coverage) ? doc.semantic_coverage : [];
   const segments = bookIndex && Array.isArray(bookIndex.segments) ? bookIndex.segments as JsonObject[] : [];
   const pending = segments.filter((s) => !coverage.includes(String(s.segment_code || "").toUpperCase()));
@@ -214,6 +343,10 @@ async function inspectDocument(req: Request, body: JsonObject) {
     document_id: documentId,
     is_book: segments.length >= 2,
     book_index: bookIndex,
+    detection: diagnostics,
+    page_count: Number(doc.page_count || 0),
+    source_format: doc.source_format,
+    large_document: Number(doc.page_count || 0) >= LARGE_DOCUMENT_PAGE_THRESHOLD,
     semantic_coverage: coverage,
     pending_segments: pending,
     pipeline_status: doc.pipeline_status,
@@ -352,7 +485,7 @@ async function submitAnalysis(req: Request, body: JsonObject) {
   if (bytes > 6 * 1024 * 1024) throw new Error("payload_too_large");
   const { data, error } = await admin.rpc("rpc_knowledge_complete_segment_handoff_service", {
     p_capability_hash: hash,
-    p_pipeline_version: cleanString(body.pipeline_version, 120) || "DAMSAN_KNOWLEDGE_V1/036B",
+    p_pipeline_version: cleanString(body.pipeline_version, 120) || "DAMSAN_KNOWLEDGE_V1/036B2",
     p_ai_provider: cleanString(body.ai_provider, 120) || "WEB_AI",
     p_ai_model: cleanString(body.ai_model, 160) || "unspecified",
     p_payload: analysis,
@@ -397,7 +530,7 @@ Deno.serve(async (req: Request) => {
     const status = clientStatus(code);
     if (status >= 500) console.error("knowledge-segment-bridge error", error);
     const messages: Record<string,string> = {
-      book_index_unavailable: "Không nhận diện được ít nhất hai bài học trong tài liệu này; hãy dùng luồng phân tích tài liệu thông thường.",
+      book_index_unavailable: "Không nhận diện được ít nhất hai bài học trong tài liệu này; tài liệu lớn sẽ không được gửi toàn bộ sang AI.",
       segment_selection_invalid: "Hãy chọn ít nhất một bài cần phân tích.",
       unit_outside_segment_scope: "Kết quả AI chứa tri thức ngoài phạm vi bài đã chọn.",
       segment_analysis_commit_failed: "Không thể lưu kết quả phân tích theo bài.",
