@@ -12,7 +12,7 @@ const migration = fs.readFileSync('supabase/migrations/20260910150516_geography_
 const scopeMigration = fs.readFileSync('supabase/migrations/20260910152210_knowledge_book_lesson_scope_036.sql','utf8');
 const lazyMigration = fs.readFileSync('supabase/migrations/20260910155631_knowledge_lazy_segment_analysis_036b.sql','utf8');
 const segmentBridge = fs.readFileSync('supabase/functions/knowledge-segment-bridge/index.ts','utf8');
-const bookIndexBridge = fs.readFileSync('supabase/functions/knowledge-book-index/index.ts','utf8');
+const bookIndexBridge = fs.readFileSync('supabase/functions/knowledge-book-index-v2/index.ts','utf8');
 const docs = fs.readFileSync('docs/GEOGRAPHY_ASSESSMENT_STANDARD_037.md','utf8');
 
 new vm.Script(bookRepair, { filename:'knowledge_ai_book_repair.js' });
@@ -57,9 +57,9 @@ assert(docs.includes('vqa.moet.gov.vn/vi/news/tin-tuc-su-kien/de-thi-tham-khao-k
 assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(docs) && /Bình Phước/.test(docs),'provincial benchmark corpus not documented');
 
 assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'),'036 lesson-scope overlay missing from exam UI');
-assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay cache version missing from semantic-analysis UI');
+assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay missing from semantic-analysis UI');
 assert(knowledgeHtml.includes('r=036b2'),'036B2 cache-bust marker missing from semantic-analysis UI');
-assert(knowledgeHtml.includes('knowledge_ai_book_repair.js?v=20260911-whole-book-toc-036b3'),'036B3 repair overlay missing from semantic-analysis UI');
+assert(knowledgeHtml.includes('knowledge_ai_book_repair.js?v=20260911-whole-book-toc-036b4'),'036B4 repair cache-bust missing from semantic-analysis UI');
 assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'),'036 scope schema missing from browser request');
 assert(scopeOverlay.includes('rpc_knowledge_scope_catalog_read'),'036 browser must use protected lesson catalog RPC');
 assert(scopeOverlay.includes('knowledge-lesson-check'),'036 lesson selector UI missing');
@@ -87,11 +87,12 @@ assert(bookOverlay.includes('LARGE_DOCUMENT_PAGE_THRESHOLD'),'036B2 large-docume
 assert(/Đã chặn tạo prompt toàn cuốn/.test(bookOverlay),'036B2 unsafe whole-book fallback must be blocked');
 assert(/Chưa nhận diện được cấu trúc Bài/.test(bookOverlay),'036B2 visible detector failure diagnostic missing');
 
-assert(bookRepair.includes('knowledge-book-index'),'036B3 UI must use dedicated TOC repair bridge');
-assert(bookRepair.includes("action:'repair_book_index'"),'036B3 UI must request server-side book-index repair');
-assert(bookRepair.includes('MutationObserver'),'036B3 repair must react to unresolved detector panel without extra teacher action');
-assert(/Không gửi nội dung sách sang AI/.test(bookRepair),'036B3 repair UX must state that source content is not sent to AI');
-assert(/vẫn chặn gửi toàn cuốn/.test(bookRepair),'036B3 repair failure must preserve whole-book safety gate');
+assert(bookRepair.includes('knowledge-book-index-v2'),'036B4 UI must use robust TOC-block repair bridge');
+assert(bookRepair.includes("action:'repair_book_index'"),'036B4 UI must request server-side book-index repair');
+assert(bookRepair.includes('MutationObserver'),'036B4 repair must react to book-index UI changes');
+assert(bookRepair.includes('LARGE_DOCUMENT_PAGE_THRESHOLD'),'036B4 must recheck large documents even when an earlier partial index exists');
+assert(/Không gửi nội dung sách sang AI/.test(bookRepair),'036B4 repair UX must state that source content is not sent to AI');
+assert(/vẫn chặn gửi toàn cuốn/.test(bookRepair),'036B4 repair failure must preserve whole-book safety gate');
 
 assert(lazyMigration.includes('DAMSAN_BOOK_INDEX_V1'),'036B persistent mechanical book index missing');
 assert(lazyMigration.includes('knowledge_segment_handoffs'),'036B segment capability table missing');
@@ -114,13 +115,15 @@ assert(segmentBridge.includes('buildScopedChunk'),'036B server must slice artifa
 assert(segmentBridge.includes('rpc_knowledge_store_book_index_service'),'036B detected index must be persisted');
 assert(segmentBridge.includes('rpc_knowledge_complete_segment_handoff_service'),'036B edge must use transactional merge RPC');
 
-assert(bookIndexBridge.includes('detector_version: "036B3"'),'036B3 detector version missing');
-assert(bookIndexBridge.includes('TOC_CALIBRATED'),'036B3 must calibrate lesson starts from table of contents');
-assert(bookIndexBridge.includes('collectTocEntries'),'036B3 TOC entry collector missing');
-assert(bookIndexBridge.includes('collectPrintedPageOffsets'),'036B3 printed-page calibration fallback missing');
-assert(bookIndexBridge.includes('chooseOffset'),'036B3 offset consensus selector missing');
-assert(bookIndexBridge.includes('BODY_ANCHORS'),'036B3 body-heading anchor calibration missing');
-assert(bookIndexBridge.includes('rpc_knowledge_store_book_index_service'),'036B3 repaired index must use canonical persistence RPC');
-assert(bookIndexBridge.includes('staff_sessions') && bookIndexBridge.includes('staff_identity_mismatch'),'036B3 repair bridge must preserve custom staff authentication');
+assert(bookIndexBridge.includes('detector_version:"036B4"'),'036B4 detector version missing');
+assert(bookIndexBridge.includes('TOC_BLOCK_CALIBRATED'),'036B4 must parse multiline/flattened TOC blocks');
+assert(bookIndexBridge.includes('parseTocBlocks'),'036B4 TOC block parser missing');
+assert(bookIndexBridge.includes('collectPrintedPageOffsets'),'036B4 printed-page calibration missing');
+assert(bookIndexBridge.includes('chooseOffset'),'036B4 offset consensus selector missing');
+assert(bookIndexBridge.includes('BOOK_INDEX_PARTIAL_REJECTED'),'036B4 must reject partial late-book indexes');
+assert(bookIndexBridge.includes('beginsNearFirstLesson'),'036B4 first-lesson plausibility gate missing');
+assert(bookIndexBridge.includes('contiguousRatio'),'036B4 sequence coverage gate missing');
+assert(bookIndexBridge.includes('rpc_knowledge_store_book_index_service'),'036B4 repaired index must use canonical persistence RPC');
+assert(bookIndexBridge.includes('staff_sessions') && bookIndexBridge.includes('staff_identity_mismatch'),'036B4 repair bridge must preserve custom staff authentication');
 
-console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b2 + toc_repair_036b3');
+console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b2 + toc_repair_036b4');
