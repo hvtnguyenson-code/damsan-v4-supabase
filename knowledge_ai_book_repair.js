@@ -1,4 +1,4 @@
-// 036B5A1 — repair whole-book index, then surface bounded read-only OCR diagnostics on failure.
+// 036B5B — recover OCR-flattened TOC sequences, then surface bounded 036B5A diagnostics on failure.
 (function () {
   'use strict';
 
@@ -45,11 +45,12 @@
   function diagnosticText(detection) {
     if (!detection) return '';
     const tocCount = Number(detection.toc_entry_count || 0);
+    const candidateCount = Number(detection.toc_candidate_count || 0);
     const anchorCount = Number(detection.body_anchor_count || 0);
     const offset = detection.chosen_offset ?? detection.page_number_offset?.offset ?? '?';
     const source = detection.offset_source || 'none';
     const status = detection.status || '';
-    return `TOC=${tocCount} · anchors=${anchorCount} · offset=${offset} · source=${source}${status ? ` · ${status}` : ''}`;
+    return `TOC=${tocCount}/${candidateCount || tocCount} · anchors=${anchorCount} · offset=${offset} · source=${source}${status ? ` · ${status}` : ''}`;
   }
 
   function renderRepairing(panel) {
@@ -57,7 +58,7 @@
     panel.classList.remove('hidden');
     panel.classList.add('warning');
     panel.innerHTML = '<div class="book-segment-head">Đang kiểm tra lại chỉ mục toàn cuốn...</div>' +
-      '<div class="book-segment-note">036B4 đang đọc các khối mục lục nhiều dòng và đối chiếu số trang in với trang PDF. Không gửi nội dung sách sang AI.</div>';
+      '<div class="book-segment-note">036B5B đang khôi phục các dòng mục lục bị OCR làm phẳng, chỉ nhận số bài dạng số và đối chiếu với số trang in. Không gửi nội dung sách sang AI.</div>';
   }
 
   function renderRepairFailure(panel, error) {
@@ -66,7 +67,7 @@
     panel.classList.remove('hidden');
     panel.classList.add('warning');
     panel.innerHTML = '<div class="book-segment-head">Chưa dựng được chỉ mục bài đầy đủ — vẫn chặn gửi toàn cuốn</div>' +
-      '<div class="book-segment-note">Bộ sửa 036B4 chưa đủ bằng chứng để xác lập toàn bộ ranh giới bài an toàn. Không fallback sang prompt toàn tài liệu.</div>' +
+      '<div class="book-segment-note">Bộ sửa 036B5B chưa đủ bằng chứng để xác lập toàn bộ ranh giới bài an toàn. Không fallback sang prompt toàn tài liệu.</div>' +
       `<div class="book-segment-diag">${diag || 'Không có diagnostic bổ sung.'}</div>`;
   }
 
