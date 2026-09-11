@@ -52,9 +52,9 @@ console.log('K030B1-16..22 two-phase upload integrity: PASSED');
 mustMatch(html, /type="file" multiple[\s\S]*accept="\.pdf,\.doc,\.docx/, 'K030B1-23 UI accepts ordinary raw source documents');
 mustMatch(html, /Gợi ý cho AI — tùy chọn/, 'K030B1-24 context hint is explicitly optional');
 assert(!/name="(?:grade|document_type|lesson_code|page_start|page_end)"/i.test(html),
-  'K030B1-25 teacher is not asked to normalize knowledge metadata');
-mustMatch(html, /Không cần chia bài, gắn trang, đặt mã bài hay chuyển sang JSON/, 'K030B1-26 raw-document-first product promise is visible');
-console.log('K030B1-23..26 no-manual-normalization UI: PASSED');
+  'K030B1-25 raw-upload form still does not ask the teacher to normalize document structure');
+mustMatch(html, /File gốc luôn được giữ làm nguồn đối chiếu/, 'K030B1-26 raw-document-first provenance promise is visible');
+console.log('K030B1-23..26 raw-source UI boundary: PASSED');
 
 mustMatch(js, /sessionStorage\.getItem\('damSan_StaffToken'\)/, 'K030B1-27 client reuses existing staff token');
 mustMatch(js, /uploadToSignedUrl\(prepared\.storage_path, prepared\.upload_token, file/, 'K030B1-28 browser uploads directly to signed Storage URL');
