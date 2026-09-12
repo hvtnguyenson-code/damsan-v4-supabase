@@ -112,3 +112,33 @@ drop trigger if exists trg_knowledge_long_source_chunk_guard_042 on public.knowl
 create trigger trg_knowledge_long_source_chunk_guard_042
 before update on public.knowledge_documents
 for each row execute function public._knowledge_long_source_chunk_guard_042();
+
+-- An assembled revision with uncertain pages is intentionally kept non-active by
+-- the canonical 038 quality gate. Keep the plan editable as NEEDS_REVIEW so the
+-- teacher can re-run only uncertain chunks and assemble again; do not strand the
+-- workflow in ASSEMBLED with no route to repair.
+create or replace function public._knowledge_chunk_plan_review_guard_042()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.plan_status='ASSEMBLED'
+     and exists(
+       select 1
+       from public.knowledge_normalization_chunks c
+       where c.plan_id=new.id
+         and c.chunk_type='LESSON'
+         and c.status<>'IMPORTED'
+     ) then
+    new.plan_status:='NEEDS_REVIEW';
+    new.assembled_at:=null;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_knowledge_chunk_plan_review_guard_042 on public.knowledge_normalization_plans;
+create trigger trg_knowledge_chunk_plan_review_guard_042
+before update of plan_status,assembled_at on public.knowledge_normalization_plans
+for each row execute function public._knowledge_chunk_plan_review_guard_042();
