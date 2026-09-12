@@ -1,5 +1,5 @@
-// 036 — document/book → lesson-aware knowledge scoping for AI exam generation.
-// Keeps the existing request flow, but makes the selected lesson scope explicit in exam_spec.
+// 045 — explicit document/book → lesson-aware knowledge scoping for AI exam generation.
+// The server remains authoritative; this layer makes the lesson boundary impossible to miss in the teacher UI.
 (function () {
   'use strict';
 
@@ -46,7 +46,7 @@
   function spec036() {
     const spec = baseSpec();
     const items = selectedScopeItems();
-    if (!items.length) throw new Error('Hãy chọn ít nhất một tài liệu hoặc một bài trong tài liệu nguồn.');
+    if (!items.length) throw new Error('Hãy chọn ít nhất một bài học hoặc chọn toàn bộ tài liệu nguồn.');
     return {
       ...spec,
       knowledge_scope: {
@@ -56,22 +56,53 @@
     };
   }
 
+  function updateSelectionSummary(group) {
+    const allCheck = group.querySelector('.knowledge-doc-all');
+    const lessonChecks = Array.from(group.querySelectorAll('.knowledge-lesson-check'));
+    const summary = group.querySelector('.scope-selection-summary');
+    if (!summary) return;
+    if (allCheck?.checked) {
+      summary.textContent = `Đang dùng toàn bộ ${lessonChecks.length} bài`;
+      summary.className = 'scope-selection-summary all';
+      return;
+    }
+    const selected = lessonChecks.filter((el) => el.checked).length;
+    summary.textContent = selected ? `Đã chọn ${selected}/${lessonChecks.length} bài` : 'Chưa chọn bài nào';
+    summary.className = `scope-selection-summary${selected ? ' selected' : ''}`;
+  }
+
   function bindScopeControls() {
     for (const group of document.querySelectorAll('[data-knowledge-scope-doc]')) {
       const allCheck = group.querySelector('.knowledge-doc-all');
       const lessonChecks = Array.from(group.querySelectorAll('.knowledge-lesson-check'));
-      if (!allCheck || !lessonChecks.length) continue;
+      if (!allCheck) continue;
+
       const sync = () => {
         const all = Boolean(allCheck.checked);
         for (const child of lessonChecks) {
           child.disabled = all;
           if (all) child.checked = false;
         }
+        updateSelectionSummary(group);
       };
+
       allCheck.addEventListener('change', sync);
       for (const child of lessonChecks) child.addEventListener('change', () => {
         if (child.checked) allCheck.checked = false;
+        updateSelectionSummary(group);
       });
+
+      for (const button of group.querySelectorAll('[data-scope-action]')) {
+        button.addEventListener('click', () => {
+          const action = button.dataset.scopeAction;
+          allCheck.checked = false;
+          for (const child of lessonChecks) {
+            child.disabled = false;
+            child.checked = action === 'all-lessons';
+          }
+          updateSelectionSummary(group);
+        });
+      }
       sync();
     }
   }
@@ -100,17 +131,26 @@
         </div>`;
       }
 
-      const lessonRows = lessons.map((lesson) => `<label class="scope-lesson-row">
+      const lessonRows = lessons.map((lesson, index) => `<label class="scope-lesson-row">
         <input type="checkbox" class="knowledge-lesson-check" data-scope-key="${esc(lesson.scope_key)}">
-        <span><strong>${esc(lesson.lesson_title || lesson.scope_key)}</strong><small>${esc(pageLabel(lesson))} · ${Number(lesson.unit_count || 0)} units</small></span>
+        <span><strong>${index + 1}. ${esc(lesson.lesson_title || lesson.scope_key)}</strong><small>${esc(pageLabel(lesson))} · ${Number(lesson.unit_count || 0)} đơn vị tri thức</small></span>
       </label>`).join('');
 
       return `<div class="scope-doc-group" data-knowledge-scope-doc="${esc(doc.id)}">
-        <label class="doc scope-doc-head">
+        <div class="scope-title-block">
+          <div><strong>PHẠM VI KIẾN THỨC</strong><small>Chọn đúng bài cần đưa vào đề. Không cần nhập tên bài bằng tay.</small></div>
+          <span class="scope-selection-summary">Chưa chọn bài nào</span>
+        </div>
+        <div class="scope-doc-info"><strong>${esc(docTitle)}</strong><small>${esc(meta)} · ${lessons.length} bài</small></div>
+        <div class="scope-toolbar" role="group" aria-label="Chọn nhanh phạm vi bài học">
+          <button type="button" class="secondary scope-quick" data-scope-action="all-lessons">Chọn tất cả ${lessons.length} bài</button>
+          <button type="button" class="secondary scope-quick" data-scope-action="none">Bỏ chọn</button>
+        </div>
+        <label class="scope-all-row">
           <input type="checkbox" class="knowledge-doc-all knowledge-check" value="${esc(doc.id)}">
-          <span><strong>${esc(docTitle)}</strong><small>${esc(meta)} · ${lessons.length} bài · tick ô này nếu thật sự muốn dùng toàn bộ tài liệu</small></span>
+          <span><strong>Dùng toàn bộ sách</strong><small>Chỉ chọn khi đề thực sự bao quát toàn bộ ${lessons.length} bài.</small></span>
         </label>
-        <div class="scope-lessons">${lessonRows}</div>
+        <div class="scope-lessons" aria-label="Danh sách bài học">${lessonRows}</div>
       </div>`;
     }).join('');
     bindScopeControls();
@@ -120,6 +160,7 @@
     const session = aieRequireSession();
     if (!session) return;
     const scope = aieTargetScope(session);
+    if (!scope) return;
     aieSetBusy(true);
     try {
       const { data, error } = await aieSb.rpc('rpc_knowledge_scope_catalog_read', {
@@ -139,7 +180,7 @@
       if (!docs.length) {
         aieNotice('Cần ít nhất một tài liệu có active revision.', 'info');
       } else if (multi) {
-        aieNotice(`Đã nạp ${docs.length} tài liệu. Có ${multi} tài liệu nhiều bài: hãy chỉ tick đúng bài cần đưa vào đề.`, 'info');
+        aieNotice(`Đã nạp ${docs.length} nguồn. Hãy chọn trực tiếp các bài cần kiểm tra trong mục PHẠM VI KIẾN THỨC.`, 'info');
       } else {
         aieNotice(`Đã nạp ${docs.length} tài liệu nguồn có active revision.`, 'info');
       }
@@ -151,7 +192,19 @@
   }
 
   const style = document.createElement('style');
-  style.textContent = '.scope-doc-group{border-bottom:1px solid #e2e8f0}.scope-doc-group:last-child{border-bottom:0}.scope-doc-head{border-bottom:0!important;background:#fff}.scope-lessons{padding:0 10px 9px 34px}.scope-lesson-row{display:flex;gap:9px;align-items:flex-start;padding:7px 9px;border-left:2px solid #ccfbf1}.scope-lesson-row input{width:auto;margin-top:3px}.scope-lesson-row strong{font-size:12px}.scope-lesson-row small{display:block;color:#64748b;margin-top:2px;font-size:11px}';
+  style.textContent = `
+    #knowledgeDocs{max-height:460px}
+    .scope-doc-group{border:1px solid #cbd5e1;border-radius:10px;margin:8px;background:#fff;overflow:hidden}
+    .scope-title-block{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 14px;background:#eff6ff;border-bottom:1px solid #bfdbfe;color:#1e3a8a}
+    .scope-title-block>div>strong{display:block;font-size:13px;letter-spacing:.03em}.scope-title-block small{display:block;color:#475569;margin-top:3px;font-size:11px}
+    .scope-selection-summary{white-space:nowrap;border-radius:999px;padding:5px 9px;background:#e2e8f0;color:#475569;font-size:11px;font-weight:800}.scope-selection-summary.selected{background:#dcfce7;color:#166534}.scope-selection-summary.all{background:#dbeafe;color:#1d4ed8}
+    .scope-doc-info{padding:10px 14px}.scope-doc-info>strong{display:block;font-size:13px}.scope-doc-info small{display:block;color:#64748b;margin-top:2px;font-size:11px}
+    .scope-toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 10px}.scope-quick{padding:7px 10px;font-size:11px}
+    .scope-all-row{display:flex;gap:9px;align-items:flex-start;margin:0 14px 10px;padding:9px 10px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px}.scope-all-row input{width:auto;margin-top:3px}.scope-all-row strong{font-size:12px}.scope-all-row small{display:block;color:#92400e;margin-top:2px;font-size:11px}
+    .scope-lessons{padding:0 14px 12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+    .scope-lesson-row{display:flex;gap:9px;align-items:flex-start;padding:8px 9px;border:1px solid #e2e8f0;border-radius:7px;background:#fff}.scope-lesson-row:hover{background:#f8fafc}.scope-lesson-row input{width:auto;margin-top:3px}.scope-lesson-row strong{font-size:12px}.scope-lesson-row small{display:block;color:#64748b;margin-top:2px;font-size:11px}
+    @media(max-width:760px){.scope-lessons{grid-template-columns:1fr}.scope-title-block{align-items:flex-start;flex-direction:column}}
+  `;
   document.head.appendChild(style);
 
   aieSelectedDocumentIds = selectedDocumentIds036;
