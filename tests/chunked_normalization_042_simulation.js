@@ -21,6 +21,8 @@ assert(migration.includes('_knowledge_long_source_chunk_guard_042'), '042 server
 assert(migration.includes("coalesce(new.page_count,0)>40"), '042 server-side long-source threshold missing');
 assert(migration.includes("@> '[\"CHUNKED_NORMALIZATION_042\"]'::jsonb"), '042 server must require assembler audit marker for long knowledge sources');
 assert(migration.includes('long_knowledge_source_requires_chunked_normalization'), '042 fail-closed long-source error missing');
+assert(migration.includes('_knowledge_chunk_plan_review_guard_042'), '042 review-plan guard missing');
+assert(migration.includes("new.plan_status:='NEEDS_REVIEW'"), '042 uncertain assembled revisions must leave the plan repairable');
 
 assert(edge.includes('DAMSAN_SOURCE_PLAN_V1'), '042 structure-plan schema missing');
 assert(edge.includes('DOCUMENT STRUCTURE SCANNER'), '042 structure scanner prompt missing');
