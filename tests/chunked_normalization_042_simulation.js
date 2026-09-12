@@ -5,10 +5,12 @@ const vm = require('vm');
 const migration = fs.readFileSync('supabase/migrations/20260912090000_chunked_knowledge_normalization_042.sql', 'utf8');
 const edge = fs.readFileSync('supabase/functions/knowledge-chunked-normalization/index.ts', 'utf8');
 const ui = fs.readFileSync('knowledge_chunked_normalization.js', 'utf8');
+const resume = fs.readFileSync('knowledge_chunked_resume.js', 'utf8');
 const guard = fs.readFileSync('knowledge_long_source_guard.js', 'utf8');
 const html = fs.readFileSync('knowledge.html', 'utf8');
 
 new vm.Script(ui, { filename: 'knowledge_chunked_normalization.js' });
+new vm.Script(resume, { filename: 'knowledge_chunked_resume.js' });
 new vm.Script(guard, { filename: 'knowledge_long_source_guard.js' });
 
 assert(migration.includes('knowledge_normalization_plans'), '042 plan staging table missing');
@@ -50,12 +52,24 @@ assert(ui.includes("rpc_knowledge_set_subject_grade"), '042 browser must keep ex
 assert(ui.includes("rpc_knowledge_set_authority_binding"), '042 browser must keep KNOWLEDGE_SOURCE role binding');
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(ui), '042 UI must not touch room/exam persistence');
 
+// 042B: a reload/navigation must resume persisted server progress rather than presenting an empty workflow.
+assert(resume.includes("STORAGE_PREFIX = 'damsan.chunked.resume.v1'"), '042B local resume key missing');
+assert(resume.includes("action: 'read_plan'"), '042B must recover from authoritative persisted plan state');
+assert(resume.includes('findLatestServerPlan'), '042B first-upgrade server fallback missing');
+assert(resume.includes("document.getElementById('chunkedDocument')"), '042B document restoration missing');
+assert(resume.includes("dispatchEvent(new Event('change'"), '042B must reuse canonical document-change/loadPlan path');
+assert(resume.includes("document.getElementById('chunkedChunkSelect')"), '042B chunk selection restoration missing');
+assert(resume.includes('Không cần nhập lại kế hoạch'), '042B user-visible recovery confirmation missing');
+assert(!/import_structure_plan|import_chunk_jsonl|assemble_chunks|prepare_chunk_prompt/.test(resume), '042B recovery helper must be read-only and never mutate normalization state');
+assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(resume), '042B must remain outside room/exam persistence');
+
 assert(guard.includes('LONG_PAGE_THRESHOLD = 40'), '042 long-source one-shot threshold missing');
 assert(guard.includes("role === 'KNOWLEDGE_SOURCE'"), '042 guard must be knowledge-source scoped');
 assert(guard.includes("#btnNormalizedPrompt,#btnNormalizedImport"), '042 guard must block old one-shot prepare/import actions for long knowledge sources');
 assert(guard.includes('Scanner → Chunk → Assembler'), '042 guard must redirect teachers to chunked flow');
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(guard), '042 guard must not touch room/exam persistence');
 assert(html.includes('knowledge_chunked_normalization.js?v=20260912-chunked-normalization-042'), '042 knowledge page chunked cache-bust missing');
+assert(html.includes('knowledge_chunked_resume.js?v=20260912-chunked-refresh-resume-042b'), '042B refresh-resume helper loader missing');
 assert(html.includes('knowledge_long_source_guard.js?v=20260912-long-source-guard-042'), '042 long-source guard cache-bust missing');
 
-console.log('PASS chunked normalization 042 scanner -> chunks -> assembler invariants');
+console.log('PASS chunked normalization 042/042B scanner -> chunks -> assembler + refresh resume invariants');
