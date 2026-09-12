@@ -81,3 +81,34 @@ comment on table public.knowledge_normalization_plans is
   '042 server-validated structure plans for long KNOWLEDGE_SOURCE normalization. Browser access is only through an authenticated Edge function.';
 comment on table public.knowledge_normalization_chunks is
   '042 staged lesson chunks. No row becomes canonical knowledge until assembler calls rpc_knowledge_import_normalized_source_service.';
+
+-- Fail closed on the canonical document update as well as in browser UX.
+-- A >40-page KNOWLEDGE_SOURCE may only commit a new DAMSAN_SOURCE_V2 revision
+-- when the final manifest proves that it came from the server-side 042 assembler.
+create or replace function public._knowledge_long_source_chunk_guard_042()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if coalesce(new.source_role,'KNOWLEDGE_SOURCE')='KNOWLEDGE_SOURCE'
+     and coalesce(new.page_count,0)>40
+     and new.normalization_schema='DAMSAN_SOURCE_V2'
+     and (
+       new.analysis_revision is distinct from old.analysis_revision
+       or new.normalized_storage_path is distinct from old.normalized_storage_path
+     )
+     and not (
+       jsonb_typeof(coalesce(new.normalized_manifest->'notes','[]'::jsonb))='array'
+       and coalesce(new.normalized_manifest->'notes','[]'::jsonb) @> '["CHUNKED_NORMALIZATION_042"]'::jsonb
+     ) then
+    raise exception 'long_knowledge_source_requires_chunked_normalization';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_knowledge_long_source_chunk_guard_042 on public.knowledge_documents;
+create trigger trg_knowledge_long_source_chunk_guard_042
+before update on public.knowledge_documents
+for each row execute function public._knowledge_long_source_chunk_guard_042();
