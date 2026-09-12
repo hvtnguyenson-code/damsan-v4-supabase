@@ -17,6 +17,10 @@ assert(migration.includes("chunk_type in ('LESSON','NON_LESSON','UNRESOLVED')"),
 assert(migration.includes("status in ('PENDING','ACCOUNTED','IMPORTED','NEEDS_REVIEW','INCOMPLETE')"), '042 chunk status boundary missing');
 assert(migration.includes('enable row level security'), '042 staging tables must have RLS enabled');
 assert(migration.includes('grant all on table public.knowledge_normalization_plans to service_role'), '042 plan table must remain service-only');
+assert(migration.includes('_knowledge_long_source_chunk_guard_042'), '042 server-side long-source canonical guard missing');
+assert(migration.includes("coalesce(new.page_count,0)>40"), '042 server-side long-source threshold missing');
+assert(migration.includes("@> '[\"CHUNKED_NORMALIZATION_042\"]'::jsonb"), '042 server must require assembler audit marker for long knowledge sources');
+assert(migration.includes('long_knowledge_source_requires_chunked_normalization'), '042 fail-closed long-source error missing');
 
 assert(edge.includes('DAMSAN_SOURCE_PLAN_V1'), '042 structure-plan schema missing');
 assert(edge.includes('DOCUMENT STRUCTURE SCANNER'), '042 structure scanner prompt missing');
