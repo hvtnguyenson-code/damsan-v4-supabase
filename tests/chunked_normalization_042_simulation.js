@@ -5,9 +5,11 @@ const vm = require('vm');
 const migration = fs.readFileSync('supabase/migrations/20260912090000_chunked_knowledge_normalization_042.sql', 'utf8');
 const edge = fs.readFileSync('supabase/functions/knowledge-chunked-normalization/index.ts', 'utf8');
 const ui = fs.readFileSync('knowledge_chunked_normalization.js', 'utf8');
+const guard = fs.readFileSync('knowledge_long_source_guard.js', 'utf8');
 const html = fs.readFileSync('knowledge.html', 'utf8');
 
 new vm.Script(ui, { filename: 'knowledge_chunked_normalization.js' });
+new vm.Script(guard, { filename: 'knowledge_long_source_guard.js' });
 
 assert(migration.includes('knowledge_normalization_plans'), '042 plan staging table missing');
 assert(migration.includes('knowledge_normalization_chunks'), '042 chunk staging table missing');
@@ -41,6 +43,13 @@ assert(ui.includes('btnChunkedAssemble'), '042 assemble action missing');
 assert(ui.includes("rpc_knowledge_set_subject_grade"), '042 browser must keep explicit subject/grade binding');
 assert(ui.includes("rpc_knowledge_set_authority_binding"), '042 browser must keep KNOWLEDGE_SOURCE role binding');
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(ui), '042 UI must not touch room/exam persistence');
-assert(html.includes('knowledge_chunked_normalization.js?v=20260912-chunked-normalization-042'), '042 knowledge page cache-bust missing');
+
+assert(guard.includes('LONG_PAGE_THRESHOLD = 40'), '042 long-source one-shot threshold missing');
+assert(guard.includes("role === 'KNOWLEDGE_SOURCE'"), '042 guard must be knowledge-source scoped');
+assert(guard.includes("#btnNormalizedPrompt,#btnNormalizedImport"), '042 guard must block old one-shot prepare/import actions for long knowledge sources');
+assert(guard.includes('Scanner → Chunk → Assembler'), '042 guard must redirect teachers to chunked flow');
+assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(guard), '042 guard must not touch room/exam persistence');
+assert(html.includes('knowledge_chunked_normalization.js?v=20260912-chunked-normalization-042'), '042 knowledge page chunked cache-bust missing');
+assert(html.includes('knowledge_long_source_guard.js?v=20260912-long-source-guard-042'), '042 long-source guard cache-bust missing');
 
 console.log('PASS chunked normalization 042 scanner -> chunks -> assembler invariants');
