@@ -6,11 +6,15 @@ const migration = fs.readFileSync('supabase/migrations/20260912090000_chunked_kn
 const edge = fs.readFileSync('supabase/functions/knowledge-chunked-normalization/index.ts', 'utf8');
 const ui = fs.readFileSync('knowledge_chunked_normalization.js', 'utf8');
 const resume = fs.readFileSync('knowledge_chunked_resume.js', 'utf8');
+const batch = fs.readFileSync('knowledge_chunked_batch.js', 'utf8');
+const feedbackFix = fs.readFileSync('knowledge_chunked_feedback_fix.js', 'utf8');
 const guard = fs.readFileSync('knowledge_long_source_guard.js', 'utf8');
 const html = fs.readFileSync('knowledge.html', 'utf8');
 
 new vm.Script(ui, { filename: 'knowledge_chunked_normalization.js' });
 new vm.Script(resume, { filename: 'knowledge_chunked_resume.js' });
+new vm.Script(batch, { filename: 'knowledge_chunked_batch.js' });
+new vm.Script(feedbackFix, { filename: 'knowledge_chunked_feedback_fix.js' });
 new vm.Script(guard, { filename: 'knowledge_long_source_guard.js' });
 
 assert(migration.includes('knowledge_normalization_plans'), '042 plan staging table missing');
@@ -63,6 +67,23 @@ assert(resume.includes('Không cần nhập lại kế hoạch'), '042B user-vis
 assert(!/import_structure_plan|import_chunk_jsonl|assemble_chunks|prepare_chunk_prompt/.test(resume), '042B recovery helper must be read-only and never mutate normalization state');
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(resume), '042B must remain outside room/exam persistence');
 
+// 042C: preserve per-chunk server gates while batching manual web-AI interactions.
+assert(batch.includes('MAX_BATCH_CHUNKS = 5'), '042C batch chunk ceiling missing');
+assert(batch.includes('MAX_BATCH_PAGES = 24'), '042C batch page ceiling missing');
+assert(batch.includes('BATCH LESSON NORMALIZATION WORKER'), '042C batch worker prompt missing');
+assert(batch.includes("action: 'prepare_chunk_prompt'"), '042C must reuse canonical server-generated chunk prompts');
+assert(batch.includes("action: 'import_chunk_jsonl'"), '042C must commit each batch segment through canonical per-chunk validation');
+assert(batch.includes('splitBatchJsonl'), '042C browser batch splitter missing');
+assert(batch.includes("record_type || '').toLowerCase() === 'chunk_status'"), '042C batch boundaries must be chunk_status records');
+assert(batch.includes('Không gộp hai chunk'), '042C prompt must forbid cross-chunk merging');
+assert(batch.includes('Cùng một chat thì chỉ cần đính kèm PDF một lần'), '042C reduced-interaction guidance missing');
+assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(batch), '042C must remain outside room/exam persistence');
+
+// 042C feedback fix: live card id is #chunkedSourceCard, not the stale helper id.
+assert(feedbackFix.includes("getElementById('chunkedSourceCard')"), '042C feedback must bind the live chunked card');
+assert(feedbackFix.includes('is-busy') && feedbackFix.includes('is-success') && feedbackFix.includes('is-error'), '042C explicit visual states missing');
+assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(feedbackFix), '042C feedback must be visual-only');
+
 assert(guard.includes('LONG_PAGE_THRESHOLD = 40'), '042 long-source one-shot threshold missing');
 assert(guard.includes("role === 'KNOWLEDGE_SOURCE'"), '042 guard must be knowledge-source scoped');
 assert(guard.includes("#btnNormalizedPrompt,#btnNormalizedImport"), '042 guard must block old one-shot prepare/import actions for long knowledge sources');
@@ -70,6 +91,8 @@ assert(guard.includes('Scanner → Chunk → Assembler'), '042 guard must redire
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(guard), '042 guard must not touch room/exam persistence');
 assert(html.includes('knowledge_chunked_normalization.js?v=20260912-chunked-normalization-042'), '042 knowledge page chunked cache-bust missing');
 assert(html.includes('knowledge_chunked_resume.js?v=20260912-chunked-refresh-resume-042b'), '042B refresh-resume helper loader missing');
+assert(html.includes('knowledge_chunked_feedback_fix.js?v=20260912-chunked-feedback-042c'), '042C chunk feedback fix loader missing');
+assert(html.includes('knowledge_chunked_batch.js?v=20260912-chunked-batch-042c'), '042C batch helper loader missing');
 assert(html.includes('knowledge_long_source_guard.js?v=20260912-long-source-guard-042'), '042 long-source guard cache-bust missing');
 
-console.log('PASS chunked normalization 042/042B scanner -> chunks -> assembler + refresh resume invariants');
+console.log('PASS chunked normalization 042/042B/042C scanner -> chunks -> assembler + refresh resume + web batch invariants');
