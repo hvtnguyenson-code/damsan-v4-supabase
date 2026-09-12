@@ -1,5 +1,5 @@
-// 042C — Correct chunked-card action feedback target.
-// The 041B helper looked for a stale container id; this patch binds visible states directly to #chunkedSourceCard.
+// 042C/043 — Correct chunked-card feedback and simplify legacy source intake.
+// Visual-only helper: no room/exam persistence access.
 (() => {
   'use strict';
 
@@ -61,7 +61,7 @@
     const finish = () => {
       const text = (status.textContent || '').trim();
       if (!text || !lastAction) return;
-      let state = status.classList.contains('error') ? 'error' : status.classList.contains('warn') ? 'warning' : status.classList.contains('ok') ? 'success' : '';
+      const state = status.classList.contains('error') ? 'error' : status.classList.contains('warn') ? 'warning' : status.classList.contains('ok') ? 'success' : '';
       if (!state) return;
       const successLabel = config[lastAction]?.[1] || '✓ Hoàn tất';
       setState(lastAction, state, state === 'success' ? successLabel : state === 'warning' ? '⚠ Cần rà soát' : '⚠ Thao tác lỗi');
@@ -71,10 +71,71 @@
     return true;
   }
 
+  function installCompactIntake() {
+    const uploadButton = document.getElementById('btnUpload');
+    const card = uploadButton?.closest('.card');
+    if (!card) return false;
+    if (card.dataset.knowledgeIntake043 === '1') return true;
+    card.dataset.knowledgeIntake043 = '1';
+    card.classList.add('knowledge-intake-compact');
+
+    const heading = card.querySelector('h2');
+    if (heading) heading.textContent = 'Thêm tài liệu nguồn';
+    const sub = card.querySelector('.sub');
+    if (sub) sub.textContent = 'Chỉ mở khi cần bổ sung PDF/DOC/DOCX mới. File gốc vẫn được giữ làm nguồn đối chiếu; sách dài sau khi tải lên sẽ xử lý ở 0A, còn Quy định/Đề mẫu dùng 0B.';
+
+    const hint = document.getElementById('knowledgeHint');
+    if (hint) {
+      hint.value = '';
+      const hintRow = hint.closest('.hint-row');
+      if (hintRow) hintRow.style.display = 'none';
+    }
+    card.querySelector('.pipeline-note')?.remove();
+
+    const dropzone = document.getElementById('dropzone');
+    const actions = uploadButton.closest('.actions');
+    const queue = document.getElementById('uploadQueue');
+    if (!dropzone || !actions || !queue) return true;
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.id = 'btnToggleKnowledgeIntake';
+    toggle.className = 'secondary knowledge-intake-toggle';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.textContent = '＋ Thêm file mới';
+
+    const body = document.createElement('div');
+    body.id = 'knowledgeIntakeBody';
+    body.className = 'knowledge-intake-body';
+    body.hidden = true;
+    sub?.insertAdjacentElement('afterend', toggle);
+    toggle.insertAdjacentElement('afterend', body);
+    body.append(dropzone, actions, queue);
+
+    uploadButton.textContent = 'Tải lên kho';
+    const clearButton = document.getElementById('btnClearSelection');
+    if (clearButton) clearButton.textContent = 'Bỏ lựa chọn';
+
+    const setOpen = (open) => {
+      body.hidden = !open;
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      toggle.textContent = open ? '− Đóng phần thêm tài liệu' : '＋ Thêm file mới';
+    };
+    toggle.addEventListener('click', () => setOpen(body.hidden));
+
+    const style = document.createElement('style');
+    style.textContent = `
+      .knowledge-intake-compact{padding:14px 18px}.knowledge-intake-compact h2{margin-bottom:4px}.knowledge-intake-compact .sub{margin-bottom:10px}.knowledge-intake-toggle{margin:0}.knowledge-intake-body{margin-top:12px}.knowledge-intake-body .dropzone{min-height:110px;padding:16px}.knowledge-intake-body .actions{margin-top:10px}.knowledge-intake-body .upload-queue{margin-top:10px}`;
+    document.head.appendChild(style);
+    return true;
+  }
+
   function boot() {
-    if (bindButtons() && bindStatus()) return;
+    const ready = bindButtons() && bindStatus();
+    const compact = installCompactIntake();
+    if (ready && compact) return;
     const observer = new MutationObserver(() => {
-      if (bindButtons() && bindStatus()) observer.disconnect();
+      if (bindButtons() && bindStatus() && installCompactIntake()) observer.disconnect();
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
