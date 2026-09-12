@@ -60,7 +60,7 @@ assert(feedback.includes('Đang kiểm định kế hoạch…') && feedback.inc
 assert(feedback.includes('Đang tạo prompt chunk…') && feedback.includes('✓ Prompt chunk sẵn sàng'), '042A chunk-prompt button feedback missing');
 assert(feedback.includes('Đang kiểm định chunk…') && feedback.includes('✓ Đã nhập chunk'), '042A chunk-import button feedback missing');
 assert(feedback.includes('Đang ghép nguồn…') && feedback.includes('✓ Đã ghép nguồn'), '042A assembler button feedback missing');
-assert(feedback.includes("document.getElementById('chunkedStatus')"), '042A chunk status observer missing');
+assert(feedback.includes("bindStatusElement('chunkedStatus'"), '042A chunk status observer missing');
 assert(feedback.includes("el.classList.contains('warn')"), '042A warning result feedback missing');
 
 // Overlay must never steal or reroute the original business click.
