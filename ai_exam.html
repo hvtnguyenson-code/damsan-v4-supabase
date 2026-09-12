@@ -26,7 +26,7 @@
     <div class="sub" style="margin-top:7px;margin-bottom:0">Nếu assessment authority quy định blueprint bắt buộc (ví dụ Địa lí 12 — TNTHPT), số câu sẽ bị khóa. Muốn tạo bài luyện rút gọn, hãy chọn loại đánh giá khác thay vì sửa cấu trúc đề chính thức.</div>
     <div id="customWeights" class="grid4 hidden" style="margin-top:12px"><div class="field"><label for="w1">Trọng số P1</label><input id="w1" type="number" min="0" max="10" step="0.01" value="4"></div><div class="field"><label for="w2">Trọng số P2</label><input id="w2" type="number" min="0" max="10" step="0.01" value="4"></div><div class="field"><label for="w3">Trọng số P3</label><input id="w3" type="number" min="0" max="10" step="0.01" value="2"></div><div class="field"><label>Tổng</label><input id="weightSum" readonly value="10"></div></div>
     <div class="field" style="margin-top:12px"><label for="requirements">Yêu cầu nội dung / mức độ / phong cách</label><textarea id="requirements" placeholder="Ví dụ: NB 40%, TH 30%, VD 30%; văn phong tự nhiên; tránh đáp án dài nổi bật..."></textarea></div>
-    <div class="field" style="margin-top:12px"><label>Tài liệu / bài học nguồn kiến thức cùng khối</label><div id="knowledgeDocs" class="docs"><div class="doc">Hãy chọn khối...</div></div></div>
+    <div class="field" style="margin-top:12px"><label>Phạm vi kiến thức — chọn bài cần ra đề</label><div class="sub" style="margin:2px 0 8px">Hệ thống chỉ đưa những bài được chọn vào Knowledge Pack. Chọn “Dùng toàn bộ sách” chỉ khi đề thực sự bao quát toàn bộ chương trình.</div><div id="knowledgeDocs" class="docs"><div class="doc">Hãy chọn khối...</div></div></div>
     <div class="actions"><button id="btnCreate" class="primary">Tạo gói ra đề AI</button><button id="btnRefreshDocs" class="secondary">Làm mới tài liệu</button><button id="btnChatGPT" class="secondary">Mở ChatGPT</button><button id="btnGemini" class="secondary">Mở Gemini</button></div><div id="generationStatus" class="statusline"></div>
   </section>
 
@@ -41,7 +41,7 @@
 <script src="ai_exam.js?v=20260910-ai-exam-ui-031b2"></script>
 <script src="ai_exam_resilience.js?v=20260910-ai-exam-resilience-031c"></script>
 <script src="ai_exam_assessment_profile.js?v=20260911-assessment-authority-039"></script>
-<script src="ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036"></script>
+<script src="ai_exam_knowledge_scope.js?v=20260913-explicit-lesson-scope-045"></script>
 <script src="ai_exam_grade_authority.js?v=20260911-grade-authority-039"></script>
 <script src="ai_exam_copy_feedback.js?v=20260910-ai-exam-copy-feedback-035"></script>
 <script src="ai_action_feedback.js?v=20260912-ai-action-feedback-041a"></script>

@@ -57,7 +57,8 @@ assert(docs.includes('vqa.moet.gov.vn/vi/news/thong-bao/cau-truc-dinh-dang-de-th
 assert(docs.includes('vqa.moet.gov.vn/vi/news/tin-tuc-su-kien/de-thi-tham-khao-ky-thi-tot-nghiep-thpt-tu-nam-2025-159.html'),'official reference exam source missing');
 assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(docs) && /Bình Phước/.test(docs),'provincial benchmark corpus not documented');
 
-assert(html.includes('ai_exam_knowledge_scope.js?v=20260910-book-lesson-scope-036'),'036 lesson-scope overlay missing from exam UI');
+assert(html.includes('ai_exam_knowledge_scope.js?v=20260913-explicit-lesson-scope-045'),'045 explicit lesson-scope overlay missing from exam UI');
+assert(html.includes('Phạm vi kiến thức — chọn bài cần ra đề'),'045 lesson-scope heading must be explicit in main setup UI');
 assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay missing from semantic-analysis UI');
 assert(knowledgeHtml.includes('r=036b2'),'036B2 cache-bust marker missing from semantic-analysis UI');
 assert(knowledgeHtml.includes('knowledge_ai_book_repair.js?v=20260911-ocr-toc-recovery-036b5b'),'036B5B repair cache-bust missing from semantic-analysis UI');
@@ -65,7 +66,10 @@ assert(scopeOverlay.includes('DAMSAN_KNOWLEDGE_SCOPE_V1'),'036 scope schema miss
 assert(scopeOverlay.includes('rpc_knowledge_scope_catalog_read'),'036 browser must use protected lesson catalog RPC');
 assert(scopeOverlay.includes('knowledge-lesson-check'),'036 lesson selector UI missing');
 assert(scopeOverlay.includes("mode: 'LESSONS'"),'036 lesson-only request mode missing');
-assert(/tick ô này nếu thật sự muốn dùng toàn bộ tài liệu/.test(scopeOverlay),'multi-lesson document must not be silently selected in full');
+assert(scopeOverlay.includes('PHẠM VI KIẾN THỨC'),'045 visible knowledge-scope panel missing');
+assert(scopeOverlay.includes('scope-selection-summary'),'045 selected lesson-count summary missing');
+assert(scopeOverlay.includes('Dùng toàn bộ sách'),'045 full-book scope must be explicit opt-in');
+assert(scopeOverlay.includes('data-scope-action="all-lessons"'),'045 quick all-lessons control missing');
 assert(scopeMigration.includes('_knowledge_scope_key_036'),'036 stable lesson scope key missing');
 assert(scopeMigration.includes('_ai_exam_normalize_scope_036'),'036 server scope normalization missing');
 assert(scopeMigration.includes('rpc_knowledge_scope_catalog_read'),'036 secure scope catalog missing');
@@ -146,4 +150,4 @@ assert(bookIndexBridge.includes('rpc_knowledge_store_book_index_service'),'036B5
 assert(bookIndexBridge.includes('staff_sessions') && bookIndexBridge.includes('staff_identity_mismatch'),'036B5B repair bridge must preserve custom staff authentication');
 assert(!bookIndexBridge.includes('[IVXLCDM]'),'036B5B must not restore Roman-numeral lesson matching');
 
-console.log('PASS ai_geography_assessment_standard_simulation + book_lesson_scope_036 + lazy_segment_036b2 + ocr_toc_recovery_036b5b + diagnostics_036b5a');
+console.log('PASS ai_geography_assessment_standard_simulation + explicit_lesson_scope_045 + book_lesson_scope_036 + lazy_segment_036b2 + ocr_toc_recovery_036b5b + diagnostics_036b5a');
