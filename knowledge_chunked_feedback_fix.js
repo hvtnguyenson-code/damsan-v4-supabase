@@ -1,5 +1,5 @@
-// 042C/043 — Correct chunked-card feedback and simplify legacy source intake.
-// Visual-only helper: no room/exam persistence access.
+// 042C/043/044 — Action feedback, compact source intake, and guided-flow bootstrap.
+// Visual-only helper: canonical validation remains in the dedicated knowledge services.
 (() => {
   'use strict';
 
@@ -82,7 +82,7 @@
     const heading = card.querySelector('h2');
     if (heading) heading.textContent = 'Thêm tài liệu nguồn';
     const sub = card.querySelector('.sub');
-    if (sub) sub.textContent = 'Chỉ mở khi cần bổ sung PDF/DOC/DOCX mới. File gốc vẫn được giữ làm nguồn đối chiếu; sách dài sau khi tải lên sẽ xử lý ở 0A, còn Quy định/Đề mẫu dùng 0B.';
+    if (sub) sub.textContent = 'Chỉ mở khi cần bổ sung PDF/DOC/DOCX mới. Sau khi tải lên, hệ thống sẽ tự xác định tiến độ và hướng dẫn đúng bước tiếp theo.';
 
     const hint = document.getElementById('knowledgeHint');
     if (hint) {
@@ -130,12 +130,23 @@
     return true;
   }
 
+  function loadGuidedFlow044() {
+    if (document.getElementById('damsanGuidedFlow044Loader') || document.getElementById('guidedKnowledgeCard')) return true;
+    const script = document.createElement('script');
+    script.id = 'damsanGuidedFlow044Loader';
+    script.src = 'knowledge_guided_flow.js?v=20260912-guided-flow-044';
+    script.async = false;
+    document.head.appendChild(script);
+    return true;
+  }
+
   function boot() {
     const ready = bindButtons() && bindStatus();
     const compact = installCompactIntake();
-    if (ready && compact) return;
+    const guided = loadGuidedFlow044();
+    if (ready && compact && guided) return;
     const observer = new MutationObserver(() => {
-      if (bindButtons() && bindStatus() && installCompactIntake()) observer.disconnect();
+      if (bindButtons() && bindStatus() && installCompactIntake() && loadGuidedFlow044()) observer.disconnect();
     });
     observer.observe(document.body, { childList: true, subtree: true });
   }
