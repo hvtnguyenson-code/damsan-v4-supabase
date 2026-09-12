@@ -8,6 +8,7 @@ const ui = fs.readFileSync('knowledge_chunked_normalization.js', 'utf8');
 const resume = fs.readFileSync('knowledge_chunked_resume.js', 'utf8');
 const batch = fs.readFileSync('knowledge_chunked_batch.js', 'utf8');
 const feedbackFix = fs.readFileSync('knowledge_chunked_feedback_fix.js', 'utf8');
+const guided = fs.readFileSync('knowledge_guided_flow.js', 'utf8');
 const guard = fs.readFileSync('knowledge_long_source_guard.js', 'utf8');
 const html = fs.readFileSync('knowledge.html', 'utf8');
 
@@ -15,6 +16,7 @@ new vm.Script(ui, { filename: 'knowledge_chunked_normalization.js' });
 new vm.Script(resume, { filename: 'knowledge_chunked_resume.js' });
 new vm.Script(batch, { filename: 'knowledge_chunked_batch.js' });
 new vm.Script(feedbackFix, { filename: 'knowledge_chunked_feedback_fix.js' });
+new vm.Script(guided, { filename: 'knowledge_guided_flow.js' });
 new vm.Script(guard, { filename: 'knowledge_long_source_guard.js' });
 
 assert(migration.includes('knowledge_normalization_plans'), '042 plan staging table missing');
@@ -79,10 +81,39 @@ assert(batch.includes('Không gộp hai chunk'), '042C prompt must forbid cross-
 assert(batch.includes('Cùng một chat thì chỉ cần đính kèm PDF một lần'), '042C reduced-interaction guidance missing');
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(batch), '042C must remain outside room/exam persistence');
 
-// 042C feedback fix: live card id is #chunkedSourceCard, not the stale helper id.
+// 043/044 bootstrap: raw upload is secondary and the guided layer loads with an explicit cache version.
+assert(feedbackFix.includes("heading.textContent = 'Thêm tài liệu nguồn'"), '043 compact raw-source heading missing');
+assert(feedbackFix.includes("toggle.textContent = '＋ Thêm file mới'"), '043 collapsed source-intake affordance missing');
+assert(feedbackFix.includes("knowledge_guided_flow.js?v=20260912-guided-flow-044"), '044 guided-flow bootstrap missing');
+assert(feedbackFix.includes('Sau khi tải lên, hệ thống sẽ tự xác định tiến độ'), '044 raw-source copy must defer workflow complexity to the system');
+assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(feedbackFix), '043/044 feedback/bootstrap must remain visual-only');
+
+// 044: one-next-action guided flow, recognition over recall, and a single AI-result inbox.
+assert(guided.includes('Chuẩn hóa nguồn tri thức'), '044 guided card heading missing');
+assert(guided.includes('VIỆC TIẾP THEO'), '044 one-next-action cue missing');
+assert(guided.includes('Dán kết quả AI'), '044 clipboard result action missing');
+assert(guided.includes('kéo file JSON/JSONL vào đây'), '044 unified drop result inbox missing');
+assert(guided.includes('navigator.clipboard.readText'), '044 clipboard result ingestion missing');
+assert(guided.includes('Array.isArray(parsed)'), '044 must normalize JSON-array AI output rather than burden the teacher');
+assert(guided.includes('plan_manifest') && guided.includes('chunk_status'), '044 must auto-detect scanner versus lesson output');
+assert(guided.includes("action: 'import_structure_plan'"), '044 guided scanner result must use canonical plan import');
+assert(guided.includes("action: 'import_chunk_jsonl'"), '044 guided lesson result must use canonical chunk import');
+assert(guided.includes("action: 'assemble_chunks'"), '044 guided completion must reuse canonical assembler');
+assert(guided.includes("action: 'prepare_structure_prompt'"), '044 scanner prompt preparation missing');
+assert(guided.includes("action: 'prepare_chunk_prompt'"), '044 batch/review prompt preparation missing');
+assert(guided.includes('MAX_BATCH_CHUNKS = 5') && guided.includes('MAX_BATCH_PAGES = 24'), '044 must preserve bounded web-AI workload');
+assert(guided.includes('canonicalChunkPromptFix'), '044 must correct per-chunk first-record wording automatically');
+assert(guided.includes('RECORD ĐẦU TIÊN BẮT BUỘC CỦA CHUNK'), '044 corrected chunk wording missing');
+assert(guided.includes('expected_chunk_keys'), '044 must remember the expected batch and reject accidental old-batch reuse');
+assert(guided.includes("rpc_knowledge_set_subject_grade") && guided.includes("rpc_knowledge_set_authority_binding"), '044 must keep explicit subject/grade/role server binding');
+assert(guided.includes("chunked.style.display = 'none'") && guided.includes("normalized.style.display = 'none'"), '044 technical workflows must be progressively disclosed');
+assert(guided.includes('Tiến độ được lưu trên server'), '044 save-and-return reassurance missing');
+assert(!/from\(['"]knowledge_(?:documents|units|normalization_plans|normalization_chunks)['"]\)\s*\.\s*(?:insert|update|delete|upsert)/.test(guided), '044 browser must not directly mutate protected knowledge tables');
+assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(guided), '044 guided flow must remain outside room/exam persistence');
+
+// 042C feedback fix still binds the live technical card for advanced/fallback use.
 assert(feedbackFix.includes("getElementById('chunkedSourceCard')"), '042C feedback must bind the live chunked card');
 assert(feedbackFix.includes('is-busy') && feedbackFix.includes('is-success') && feedbackFix.includes('is-error'), '042C explicit visual states missing');
-assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(feedbackFix), '042C feedback must be visual-only');
 
 assert(guard.includes('LONG_PAGE_THRESHOLD = 40'), '042 long-source one-shot threshold missing');
 assert(guard.includes("role === 'KNOWLEDGE_SOURCE'"), '042 guard must be knowledge-source scoped');
@@ -91,8 +122,9 @@ assert(guard.includes('Scanner → Chunk → Assembler'), '042 guard must redire
 assert(!/rpc_luu_de_thi_len_phong|\bphong_thi\b|\bde_thi\b/.test(guard), '042 guard must not touch room/exam persistence');
 assert(html.includes('knowledge_chunked_normalization.js?v=20260912-chunked-normalization-042'), '042 knowledge page chunked cache-bust missing');
 assert(html.includes('knowledge_chunked_resume.js?v=20260912-chunked-refresh-resume-042b'), '042B refresh-resume helper loader missing');
-assert(html.includes('knowledge_chunked_feedback_fix.js?v=20260912-chunked-feedback-042c'), '042C chunk feedback fix loader missing');
+assert(html.includes('knowledge_chunked_feedback_fix.js?v=20260912-guided-bootstrap-044'), '044 guided bootstrap cache-bust missing');
 assert(html.includes('knowledge_chunked_batch.js?v=20260912-chunked-batch-042c'), '042C batch helper loader missing');
 assert(html.includes('knowledge_long_source_guard.js?v=20260912-long-source-guard-042'), '042 long-source guard cache-bust missing');
+assert(html.includes('Hệ thống tự lưu để có thể rời trang rồi quay lại sau'), '044 save-and-return header copy missing');
 
-console.log('PASS chunked normalization 042/042B/042C scanner -> chunks -> assembler + refresh resume + web batch invariants');
+console.log('PASS chunked normalization 042/042B/042C + compact intake 043 + guided low-interaction UX 044');

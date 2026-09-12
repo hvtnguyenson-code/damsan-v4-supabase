@@ -15,7 +15,7 @@
     body { margin: 0; font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f6f8; color: #1f2937; }
     header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: white; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     header h1 { font-size: 21px; margin: 0; }
-    header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+    header p { margin: 4px 0 0; font-size: 13px; opacity: .92; }
     .header-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 5px; }
     .back { color: #0d47a1; background: white; text-decoration: none; font-weight: 700; border-radius: 7px; padding: 9px 13px; white-space: nowrap; }
     main { max-width: 1120px; margin: 22px auto; padding: 0 16px 36px; }
@@ -74,7 +74,7 @@
   <header>
     <div>
       <h1>Kho tri thức AI — Đam San V4</h1>
-      <p>Giữ file gốc làm provenance; SGK/PDF dài được quét cấu trúc rồi chuẩn hóa theo từng bài/chunk trước khi ghép thành DAMSAN_SOURCE_V2.</p>
+      <p>Thêm nguồn, tiếp tục công việc đang dở và theo dõi tiến độ. Hệ thống tự lưu để có thể rời trang rồi quay lại sau.</p>
     </div>
     <div>
       <div id="sessionInfo" class="session"></div>
@@ -91,18 +91,18 @@
 
     <section class="card">
       <h2>1. Nạp file gốc</h2>
-      <p class="sub">Chấp nhận PDF, PDF scan, DOC và DOCX; tối đa 50 MiB mỗi tệp. File gốc luôn được giữ làm nguồn đối chiếu. Bộ đọc cơ học vẫn hoạt động cho tài liệu ngắn/text sạch; với sách dài hoặc bố cục phức tạp, dùng quy trình Scanner → Chunk → Assembler phía trên sau khi file đã xuất hiện trong kho.</p>
+      <p class="sub">Chấp nhận PDF, PDF scan, DOC và DOCX; tối đa 50 MiB mỗi tệp. File gốc luôn được giữ làm nguồn đối chiếu. Sau khi tải lên, hệ thống sẽ hướng dẫn bước xử lý phù hợp.</p>
 
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Chọn tài liệu nguồn">
         <strong>Thả tài liệu vào đây hoặc bấm để chọn</strong>
-        <small>Có thể chọn nhiều tệp. File gốc và kết quả đọc đều được lưu trong Storage riêng tư.</small>
+        <small>Có thể chọn nhiều tệp. File gốc được lưu trong Storage riêng tư.</small>
         <input id="knowledgeFiles" type="file" multiple accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
       </div>
 
       <div class="hint-row">
         <label for="knowledgeHint">Gợi ý cho AI — tùy chọn</label>
-        <textarea id="knowledgeHint" placeholder="Ví dụ: Đây là SGK Địa lí 12 Kết nối tri thức. Có thể để trống hoàn toàn."></textarea>
-        <div class="help">Gợi ý chỉ hỗ trợ pipeline cũ. Với DAMSAN_SOURCE_V2, khối và vai trò nguồn được chọn bằng trường bắt buộc riêng.</div>
+        <textarea id="knowledgeHint" placeholder="Có thể để trống hoàn toàn."></textarea>
+        <div class="help">Trường này chỉ còn để tương thích với nguồn cũ và sẽ được ẩn trong giao diện hướng dẫn.</div>
       </div>
 
       <div class="actions">
@@ -110,14 +110,14 @@
         <button id="btnClearSelection" class="secondary" type="button">Bỏ danh sách đã chọn</button>
       </div>
       <div id="uploadQueue" class="upload-queue"></div>
-      <div class="pipeline-note"><strong>Ba đường xử lý:</strong> (1) tài liệu ngắn/text sạch có thể đi qua PDF.js/Mammoth/Tesseract; (2) SGK/PDF dài dùng Scanner → lesson chunks → Assembler để tránh giới hạn đầu ra của AI web; (3) quy định ra đề và đề mẫu được nhập bằng vai trò authority/benchmark riêng, không trộn vào nguồn kiến thức.</div>
+      <div class="pipeline-note"><strong>Nguyên tắc:</strong> file gốc luôn được giữ để đối chiếu; kết quả AI chỉ được dùng sau khi qua kiểm định của hệ thống.</div>
     </section>
 
     <section class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
         <div>
-          <h2>2. Trạng thái kho tri thức</h2>
-          <p class="sub" style="margin-bottom:0;">Nguồn chuẩn hóa đạt coverage đầy đủ có thể trở thành active revision. `NEEDS_REVIEW` nghĩa là AI đã khai báo còn trang chưa chắc chắn; revision cũ vẫn được giữ cho đến khi có nguồn đạt gate.</p>
+          <h2>Trạng thái kho tri thức</h2>
+          <p class="sub" style="margin-bottom:0;">Nguồn đạt kiểm định sẽ được dùng cho AI ra đề. Nếu còn điểm chưa chắc chắn, hệ thống giữ nguyên nguồn đang dùng và đánh dấu để rà soát.</p>
         </div>
         <button id="btnRefresh" class="secondary" type="button">Làm mới</button>
       </div>
@@ -148,7 +148,7 @@
   <script src="knowledge_chunked_normalization.js?v=20260912-chunked-normalization-042"></script>
   <script src="knowledge_chunked_resume.js?v=20260912-chunked-refresh-resume-042b"></script>
   <script src="ai_action_feedback.js?v=20260912-ai-action-feedback-041a"></script>
-  <script src="knowledge_chunked_feedback_fix.js?v=20260912-chunked-feedback-042c"></script>
+  <script src="knowledge_chunked_feedback_fix.js?v=20260912-guided-bootstrap-044"></script>
   <script src="knowledge_chunked_batch.js?v=20260912-chunked-batch-042c"></script>
   <script src="knowledge_long_source_guard.js?v=20260912-long-source-guard-042"></script>
 </body>
