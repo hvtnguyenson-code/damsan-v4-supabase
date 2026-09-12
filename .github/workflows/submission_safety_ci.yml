@@ -28,6 +28,7 @@ jobs:
           node --check knowledge_reader.js
           node --check knowledge_reader_hardening.js
           node --check knowledge_normalized_source.js
+          node --check knowledge_chunked_normalization.js
           node --check knowledge_ai_web.js
           node --check knowledge_ai_hardening.js
           node --check ai_exam.js
@@ -43,6 +44,7 @@ jobs:
           node --check tests/normalized_knowledge_authority_simulation.js
           node --check tests/normalized_source_subject_binding_040a_simulation.js
           node --check tests/ai_action_feedback_041a_simulation.js
+          node --check tests/chunked_normalization_042_simulation.js
           node --check tests/ai_room_boundary_invariant_simulation.js
       - name: Browser OCR runtime probe
         run: |
@@ -112,6 +114,7 @@ jobs:
           node tests/normalized_knowledge_authority_simulation.js
           node tests/normalized_source_subject_binding_040a_simulation.js
           node tests/ai_action_feedback_041a_simulation.js
+          node tests/chunked_normalization_042_simulation.js
           node tests/ai_room_boundary_invariant_simulation.js
           node tests/ai_authoring_navigation_resilience_simulation.js
           node tests/knowledge_ocr_usability_gate_simulation.js
