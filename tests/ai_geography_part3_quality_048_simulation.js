@@ -15,7 +15,7 @@ assert(/chỉ trừ hai mốc độ cao/i.test(overlay), 'arbitrary altitude sub
 assert(overlay.includes('quantitative gồm: skill_code, operation_code, data_form, inputs'), 'Part III quantitative metadata schema missing');
 assert(overlay.includes('SUM_DIFFERENCE_TWO_GROUPS'), 'two-series raw-data operation missing');
 assert(overlay.includes('tối đa 2 câu một bước') && overlay.includes('ít nhất 4 câu từ hai bước'), 'full-exam cognitive mix missing');
-assert(html.includes('ai_exam_assessment_profile.js?v=20260914-part3-quality-048'), '048 prompt compiler cache-bust marker missing from AI exam UI');
+assert(html.includes('ai_exam_assessment_profile.js?v=20260914-validation-recovery-049'), '049 prompt/recovery cache-bust marker missing from AI exam UI');
 
 const context = {
   window:{},
