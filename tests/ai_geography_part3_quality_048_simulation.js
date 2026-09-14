@@ -3,6 +3,7 @@ const vm = require('vm');
 const assert = require('assert');
 
 const overlay = fs.readFileSync('ai_exam_assessment_profile.js','utf8');
+const html = fs.readFileSync('ai_exam.html','utf8');
 const migration = fs.readFileSync('supabase/migrations/20260914140500_geography_part3_quantitative_quality_048.sql','utf8');
 
 assert(overlay.includes('version 048'), '048 prompt version missing');
@@ -13,6 +14,7 @@ assert(/chỉ trừ hai mốc độ cao/i.test(overlay), 'arbitrary altitude sub
 assert(overlay.includes('quantitative gồm: skill_code, operation_code, data_form, inputs'), 'Part III quantitative metadata schema missing');
 assert(overlay.includes('SUM_DIFFERENCE_TWO_GROUPS'), 'two-series raw-data operation missing');
 assert(overlay.includes('tối đa 2 câu một bước') && overlay.includes('ít nhất 4 câu từ hai bước'), 'full-exam cognitive mix missing');
+assert(html.includes('ai_exam_assessment_profile.js?v=20260914-part3-quality-048'), '048 prompt compiler cache-bust marker missing from AI exam UI');
 
 const context = { window:{}, document:{ getElementById:()=>null }, AIE_MAX_PROMPT_CHARS:7_500_000, console };
 vm.createContext(context);
