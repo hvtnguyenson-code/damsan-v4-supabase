@@ -37,13 +37,14 @@
 
   <section id="reviewCard" class="card hidden"><h2>4. Xem trước và quyết định cuối cùng</h2><p class="sub">Đây là điểm duyệt bắt buộc duy nhất. Chỉ khi bấm “Phê duyệt & đưa lên phòng” hệ thống mới gọi RPC lưu đề chính thức.</p><div id="reviewMeta" class="statusline"></div><div id="preview" class="preview" style="margin-top:12px"></div><div class="actions"><button id="btnApprove" class="success">PHÊ DUYỆT & ĐƯA LÊN PHÒNG</button><button id="btnReject" class="danger">TỪ CHỐI ĐỀ</button></div></section>
 
-  <section class="card"><h2>Yêu cầu gần đây</h2><p class="sub">Có thể mở lại đề READY_FOR_REVIEW/PUBLISHED sau khi tải lại trang. Với request AI đang dở, có thể mở lại request và từ chối để dọn trạng thái; capability AI không được lưu lâu dài trong trình duyệt.</p><div id="requestList" class="request-list"><div class="request">Đang tải...</div></div></section>
+  <section class="card"><h2>Yêu cầu gần đây</h2><p class="sub">Lỗi kiểm định được giữ lại để biết chính xác câu nào/rule nào chưa đạt. Khi capability còn hiệu lực, có thể sửa JSON và gửi lại ngay; trạng thái REJECTED chỉ xuất hiện khi giáo viên chủ động từ chối request.</p><div id="requestList" class="request-list"><div class="request">Đang tải...</div></div></section>
 </main>
 <script src="ai_exam.js?v=20260910-ai-exam-ui-031b2"></script>
 <script src="ai_exam_subject_scope.js?v=20260914-visible-subject-scope-046"></script>
 <script src="ai_exam_resilience.js?v=20260910-ai-exam-resilience-031c"></script>
 <!-- Legacy cache marker retained for regression compatibility: ai_exam_assessment_profile.js?v=20260911-assessment-authority-039 -->
-<script src="ai_exam_assessment_profile.js?v=20260914-part3-quality-048"></script>
+<!-- 048 cache marker retained for regression history: ai_exam_assessment_profile.js?v=20260914-part3-quality-048 -->
+<script src="ai_exam_assessment_profile.js?v=20260914-validation-recovery-049"></script>
 <script src="ai_exam_knowledge_scope.js?v=20260913-explicit-lesson-scope-045"></script>
 <script src="ai_exam_grade_authority.js?v=20260911-grade-authority-039"></script>
 <script src="ai_exam_copy_feedback.js?v=20260910-ai-exam-copy-feedback-035"></script>

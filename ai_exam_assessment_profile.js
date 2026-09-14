@@ -1,9 +1,10 @@
-// 048 — Geography TNTHPT assessment profile prompt compiler.
+// 048/049 — Geography TNTHPT assessment profile prompt compiler + validation recovery.
 // Keeps the Web-AI handoff provider-neutral while enforcing official-style item-writing rules.
 (function () {
   'use strict';
 
   const STANDARD_ID = 'DIA_LI_TNTHPT_2025_PLUS_V1';
+  let lastValidationFailure049 = null;
 
   function serverSpec(input, localSpec) {
     const remote = input && input.request && input.request.exam_spec;
@@ -60,13 +61,28 @@
     ];
   }
 
-  window.aieBuildPrompt = function aieBuildPrompt048(input, units, localSpec) {
+  function generationInstructions049(input) {
+    const base = input && input.instructions && typeof input.instructions === 'object' && !Array.isArray(input.instructions)
+      ? input.instructions
+      : {};
+    return {
+      ...base,
+      question_fields: [
+        'phan','noi_dung','A','B','C','D','dap_an_dung','loi_giai',
+        'source_refs','muc_do','bai_hoc','quantitative'
+      ],
+      part_3: 'Short answer. A/B/C/D are empty strings. For Geography assessment standard 048 every Part III question MUST include quantitative metadata exactly as required by the assessment rules in this prompt.',
+      validation_contract: 'question_fields is the complete 049 contract. quantitative is mandatory for Geography Part III and is not optional metadata.'
+    };
+  }
+
+  window.aieBuildPrompt = function aieBuildPrompt049(input, units, localSpec) {
     const spec = serverSpec(input, localSpec);
     const pkg = {
       schema_version: 'DAMSAN_WEB_AI_EXAM_PACKAGE_V1',
       task: 'GROUNDED_EXAM_GENERATION',
       request: input.request,
-      instructions: input.instructions,
+      instructions: generationInstructions049(input),
       authoritative_exam_spec: spec,
       knowledge_units: units
     };
@@ -91,7 +107,7 @@
   };
 
   const previousProfileChange = window.aieProfileChange;
-  window.aieProfileChange = function aieProfileChange048() {
+  window.aieProfileChange = function aieProfileChange049() {
     if (typeof previousProfileChange === 'function') previousProfileChange();
     const profile = document.getElementById('profile')?.value;
     if (profile === 'TOT_NGHIEP') {
@@ -102,4 +118,198 @@
       }
     }
   };
+
+  function parseFailure049(raw) {
+    if (!raw) return null;
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+    try {
+      const parsed = JSON.parse(String(raw));
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function failureQuestion049(failure) {
+    const n = Number(failure?.quality?.question_no);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  }
+
+  function failureMessage049(failure, fallbackCode = '') {
+    const code = String(failure?.code || fallbackCode || 'validation_failed');
+    const q = failureQuestion049(failure);
+    const prefix = q ? `Câu ${q}: ` : '';
+    const quality = failure?.quality || {};
+    const messages = {
+      quality_part3_quantitative_metadata_required: 'thiếu metadata định lượng quantitative của Phần III.',
+      quality_part3_skill_invalid: `skill_code không hợp lệ${quality.skill_code ? ` (${quality.skill_code})` : ''}.`,
+      quality_part3_operation_invalid: `operation_code không hợp lệ${quality.operation_code ? ` (${quality.operation_code})` : ''}.`,
+      quality_part3_skill_operation_mismatch: 'skill_code và operation_code không khớp nhau.',
+      quality_part3_data_form_invalid: 'data_form không thuộc TABLE_SERIES, MULTI_VALUE hoặc DIRECT_RELATION.',
+      quality_part3_inputs_invalid: 'inputs phải là mảng số liệu thô hợp lệ.',
+      quality_part3_source_data_not_exposed: 'số liệu thô trong quantitative chưa được đưa đầy đủ vào nội dung học sinh nhìn thấy.',
+      quality_part3_recompute_mismatch: `đáp án AI không khớp phép tính của server${quality.expected != null ? `; server tính ${quality.expected}, AI trả ${quality.actual}` : ''}.`,
+      quality_part3_rounding_invalid: 'câu hỏi chưa nêu rõ yêu cầu làm tròn.',
+      quality_part3_rounding_metadata_invalid: 'rounding_digits không hợp lệ.',
+      quality_part3_reasoning_steps_invalid: 'reasoning_steps không hợp lệ.',
+      quality_part3_table_series_too_small: 'TABLE_SERIES phải chứa ít nhất 3 số liệu thô.',
+      quality_part3_simple_sum_invalid: 'phép SUM hai số quá đơn giản, không đạt chuẩn Phần III.',
+      quality_part3_too_many_single_step: `cả Phần III có quá nhiều câu một bước (${quality.single_step_count ?? '?'}; tối đa 2).`,
+      quality_part3_multistep_mix_invalid: `cả Phần III chưa đủ câu nhiều bước (${quality.multistep_count ?? '?'}; cần ít nhất 4).`,
+      quality_part3_rich_data_mix_invalid: `cả Phần III chưa đủ câu dùng dữ liệu phong phú (${quality.rich_data_count ?? '?'}; cần ít nhất 3).`,
+      quality_part3_skill_diversity_invalid: `cả Phần III chưa đủ đa dạng kĩ năng (${quality.distinct_skills ?? '?'}; cần ít nhất 4).`,
+      quality_part3_skill_repetition_invalid: 'một dạng kĩ năng bị lặp quá nhiều trong Phần III.',
+      quality_part2_stimulus_invalid: 'stimulus Phần II quá ngắn hoặc chưa đủ ngữ cảnh.',
+      quality_part2_statements_invalid: 'bốn nhận định Phần II chưa đạt yêu cầu.',
+      quality_part2_truth_pattern_invalid: 'mẫu đáp án Đúng/Sai không hợp lệ.',
+      quality_part2_all_same_invalid: 'không được để cả bốn nhận định Phần II cùng Đúng hoặc cùng Sai.',
+      quality_part1_duplicate_options_invalid: 'Phần I có phương án trùng/rỗng.',
+      knowledge_source_ref_outside_scope: 'source_refs trỏ ra ngoài các bài đã chọn.',
+      source_ref_unknown: 'AI dùng source_ref không tồn tại trong Knowledge Pack.',
+      question_count_mismatch: 'số câu AI trả về không đúng cấu trúc đã khóa.',
+      exam_schema_invalid: 'schema JSON không phải DAMSAN_EXAM_V1.',
+      assessment_type_mismatch: 'loại đề AI trả về không khớp request.',
+      capability_expired: 'capability đã hết hạn; request này không thể gửi lại.',
+      capability_not_claimed: 'capability không còn ở trạng thái cho phép gửi lại.',
+      exam_request_unavailable: 'request không còn ở trạng thái nhận bản đề AI.'
+    };
+    return prefix + (messages[code] || `kiểm định không đạt (${code}).`);
+  }
+
+  async function readFailure049(requestId) {
+    const session = typeof aieSession === 'function' ? aieSession() : null;
+    if (!session || !requestId) return null;
+    try {
+      const { data, error } = await aieSb.rpc('rpc_ai_exam_request_read', {
+        p_staff_token: session.token,
+        p_ma_gv: session.profile.ma_gv,
+        p_request_id: requestId
+      });
+      if (error || !data || data.status !== 'success') return null;
+      const request = Array.isArray(data.requests) ? data.requests[0] : null;
+      return parseFailure049(request?.processing_error);
+    } catch {
+      return null;
+    }
+  }
+
+  function ensureRepairButton049() {
+    let button = document.getElementById('btnRepairAI049');
+    if (button) return button;
+    const validate = document.getElementById('btnValidate');
+    const actions = validate?.parentElement;
+    if (!validate || !actions) return null;
+    button = document.createElement('button');
+    button.id = 'btnRepairAI049';
+    button.type = 'button';
+    button.className = 'secondary';
+    button.textContent = 'Sao chép yêu cầu AI sửa lỗi';
+    button.hidden = true;
+    actions.appendChild(button);
+    button.addEventListener('click', async () => {
+      const currentJson = document.getElementById('resultBox')?.value?.trim() || '';
+      if (!currentJson || !lastValidationFailure049) {
+        if (typeof aieNotice === 'function') aieNotice('Chưa có lỗi kiểm định và JSON để tạo yêu cầu sửa.', 'info');
+        return;
+      }
+      const repairPrompt = [
+        'Bạn đang sửa một JSON đề thi Đam San V4 vừa bị server kiểm định từ chối.',
+        'Giữ nguyên phạm vi kiến thức, cấu trúc đề, số câu và source_refs hợp lệ. Chỉ sửa lỗi được nêu và các chỗ phụ thuộc trực tiếp vào lỗi đó.',
+        'Đối với Phần III Địa lí, phải tuân thủ đầy đủ chuẩn định lượng 048 và tự tính lại đáp án.',
+        'Không giải thích, không Markdown fence. Chỉ trả DUY NHẤT JSON object DAMSAN_EXAM_V1 đã sửa hoàn chỉnh.',
+        '',
+        'LỖI SERVER:',
+        JSON.stringify(lastValidationFailure049, null, 2),
+        '',
+        'JSON HIỆN TẠI:',
+        currentJson
+      ].join('\n');
+      try {
+        await navigator.clipboard.writeText(repairPrompt);
+        if (typeof aieNotice === 'function') aieNotice('Đã sao chép yêu cầu sửa lỗi. Dán vào đúng cuộc trò chuyện AI vừa tạo đề, rồi dán JSON đã sửa trở lại đây.', 'ok');
+      } catch {
+        const temp = document.createElement('textarea');
+        temp.value = repairPrompt;
+        temp.setAttribute('readonly','');
+        temp.style.position = 'fixed';
+        temp.style.opacity = '0';
+        document.body.appendChild(temp);
+        temp.select();
+        try { document.execCommand('copy'); } catch { /* best effort */ }
+        temp.remove();
+        if (typeof aieNotice === 'function') aieNotice('Đã chuẩn bị yêu cầu sửa lỗi trong clipboard nếu trình duyệt cho phép.', 'info');
+      }
+    });
+    return button;
+  }
+
+  function showRepair049(show) {
+    const button = ensureRepairButton049();
+    if (button) button.hidden = !show;
+  }
+
+  window.aieValidateDraft = async function aieValidateDraft049() {
+    if (aieBusy) return;
+    if (!aieCapability || !aieCurrentRequestId) return aieNotice('Capability tạo đề không còn trong phiên này. Hãy tạo lại gói ra đề.', 'error');
+    let exam;
+    try { exam = aieLooseJson(document.getElementById('resultBox').value); }
+    catch (error) { return aieNotice(`JSON đề không hợp lệ: ${error.message}`, 'error'); }
+
+    lastValidationFailure049 = null;
+    showRepair049(false);
+    aieSetBusy(true);
+    document.getElementById('validationStatus').textContent = 'Server đang kiểm định schema, cấu trúc, chất lượng, đáp án và nguồn...';
+    try {
+      const result = await aieGateway({
+        action: 'submit_exam_draft',
+        capability_token: aieCapability,
+        ai_provider: document.getElementById('provider').value || 'WEB_AI',
+        ai_model: document.getElementById('modelName').value.trim() || 'unspecified',
+        exam
+      });
+      document.getElementById('validationStatus').textContent = `VALIDATED · revision ${result.revision} · ${result.validation?.question_count || 0} câu · ${result.validation?.variant_count || 0} mã đề.`;
+      aieNotice('Đề đã vượt kiểm định kỹ thuật và chất lượng. Kiểm tra toàn bộ nội dung ở phần xem trước trước khi phê duyệt.', 'ok');
+      aieCapability = '';
+      await aieLoadRequests(aieCurrentRequestId);
+    } catch (error) {
+      const diagnostic = await readFailure049(aieCurrentRequestId);
+      const code = diagnostic?.code || error?.code || 'validation_failed';
+      const recoverable = diagnostic?.recoverable === true || !['capability_expired','capability_not_claimed','exam_request_unavailable','staff_session_invalid'].includes(String(code));
+      lastValidationFailure049 = diagnostic || {
+        schema_version: 'DAMSAN_AI_VALIDATION_FAILURE_V1',
+        stage: 'EDGE_VALIDATION',
+        code,
+        recoverable
+      };
+      const reason = failureMessage049(lastValidationFailure049, code);
+      const suffix = recoverable
+        ? ' Request vẫn còn hiệu lực; không cần tạo gói mới. Có thể sửa JSON và bấm Gửi kiểm định đề lại.'
+        : '';
+      document.getElementById('validationStatus').textContent = `KHÔNG ĐẠT · ${reason}${suffix}`;
+      aieNotice(`${reason}${suffix}`, 'error');
+      showRepair049(recoverable && !!document.getElementById('resultBox').value.trim());
+    } finally {
+      aieSetBusy(false);
+    }
+  };
+
+  const previousOpenRequest049 = window.aieOpenRequest;
+  window.aieOpenRequest = function aieOpenRequest049(requestId) {
+    const request = Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === requestId) : null;
+    const failure = parseFailure049(request?.processing_error);
+    if (request && failure && !request.draft && ['AWAITING_AI','AI_WORKING','REJECTED'].includes(request.status)) {
+      aieCurrentRequestId = request.request_id;
+      document.querySelectorAll('.request').forEach((el) => el.classList.toggle('active', el.dataset.requestId === requestId));
+      document.getElementById('reviewCard')?.classList.add('hidden');
+      const reason = failureMessage049(failure);
+      const state = request.status === 'REJECTED'
+        ? 'Request đã bị từ chối.'
+        : 'Request chưa bị mất; nếu capability của phiên hiện tại còn hiệu lực thì có thể sửa và gửi lại.';
+      aieNotice(`${request.ma_phong}: ${reason} ${state}`, 'error');
+      return;
+    }
+    if (typeof previousOpenRequest049 === 'function') previousOpenRequest049(requestId);
+  };
+
+  document.addEventListener('DOMContentLoaded', () => ensureRepairButton049());
 })();

@@ -26,7 +26,7 @@ assert(/không sao chép/i.test(overlay), 'benchmark no-copy policy missing');
 assert(/input\.request\.exam_spec/.test(overlay), 'prompt compiler must prefer server authoritative exam_spec');
 
 const elements = { profile:{value:'TOT_NGHIEP'}, p1Count:{value:0}, p2Count:{value:0}, p3Count:{value:0} };
-const context = { window:{}, document:{ getElementById:(id)=>elements[id]||null }, AIE_MAX_PROMPT_CHARS:7_500_000, console };
+const context = { window:{}, document:{ getElementById:(id)=>elements[id]||null, addEventListener:()=>{} }, AIE_MAX_PROMPT_CHARS:7_500_000, console };
 context.window.aieProfileChange = () => {};
 vm.createContext(context);
 vm.runInContext(overlay, context);
