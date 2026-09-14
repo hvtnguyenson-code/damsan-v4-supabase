@@ -25,7 +25,7 @@ must(knowledge, /File gốc luôn được giữ làm nguồn đối chiếu[\s\
 console.log('A031C-05..08 knowledge workflow navigation: PASSED');
 
 must(examHtml, /ai_exam_resilience\.js\?v=20260910-ai-exam-resilience-031c/, 'A031C-09 resilience script is cache-busted and loaded');
-must(examHtml, /request AI đang dở[\s\S]*từ chối để dọn trạng thái/i, 'A031C-10 reload recovery guidance is visible');
+must(examHtml, /Lỗi kiểm định được giữ lại[\s\S]*sửa JSON và gửi lại ngay[\s\S]*REJECTED chỉ xuất hiện khi giáo viên chủ động từ chối/i, 'A031C-10 049 retry/reject guidance is visible');
 must(resilience, /const aieOpenRequest031B2 = aieOpenRequest/, 'A031C-11 existing review behavior is wrapped, not replaced blindly');
 must(resilience, /\['AWAITING_AI', 'AI_WORKING', 'FAILED'\]/, 'A031C-12 stale non-published states are recoverable');
 must(resilience, /approve\.style\.display = 'none'/, 'A031C-13 stale request cannot expose publish action');
