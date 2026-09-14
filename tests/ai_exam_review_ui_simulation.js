@@ -4,6 +4,7 @@ const path = require('path');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'ai_exam.html'), 'utf8');
 const js = fs.readFileSync(path.join(root, 'ai_exam.js'), 'utf8');
+const subjectScope = fs.readFileSync(path.join(root, 'ai_exam_subject_scope.js'), 'utf8');
 const sql = fs.readFileSync(path.join(root, 'supabase', 'migrations', '20260910074529_ai_exam_review_ui_guard_031b2.sql'), 'utf8');
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
@@ -20,6 +21,17 @@ must(html, /PHÊ DUYỆT & ĐƯA LÊN PHÒNG/, 'A031B2-06 explicit final approva
 must(html, /TỪ CHỐI ĐỀ/, 'A031B2-07 explicit rejection exists');
 must(html, /ai_exam\.js\?v=20260910-ai-exam-ui-031b2/, 'A031B2-08 cache-busted script is loaded');
 console.log('A031B2-01..08 UI contract: PASSED');
+
+must(html, /id="subjectSelect"/, 'A046-01 visible subject selector exists');
+must(html, /id="subjectScopeState"/, 'A046-02 visible subject scope status exists');
+must(html, /ai_exam_subject_scope\.js\?v=20260914-visible-subject-scope-046/, 'A046-03 subject-scope overlay is cache-busted');
+must(subjectScope, /aieTargetScope = function aieTargetScope046/, 'A046-04 Admin target scope override missing');
+must(subjectScope, /\.from\('mon_hoc'\)\.select\('id,ten_mon'\)/, 'A046-05 subject catalog must come from canonical subject table');
+must(subjectScope, /localStorage\.setItem\('damSan_Workspace'/, 'A046-06 explicit subject selection must synchronize Admin workspace');
+must(subjectScope, /grade\.dispatchEvent\(new Event\('change'\)\)/, 'A046-07 subject change must reuse canonical grade-authority refresh path');
+must(subjectScope, /aieCapability = ''/, 'A046-08 subject change must invalidate stale generation capability');
+assert(!/\.from\(['"](ai_exam_requests|ai_exam_drafts|de_thi|phong_thi)['"]\)/.test(subjectScope), 'A046-09 subject overlay must not mutate protected exam/room tables');
+console.log('A046-01..09 visible subject scope: PASSED');
 
 must(js, /sessionStorage\.getItem\('damSan_StaffToken'\)/, 'A031B2-09 existing custom staff session is reused');
 must(js, /damSan_WorkspaceSchool/, 'A031B2-10 Admin school workspace is respected');
