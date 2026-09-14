@@ -61,6 +61,14 @@ function cleanString(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
+function normalizePart(value: unknown) {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value)) return "";
+    return String(value);
+  }
+  return cleanString(value, 8);
+}
+
 function asObject(value: unknown): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("object_invalid");
   return value as JsonObject;
@@ -244,7 +252,7 @@ function sourceRefs(value: unknown) {
 
 function cleanQuestion(rawValue: unknown, knownUnitKeys: Set<string>) {
   const raw = asObject(rawValue);
-  const phan = cleanString(raw.phan ?? raw.Phan, 8);
+  const phan = normalizePart(raw.phan ?? raw.Phan);
   if (!["1", "2", "3"].includes(phan)) throw new Error("question_part_invalid");
   const noiDung = cleanString(raw.noi_dung ?? raw.NoiDung, 16000);
   if (!noiDung) throw new Error("question_text_required");
