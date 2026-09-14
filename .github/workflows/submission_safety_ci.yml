@@ -41,6 +41,7 @@ jobs:
           node --check tests/run_browser_ocr_probe.mjs
           node --check tests/ai_exam_copy_feedback_simulation.js
           node --check tests/ai_geography_assessment_standard_simulation.js
+          node --check tests/ai_geography_part3_quality_048_simulation.js
           node --check tests/normalized_knowledge_authority_simulation.js
           node --check tests/normalized_source_subject_binding_040a_simulation.js
           node --check tests/ai_action_feedback_041a_simulation.js
@@ -111,6 +112,7 @@ jobs:
           node tests/ai_exam_review_ui_simulation.js
           node tests/ai_exam_copy_feedback_simulation.js
           node tests/ai_geography_assessment_standard_simulation.js
+          node tests/ai_geography_part3_quality_048_simulation.js
           node tests/normalized_knowledge_authority_simulation.js
           node tests/normalized_source_subject_binding_040a_simulation.js
           node tests/ai_action_feedback_041a_simulation.js
