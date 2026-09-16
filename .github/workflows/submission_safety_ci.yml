@@ -35,6 +35,7 @@ jobs:
           node --check ai_exam_resilience.js
           node --check ai_exam_copy_feedback.js
           node --check ai_exam_assessment_profile.js
+          node --check ai_exam_validation_architecture_053.js
           node --check ai_exam_grade_authority.js
           node --check ai_action_feedback.js
           node --check tests/browser_ocr_runtime_probe.js
