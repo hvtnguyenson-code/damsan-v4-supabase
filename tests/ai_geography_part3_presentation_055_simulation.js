@@ -4,19 +4,27 @@ const assert = require('assert');
 const overlay = fs.readFileSync('ai_exam_part3_presentation_055.js','utf8');
 const html = fs.readFileSync('ai_exam.html','utf8');
 const migration = fs.readFileSync('supabase/migrations/20260916214500_geography_part3_table_answer_format_055.sql','utf8');
+const migration056 = fs.readFileSync('supabase/migrations/20260916230500_ai_exam_json_safe_table_marker_056.sql','utf8');
 const studentJs = fs.readFileSync('hoc_sinh.js','utf8');
 const studentHtml = fs.readFileSync('hoc_sinh.html','utf8');
 
-assert(overlay.includes('PHẦN III — 055 BẢNG SỐ LIỆU + ĐÁP ÁN TỐI ĐA 4 KÍ TỰ'), '055 Part III prompt contract missing');
-assert(overlay.includes('"22,2"') && overlay.includes('"2,22"') && overlay.includes('"-222"'), '055 compact-answer examples missing');
-assert(overlay.includes('data-damsan-p3="1"'), '055 table marker missing from prompt');
-assert(overlay.includes('từ 3 số liệu thô trở lên'), '055 table threshold missing from prompt');
-assert(overlay.includes('result_divisor'), '055 result unit-scaling contract missing from prompt');
-assert(overlay.includes('KHÔNG dùng style'), '055 semantic-table prompt must avoid numeric inline-style noise');
-assert(overlay.includes('renderP3Stem055'), '055 teacher preview table renderer missing');
-assert(html.includes('ai_exam_part3_presentation_055.js?v=20260916-part3-presentation-055'), '055 overlay is not loaded by ai_exam.html');
+assert(overlay.includes('PHẦN III — 056 BẢNG SỐ LIỆU + ĐÁP ÁN TỐI ĐA 4 KÍ TỰ'), '056 Part III prompt contract missing');
+assert(overlay.includes('"22,2"') && overlay.includes('"2,22"') && overlay.includes('"-222"'), 'compact-answer examples missing');
+assert(overlay.includes("<table data-damsan-p3='1'>"), 'JSON-safe single-quoted table marker missing from prompt');
+assert(overlay.includes('KHÔNG chèn dấu nháy kép chưa escape'), 'prompt must explicitly forbid raw double quotes inside JSON strings');
+assert(overlay.includes('tự kiểm tra toàn bộ output bằng JSON.parse'), 'prompt must require a final JSON validity check');
+assert(overlay.includes('từ 3 số liệu thô trở lên'), 'table threshold missing from prompt');
+assert(overlay.includes('result_divisor'), 'result unit-scaling contract missing from prompt');
+assert(overlay.includes('KHÔNG dùng style'), 'semantic-table prompt must avoid numeric inline-style noise');
+assert(overlay.includes('renderP3Stem055'), 'teacher preview table renderer missing');
+assert(html.includes('ai_exam_part3_presentation_055.js?v=20260916-part3-presentation-055'), 'Part III overlay is not loaded by ai_exam.html');
 
-// Student UI already has the safe rich-text path and table CSS. 055 must reuse it rather than adding a second room payload.
+// The JSON-safe marker must survive a literal JSON parse without escaping the HTML attribute quotes.
+const jsonSafeFixture = '{"noi_dung":"<table data-damsan-p3=\'1\'><tbody><tr><td>21,3</td></tr></tbody></table>"}';
+assert.doesNotThrow(() => JSON.parse(jsonSafeFixture), 'single-quoted HTML attribute must keep surrounding JSON valid');
+assert.strictEqual(JSON.parse(jsonSafeFixture).noi_dung.includes("data-damsan-p3='1'"), true);
+
+// Student UI already has the safe rich-text path and table CSS. Reuse it rather than adding a second room payload.
 assert(/safeHTML\(cau\.noi_dung\s*\|\|\s*cau\.NoiDung\)/.test(studentJs), 'student question renderer no longer renders sanitized noi_dung');
 assert(/\.q-text\s+table/.test(studentHtml), 'student UI table styling for question stems is missing');
 assert(/dompurify\/3\.0\.6\/purify\.min\.js/i.test(studentHtml), 'student UI must sanitize authored table HTML with DOMPurify');
@@ -35,6 +43,12 @@ assert(/trg_ai_exam_draft_normalize_055/i.test(migration), '055 canonical-answer
 assert(/v_standard_id='DIA_LI_TNTHPT_2025_PLUS_V1'/.test(migration), '055 draft normalization must be scoped to Geography TNTHPT');
 assert(/replace\(btrim\(coalesce\(q\.value->>'dap_an_dung'/i.test(migration), '055 decimal-comma normalization missing');
 
+assert(/profile_version='056'/i.test(migration056), '056 profile version not persisted');
+assert(/json_safe_html_attribute_quotes/.test(migration056), '056 JSON-safe quote policy missing');
+assert(/_ai_exam_quality_gate_055_base/.test(migration056), '056 must preserve the full 055 gate');
+assert(/_ai_exam_normalize_table_marker_056/.test(migration056), '056 marker normalization helper missing');
+assert(/data-damsan-p3\\s\*=\\s\*'1'/.test(migration056), '056 must normalize single-quoted authored table markers');
+
 function canonical(value) {
   return String(value).trim().replace('.', ',');
 }
@@ -43,7 +57,7 @@ function valid(value) {
   return /^-?[0-9]+(,[0-9]+)?$/.test(s) && s.length <= 4;
 }
 function applyDivisor(result, divisor = 1) {
-  const allowed = new Set([1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000]);
+  const allowed = new Set([1,10,100,1000,10000,100000,1000000,10000000,1000000000]);
   if (!allowed.has(divisor)) return null;
   return result / divisor;
 }
@@ -58,4 +72,4 @@ assert.strictEqual(canonical('54.8'),'54,8','dot must canonicalize to decimal co
 assert.strictEqual(applyDivisor(12345,1000),12.345,'result_divisor should support legitimate unit scaling');
 assert.strictEqual(applyDivisor(12345,60),null,'arbitrary result scaling must be rejected');
 
-console.log('AI Geography Part III presentation 055 simulation: PASSED');
+console.log('AI Geography Part III presentation 056 simulation: PASSED');
