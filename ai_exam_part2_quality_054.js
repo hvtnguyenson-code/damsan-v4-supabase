@@ -5,6 +5,7 @@
 
   const STANDARD_ID = 'DIA_LI_TNTHPT_2025_PLUS_V1';
   const previousBuildPrompt = window.aieBuildPrompt;
+  const previousQuestionPreview = window.aieQuestionPreview;
 
   function specFrom(input, localSpec) {
     const remote = input && input.request && input.request.exam_spec;
@@ -19,6 +20,7 @@
     const part2Rules = [
       '',
       'PHẦN II — 054 CỤM ĐÚNG/SAI CÓ PHÂN HÓA NHẬN THỨC:',
+      '- Quy tắc 054 này ƯU TIÊN hơn mô tả question_fields/part_2 cũ nằm trong KNOWLEDGE PACKAGE nếu có khác biệt.',
       '- Mỗi câu Phần II là MỘT stimulus chung trong noi_dung và đúng bốn LỆNH/NHẬN ĐỊNH A/B/C/D. A/B/C/D không phải bốn phương án lựa chọn của Phần I.',
       '- Độ dài A/B/C/D được phép khác nhau tự nhiên theo yêu cầu nhận thức. KHÔNG cân bằng độ dài như Phần I và không rút các lệnh về cùng một khuôn câu ngắn.',
       '- Trong MỖI câu Phần II, bốn lệnh phải bao phủ ÍT NHẤT HAI mức độ trong NB, TH, VD; ưu tiên ba mức khi dữ liệu và phạm vi kiến thức cho phép. Cấm cả bốn lệnh cùng một mức độ.',
@@ -36,6 +38,26 @@
       'Mỗi question: phan, noi_dung, A, B, C, D, dap_an_dung, loi_giai, source_refs, muc_do, bai_hoc. Phần III thêm quantitative theo contract 053.',
       'Mỗi question: phan, noi_dung, A, B, C, D, dap_an_dung, loi_giai, source_refs, muc_do, bai_hoc. Phần II thêm statement_levels; Phần III thêm quantitative theo contract 053.'
     );
+    out = out.replace(
+      '"source_refs","muc_do","bai_hoc","quantitative"]',
+      '"source_refs","muc_do","bai_hoc","statement_levels","quantitative"]'
+    );
     return out;
   };
+
+  if (typeof previousQuestionPreview === 'function') {
+    window.aieQuestionPreview = function aieQuestionPreview054(question, index) {
+      let html = previousQuestionPreview(question, index);
+      const part = String(question?.phan || question?.Phan || '1');
+      const levels = question?.statement_levels;
+      if (part !== '2' || !levels || typeof levels !== 'object' || Array.isArray(levels)) return html;
+      const labels = ['A','B','C','D'].map((key) => {
+        const value = String(levels[key] || '').toUpperCase();
+        return `${key}: ${aieEscape(value || '?')}`;
+      }).join(' · ');
+      const marker = '<div class="answer">';
+      const badge = `<div class="source"><strong>Mức độ từng lệnh:</strong> ${labels}</div>`;
+      return html.includes(marker) ? html.replace(marker, `${badge}${marker}`) : `${html}${badge}`;
+    };
+  }
 })();
