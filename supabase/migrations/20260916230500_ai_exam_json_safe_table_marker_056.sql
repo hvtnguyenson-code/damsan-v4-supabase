@@ -103,7 +103,7 @@ as $$
                 to_jsonb(
                   regexp_replace(
                     q.value->>'noi_dung',
-                    $$data-damsan-p3\s*=\s*'1'$$,
+                    $re$data-damsan-p3\s*=\s*'1'$re$,
                     'data-damsan-p3="1"',
                     'gi'
                   )
