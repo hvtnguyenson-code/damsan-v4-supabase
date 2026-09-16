@@ -4,10 +4,12 @@ const assert = require('assert');
 
 const overlay = fs.readFileSync('ai_exam_assessment_profile.js','utf8');
 const architecture053 = fs.readFileSync('ai_exam_validation_architecture_053.js','utf8');
+const qualityReview053 = fs.readFileSync('ai_exam_quality_review_053.js','utf8');
 const html = fs.readFileSync('ai_exam.html','utf8');
 const migration = fs.readFileSync('supabase/migrations/20260914140500_geography_part3_quantitative_quality_048.sql','utf8');
 const recovery = fs.readFileSync('supabase/migrations/20260914224500_ai_exam_validation_recovery_049.sql','utf8');
 const architectureMigration = fs.readFileSync('supabase/migrations/20260916150000_ai_exam_validation_architecture_053.sql','utf8');
+const profileSync053 = fs.readFileSync('supabase/migrations/20260916150100_ai_exam_validation_profile_sync_053a.sql','utf8');
 
 assert(overlay.includes('version 048'), '048 prompt version missing');
 assert(/xử lí số liệu địa lí/i.test(overlay), 'geographic quantitative reasoning instruction missing');
@@ -19,6 +21,7 @@ assert(overlay.includes('SUM_DIFFERENCE_TWO_GROUPS'), 'two-series raw-data opera
 assert(overlay.includes('tối đa 2 câu một bước') && overlay.includes('ít nhất 4 câu từ hai bước'), 'full-exam cognitive mix missing');
 assert(html.includes('ai_exam_assessment_profile.js?v=20260914-validation-recovery-049'), '049 prompt/recovery cache-bust marker missing from AI exam UI');
 assert(html.includes('ai_exam_validation_architecture_053.js?v=20260916-validation-architecture-053'), '053 architecture overlay missing from AI exam UI');
+assert(html.includes('ai_exam_quality_review_053.js?v=20260916-quality-review-053'), '053 quality review overlay missing from AI exam UI');
 
 const context = {
   window:{},
@@ -40,7 +43,7 @@ const prompt = context.window.aieBuildPrompt(
   spec
 );
 assert(prompt.includes('053 SERVER-CANONICAL'), '053 compiled prompt missing');
-assert(prompt.includes('quantitative với operation_code, inputs'), '053 must use reduced calculation recipe');
+assert(prompt.includes('quantitative gồm operation_code, inputs'), '053 must use reduced calculation recipe');
 assert(prompt.includes('KHÔNG cần skill_code, data_form, reasoning_steps'), '053 must stop delegating descriptive metadata to AI');
 assert(prompt.includes('Server tự tính lại đáp án'), '053 server recomputation instruction missing');
 assert(prompt.includes('học sinh nhìn thấy'), '053 student-visible source-data rule missing');
@@ -70,10 +73,17 @@ assert(!architectureMigration.includes('quality_part3_skill_operation_mismatch')
 assert(!architectureMigration.includes('quality_part3_table_series_too_small'), '053 must not hard-reject AI data_form labels');
 assert(!architectureMigration.includes('quality_part3_reasoning_steps_invalid'), '053 must not hard-reject AI reasoning self-ratings');
 
-assert(architecture053.includes("rpc_ai_exam_reissue_handoff"), '053 UI must renew capability on the same request');
-assert(architecture053.includes("quality_batch_invalid") || architecture053.includes('errors'), '053 UI must understand aggregate diagnostics');
+assert(profileSync053.includes('"ai_descriptive_metadata_trusted":false'), '053 stored authority profile must distrust descriptive AI metadata');
+assert(profileSync053.includes('"quality_mix_is_advisory":true'), '053 stored authority profile must mark quality mix advisory');
+assert(profileSync053.includes('"quantitative_core_required":["operation_code","inputs"]'), '053 stored authority profile must expose reduced hard contract');
+assert(!profileSync053.includes('"quantitative_metadata_required":true'), '053 stored profile must not retain obsolete full metadata hard requirement');
+
+assert(architecture053.includes('rpc_ai_exam_reissue_handoff'), '053 UI must renew capability on the same request');
+assert(architecture053.includes('quality_batch_invalid') || architecture053.includes('errors'), '053 UI must understand aggregate diagnostics');
 assert(architecture053.includes('Sao chép toàn bộ lỗi cho AI sửa'), '053 one-pass repair UX missing');
-assert(architecture053.includes("window.aieValidateDraft = async function aieValidateDraft053"), '053 validation handler override missing');
+assert(architecture053.includes('window.aieValidateDraft = async function aieValidateDraft053'), '053 validation handler override missing');
 assert(architecture053.includes("capability_expired','capability_not_claimed','capability_unavailable"), '053 automatic capability recovery codes missing');
+assert(qualityReview053.includes('Cảnh báo chất lượng cần giáo viên xem trước khi phê duyệt'), '053 teacher-facing warning panel missing');
+assert(qualityReview053.includes('Hard gate đã qua'), '053 warning panel must distinguish advisory quality from correctness');
 
 console.log('PASS ai_geography_part3_quality_048 + recovery_049 + validation_architecture_053_simulation');
