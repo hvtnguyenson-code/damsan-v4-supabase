@@ -96,6 +96,8 @@ declare
   v_part text;
   v_idx integer := 0;
   v_stem text;
+  v_visible_text text;
+  v_visible_numeric_tokens integer;
   v_answer_raw text;
   v_answer_canonical text;
   v_quant jsonb;
@@ -161,6 +163,23 @@ begin
       v_input_count:=jsonb_array_length(v_quant->'inputs');
     else
       v_input_count:=0;
+    end if;
+
+    -- Count only text that a student can see. Numeric CSS/HTML attributes must not satisfy
+    -- the raw-data exposure requirement.
+    v_visible_text:=regexp_replace(v_stem,'<[^>]+>',' ','g');
+    select count(*)::integer
+    into v_visible_numeric_tokens
+    from regexp_matches(v_visible_text,'[-+]?[0-9]+([ .][0-9]{3})*([,.][0-9]+)?','g');
+
+    if v_input_count>0 and coalesce(v_visible_numeric_tokens,0)<v_input_count then
+      v_extra_errors:=v_extra_errors || jsonb_build_array(jsonb_build_object(
+        'question_no',v_idx,
+        'code','quality_part3_visible_data_insufficient',
+        'message','Chưa hiển thị đủ số liệu thô mà học sinh cần dùng để tính.',
+        'visible_numeric_tokens',coalesce(v_visible_numeric_tokens,0),
+        'input_count',v_input_count
+      ));
     end if;
 
     v_table_required:=v_input_count>=3;
