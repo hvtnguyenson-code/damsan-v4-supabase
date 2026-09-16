@@ -36,6 +36,7 @@ jobs:
           node --check ai_exam_copy_feedback.js
           node --check ai_exam_assessment_profile.js
           node --check ai_exam_validation_architecture_053.js
+          node --check ai_exam_part2_quality_054.js
           node --check ai_exam_quality_review_053.js
           node --check ai_exam_grade_authority.js
           node --check ai_action_feedback.js
@@ -44,6 +45,7 @@ jobs:
           node --check tests/ai_exam_copy_feedback_simulation.js
           node --check tests/ai_geography_assessment_standard_simulation.js
           node --check tests/ai_geography_part3_quality_048_simulation.js
+          node --check tests/ai_geography_part2_quality_054_simulation.js
           node --check tests/normalized_knowledge_authority_simulation.js
           node --check tests/normalized_source_subject_binding_040a_simulation.js
           node --check tests/ai_action_feedback_041a_simulation.js
@@ -115,6 +117,7 @@ jobs:
           node tests/ai_exam_copy_feedback_simulation.js
           node tests/ai_geography_assessment_standard_simulation.js
           node tests/ai_geography_part3_quality_048_simulation.js
+          node tests/ai_geography_part2_quality_054_simulation.js
           node tests/normalized_knowledge_authority_simulation.js
           node tests/normalized_source_subject_binding_040a_simulation.js
           node tests/ai_action_feedback_041a_simulation.js
