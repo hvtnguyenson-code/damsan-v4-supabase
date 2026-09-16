@@ -6,6 +6,7 @@ const teacher = fs.readFileSync(path.join(root, 'giaovien.html'), 'utf8');
 const knowledge = fs.readFileSync(path.join(root, 'knowledge.html'), 'utf8');
 const examHtml = fs.readFileSync(path.join(root, 'ai_exam.html'), 'utf8');
 const resilience = fs.readFileSync(path.join(root, 'ai_exam_resilience.js'), 'utf8');
+const validation053 = fs.readFileSync(path.join(root, 'ai_exam_validation_architecture_053.js'), 'utf8');
 
 function assert(condition, message) { if (!condition) throw new Error(message); }
 function must(source, regex, message) { assert(regex.test(source), message); }
@@ -25,13 +26,16 @@ must(knowledge, /File gốc luôn được giữ làm nguồn đối chiếu[\s\
 console.log('A031C-05..08 knowledge workflow navigation: PASSED');
 
 must(examHtml, /ai_exam_resilience\.js\?v=20260910-ai-exam-resilience-031c/, 'A031C-09 resilience script is cache-busted and loaded');
-must(examHtml, /Lỗi kiểm định được giữ lại[\s\S]*sửa JSON và gửi lại ngay[\s\S]*REJECTED chỉ xuất hiện khi giáo viên chủ động từ chối/i, 'A031C-10 049 retry/reject guidance is visible');
+must(examHtml, /Hard gate chỉ chặn lỗi có thể làm đề sai hoặc không kiểm chứng được[\s\S]*cảnh báo[\s\S]*AI_WORKING có thể được cấp lại capability tự động/i, 'A031C-10 053 hard-gate/advisory/recovery guidance is visible');
+must(validation053, /rpc_ai_exam_reissue_handoff/, 'A031C-10A 053 can renew capability for the same request');
+must(validation053, /Sao chép toàn bộ lỗi cho AI sửa/, 'A031C-10B 053 aggregates repair guidance instead of one-error-at-a-time');
 must(resilience, /const aieOpenRequest031B2 = aieOpenRequest/, 'A031C-11 existing review behavior is wrapped, not replaced blindly');
 must(resilience, /\['AWAITING_AI', 'AI_WORKING', 'FAILED'\]/, 'A031C-12 stale non-published states are recoverable');
 must(resilience, /approve\.style\.display = 'none'/, 'A031C-13 stale request cannot expose publish action');
 must(resilience, /reject\.disabled = false/, 'A031C-14 stale request exposes reject cleanup');
 must(resilience, /Thao tác từ chối không ghi hoặc thay đề trong phòng thi/, 'A031C-15 cleanup semantics are explicit');
 assert(!/rpc_ai_exam_approve_and_publish|rpc_luu_de_thi_len_phong/.test(resilience), 'A031C-16 resilience layer has no publication call');
-console.log('A031C-09..16 stale-request resilience: PASSED');
+assert(!/rpc_ai_exam_approve_and_publish|rpc_luu_de_thi_len_phong/.test(validation053), 'A031C-17 validation 053 layer has no publication call');
+console.log('A031C-09..17 stale-request resilience: PASSED');
 
 console.log('PASS: AI-AUTHORING-031C navigation and resilience structural simulation');
