@@ -1,6 +1,6 @@
 // 055 — Geography Part III presentation + compact-answer contract.
-// Tabular raw data is carried inside noi_dung as a sanitized HTML table so the existing
-// student renderer can display it without a second room-data path.
+// Quantitative data with a natural table structure is authored as semantic HTML inside noi_dung.
+// Student rendering already passes noi_dung through DOMPurify and has table CSS, so no second room path is needed.
 (function () {
   'use strict';
 
@@ -21,19 +21,19 @@
     const rules = [
       '',
       'PHẦN III — 055 BẢNG SỐ LIỆU + ĐÁP ÁN TỐI ĐA 4 KÍ TỰ:',
-      '- dap_an_dung của mỗi câu Phần III phải là CHUỖI số tối đa 4 kí tự. Dấu âm và dấu phẩy thập phân đều được tính là một kí tự.',
-      '- Dùng dấu phẩy làm dấu thập phân trong dap_an_dung. Không ghi đơn vị, dấu cách, dấu phân cách hàng nghìn hoặc dấu + trong đáp án.',
-      '- Các dạng hợp lệ điển hình: "2", "22", "222", "2222", "22,2", "2,22", "-222", "-2,2". Mọi đáp án dài hơn 4 kí tự đều không đạt.',
-      '- Nếu kết quả tính tự nhiên dài hơn 4 kí tự, phải chọn cách làm tròn/đơn vị biểu diễn hợp lí ngay trong câu hỏi để kết quả cuối cùng còn tối đa 4 kí tự. Không được cắt bớt chữ số một cách cơ học và không được làm sai giá trị.',
-      '- rounding_digits trong quantitative phải đúng với cách làm tròn đã nêu trong noi_dung và phải tạo ra đúng dap_an_dung sau khi server tính lại.',
+      '- dap_an_dung của mỗi câu Phần III là MỘT CHUỖI SỐ tối đa 4 kí tự. Dấu âm và dấu phẩy thập phân đều tính là một kí tự.',
+      '- Các dạng hợp lệ điển hình: "2", "22", "222", "2222", "22,2", "2,22", "-222", "-2,2". Không ghi đơn vị, dấu cách, dấu phân cách hàng nghìn hoặc dấu + trong dap_an_dung.',
+      '- Dùng dấu phẩy làm dấu thập phân trong dap_an_dung. Nếu kết quả tính tự nhiên dài hơn 4 kí tự, phải lựa chọn đơn vị biểu diễn và/hoặc quy tắc làm tròn hợp lí ngay trong câu hỏi để đáp án cuối cùng vẫn tối đa 4 kí tự; không được cắt chữ số cơ học.',
+      '- Nếu đổi đơn vị CHỈ Ở KẾT QUẢ để thu gọn đáp án (ví dụ người -> nghìn người, ha -> nghìn ha), thêm quantitative.result_divisor là lũy thừa của 10 dùng để chia kết quả sau phép tính. Ví dụ 12345 người -> 12,3 nghìn người: result_divisor=1000, rounding_digits=1, dap_an_dung="12,3".',
+      '- rounding_digits phải khớp yêu cầu làm tròn nêu trong noi_dung. Server sẽ tính lại từ quantitative.inputs, operation_code, result_divisor rồi đối chiếu dap_an_dung.',
       '',
       'TRÌNH BÀY SỐ LIỆU:',
-      '- Khi câu dùng từ 3 số liệu thô trở lên, hoặc dữ liệu vốn có cấu trúc theo trạm/năm/đối tượng/chỉ tiêu, PHẢI trình bày số liệu bằng bảng HTML ngay trong noi_dung; không nối một chuỗi dài bằng dấu chấm phẩy.',
-      '- Bảng bắt buộc dùng đúng marker <table data-damsan-p3="1" ...> để hệ thống nhận diện. Dùng thead/tbody, th/td; có thể có caption. Không dùng script, iframe, form hoặc phần tử tương tác.',
-      '- Mẫu hình thức: <table data-damsan-p3="1" style="border-collapse:collapse;width:100%;margin:10px 0"><thead><tr><th style="border:1px solid #94a3b8;padding:6px">...</th></tr></thead><tbody><tr><td style="border:1px solid #94a3b8;padding:6px">...</td></tr></tbody></table>.',
-      '- noi_dung nên gồm lời dẫn/yêu cầu tính toán + bảng. Không lặp lại toàn bộ số liệu của bảng thành một câu văn phía trên hoặc phía dưới.',
+      '- Khi câu dùng từ 3 số liệu thô trở lên, hoặc dữ liệu vốn có cấu trúc theo năm/trạm/đối tượng/chỉ tiêu, PHẢI trình bày số liệu bằng BẢNG trong noi_dung; không nối một chuỗi dài bằng dấu chấm phẩy.',
+      '- Bảng dùng HTML ngữ nghĩa tối giản và bắt buộc có marker <table data-damsan-p3="1">. Chỉ dùng caption, thead, tbody, tr, th, td. KHÔNG dùng style, script, iframe, form hoặc phần tử tương tác.',
+      '- Ví dụ khung: <table data-damsan-p3="1"><caption>Bảng số liệu ...</caption><thead><tr><th>Năm</th><th>2020</th><th>2024</th></tr></thead><tbody><tr><th>Giá trị</th><td>...</td><td>...</td></tr></tbody></table>.',
+      '- noi_dung gồm lời dẫn/yêu cầu tính toán + bảng. Không lặp lại toàn bộ số liệu của bảng thành câu văn phía trên hoặc phía dưới.',
       '- Với đúng 2 số liệu đơn giản và không có cấu trúc bảng tự nhiên, có thể trình bày trong câu văn thay vì ép thành bảng.',
-      '- Các số dùng trong quantitative.inputs phải xuất hiện rõ trong noi_dung/bảng mà học sinh nhìn thấy.',
+      '- Mọi giá trị dùng trong quantitative.inputs phải xuất hiện rõ trong phần văn bản hoặc các ô bảng mà học sinh nhìn thấy.',
       ''
     ].join('\n');
 
@@ -47,13 +47,14 @@
       if (!table) return '';
       const caption = table.querySelector('caption')?.textContent?.trim() || '';
       const rows = Array.from(table.querySelectorAll('tr')).map((tr) =>
-        Array.from(tr.querySelectorAll('th,td')).map((cell) => cell.textContent?.trim() || '')
+        Array.from(tr.querySelectorAll('th,td')).map((cell) => ({
+          value: cell.textContent?.trim() || '',
+          header: cell.tagName.toLowerCase() === 'th'
+        }))
       ).filter((row) => row.length);
       if (!rows.length) return '';
-      const first = rows[0];
-      const body = rows.slice(1);
       const esc = (value) => aieEscape(value);
-      return `<div style="overflow-x:auto;margin:10px 0">${caption ? `<div style="font-weight:700;text-align:center;margin-bottom:6px">${esc(caption)}</div>` : ''}<table style="border-collapse:collapse;width:100%;font-size:13px"><thead><tr>${first.map((cell) => `<th style="border:1px solid #cbd5e1;padding:6px;background:#f8fafc">${esc(cell)}</th>`).join('')}</tr></thead><tbody>${body.map((row) => `<tr>${row.map((cell) => `<td style="border:1px solid #cbd5e1;padding:6px">${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      return `<div style="overflow-x:auto;margin:10px 0">${caption ? `<div style="font-weight:700;text-align:center;margin-bottom:6px">${esc(caption)}</div>` : ''}<table style="border-collapse:collapse;width:100%;font-size:13px"><tbody>${rows.map((row) => `<tr>${row.map((cell) => cell.header ? `<th style="border:1px solid #cbd5e1;padding:6px;background:#f8fafc">${esc(cell.value)}</th>` : `<td style="border:1px solid #cbd5e1;padding:6px">${esc(cell.value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     } catch {
       return '';
     }
