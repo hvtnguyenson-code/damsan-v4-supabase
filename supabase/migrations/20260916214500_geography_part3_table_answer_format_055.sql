@@ -1,10 +1,11 @@
 begin;
 
 -- 055 — Geography Part III presentation + compact-answer standard.
--- 1) Tabular quantitative data (>=3 raw inputs) must be shown as a real table in the student-visible stem.
+-- 1) Quantitative data with >=3 raw inputs must be shown as a real student-visible table.
 -- 2) Final short answer is canonicalized to decimal comma and must fit in <=4 characters,
 --    counting a leading minus sign and decimal comma.
--- 3) Validation remains server-canonical and aggregated; no room/submission path is changed.
+-- 3) Optional result_divisor supports legitimate power-of-ten unit scaling before rounding.
+-- 4) Validation remains server-canonical and aggregated; no room/submission path is changed.
 
 create or replace function public._ai_exam_geography_standard_037()
 returns jsonb
@@ -46,6 +47,8 @@ as $$
       "answer_decimal_separator":",",
       "answer_minus_counts_as_character":true,
       "answer_decimal_separator_counts_as_character":true,
+      "result_divisor_allowed":true,
+      "result_divisor_policy":"POWER_OF_TEN_1_TO_1E9",
       "table_required_min_raw_inputs":3,
       "table_marker":"data-damsan-p3=1"
     },
@@ -66,6 +69,8 @@ set profile_version='055',
         "answer_decimal_separator":",",
         "answer_minus_counts_as_character":true,
         "answer_decimal_separator_counts_as_character":true,
+        "result_divisor_allowed":true,
+        "result_divisor_policy":"POWER_OF_TEN_1_TO_1E9",
         "table_required_min_raw_inputs":3,
         "table_marker":"data-damsan-p3=1"
       }'::jsonb,
@@ -74,7 +79,44 @@ set profile_version='055',
     updated_at=now()
 where profile_id='DIA_LI_TNTHPT_2025_PLUS_V1';
 
--- Preserve the 053 quantitative/correctness gate as a callable base, then wrap it with 055 presentation rules.
+-- Keep the 053 arithmetic engine as the base and extend it only with a final-result
+-- power-of-ten divisor. This preserves every previously supported operation.
+alter function public._ai_exam_part3_recompute_053(jsonb)
+  rename to _ai_exam_part3_recompute_053_base;
+
+revoke all on function public._ai_exam_part3_recompute_053_base(jsonb) from public, anon, authenticated;
+grant execute on function public._ai_exam_part3_recompute_053_base(jsonb) to service_role;
+
+create or replace function public._ai_exam_part3_recompute_053(p_quant jsonb)
+returns numeric
+language plpgsql
+immutable
+set search_path = public
+as $$
+declare
+  v_result numeric;
+  v_divisor numeric := 1;
+begin
+  v_result:=public._ai_exam_part3_recompute_053_base(p_quant);
+  if v_result is null then return null; end if;
+
+  if nullif(btrim(coalesce(p_quant->>'result_divisor','')),'') is not null then
+    if coalesce(p_quant->>'result_divisor','') !~ '^[0-9]+([.][0-9]+)?$' then return null; end if;
+    v_divisor:=(p_quant->>'result_divisor')::numeric;
+    if v_divisor not in (1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000) then
+      return null;
+    end if;
+  end if;
+
+  return v_result/v_divisor;
+end;
+$$;
+
+revoke all on function public._ai_exam_part3_recompute_053(jsonb) from public, anon, authenticated;
+grant execute on function public._ai_exam_part3_recompute_053(jsonb) to service_role;
+
+-- Preserve the 053 objective/correctness gate as a callable base, then wrap it with
+-- the 055 presentation and compact-answer requirements.
 alter function public._ai_exam_quality_gate_037(uuid,jsonb)
   rename to _ai_exam_quality_gate_053_base;
 
@@ -102,9 +144,16 @@ declare
   v_answer_canonical text;
   v_quant jsonb;
   v_input_count integer;
+  v_input jsonb;
+  v_input_text text;
   v_table_required boolean;
   v_table_marker boolean;
   v_table_rows integer;
+  v_table_inner text;
+  v_table_visible text;
+  v_table_normalized text;
+  v_missing_inputs integer;
+  v_divisor numeric;
   v_extra_errors jsonb := '[]'::jsonb;
   v_extra_warnings jsonb := '[]'::jsonb;
   v_errors jsonb;
@@ -165,7 +214,25 @@ begin
       v_input_count:=0;
     end if;
 
-    -- Count only text that a student can see. Numeric CSS/HTML attributes must not satisfy
+    if nullif(btrim(coalesce(v_quant->>'result_divisor','')),'') is not null then
+      if coalesce(v_quant->>'result_divisor','') !~ '^[0-9]+([.][0-9]+)?$' then
+        v_extra_errors:=v_extra_errors || jsonb_build_array(jsonb_build_object(
+          'question_no',v_idx,'code','quality_part3_result_divisor_invalid',
+          'message','result_divisor phải là lũy thừa của 10 từ 1 đến 1 000 000 000.'
+        ));
+      else
+        v_divisor:=(v_quant->>'result_divisor')::numeric;
+        if v_divisor not in (1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000) then
+          v_extra_errors:=v_extra_errors || jsonb_build_array(jsonb_build_object(
+            'question_no',v_idx,'code','quality_part3_result_divisor_invalid',
+            'message','result_divisor phải là lũy thừa của 10 từ 1 đến 1 000 000 000.',
+            'actual',v_divisor
+          ));
+        end if;
+      end if;
+    end if;
+
+    -- Count only text the student can actually see. HTML attributes cannot satisfy
     -- the raw-data exposure requirement.
     v_visible_text:=regexp_replace(v_stem,'<[^>]+>',' ','g');
     select count(*)::integer
@@ -206,8 +273,34 @@ begin
         v_extra_errors:=v_extra_errors || jsonb_build_array(jsonb_build_object(
           'question_no',v_idx,
           'code','quality_part3_table_structure_invalid',
-          'message','Bảng Phần III phải có hàng tiêu đề và dữ liệu bằng th/td.',
+          'message','Bảng Phần III phải có hàng/nhãn bằng th và dữ liệu bằng td.',
           'row_count',coalesce(v_table_rows,0)
+        ));
+      end if;
+
+      -- For table-required items, verify each raw numeric input is actually represented
+      -- in the table body. Spaces in thousands and comma/dot decimal separators are normalized.
+      v_table_inner:=substring(v_stem from '(?is)<table[^>]*data-damsan-p3="1"[^>]*>(.*?)</table>');
+      v_table_visible:=regexp_replace(coalesce(v_table_inner,''),'<[^>]+>',' ','g');
+      v_table_normalized:=replace(replace(replace(v_table_visible,' ',''),E'\n',''),',','.');
+      v_missing_inputs:=0;
+
+      if v_input_count>0 then
+        for v_input in select value from jsonb_array_elements(v_quant->'inputs') loop
+          v_input_text:=replace(btrim(v_input #>> '{}'),',','.');
+          if v_input_text='' or position(v_input_text in v_table_normalized)=0 then
+            v_missing_inputs:=v_missing_inputs+1;
+          end if;
+        end loop;
+      end if;
+
+      if v_table_required and v_missing_inputs>0 then
+        v_extra_errors:=v_extra_errors || jsonb_build_array(jsonb_build_object(
+          'question_no',v_idx,
+          'code','quality_part3_table_inputs_not_exposed',
+          'message','Bảng chưa chứa đầy đủ các số liệu thô dùng trong phép tính.',
+          'missing_input_count',v_missing_inputs,
+          'input_count',v_input_count
         ));
       end if;
     end if;
@@ -226,6 +319,7 @@ begin
       'part3_presentation',jsonb_build_object(
         'answer_max_characters',4,
         'decimal_separator',',',
+        'result_divisor_policy','POWER_OF_TEN_1_TO_1E9',
         'table_required_min_raw_inputs',3,
         'table_marker','data-damsan-p3="1"'
       ),
@@ -237,7 +331,8 @@ $$;
 revoke all on function public._ai_exam_quality_gate_037(uuid,jsonb) from public, anon, authenticated;
 grant execute on function public._ai_exam_quality_gate_037(uuid,jsonb) to service_role;
 
--- Server-canonical answer formatting. The AI may return a dot; persisted drafts/variants use comma.
+-- Server-canonical answer formatting. AI input using a decimal dot remains recoverable,
+-- but persisted Geography drafts/variants always use a decimal comma.
 create or replace function public._ai_exam_normalize_questions_055(p_questions jsonb)
 returns jsonb
 language sql
@@ -315,9 +410,18 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_standard_id text;
 begin
-  new.exam_payload:=public._ai_exam_normalize_exam_payload_055(new.exam_payload);
-  new.variants_payload:=public._ai_exam_normalize_variants_055(new.variants_payload);
+  select r.exam_spec #>> '{assessment_standard,id}'
+  into v_standard_id
+  from public.ai_exam_requests r
+  where r.id=new.request_id;
+
+  if v_standard_id='DIA_LI_TNTHPT_2025_PLUS_V1' then
+    new.exam_payload:=public._ai_exam_normalize_exam_payload_055(new.exam_payload);
+    new.variants_payload:=public._ai_exam_normalize_variants_055(new.variants_payload);
+  end if;
   return new;
 end;
 $$;
