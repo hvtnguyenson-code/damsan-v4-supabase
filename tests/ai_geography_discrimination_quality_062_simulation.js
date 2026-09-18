@@ -47,7 +47,7 @@ assert(prompt.includes('từ tuyệt đối/cực đoan'), 'anti-clue language g
 assert(prompt.includes('tạm giấu đáp án'), 'blind-answer elimination self-test missing');
 assert(prompt.includes('ít nhất hai mảnh bằng chứng/quan hệ'), 'Part I VD evidence-depth requirement missing');
 assert(prompt.includes('Phần II: nhận định TH/VD sai nên là near-miss'), 'Part II near-miss quality rule missing');
-assert(prompt.includes('không dùng cụm mâu thuẫn kiểu “tổng ... trung bình”'), 'Part III operation wording rule missing');
+assert(/không dùng cụm mâu thuẫn kiểu “tổng \.\.\. trung bình”/i.test(prompt), 'Part III operation wording rule missing');
 assert(prompt.includes('Chỉ khai báo quantitative.rounding_digits khi thực sự cần làm tròn'), 'rounding metadata/presentation alignment missing');
 assert(prompt.includes('rationale nội bộ cho từng distractor TH/VD'), 'private distractor rationale check missing');
 assert(prompt.includes('Giữ tự do sáng tạo của 060'), '062 must explicitly preserve the creative envelope');
