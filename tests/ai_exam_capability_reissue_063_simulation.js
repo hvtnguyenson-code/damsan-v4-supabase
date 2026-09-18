@@ -25,3 +25,6 @@ assert(ui.includes("['capability_expired','capability_not_claimed','capability_u
 assert(ui.includes('await renewCapability053(aieCurrentRequestId)'), 'UI must renew the currently selected request');
 
 console.log('PASS ai_exam_capability_reissue_063_simulation');
+
+// Keep the focused 064 regression in the existing AI-exam safety path.
+require('./ai_exam_rounding_warning_064_simulation.js');
