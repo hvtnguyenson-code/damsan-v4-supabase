@@ -26,6 +26,7 @@ must(knowledge, /File gốc luôn được giữ làm nguồn đối chiếu[\s\
 console.log('A031C-05..08 knowledge workflow navigation: PASSED');
 
 must(examHtml, /ai_exam_resilience\.js\?v=20260910-ai-exam-resilience-031c/, 'A031C-09 resilience script is cache-busted and loaded');
+must(examHtml, /ai_exam_validation_architecture_053\.js\?v=20260918-ai-working-open-061/, 'A031C-09A pending-request navigation fix is cache-busted and loaded');
 must(examHtml, /Hard gate chỉ chặn lỗi có thể làm đề sai hoặc không kiểm chứng được[\s\S]*cảnh báo[\s\S]*AI_WORKING có thể được cấp lại capability tự động/i, 'A031C-10 053 hard-gate/advisory/recovery guidance is visible');
 must(validation053, /rpc_ai_exam_reissue_handoff/, 'A031C-10A 053 can renew capability for the same request');
 must(validation053, /Sao chép toàn bộ lỗi cho AI sửa/, 'A031C-10B 053 aggregates repair guidance instead of one-error-at-a-time');
