@@ -1,0 +1,29 @@
+name: AI Provider Control Plane CI
+
+on:
+  pull_request:
+    paths:
+      - 'ai_provider.html'
+      - 'ai_provider.js'
+      - 'supabase/functions/ai-provider-control/**'
+      - 'supabase/migrations/*ai_provider*'
+      - 'tests/ai_provider_control_plane_065a_simulation.js'
+      - '.github/workflows/ai_provider_control_plane_ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Provider UI JavaScript syntax
+        run: node --check ai_provider.js
+      - name: Provider control plane regression
+        run: node tests/ai_provider_control_plane_065a_simulation.js
+      - name: Whitespace errors
+        run: git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
