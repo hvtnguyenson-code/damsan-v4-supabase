@@ -52,6 +52,7 @@ jobs:
           node --check tests/ai_geography_part3_presentation_055_simulation.js
           node --check tests/ai_geography_creative_envelope_060_simulation.js
           node --check tests/ai_geography_discrimination_quality_062_simulation.js
+          node --check tests/ai_exam_capability_reissue_063_simulation.js
           node --check tests/normalized_knowledge_authority_simulation.js
           node --check tests/normalized_source_subject_binding_040a_simulation.js
           node --check tests/ai_action_feedback_041a_simulation.js
@@ -127,6 +128,7 @@ jobs:
           node tests/ai_geography_part3_presentation_055_simulation.js
           node tests/ai_geography_creative_envelope_060_simulation.js
           node tests/ai_geography_discrimination_quality_062_simulation.js
+          node tests/ai_exam_capability_reissue_063_simulation.js
           node tests/normalized_knowledge_authority_simulation.js
           node tests/normalized_source_subject_binding_040a_simulation.js
           node tests/ai_action_feedback_041a_simulation.js
