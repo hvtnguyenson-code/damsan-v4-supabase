@@ -272,11 +272,45 @@
   const previousOpen053 = window.aieOpenRequest;
   window.aieOpenRequest = function aieOpenRequest053(requestId) {
     const request = Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === requestId) : null;
+    if (typeof previousOpen053 === 'function') previousOpen053(requestId);
+
     if (request && !request.draft && ['AWAITING_AI','AI_WORKING'].includes(request.status)) {
       aieCurrentRequestId = request.request_id;
       document.querySelectorAll('.request').forEach((el) => el.classList.toggle('active', el.dataset.requestId === requestId));
-      document.getElementById('reviewCard')?.classList.add('hidden');
+
       const failure = parseFailure053(request.processing_error);
+      const promptAvailable = !!document.getElementById('promptBox')?.value?.trim();
+      const meta = document.getElementById('reviewMeta');
+      const preview = document.getElementById('preview');
+      const approve = document.getElementById('btnApprove');
+      const reject = document.getElementById('btnReject');
+      const card = document.getElementById('reviewCard');
+
+      if (meta) meta.textContent = `${request.ma_phong} · ${request.status} · request đang chờ JSON từ AI`;
+      if (preview) {
+        preview.innerHTML = [
+          '<div class="question">',
+          `<h3>${aieEscape(request.status)} — chưa có draft để duyệt</h3>`,
+          promptAvailable
+            ? '<div>Prompt của request này vẫn còn ở mục 2. Tiếp tục gửi prompt cho AI, rồi dán JSON kết quả vào mục 3.</div>'
+            : '<div>Prompt không còn trong phiên trình duyệt hiện tại. Nếu đã gửi prompt cho AI, chỉ cần lấy JSON kết quả và dán vào mục 3.</div>',
+          '<div class="source">Khi bấm “Gửi kiểm định”, capability hết hạn sẽ được cấp lại tự động cho chính request này; không cần tạo request mới chỉ vì capability cũ mất.</div>',
+          failure
+            ? `<div class="source">Chẩn đoán gần nhất: ${aieEscape(failureText053(failure))}</div>`
+            : '<div class="source">Request chưa có lỗi kiểm định được ghi nhận.</div>',
+          '</div>'
+        ].join('');
+      }
+      if (approve) approve.style.display = 'none';
+      if (reject) {
+        reject.style.display = '';
+        reject.disabled = false;
+      }
+      if (card) {
+        card.classList.remove('hidden');
+        card.scrollIntoView({ behavior:'smooth', block:'start' });
+      }
+
       if (failure) {
         lastFailure053 = failure;
         const reason = failureText053(failure);
@@ -284,11 +318,13 @@
         showRepair053(!!document.getElementById('resultBox')?.value?.trim());
         aieNotice(`${request.ma_phong}: ${reason} Khi gửi lại, capability hết hạn sẽ được cấp mới tự động cho chính request này.`, 'info');
       } else {
+        document.getElementById('validationStatus').textContent = '';
+        showRepair053(false);
         aieNotice(`${request.ma_phong}: ${request.status}. Có thể tiếp tục trên chính request này.`, 'info');
       }
       return;
     }
-    if (typeof previousOpen053 === 'function') previousOpen053(requestId);
+
     setTimeout(() => {
       const selected = Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === requestId) : null;
       const warnings = selected?.draft?.validation_report?.assessment_quality?.warnings;

@@ -26,9 +26,14 @@ must(knowledge, /File gốc luôn được giữ làm nguồn đối chiếu[\s\
 console.log('A031C-05..08 knowledge workflow navigation: PASSED');
 
 must(examHtml, /ai_exam_resilience\.js\?v=20260910-ai-exam-resilience-031c/, 'A031C-09 resilience script is cache-busted and loaded');
+must(examHtml, /ai_exam_validation_architecture_053\.js\?v=20260918-ai-working-open-061/, 'A031C-09A pending-request navigation fix is cache-busted and loaded');
 must(examHtml, /Hard gate chỉ chặn lỗi có thể làm đề sai hoặc không kiểm chứng được[\s\S]*cảnh báo[\s\S]*AI_WORKING có thể được cấp lại capability tự động/i, 'A031C-10 053 hard-gate/advisory/recovery guidance is visible');
 must(validation053, /rpc_ai_exam_reissue_handoff/, 'A031C-10A 053 can renew capability for the same request');
 must(validation053, /Sao chép toàn bộ lỗi cho AI sửa/, 'A031C-10B 053 aggregates repair guidance instead of one-error-at-a-time');
+must(validation053, /if \(typeof previousOpen053 === 'function'\) previousOpen053\(requestId\);[\s\S]*if \(request && !request\.draft && \['AWAITING_AI','AI_WORKING'\]/, 'A031C-10C 053 must delegate to the resilience layer before handling pending requests');
+must(validation053, /request đang chờ JSON từ AI/, 'A031C-10D pending request click exposes a visible request detail state');
+must(validation053, /card\.classList\.remove\('hidden'\)/, 'A031C-10E pending request detail card must remain visible');
+must(validation053, /capability hết hạn sẽ được cấp lại tự động/, 'A031C-10F pending request guidance matches automatic capability reissue');
 must(resilience, /const aieOpenRequest031B2 = aieOpenRequest/, 'A031C-11 existing review behavior is wrapped, not replaced blindly');
 must(resilience, /\['AWAITING_AI', 'AI_WORKING', 'FAILED'\]/, 'A031C-12 stale non-published states are recoverable');
 must(resilience, /approve\.style\.display = 'none'/, 'A031C-13 stale request cannot expose publish action');
