@@ -33,7 +33,7 @@ assert(html.includes('OpenAI-compatible'),'065A OpenAI-compatible option missing
 assert(html.includes('Custom JSON HTTP'),'065A custom provider option missing');
 assert(html.includes('PERSONAL')&&html.includes('SCHOOL'),'065A ownership UI missing');
 assert(html.includes('type="password"'),'065A API key field must be password type');
-assert(html.includes('ai_provider.js?v=20260918-provider-control-065a'),'065A cache marker missing');
+assert(/ai_provider\.js\?v=20260918-provider-control-065[ac]/.test(html),'065A/065C provider cache marker missing');
 assert(js.includes('/functions/v1/ai-provider-control'),'065A UI must call provider control edge function');
 assert(js.includes("sessionStorage.getItem('damSan_StaffToken')"),'065A must reuse staff session boundary');
 assert(!/localStorage\.setItem\([^,]+,\s*[^)]*api/i.test(js),'065A must never store API key in localStorage');
