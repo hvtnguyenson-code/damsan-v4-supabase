@@ -20,7 +20,7 @@ assert(overlay.includes('quantitative gồm: skill_code, operation_code, data_fo
 assert(overlay.includes('SUM_DIFFERENCE_TWO_GROUPS'), 'two-series raw-data operation missing');
 assert(overlay.includes('tối đa 2 câu một bước') && overlay.includes('ít nhất 4 câu từ hai bước'), 'full-exam cognitive mix missing');
 assert(html.includes('ai_exam_assessment_profile.js?v=20260914-validation-recovery-049'), '049 prompt/recovery cache-bust marker missing from AI exam UI');
-assert(html.includes('ai_exam_validation_architecture_053.js?v=20260916-validation-architecture-053'), '053 architecture overlay missing from AI exam UI');
+assert(html.includes('ai_exam_validation_architecture_053.js?v=20260918-ai-working-open-061'), '053/061 architecture overlay missing from AI exam UI');
 assert(html.includes('ai_exam_quality_review_053.js?v=20260916-quality-review-053'), '053 quality review overlay missing from AI exam UI');
 
 const context = {
