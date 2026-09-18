@@ -1,5 +1,4 @@
 const AIP_SUPABASE_URL='https://xcervjnwlchwfqvbeahy.supabase.co';
-const AIP_SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiJ9';
 // Runtime calls use only the public anon key that is already shipped with the site. Never put provider API keys in storage.
 const AIP_PUBLIC_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJIUzI1NiIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const AIP_ENDPOINT=`${AIP_SUPABASE_URL}/functions/v1/ai-provider-control`;
