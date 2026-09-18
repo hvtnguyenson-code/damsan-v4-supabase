@@ -1,0 +1,36 @@
+name: AI Exam API Mode CI
+
+on:
+  pull_request:
+    paths:
+      - 'ai_exam.html'
+      - 'ai_exam_api_mode_065c.js'
+      - 'ai_provider.html'
+      - 'ai_provider.js'
+      - 'tests/ai_exam_api_mode_065c_simulation.js'
+      - '.github/workflows/ai_exam_api_mode_ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: JavaScript syntax
+        run: |
+          node --check ai_exam_api_mode_065c.js
+          node --check ai_provider.js
+          node --check tests/ai_exam_api_mode_065c_simulation.js
+      - name: API mode regression
+        run: node tests/ai_exam_api_mode_065c_simulation.js
+      - name: Existing provider control regression
+        run: node tests/ai_provider_control_plane_065a_simulation.js
+      - name: Whitespace errors
+        run: git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
