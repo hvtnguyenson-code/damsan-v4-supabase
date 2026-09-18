@@ -1,0 +1,27 @@
+name: AI API Generation Engine CI
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/exam-ai-orchestrator/**'
+      - 'supabase/migrations/*ai_api_generation*'
+      - 'tests/ai_api_generation_engine_065b_simulation.js'
+      - '.github/workflows/ai_api_generation_engine_ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Regression simulation
+        run: node tests/ai_api_generation_engine_065b_simulation.js
+      - name: Whitespace errors
+        run: git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
