@@ -1,132 +1,144 @@
-// 065D — simplified API execution UI. Web-AI remains the default; provider secrets stay server-side.
+// 066 — one-click AI orchestration. Provider/model routing is server-side and invisible to normal authoring.
 (() => {
-  const CONTROL_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/ai-provider-control`;
-  const ORCHESTRATOR_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-orchestrator`;
-  let providers = [];
-  let apiBusy = false;
+  const ROUTER_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-router`;
+  let autoBusy = false;
+  let manualVisible = false;
 
-  function apiSessionBody() {
+  function sessionBody() {
     const s = aieSession();
     if (!s) throw new Error('Phiên giáo viên không còn hợp lệ.');
     return { staff_token: s.token, ma_gv: s.profile.ma_gv };
   }
-  async function apiPost(endpoint, payload) {
-    const response = await fetch(endpoint, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': AIE_SUPABASE_KEY },
-      cache: 'no-store', body: JSON.stringify({ ...payload, ...apiSessionBody() })
+
+  async function routerPost(payload) {
+    const response = await fetch(ROUTER_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': AIE_SUPABASE_KEY },
+      cache: 'no-store',
+      body: JSON.stringify({ ...payload, ...sessionBody() })
     });
-    let data = null; try { data = await response.json(); } catch { data = null; }
+    let data = null;
+    try { data = await response.json(); } catch { data = null; }
     if (!response.ok || !data || data.status !== 'success') {
-      const error = new Error(data?.code || data?.message || `API AI trả mã ${response.status}.`);
-      error.code = data?.code || 'api_generation_failed'; error.detail = data; throw error;
+      const error = new Error(data?.message || data?.code || `AI router trả mã ${response.status}.`);
+      error.code = data?.code || 'ai_route_failed';
+      error.detail = data;
+      throw error;
     }
     return data;
   }
-  function currentProvider() {
-    const id = document.getElementById('apiProviderSelect')?.value || '';
-    return providers.find((p) => p.id === id) || null;
-  }
-  function renderModels() {
-    const select = document.getElementById('apiModelSelect'); if (!select) return;
-    const p = currentProvider();
-    const models = Array.isArray(p?.models) ? p.models.filter((m) => m.enabled !== false) : [];
-    select.innerHTML = models.length
-      ? models.map((m) => `<option value="${aieEscape(m.id)}">${aieEscape(m.display_name || m.model_id)}</option>`).join('')
-      : '<option value="">-- Chưa có model --</option>';
-    const state = document.getElementById('apiProviderState');
-    if (state && p) state.textContent = models.length ? `${p.display_name}: ${models.length} model sẵn sàng.` : `${p.display_name}: chưa có model. Mở “Kết nối AI” để thêm.`;
-  }
-  function renderProviders() {
-    const select = document.getElementById('apiProviderSelect'); if (!select) return;
-    const usable = providers.filter((p) => p.enabled !== false);
-    select.innerHTML = usable.length
-      ? usable.map((p) => `<option value="${aieEscape(p.id)}">${aieEscape(p.display_name)}</option>`).join('')
-      : '<option value="">-- Chưa có kết nối AI --</option>';
-    renderModels();
-  }
-  async function loadProviders() {
-    const data = await apiPost(CONTROL_ENDPOINT, { action: 'list' });
-    providers = Array.isArray(data.providers) ? data.providers : [];
-    renderProviders();
-    const state = document.getElementById('apiProviderState');
-    if (!providers.length && state) state.innerHTML = 'Chưa có kết nối. <a href="ai_provider.html">Thêm kết nối AI</a> trước.';
-  }
-  function modeChanged() {
-    const api = document.getElementById('aiExecutionMode')?.value === 'API';
-    document.getElementById('apiGenerationControls')?.classList.toggle('hidden', !api);
-    document.getElementById('provider')?.closest('.grid')?.classList.toggle('hidden', api);
-    document.getElementById('resultBox')?.classList.toggle('hidden', api);
-    document.getElementById('btnPaste')?.closest('.actions')?.classList.toggle('hidden', api);
-    if (api && !providers.length) loadProviders().catch((e) => aieNotice(e.message, 'error'));
-  }
-  function numericValue(id) {
-    const raw = document.getElementById(id)?.value?.trim(); if (!raw) return undefined;
-    const n = Number(raw); return Number.isFinite(n) ? n : undefined;
-  }
-  async function generateByApi() {
-    if (apiBusy) return;
-    const prompt = document.getElementById('promptBox')?.value || '';
-    const providerId = document.getElementById('apiProviderSelect')?.value || '';
-    const modelProfileId = document.getElementById('apiModelSelect')?.value || '';
-    if (!aieCurrentRequestId || !prompt.trim()) return aieNotice('Hãy bấm “Tạo gói ra đề AI” trước.', 'error');
-    if (!providerId || !modelProfileId) return aieNotice('Chưa có kết nối AI hoặc model khả dụng.', 'error');
-    const parameters = {};
-    const temperature = numericValue('apiTemperature'), topP = numericValue('apiTopP'), maxOutput = numericValue('apiMaxOutput');
-    const reasoning = document.getElementById('apiReasoning')?.value || '';
-    if (temperature !== undefined) parameters.temperature = temperature;
-    if (topP !== undefined) parameters.top_p = topP;
-    if (maxOutput !== undefined) parameters.max_output_tokens = maxOutput;
-    if (reasoning) parameters.reasoning_effort = reasoning;
 
-    apiBusy = true; const button = document.getElementById('btnGenerateApi'); if (button) button.disabled = true;
-    aieSetBusy(true); const status = document.getElementById('apiGenerationStatus');
-    if (status) status.textContent = 'Đang tạo đề và kiểm định tự động...';
+  function cardByHeading(prefix) {
+    return Array.from(document.querySelectorAll('section.card')).find((card) => String(card.querySelector('h2')?.textContent || '').trim().startsWith(prefix)) || null;
+  }
+
+  function setManualVisible(value) {
+    manualVisible = !!value;
+    const promptCard = cardByHeading('2. Prompt');
+    const receiveCard = cardByHeading('3. Nhận đề');
+    promptCard?.classList.toggle('hidden', !manualVisible);
+    receiveCard?.classList.toggle('hidden', !manualVisible);
+    document.getElementById('btnChatGPT')?.classList.toggle('hidden', !manualVisible);
+    document.getElementById('btnGemini')?.classList.toggle('hidden', !manualVisible);
+    const toggle = document.getElementById('btnManualAiWeb');
+    if (toggle) toggle.textContent = manualVisible ? 'Ẩn AI Web thủ công' : 'Dùng AI Web thủ công';
+  }
+
+  function setAutoStatus(text, kind = 'info') {
+    const el = document.getElementById('aieAutoStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = `authority-panel ${kind}`;
+  }
+
+  async function refreshRouteStatus() {
     try {
-      const result = await apiPost(ORCHESTRATOR_ENDPOINT, { action: 'generate_exam', request_id: aieCurrentRequestId, provider_id: providerId, model_profile_id: modelProfileId, prompt, parameters });
+      const data = await routerPost({ action: 'route_status' });
+      if (data.ready) setAutoStatus(`AI tự động đã sẵn sàng. Hệ thống sẽ tự chọn model, tự kiểm định và tự thử model khác khi cần.`, 'ok');
+      else setAutoStatus('Chưa có kết nối AI khả dụng. Cấu hình một lần ở “Cấu hình AI”, sau đó việc ra đề chỉ cần một nút.', 'warn');
+      return !!data.ready;
+    } catch (error) {
+      setAutoStatus(`Chưa kiểm tra được AI tự động: ${error.code || error.message}`, 'warn');
+      return false;
+    }
+  }
+
+  async function generateOneClick() {
+    if (autoBusy) return;
+    autoBusy = true;
+    const button = document.getElementById('btnCreate');
+    if (button) button.disabled = true;
+    setAutoStatus('Đang chuẩn bị phạm vi kiến thức và tiêu chuẩn đề...', 'info');
+    try {
+      await aieCreatePackage();
+      const prompt = document.getElementById('promptBox')?.value || '';
+      if (!aieCurrentRequestId || !prompt.trim()) return;
+
+      aieSetBusy(true);
+      setAutoStatus('Đang tạo đề bằng AI → kiểm định → tự sửa hoặc đổi model nếu cần...', 'info');
+      const result = await routerPost({
+        action: 'generate_exam_auto',
+        request_id: aieCurrentRequestId,
+        prompt
+      });
       aieCapability = '';
-      if (status) status.textContent = `ĐÃ KIỂM ĐỊNH · ${result.model} · revision ${result.revision}`;
-      document.getElementById('validationStatus').textContent = `API VALIDATED · revision ${result.revision}`;
-      aieNotice('Đề đã được AI tạo và server kiểm định. Kiểm tra ở bước duyệt trước khi đưa lên phòng.', 'ok');
+      document.getElementById('validationStatus').textContent = `AI VALIDATED · revision ${result.revision}`;
+      setAutoStatus(`Đề đã vượt kiểm định · ${result.route_attempts || 1} lượt AI · revision ${result.revision}.`, 'ok');
+      aieNotice('Đề đã sẵn sàng để duyệt. Kiểm tra nội dung rồi phê duyệt để đưa lên phòng.', 'ok');
       await aieLoadRequests(result.request_id);
     } catch (error) {
-      const detail = error.detail?.validation; const qualityCode = detail?.code || detail?.quality?.code || '';
-      if (status) status.textContent = `CHƯA ĐẠT · ${qualityCode || error.code || error.message}`;
-      aieNotice('Đề chưa vượt kiểm định. Có thể tạo lại bằng cùng model hoặc đổi model.', 'error');
-      await aieLoadRequests(aieCurrentRequestId);
-    } finally { apiBusy = false; aieSetBusy(false); if (button) button.disabled = false; }
+      const failures = Array.isArray(error.detail?.failures) ? error.detail.failures : [];
+      const suffix = failures.length ? ` (${failures.map((x) => x.code).slice(0,3).join(', ')})` : '';
+      setAutoStatus(`AI chưa tạo được đề hợp lệ: ${error.code || error.message}${suffix}`, 'error');
+      aieNotice('Hệ thống đã tự thử các model khả dụng nhưng chưa có đề vượt kiểm định. Request được giữ nguyên để có thể thử lại.', 'error');
+      if (aieCurrentRequestId) await aieLoadRequests(aieCurrentRequestId);
+    } finally {
+      autoBusy = false;
+      aieSetBusy(false);
+      if (button) button.disabled = false;
+    }
   }
+
+  async function createWebPackageOnly() {
+    if (autoBusy) return;
+    setManualVisible(true);
+    await aieCreatePackage();
+  }
+
   function mount() {
-    const resultBox = document.getElementById('resultBox'); const section = resultBox?.closest('.card');
-    if (!section || document.getElementById('aieApiModePanel')) return;
-    const panel = document.createElement('div'); panel.id = 'aieApiModePanel';
-    panel.innerHTML = `
-      <div class="grid" style="margin:10px 0 12px">
-        <div class="field"><label for="aiExecutionMode">Cách tạo đề</label><select id="aiExecutionMode"><option value="WEB">Dùng AI Web như hiện tại</option><option value="API">Tạo tự động bằng API</option></select></div>
-        <div class="field"><label>Kết nối AI</label><a class="secondary" style="display:inline-block;text-decoration:none;padding:10px 14px;border-radius:7px" href="ai_provider.html">Thiết lập kết nối</a></div>
-      </div>
-      <div id="apiGenerationControls" class="hidden authority-panel info">
-        <div class="grid">
-          <div class="field"><label for="apiProviderSelect">Kết nối</label><select id="apiProviderSelect"><option value="">Đang tải...</option></select></div>
-          <div class="field"><label for="apiModelSelect">Model</label><select id="apiModelSelect"><option value="">-- Chọn kết nối trước --</option></select></div>
-        </div>
-        <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Tùy chọn nâng cao — có thể bỏ qua</summary>
-          <div class="grid4" style="margin-top:10px">
-            <div class="field"><label for="apiReasoning">Reasoning</label><select id="apiReasoning"><option value="">Mặc định</option><option value="minimal">minimal</option><option value="low">low</option><option value="medium">medium</option><option value="high">high</option><option value="xhigh">xhigh</option></select></div>
-            <div class="field"><label for="apiTemperature">Temperature</label><input id="apiTemperature" type="number" min="0" max="2" step="0.1" placeholder="Auto"></div>
-            <div class="field"><label for="apiTopP">Top P</label><input id="apiTopP" type="number" min="0" max="1" step="0.05" placeholder="Auto"></div>
-            <div class="field"><label for="apiMaxOutput">Max output</label><input id="apiMaxOutput" type="number" min="512" max="65536" step="256" placeholder="Auto"></div>
-          </div>
-        </details>
-        <div id="apiProviderState" class="statusline"></div>
-        <div class="actions"><button id="btnGenerateApi" class="primary">TẠO ĐỀ</button><button id="btnReloadApiProviders" class="secondary">Làm mới kết nối</button></div>
-        <div id="apiGenerationStatus" class="statusline"></div>
+    const original = document.getElementById('btnCreate');
+    if (!original || document.getElementById('aieAutoControls')) return;
+
+    // ai_exam.js attached its historical package-only listener first. Replacing the node removes
+    // that listener while preserving the stable element id used by the rest of the page.
+    const button = original.cloneNode(true);
+    button.textContent = 'TẠO ĐỀ BẰNG AI';
+    original.replaceWith(button);
+    button.addEventListener('click', generateOneClick);
+
+    document.getElementById('btnChatGPT')?.classList.add('hidden');
+    document.getElementById('btnGemini')?.classList.add('hidden');
+    setManualVisible(false);
+
+    const controls = document.createElement('div');
+    controls.id = 'aieAutoControls';
+    controls.innerHTML = `
+      <div id="aieAutoStatus" class="authority-panel info">Đang kiểm tra AI tự động...</div>
+      <div class="actions" style="margin-top:8px">
+        <button id="btnManualAiWeb" class="secondary" type="button">Dùng AI Web thủ công</button>
+        <button id="btnCreateWebPackage" class="secondary hidden" type="button">Tạo gói cho AI Web</button>
+        <a href="ai_provider.html" class="secondary" style="display:inline-block;text-decoration:none;padding:10px 14px;border-radius:7px">Cấu hình AI</a>
       </div>`;
-    section.querySelector('h2')?.insertAdjacentElement('afterend', panel);
-    document.getElementById('aiExecutionMode')?.addEventListener('change', modeChanged);
-    document.getElementById('apiProviderSelect')?.addEventListener('change', renderModels);
-    document.getElementById('btnReloadApiProviders')?.addEventListener('click', () => loadProviders().catch((e) => aieNotice(e.message, 'error')));
-    document.getElementById('btnGenerateApi')?.addEventListener('click', generateByApi);
-    modeChanged();
+    document.getElementById('generationStatus')?.insertAdjacentElement('afterend', controls);
+
+    document.getElementById('btnManualAiWeb')?.addEventListener('click', () => {
+      setManualVisible(!manualVisible);
+      document.getElementById('btnCreateWebPackage')?.classList.toggle('hidden', !manualVisible);
+    });
+    document.getElementById('btnCreateWebPackage')?.addEventListener('click', createWebPackageOnly);
+    refreshRouteStatus();
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
 })();
