@@ -28,14 +28,16 @@ assert(edge.includes('discovery_mode')&&edge.includes('MANUAL'),'065A manual mod
 assert(edge.includes('save_model')&&edge.includes('test_provider'),'065A model/test actions missing');
 assert(!edge.includes('localStorage.setItem'),'Edge function must never persist secrets client-side');
 
-assert(html.includes('Kết nối AI API'),'065A provider UI missing');
-assert(html.includes('OpenAI-compatible'),'065A OpenAI-compatible option missing');
-assert(html.includes('Custom JSON HTTP'),'065A custom provider option missing');
-assert(html.includes('PERSONAL')&&html.includes('SCHOOL'),'065A ownership UI missing');
+assert(html.includes('Kết nối AI'),'065D provider UI missing');
+assert(html.includes('API trung gian / OpenAI-compatible'),'065D simple intermediary preset missing');
+assert(html.includes('Google Gemini')&&html.includes('Anthropic Claude'),'065D provider presets incomplete');
+assert(html.includes('id="btnQuickConnect"'),'065D one-click save/test action missing');
+assert(html.includes('id="advancedProviderSettings"'),'065D advanced configuration must remain available but collapsed');
 assert(html.includes('type="password"'),'065A API key field must be password type');
-assert(/ai_provider\.js\?v=20260918-provider-control-065[ac]/.test(html),'065A/065C provider cache marker missing');
+assert(/ai_provider\.js\?v=20260919-provider-simple-065d/.test(html),'065D provider cache marker missing');
 assert(js.includes('/functions/v1/ai-provider-control'),'065A UI must call provider control edge function');
 assert(js.includes("sessionStorage.getItem('damSan_StaffToken')"),'065A must reuse staff session boundary');
+assert(js.includes('quickConnect')&&js.includes('applyPreset'),'065D guided setup logic missing');
 assert(!/localStorage\.setItem\([^,]+,\s*[^)]*api/i.test(js),'065A must never store API key in localStorage');
 assert(!/sessionStorage\.setItem\([^,]+,\s*[^)]*api/i.test(js),'065A must never store API key in sessionStorage');
 assert(js.includes("document.getElementById('apiKey').value=''"),'065A UI must clear plaintext key after save');
