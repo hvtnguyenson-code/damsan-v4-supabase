@@ -1,4 +1,4 @@
-// 067 — one-click AI orchestration without nested long-running Edge workers.
+// 067A — one-click AI routing with one Edge worker per generation attempt.
 (() => {
   const ROUTER_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-router`;
   const ORCHESTRATOR_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-orchestrator`;
@@ -165,7 +165,7 @@
         setAutoStatus(`Đang tạo và kiểm định đề · lượt ${attemptNo}...`, 'info');
         try {
           const result = await orchestratorPost({
-            action: 'generate_exam_stream',
+            action: 'generate_exam',
             request_id: requestId,
             provider_id: candidate.provider_id,
             model_profile_id: candidate.model_profile_id,
@@ -236,8 +236,6 @@
 
     mountTargetClass();
 
-    // ai_exam.js attached its historical package-only listener first. Replacing the node removes
-    // that listener while preserving the stable element id used by the rest of the page.
     const button = original.cloneNode(true);
     button.textContent = 'TẠO ĐỀ BẰNG AI';
     original.replaceWith(button);
