@@ -1,43 +1,44 @@
 const fs=require('fs');
 const html=fs.readFileSync('ai_exam.html','utf8');
 const api=fs.readFileSync('ai_exam_api_mode_065c.js','utf8');
+const router=fs.readFileSync('supabase/functions/exam-ai-router/index.ts','utf8');
 const providerHtml=fs.readFileSync('ai_provider.html','utf8');
 const providerJs=fs.readFileSync('ai_provider.js','utf8');
 function must(v,msg){if(!v)throw new Error(msg);}
 
-// Existing Web-AI path remains present and API stays an explicit opt-in.
-must(/id="provider"/.test(html)&&/CHATGPT_WEB/.test(html)&&/id="resultBox"/.test(html),'065D-01 Web-AI input path must remain intact');
-must(/<option value="WEB">Dùng AI Web như hiện tại/.test(api)&&/<option value="API">Tạo tự động bằng API/.test(api),'065D-02 simplified execution selector missing');
-must(/id="aiExecutionMode"/.test(api),'065D-03 Web/API mode control missing');
-must(/ai_exam_api_mode_065c\.js\?v=20260918-api-mode-065c/.test(html),'065D-04 API overlay include missing');
-must(html.indexOf('ai_exam_discrimination_quality_062.js')<html.indexOf('ai_exam_api_mode_065c.js'),'065D-05 API mode must consume final 060/062 prompt contract');
+// 066 keeps the established authoring/validation pipeline but removes provider/model decisions from normal exam authoring.
+must(/id="provider"/.test(html)&&/CHATGPT_WEB/.test(html)&&/id="resultBox"/.test(html),'066-01 Web-AI fallback path must remain intact');
+must(/TẠO ĐỀ BẰNG AI/.test(api),'066-02 one-click primary action missing');
+must(/cloneNode\(true\)/.test(api)&&/original\.replaceWith\(button\)/.test(api),'066-03 one-click overlay must replace historical package-only click listener');
+must(/await aieCreatePackage\(\)/.test(api),'066-04 one click must still use canonical Knowledge Pack/prompt construction');
+must(/action:\s*'generate_exam_auto'/.test(api),'066-05 one click must call automatic route action');
+must(/\/functions\/v1\/exam-ai-router/.test(api),'066-06 automatic router endpoint missing');
+must(/aieLoadRequests\(result\.request_id\)/.test(api),'066-07 validated draft must return to existing teacher review UI');
+must(/aieCapability\s*=\s*''/.test(api),'066-08 browser handoff capability must be cleared after server validation');
 
-// API generation sends the exact prompt already built by the existing authoring contract.
-must(/document\.getElementById\('promptBox'\)\?\.value/.test(api),'065D-06 API must use current canonical promptBox');
-must(/request_id:\s*aieCurrentRequestId/.test(api),'065D-07 API generation must stay on current exam request');
-must(/action:\s*'generate_exam'/.test(api),'065D-08 orchestrator action missing');
-must(/\/functions\/v1\/exam-ai-orchestrator/.test(api),'065D-09 orchestrator endpoint missing');
-must(/\/functions\/v1\/ai-provider-control/.test(api),'065D-10 provider registry endpoint missing');
-must(/aieLoadRequests\(result\.request_id\)/.test(api),'065D-11 validated API draft must return to existing review UI');
-must(/aieCapability\s*=\s*''/.test(api),'065D-12 browser handoff capability is cleared after API validation');
+// Provider/model/tuning selection no longer belongs in the normal teacher workflow.
+must(!/apiProviderSelect|apiModelSelect|apiReasoning|apiTemperature|apiTopP|apiMaxOutput/.test(api),'066-09 normal authoring UI must not expose provider/model/tuning controls');
+must(/Dùng AI Web thủ công/.test(api)&&/Tạo gói cho AI Web/.test(api),'066-10 manual Web-AI fallback must remain available but secondary');
+must(/cardByHeading\('2\. Prompt'\)/.test(api)&&/cardByHeading\('3\. Nhận đề'\)/.test(api),'066-11 manual prompt/result cards must be hidden from primary workflow');
+must(!/api_key\s*:/.test(api),'066-12 exam UI must never accept provider API keys');
+must(!/localStorage\.setItem|sessionStorage\.setItem/.test(api),'066-13 API overlay must not persist credentials or prompt state');
 
-// Simple path exposes only connection + model; tuning remains inside collapsed advanced details.
-must(/apiProviderSelect/.test(api)&&/apiModelSelect/.test(api),'065D-13 dynamic provider/model selectors missing');
-must(/<details[^>]*>/.test(api)&&/Tùy chọn nâng cao — có thể bỏ qua/.test(api),'065D-14 tuning controls must be collapsed');
-must(/apiReasoning/.test(api)&&/apiTemperature/.test(api)&&/apiTopP/.test(api)&&/apiMaxOutput/.test(api),'065D-15 advanced model parameters must remain available');
-must(/id=\"btnGenerateApi\" class=\"primary\">TẠO ĐỀ</.test(api),'065D-16 simplified primary action missing');
-must(!/api_key\s*:/.test(api),'065D-17 exam API overlay must never accept provider API key');
-must(!/localStorage\.setItem|sessionStorage\.setItem/.test(api),'065D-18 API overlay must not persist credentials or prompt state');
+// Router automatically discovers readable provider/model candidates and performs retry/fallback through the existing 065B orchestrator.
+must(/async function routeCandidates/.test(router),'066-14 route discovery missing');
+must(/owner_scope===\"PERSONAL\"/.test(router)&&/owner_scope===\"SCHOOL\"/.test(router)&&/owner_scope===\"SYSTEM\"/.test(router),'066-15 route visibility scopes missing');
+must(/last_test_status===\"OK\"/.test(router),'066-16 verified connections should receive routing preference');
+must(/MAX_ROUTE_CANDIDATES\s*=\s*6/.test(router)&&/MAX_ROUTE_ATTEMPTS\s*=\s*10/.test(router),'066-17 bounded fallback limits missing');
+must(/for\(const candidate of candidates\)/.test(router)&&/localAttempt<2/.test(router),'066-18 retry/fallback loop missing');
+must(/repairPrompt/.test(router)&&/LẦN TẠO TRƯỚC CHƯA VƯỢT KIỂM ĐỊNH SERVER/.test(router),'066-19 automatic repair prompt missing');
+must(/\/functions\/v1\/exam-ai-orchestrator/.test(router)&&/action:\"generate_exam\"/.test(router),'066-20 router must reuse the existing audited generation engine');
+must(/action===\"route_status\"/.test(router)&&/action===\"generate_exam_auto\"/.test(router),'066-21 router actions missing');
+must(!/_ai_provider_vault_read_065a|providerSecret/.test(router),'066-22 router must not read provider secrets directly');
 
-// Provider setup is guided by presets while retaining advanced custom support.
-must(/id="quickPreset"/.test(providerHtml)&&/id="btnQuickConnect"/.test(providerHtml),'065D-19 guided provider setup missing');
-must(/API trung gian \/ OpenAI-compatible/.test(providerHtml),'065D-20 intermediary preset missing');
-must(/id="advancedProviderSettings"/.test(providerHtml),'065D-21 advanced provider settings must remain available');
-must(/id="providerOptions"/.test(providerHtml)&&/id="modelCapabilities"/.test(providerHtml)&&/id="modelParameters"/.test(providerHtml),'065D-22 advanced provider/model mappings missing');
-must(/provider_options:parseObjectField\('providerOptions'/.test(providerJs),'065D-23 provider options are persisted through control plane');
-must(/capabilities:parseObjectField\('modelCapabilities'/.test(providerJs),'065D-24 model capabilities are persisted');
-must(/default_parameters:parseObjectField\('modelParameters'/.test(providerJs),'065D-25 model default parameters are persisted');
-must(!/localStorage\.setItem\([^\n]*(apiKey|api_key)|sessionStorage\.setItem\([^\n]*(apiKey|api_key)/i.test(providerJs),'065D-26 provider key must never be written to browser storage');
-must(/type="password"/.test(providerHtml),'065D-27 provider key UI must remain write-only');
+// Provider setup remains a one-time admin/power-user concern; key stays write-only.
+must(/id="quickPreset"/.test(providerHtml)&&/id="btnQuickConnect"/.test(providerHtml),'066-23 guided provider setup missing');
+must(/API trung gian \/ OpenAI-compatible/.test(providerHtml),'066-24 intermediary preset missing');
+must(/id="advancedProviderSettings"/.test(providerHtml),'066-25 advanced provider settings must remain available');
+must(!/localStorage\.setItem\([^\n]*(apiKey|api_key)|sessionStorage\.setItem\([^\n]*(apiKey|api_key)/i.test(providerJs),'066-26 provider key must never be written to browser storage');
+must(/type="password"/.test(providerHtml),'066-27 provider key UI must remain write-only');
 
-console.log('PASS ai_exam_api_mode_065d_simulation');
+console.log('PASS ai_exam_one_click_066_simulation');
