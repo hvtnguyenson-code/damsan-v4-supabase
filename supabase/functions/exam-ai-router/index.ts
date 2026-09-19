@@ -51,6 +51,12 @@ async function routeCandidates(actor:Actor):Promise<RouteCandidate[]>{
   return (mRes.data||[]).map((m)=>{const p=byId.get(m.provider_connection_id);return p?{provider:p,model:m as Obj,score:routeScore(p,m as Obj)}:null;}).filter(Boolean).sort((a,b)=>a!.score-b!.score||String(a!.model.created_at||"").localeCompare(String(b!.model.created_at||""))).slice(0,MAX_ROUTE_CANDIDATES) as RouteCandidate[];
 }
 
+function publicCandidate(candidate:RouteCandidate){return{provider_id:s(candidate.provider.id,80),model_profile_id:s(candidate.model.id,80)};}
+async function routeStatus(req:Request,actor:Actor){const candidates=await routeCandidates(actor);return json(req,200,{status:"success",action:"route_status",ready:candidates.length>0,candidate_count:candidates.length});}
+async function routePlan(req:Request,actor:Actor){const candidates=await routeCandidates(actor);if(!candidates.length)return json(req,409,{status:"error",code:"ai_route_unavailable",message:"Chưa có kết nối AI/model khả dụng."});return json(req,200,{status:"success",action:"route_plan",candidate_count:candidates.length,candidates:candidates.map(publicCandidate)});}
+
+// Compatibility path for cached clients from 066. New clients use route_plan and invoke one
+// orchestrator worker per attempt so a long provider call does not consume two nested workers.
 async function callOrchestrator(body:Obj){
   const res=await fetch(ORCHESTRATOR_URL,{method:"POST",headers:{"Content-Type":"application/json","apikey":SERVICE_ROLE_KEY},cache:"no-store",redirect:"manual",body:JSON.stringify(body)});
   let data:Obj={};try{data=obj(await res.json());}catch{data={};}
@@ -58,9 +64,7 @@ async function callOrchestrator(body:Obj){
 }
 function safeValidationMessage(data:Obj){const x=obj(data.validation);let raw="";try{raw=JSON.stringify(x);}catch{raw="";}return raw.slice(0,6000);}
 function repairPrompt(prompt:string,data:Obj){const code=s(data.code,200)||"validation_failed",detail=safeValidationMessage(data);return `${prompt}\n\n---\nLẦN TẠO TRƯỚC CHƯA VƯỢT KIỂM ĐỊNH SERVER.\nMã lỗi: ${code}\n${detail?`Chi tiết kiểm định: ${detail}\n`:""}Hãy tạo lại TOÀN BỘ đề, sửa triệt để các lỗi trên nhưng vẫn tuân thủ nguyên vẹn ASSESSMENT AUTHORITY, KNOWLEDGE PACKAGE, source_refs và DAMSAN_EXAM_V1. Chỉ trả về một JSON object hoàn chỉnh.`;}
-function shouldRepair(data:Obj){const code=s(data.code,200);return !code.startsWith("provider_")&&!code.startsWith("staff_")&&!code.startsWith("request_forbidden")&&!code.startsWith("provider_forbidden");}
-
-async function routeStatus(req:Request,actor:Actor){const candidates=await routeCandidates(actor);return json(req,200,{status:"success",action:"route_status",ready:candidates.length>0,candidate_count:candidates.length});}
+function shouldRepair(data:Obj){const code=s(data.code,200);if(/^WORKER_|^worker_|^orchestrator_http_|^provider_|^staff_|^generation_|^handoff_|^provider_or_model_invalid$|^model_not_found$/.test(code))return false;return !code.startsWith("request_forbidden")&&!code.startsWith("provider_forbidden");}
 
 async function generateAuto(req:Request,actor:Actor,body:Obj){
   const requestId=s(body.request_id,80),prompt=typeof body.prompt==="string"?body.prompt.trim():"";
@@ -84,4 +88,4 @@ async function generateAuto(req:Request,actor:Actor,body:Obj){
 }
 
 function clientStatus(code:string){if(code.includes("staff_session"))return 401;if(code.includes("forbidden"))return 403;if(code.includes("not_found"))return 404;if(code.startsWith("request_")||code.startsWith("prompt_"))return 400;return 500;}
-Deno.serve(async(req:Request)=>{if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});if(req.method!=="POST")return json(req,405,{status:"error",code:"method_not_allowed"});try{const body=obj(await req.json()),actor=await requireStaff(body),action=s(body.action,80);if(action==="route_status")return await routeStatus(req,actor);if(action==="generate_exam_auto")return await generateAuto(req,actor,body);return json(req,400,{status:"error",code:"action_invalid"});}catch(e){const code=e instanceof Error?e.message:"ai_router_failed";if(clientStatus(code)>=500)console.error("exam-ai-router",e);return json(req,clientStatus(code),{status:"error",code,message:code});}});
+Deno.serve(async(req:Request)=>{if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});if(req.method!=="POST")return json(req,405,{status:"error",code:"method_not_allowed"});try{const body=obj(await req.json()),actor=await requireStaff(body),action=s(body.action,80);if(action==="route_status")return await routeStatus(req,actor);if(action==="route_plan")return await routePlan(req,actor);if(action==="generate_exam_auto")return await generateAuto(req,actor,body);return json(req,400,{status:"error",code:"action_invalid"});}catch(e){const code=e instanceof Error?e.message:"ai_router_failed";if(clientStatus(code)>=500)console.error("exam-ai-router",e);return json(req,clientStatus(code),{status:"error",code,message:code});}});

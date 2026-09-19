@@ -8,6 +8,7 @@ on:
       - 'ai_provider.html'
       - 'ai_provider.js'
       - 'supabase/functions/exam-ai-router/**'
+      - 'supabase/functions/exam-ai-orchestrator/**'
       - 'tests/ai_exam_api_mode_065c_simulation.js'
       - '.github/workflows/ai_exam_api_mode_ci.yml'
 
