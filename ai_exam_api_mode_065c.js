@@ -1,8 +1,8 @@
-// 067A — one-click AI routing with one Edge worker per generation attempt.
+// 068 — one-click AI generation split into bounded fragments so no provider call must outlive Edge limits.
 (() => {
   const ROUTER_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-router`;
-  const ORCHESTRATOR_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-orchestrator`;
-  const MAX_AUTO_ATTEMPTS = 10;
+  const FRAGMENT_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-fragment`;
+  const PART_CHUNK_SIZE = { 1: 6, 2: 2, 3: 3 };
   let autoBusy = false;
   let manualVisible = false;
 
@@ -27,7 +27,7 @@
       data = null;
     }
     if (!response.ok || !data || data.status !== 'success') {
-      const platformCode = response.status === 546 ? 'WORKER_RESOURCE_LIMIT' : '';
+      const platformCode = response.status === 546 ? 'WORKER_RESOURCE_LIMIT' : (response.status === 504 ? 'IDLE_TIMEOUT' : '');
       const error = new Error(data?.message || data?.code || platformCode || `${fallbackCode} trả mã ${response.status}.`);
       error.code = data?.code || platformCode || fallbackCode;
       error.detail = data || { status: 'error', code: error.code, http_status: response.status };
@@ -40,8 +40,8 @@
     return postJson(ROUTER_ENDPOINT, payload, 'ai_route_failed');
   }
 
-  function orchestratorPost(payload) {
-    return postJson(ORCHESTRATOR_ENDPOINT, payload, 'api_generation_failed');
+  function fragmentPost(payload) {
+    return postJson(FRAGMENT_ENDPOINT, payload, 'ai_fragment_failed');
   }
 
   function cardByHeading(prefix) {
@@ -116,28 +116,10 @@
     }
   }
 
-  function safeValidationMessage(detail) {
-    const validation = detail && typeof detail.validation === 'object' ? detail.validation : null;
-    if (!validation) return '';
-    try { return JSON.stringify(validation).slice(0, 6000); } catch { return ''; }
-  }
-
-  function repairPrompt(prompt, detail, code) {
-    const validation = safeValidationMessage(detail);
-    return `${prompt}\n\n---\nLẦN TẠO TRƯỚC CHƯA VƯỢT KIỂM ĐỊNH SERVER.\nMã lỗi: ${code || 'validation_failed'}\n${validation ? `Chi tiết kiểm định: ${validation}\n` : ''}Hãy tạo lại TOÀN BỘ đề, sửa triệt để các lỗi trên nhưng vẫn tuân thủ nguyên vẹn ASSESSMENT AUTHORITY, KNOWLEDGE PACKAGE, source_refs và DAMSAN_EXAM_V1. Chỉ trả về một JSON object hoàn chỉnh.`;
-  }
-
-  function shouldRepair(code) {
-    const value = String(code || '');
-    if (/^WORKER_|^worker_|^provider_|^staff_|^generation_|^handoff_|^orchestrator_http_|^api_generation_failed$|^provider_or_model_invalid$|^model_not_found$/.test(value)) return false;
-    if (value.startsWith('request_forbidden') || value.startsWith('provider_forbidden')) return false;
-    return true;
-  }
-
   async function refreshRouteStatus() {
     try {
       const data = await routerPost({ action: 'route_status' });
-      if (data.ready) setAutoStatus('AI tự động đã sẵn sàng. Hệ thống sẽ tự chọn model, tự kiểm định và tự thử model khác khi cần.', 'ok');
+      if (data.ready) setAutoStatus('AI tự động đã sẵn sàng. Đề lớn sẽ được tạo theo các phân đoạn ngắn rồi kiểm định toàn bộ một lần.', 'ok');
       else setAutoStatus('Chưa có kết nối AI khả dụng. Cấu hình một lần ở “Cấu hình AI”, sau đó việc ra đề chỉ cần một nút.', 'warn');
       return !!data.ready;
     } catch (error) {
@@ -146,50 +128,130 @@
     }
   }
 
-  async function generateAutomatically(requestId, prompt) {
-    const plan = await routerPost({ action: 'route_plan' });
-    const candidates = Array.isArray(plan.candidates) ? plan.candidates : [];
+  function chunkPlan(spec) {
+    const counts = spec?.counts || {};
+    const plan = [];
+    let globalStart = 1;
+    for (const part of [1, 2, 3]) {
+      let remaining = Math.max(0, Number(counts[`p${part}`]) || 0);
+      let partOffset = 0;
+      const size = PART_CHUNK_SIZE[part];
+      while (remaining > 0) {
+        const count = Math.min(size, remaining);
+        const start = globalStart + partOffset;
+        const end = start + count - 1;
+        plan.push({ part, count, start, end, key: `P${part}_${start}_${end}` });
+        remaining -= count;
+        partOffset += count;
+      }
+      globalStart += Math.max(0, Number(counts[`p${part}`]) || 0);
+    }
+    return plan;
+  }
+
+  function avoidSummary(questions) {
+    return questions.slice(-24).map((q) => ({
+      phan: Number(q?.phan || 0),
+      noi_dung: String(q?.noi_dung || '').replace(/\s+/g, ' ').slice(0, 220),
+      source_refs: Array.isArray(q?.source_refs) ? q.source_refs.slice(0, 4) : [],
+      operation_code: q?.quantitative?.operation_code || ''
+    }));
+  }
+
+  function fragmentPrompt(basePrompt, chunk, previousQuestions) {
+    const avoid = avoidSummary(previousQuestions);
+    const partNotes = chunk.part === 1
+      ? 'Phần I: mỗi câu có A/B/C/D và đúng một dap_an_dung A/B/C/D; phương án nhiễu phải cạnh tranh, đồng dạng và không tự lộ đáp án.'
+      : chunk.part === 2
+        ? 'Phần II: mỗi question là MỘT cụm gồm đúng bốn nhận định A/B/C/D; giữ statement_levels và statement_reasoning theo hợp đồng hiện có.'
+        : 'Phần III: mỗi question là trả lời ngắn; A/B/C/D rỗng; quantitative phải đủ để server tự tính lại đáp án và số liệu phải hiện trong noi_dung.';
+    return `${basePrompt}\n\n---\nCHẾ ĐỘ TẠO PHÂN ĐOẠN 068 — CHỈ THỊ CUỐI CÙNG NÀY GHI ĐÈ YÊU CẦU TẠO TOÀN BỘ ĐỀ, NHƯNG KHÔNG GHI ĐÈ CÁC RÀNG BUỘC KIẾN THỨC/CHẤT LƯỢNG.\n- Chỉ tạo chính xác ${chunk.count} question thuộc Phần ${chunk.part}, tương ứng vị trí toàn đề ${chunk.start}-${chunk.end}.\n- Tất cả question phải có phan=${chunk.part}.\n- Chỉ trả DUY NHẤT JSON object dạng {\"questions\":[...]}; không title, không schema_version, không scoring_config, không Markdown.\n- Vẫn phải tuân thủ toàn bộ KNOWLEDGE PACKAGE, source_refs, muc_do, bai_hoc, cấu trúc và tiêu chuẩn khảo thí trong prompt gốc.\n- Không lặp lại câu hỏi/ý tưởng đã tạo ở các phân đoạn trước.\n- ${partNotes}\n- Với các yêu cầu phân bố chất lượng áp dụng cho toàn phần, hãy làm phân đoạn này đóng góp cân đối và tránh dồn một kiểu thao tác/nguồn.\n\nDẤU VẾT CÁC CÂU ĐÃ TẠO TRƯỚC (chỉ để tránh lặp, không phải nguồn kiến thức):\n${JSON.stringify(avoid)}\n`;
+  }
+
+  function outputLimitFor(chunk) {
+    if (chunk.part === 1) return 5200;
+    if (chunk.part === 2) return 5200;
+    return 4200;
+  }
+
+  async function generateOneFragment(requestId, basePrompt, chunk, previousQuestions, candidates) {
+    const failures = [];
+    for (const candidate of candidates) {
+      const prompt = fragmentPrompt(basePrompt, chunk, previousQuestions);
+      setAutoStatus(`Đang tạo ${chunk.key} · ${chunk.count} câu...`, 'info');
+      try {
+        const result = await fragmentPost({
+          action: 'generate_fragment',
+          request_id: requestId,
+          provider_id: candidate.provider_id,
+          model_profile_id: candidate.model_profile_id,
+          fragment_key: chunk.key,
+          expected_part: chunk.part,
+          expected_count: chunk.count,
+          parameters: { max_output_tokens: outputLimitFor(chunk) },
+          prompt
+        });
+        if (!Array.isArray(result.questions) || result.questions.length !== chunk.count) {
+          const error = new Error('Fragment AI trả sai số câu.');
+          error.code = 'fragment_question_count_mismatch';
+          throw error;
+        }
+        return { questions: result.questions, failureCount: failures.length };
+      } catch (error) {
+        failures.push(error.code || 'ai_fragment_failed');
+      }
+    }
+    const error = new Error(`Không tạo được phân đoạn ${chunk.key}.`);
+    error.code = 'ai_fragment_exhausted';
+    error.detail = { fragment_key: chunk.key, failures };
+    throw error;
+  }
+
+  async function generateChunked(requestId, basePrompt, spec) {
+    const route = await routerPost({ action: 'route_plan' });
+    const candidates = Array.isArray(route.candidates) ? route.candidates : [];
     if (!candidates.length) {
       const error = new Error('Không có model AI khả dụng.');
       error.code = 'ai_route_unavailable';
       throw error;
     }
-
-    let attemptNo = 0;
-    const failures = [];
-    for (const candidate of candidates) {
-      if (attemptNo >= MAX_AUTO_ATTEMPTS) break;
-      let workingPrompt = prompt;
-      for (let localAttempt = 0; localAttempt < 2 && attemptNo < MAX_AUTO_ATTEMPTS; localAttempt += 1) {
-        attemptNo += 1;
-        setAutoStatus(`Đang tạo và kiểm định đề · lượt ${attemptNo}...`, 'info');
-        try {
-          const result = await orchestratorPost({
-            action: 'generate_exam',
-            request_id: requestId,
-            provider_id: candidate.provider_id,
-            model_profile_id: candidate.model_profile_id,
-            prompt: workingPrompt
-          });
-          result.route_attempts = attemptNo;
-          result.route_candidate_count = candidates.length;
-          return result;
-        } catch (error) {
-          const code = error.code || 'api_generation_failed';
-          failures.push({ code });
-          if (localAttempt === 0 && shouldRepair(code)) {
-            workingPrompt = repairPrompt(prompt, error.detail, code);
-            continue;
-          }
-          break;
-        }
-      }
+    const plan = chunkPlan(spec);
+    if (!plan.length) {
+      const error = new Error('Cấu trúc đề không có câu hỏi.');
+      error.code = 'fragment_plan_empty';
+      throw error;
     }
 
-    const error = new Error('Tất cả model khả dụng đều chưa tạo được đề hợp lệ.');
-    error.code = 'ai_route_exhausted';
-    error.detail = { status: 'error', code: error.code, attempts: attemptNo, failures };
-    throw error;
+    const questions = [];
+    let fallbackCount = 0;
+    for (let i = 0; i < plan.length; i += 1) {
+      const chunk = plan[i];
+      setAutoStatus(`Đang tạo đề theo phân đoạn ${i + 1}/${plan.length} · ${questions.length}/${plan.reduce((n, x) => n + x.count, 0)} câu đã xong...`, 'info');
+      const result = await generateOneFragment(requestId, basePrompt, chunk, questions, candidates);
+      questions.push(...result.questions);
+      fallbackCount += result.failureCount;
+    }
+    return { questions, fragment_count: plan.length, fallback_count: fallbackCount, candidate_count: candidates.length };
+  }
+
+  function assembleExam(spec, room, questions) {
+    return {
+      schema_version: 'DAMSAN_EXAM_V1',
+      title: `Đề kiểm tra ${spec.assessment_type || ''} – ${room}`,
+      assessment_type: spec.assessment_type,
+      scoring_config: spec.scoring_config || {},
+      questions
+    };
+  }
+
+  async function validateAssembledExam(exam, requestId) {
+    const box = document.getElementById('resultBox');
+    if (box) box.value = JSON.stringify(exam);
+    aieSetBusy(false);
+    setAutoStatus(`Đã tạo đủ ${exam.questions.length} câu. Server đang kiểm định toàn bộ đề...`, 'info');
+    await window.aieValidateDraft();
+    await aieLoadRequests(requestId);
+    return Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === requestId) : null;
   }
 
   async function generateOneClick() {
@@ -202,20 +264,26 @@
       await aieCreatePackage();
       const prompt = document.getElementById('promptBox')?.value || '';
       if (!aieCurrentRequestId || !prompt.trim()) return;
+      const requestId = aieCurrentRequestId;
+      const room = document.getElementById('roomCode')?.value?.trim() || 'AI_EXAM';
+      const spec = typeof window.aieSpec === 'function' ? window.aieSpec() : aieSpec();
 
       aieSetBusy(true);
-      setAutoStatus('Đang tạo đề bằng AI → kiểm định → tự sửa hoặc đổi model nếu cần...', 'info');
-      const result = await generateAutomatically(aieCurrentRequestId, prompt);
-      aieCapability = '';
-      document.getElementById('validationStatus').textContent = `AI VALIDATED · revision ${result.revision}`;
-      setAutoStatus(`Đề đã vượt kiểm định · ${result.route_attempts || 1} lượt AI · revision ${result.revision}.`, 'ok');
-      aieNotice('Đề đã sẵn sàng để duyệt. Kiểm tra nội dung rồi phê duyệt để đưa lên phòng.', 'ok');
-      await aieLoadRequests(result.request_id);
+      const generated = await generateChunked(requestId, prompt, spec);
+      const exam = assembleExam(spec, room, generated.questions);
+      const request = await validateAssembledExam(exam, requestId);
+      if (request?.status === 'READY_FOR_REVIEW') {
+        setAutoStatus(`Đề đã vượt kiểm định · ${generated.fragment_count} phân đoạn · ${generated.fallback_count} lượt fallback · ${exam.questions.length} câu.`, 'ok');
+        aieNotice('Đề đã sẵn sàng để duyệt. Kiểm tra nội dung rồi phê duyệt để đưa lên phòng.', 'ok');
+      } else {
+        const diagnostic = document.getElementById('validationStatus')?.textContent || request?.status || 'validation_failed';
+        setAutoStatus(`AI đã tạo đủ câu nhưng đề chưa vượt kiểm định: ${diagnostic}`, 'error');
+      }
     } catch (error) {
       const failures = Array.isArray(error.detail?.failures) ? error.detail.failures : [];
-      const suffix = failures.length ? ` (${failures.map((x) => x.code).slice(0, 3).join(', ')})` : '';
+      const suffix = failures.length ? ` (${failures.slice(0, 4).join(', ')})` : '';
       setAutoStatus(`AI chưa tạo được đề hợp lệ: ${error.code || error.message}${suffix}`, 'error');
-      aieNotice('Hệ thống chưa có đề vượt kiểm định. Request được giữ nguyên để có thể thử lại hoặc dùng AI Web thủ công.', 'error');
+      aieNotice('Request được giữ nguyên. Hệ thống có thể thử lại hoặc dùng AI Web thủ công.', 'error');
       if (aieCurrentRequestId) await aieLoadRequests(aieCurrentRequestId);
     } finally {
       autoBusy = false;
