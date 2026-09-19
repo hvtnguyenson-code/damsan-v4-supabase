@@ -4,75 +4,75 @@
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://xcervjnwlchwfqvbeahy.supabase.co; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Kết nối AI API - Đam San V4</title>
+  <title>Kết nối AI - Đam San V4</title>
   <style>
-    *{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',Tahoma,sans-serif;background:#f4f6f8;color:#1f2937}header{background:linear-gradient(135deg,#172554,#1e3a8a);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;gap:18px;align-items:center}h1{font-size:21px;margin:0}header p{margin:5px 0 0;font-size:13px;opacity:.9}.nav{display:flex;gap:8px;flex-wrap:wrap}.nav a{background:#fff;color:#1e3a8a;text-decoration:none;padding:9px 12px;border-radius:7px;font-weight:700;font-size:13px}main{max-width:1180px;margin:22px auto;padding:0 16px 40px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}h2{margin:0 0 8px;font-size:18px}.sub{font-size:13px;color:#64748b;line-height:1.55;margin:0 0 14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}input,select,textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font:inherit}textarea{min-height:90px}.mono{font-family:Consolas,monospace;font-size:12px;line-height:1.45}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.primary{background:#1d4ed8;color:#fff}.secondary{background:#e2e8f0;color:#334155}.success{background:#15803d;color:#fff}.danger{background:#b91c1c;color:#fff}.notice{display:none;padding:12px 14px;border-radius:8px;margin-bottom:16px;font-weight:600}.notice.info{display:block;background:#dbeafe;color:#1e40af}.notice.ok{display:block;background:#dcfce7;color:#166534}.notice.error{display:block;background:#fee2e2;color:#991b1b}.providers{display:grid;gap:10px}.provider{border:1px solid #e2e8f0;border-radius:9px;padding:12px;cursor:pointer}.provider.active{border-color:#1d4ed8;background:#eff6ff}.provider-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.provider strong{font-size:14px}.meta{font-size:12px;color:#64748b;line-height:1.5;margin-top:4px}.pill{display:inline-block;padding:3px 7px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:11px;font-weight:800}.pill.ok{background:#dcfce7;color:#166534}.pill.bad{background:#fee2e2;color:#991b1b}.models{display:grid;gap:7px;margin-top:10px}.model{border:1px solid #e2e8f0;border-radius:7px;padding:9px 10px;display:flex;justify-content:space-between;gap:8px;align-items:center}.small{font-size:12px;color:#64748b}.hidden{display:none!important}.warning{border:1px solid #fde68a;background:#fffbeb;color:#92400e;padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.5;margin-bottom:14px}details{margin-top:12px;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px}summary{cursor:pointer;font-weight:700;font-size:13px}@media(max-width:760px){header{align-items:flex-start;flex-direction:column}.grid,.grid3{grid-template-columns:1fr}.card{padding:15px}}
+    *{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',Tahoma,sans-serif;background:#f4f6f8;color:#1f2937}header{background:linear-gradient(135deg,#172554,#1e3a8a);color:#fff;padding:18px 24px;display:flex;justify-content:space-between;gap:18px;align-items:center}h1{font-size:21px;margin:0}header p{margin:5px 0 0;font-size:13px;opacity:.9}.nav{display:flex;gap:8px;flex-wrap:wrap}.nav a{background:#fff;color:#1e3a8a;text-decoration:none;padding:9px 12px;border-radius:7px;font-weight:700;font-size:13px}main{max-width:960px;margin:22px auto;padding:0 16px 40px}.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}h2{margin:0 0 8px;font-size:18px}.sub{font-size:13px;color:#64748b;line-height:1.55;margin:0 0 14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}input,select,textarea{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font:inherit}textarea{min-height:90px}.mono{font-family:Consolas,monospace;font-size:12px;line-height:1.45}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}button{border:0;border-radius:7px;padding:10px 14px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.primary{background:#1d4ed8;color:#fff}.secondary{background:#e2e8f0;color:#334155}.success{background:#15803d;color:#fff}.danger{background:#b91c1c;color:#fff}.notice{display:none;padding:12px 14px;border-radius:8px;margin-bottom:16px;font-weight:600}.notice.info{display:block;background:#dbeafe;color:#1e40af}.notice.ok{display:block;background:#dcfce7;color:#166534}.notice.error{display:block;background:#fee2e2;color:#991b1b}.providers{display:grid;gap:10px}.provider{border:1px solid #e2e8f0;border-radius:9px;padding:12px;cursor:pointer}.provider.active{border-color:#1d4ed8;background:#eff6ff}.provider-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.provider strong{font-size:14px}.meta{font-size:12px;color:#64748b;line-height:1.5;margin-top:4px}.pill{display:inline-block;padding:3px 7px;border-radius:999px;background:#e2e8f0;color:#334155;font-size:11px;font-weight:800}.pill.ok{background:#dcfce7;color:#166534}.pill.bad{background:#fee2e2;color:#991b1b}.models{display:grid;gap:7px;margin-top:10px}.model{border:1px solid #e2e8f0;border-radius:7px;padding:9px 10px;display:flex;justify-content:space-between;gap:8px;align-items:center}.small{font-size:12px;color:#64748b}.hidden{display:none!important}.simple-note{border:1px solid #bfdbfe;background:#eff6ff;color:#1e40af;padding:11px 13px;border-radius:9px;font-size:13px;line-height:1.5;margin-bottom:14px}details{margin-top:14px;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px}summary{cursor:pointer;font-weight:700;font-size:13px}@media(max-width:760px){header{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:1fr}.card{padding:15px}}
   </style>
 </head>
 <body>
-<header><div><h1>Kết nối AI API</h1><p>Quản lí provider, API key và model cho phân hệ tạo đề bằng API.</p></div><div class="nav"><a href="ai_exam.html">Tạo đề bằng AI</a><a href="knowledge.html">Kho tri thức</a><a href="giaovien.html">Cổng giáo viên</a></div></header>
+<header><div><h1>Kết nối AI</h1><p>Chỉ cần chọn loại dịch vụ, nhập API key và lưu.</p></div><div class="nav"><a href="ai_exam.html">Tạo đề bằng AI</a><a href="giaovien.html">Cổng giáo viên</a></div></header>
 <main>
   <div id="notice" class="notice"></div>
-  <section class="card">
-    <h2>Nguyên tắc bảo mật</h2>
-    <div class="warning">API key được gửi thẳng từ trình duyệt tới Edge Function của Đam San và lưu trong Supabase Vault. Sau khi lưu, trình duyệt chỉ nhận chuỗi che dạng <strong>••••ABCD</strong>; hệ thống không có API đọc lại khóa đầy đủ.</div>
-    <p class="sub">Provider tùy chỉnh chỉ cho phép HTTPS công khai. Địa chỉ localhost, private network và metadata endpoint bị chặn. API key không được lưu trong localStorage/sessionStorage. Provider trung gian tương thích OpenAI chỉ cần Base URL + API key + Model ID; không cần sửa mã nguồn.</p>
-  </section>
 
   <section class="card">
-    <h2>Kết nối đã cấu hình</h2>
-    <p class="sub">PERSONAL chỉ mình giáo viên sử dụng. SCHOOL dành cho Admin và dùng chung trong trường. SYSTEM do hệ thống quản trị ở tầng server.</p>
+    <h2>Kết nối đã lưu</h2>
+    <p class="sub">Bấm vào một kết nối để sửa. Nếu chưa có, chọn “Thêm kết nối”.</p>
     <div id="providerList" class="providers"><div class="provider">Đang tải...</div></div>
-    <div class="actions"><button id="btnNew" class="primary">+ Thêm nhà cung cấp</button><button id="btnRefresh" class="secondary">Làm mới</button></div>
+    <div class="actions"><button id="btnNew" class="primary">+ Thêm kết nối</button><button id="btnRefresh" class="secondary">Làm mới</button></div>
   </section>
 
   <section id="editorCard" class="card hidden">
-    <h2 id="editorTitle">Thêm nhà cung cấp</h2>
-    <div class="grid3">
-      <div class="field"><label for="ownerScope">Phạm vi</label><select id="ownerScope"><option value="PERSONAL">PERSONAL — cá nhân</option><option id="schoolScopeOption" value="SCHOOL">SCHOOL — toàn trường</option></select></div>
-      <div class="field"><label for="displayName">Tên hiển thị</label><input id="displayName" maxlength="120" placeholder="Ví dụ: Vertex Key cá nhân"></div>
-      <div class="field"><label for="adapterType">Protocol / Adapter</label><select id="adapterType"><option value="OPENAI_COMPAT">OpenAI-compatible</option><option value="OPENAI_RESPONSES">OpenAI Responses</option><option value="OPENAI_CHAT">OpenAI Chat Completions</option><option value="ANTHROPIC_MESSAGES">Anthropic Messages</option><option value="GEMINI_GENERATE_CONTENT">Gemini generateContent</option><option value="CUSTOM_JSON_HTTP">Custom JSON HTTP</option></select></div>
+    <h2 id="editorTitle">Thêm kết nối</h2>
+    <div class="simple-note">Thông thường mày chỉ cần 3 thứ: <strong>loại dịch vụ → Base URL (nếu là API trung gian) → API key</strong>. Các mục kỹ thuật đã được ẩn bên dưới.</div>
+    <div class="grid">
+      <div class="field"><label for="quickPreset">Dịch vụ</label><select id="quickPreset"><option value="OPENAI_COMPAT">API trung gian / OpenAI-compatible</option><option value="OPENAI">OpenAI</option><option value="GEMINI">Google Gemini</option><option value="ANTHROPIC">Anthropic Claude</option><option value="CUSTOM">API tùy chỉnh</option></select></div>
+      <div class="field"><label for="displayName">Tên kết nối</label><input id="displayName" maxlength="120" placeholder="Tự điền theo dịch vụ"></div>
     </div>
     <div class="grid" style="margin-top:12px">
-      <div class="field"><label for="baseUrl">Base URL</label><input id="baseUrl" placeholder="https://api.example.com/v1"></div>
-      <div class="field"><label for="discoveryMode">Model discovery</label><select id="discoveryMode"><option value="HYBRID">HYBRID — tự tìm + nhập tay</option><option value="AUTO">AUTO — tự tìm</option><option value="MANUAL">MANUAL — chỉ nhập tay</option></select></div>
+      <div class="field"><label for="baseUrl">Base URL</label><input id="baseUrl" placeholder="Ví dụ: https://api.openai.com/v1"></div>
+      <div class="field"><label for="apiKey">API key</label><input id="apiKey" type="password" autocomplete="new-password" placeholder="Nhập API key"></div>
     </div>
-    <div class="grid3" style="margin-top:12px">
-      <div class="field"><label for="authType">Kiểu xác thực</label><select id="authType"><option value="BEARER">Bearer token</option><option value="HEADER">Custom header</option><option value="QUERY">Query parameter</option><option value="NONE">Không xác thực</option></select></div>
-      <div class="field"><label for="authHeader">Header / query key</label><input id="authHeader" placeholder="X-API-Key hoặc key"></div>
-      <div class="field"><label for="authPrefix">Prefix</label><input id="authPrefix" placeholder="Bearer "></div>
-    </div>
-    <div class="grid" style="margin-top:12px">
-      <div class="field"><label for="apiKey">API key</label><input id="apiKey" type="password" autocomplete="new-password" placeholder="Để trống khi sửa nếu không muốn đổi khóa"></div>
-      <div class="field"><label for="modelsPath">Models path — tùy chọn</label><input id="modelsPath" placeholder="models"></div>
-    </div>
-    <details>
-      <summary>Cấu hình nâng cao — Custom JSON / timeout / mapping</summary>
-      <p class="sub" style="margin-top:8px">JSON này không dùng để chứa API key. Với CUSTOM_JSON_HTTP có thể khai báo <code>generation_path</code>, <code>request_template</code>, <code>response_text_path</code>, <code>response_id_path</code>, <code>timeout_ms</code>. Placeholder hỗ trợ: <code>{{model}}</code>, <code>{{prompt}}</code>.</p>
-      <div class="field"><label for="providerOptions">Provider options (JSON)</label><textarea id="providerOptions" class="mono" spellcheck="false" placeholder='{"generation_path":"generate","request_template":{"model":"{{model}}","prompt":"{{prompt}}"},"response_text_path":"data.output.text","timeout_ms":180000}'></textarea></div>
-    </details>
-    <div class="field" style="margin-top:12px"><label><input id="enabled" type="checkbox" checked style="width:auto;margin-right:6px">Cho phép sử dụng provider này</label></div>
-    <div class="actions"><button id="btnSave" class="primary">Lưu kết nối</button><button id="btnTest" class="success">Kiểm tra kết nối & dò model</button><button id="btnDelete" class="danger">Xóa kết nối</button><button id="btnCancel" class="secondary">Đóng</button></div>
+    <div class="actions"><button id="btnQuickConnect" class="success">LƯU & KIỂM TRA</button><button id="btnDelete" class="danger hidden">Xóa kết nối</button><button id="btnCancel" class="secondary">Đóng</button></div>
     <div id="editorStatus" class="small" style="margin-top:8px"></div>
+
+    <details id="advancedProviderSettings">
+      <summary>Cấu hình nâng cao — chỉ mở khi provider đặc biệt yêu cầu</summary>
+      <div class="grid" style="margin-top:12px">
+        <div class="field"><label for="ownerScope">Phạm vi</label><select id="ownerScope"><option value="PERSONAL">Cá nhân</option><option id="schoolScopeOption" value="SCHOOL">Toàn trường</option></select></div>
+        <div class="field"><label for="adapterType">Adapter</label><select id="adapterType"><option value="OPENAI_COMPAT">OpenAI-compatible</option><option value="OPENAI_RESPONSES">OpenAI Responses</option><option value="OPENAI_CHAT">OpenAI Chat Completions</option><option value="ANTHROPIC_MESSAGES">Anthropic Messages</option><option value="GEMINI_GENERATE_CONTENT">Gemini generateContent</option><option value="CUSTOM_JSON_HTTP">Custom JSON HTTP</option></select></div>
+        <div class="field"><label for="discoveryMode">Dò model</label><select id="discoveryMode"><option value="HYBRID">Tự dò + cho nhập tay</option><option value="AUTO">Chỉ tự dò</option><option value="MANUAL">Chỉ nhập tay</option></select></div>
+        <div class="field"><label for="modelsPath">Models path</label><input id="modelsPath" placeholder="models"></div>
+        <div class="field"><label for="authType">Xác thực</label><select id="authType"><option value="BEARER">Bearer</option><option value="HEADER">Custom header</option><option value="QUERY">Query parameter</option><option value="NONE">Không xác thực</option></select></div>
+        <div class="field"><label for="authHeader">Header / query key</label><input id="authHeader" placeholder="X-API-Key hoặc key"></div>
+        <div class="field"><label for="authPrefix">Prefix</label><input id="authPrefix" placeholder="Bearer "></div>
+        <div class="field"><label><input id="enabled" type="checkbox" checked style="width:auto;margin-right:6px">Cho phép sử dụng</label></div>
+      </div>
+      <div class="field" style="margin-top:12px"><label for="providerOptions">Provider options (JSON)</label><textarea id="providerOptions" class="mono" spellcheck="false" placeholder='{"generation_path":"generate","response_text_path":"data.output.text"}'></textarea></div>
+      <div class="actions"><button id="btnSave" class="secondary">Lưu cấu hình nâng cao</button><button id="btnTest" class="secondary">Kiểm tra lại</button></div>
+    </details>
   </section>
 
   <section id="modelsCard" class="card hidden">
-    <h2>Model của provider đang chọn</h2><p class="sub">Model discovery chỉ là tiện ích. Với provider trung gian không có endpoint /models, có thể nhập Model ID thủ công và khai báo capability/parameter riêng.</p>
-    <div class="grid">
-      <div class="field"><label for="manualModelId">Model ID</label><input id="manualModelId" placeholder="Ví dụ: google/gemini-2.5-pro"></div>
-      <div class="field"><label for="manualModelName">Tên hiển thị</label><input id="manualModelName" placeholder="Để trống sẽ dùng Model ID"></div>
-    </div>
-    <details>
-      <summary>Thiết lập model nâng cao</summary>
-      <div class="grid" style="margin-top:10px">
-        <div class="field"><label for="modelCapabilities">Capabilities (JSON)</label><textarea id="modelCapabilities" class="mono" spellcheck="false" placeholder='{"json_mode":true}'></textarea></div>
-        <div class="field"><label for="modelParameters">Default parameters (JSON)</label><textarea id="modelParameters" class="mono" spellcheck="false" placeholder='{"reasoning_effort":"high","max_output_tokens":32768}'></textarea></div>
-      </div>
-    </details>
-    <div class="actions"><button id="btnAddModel" class="primary">+ Thêm / cập nhật model</button></div>
+    <h2>Model</h2>
+    <p class="sub">Model dò được sẽ hiện tự động. Chỉ nhập tay khi provider không hỗ trợ danh sách model.</p>
     <div id="modelList" class="models"></div>
+    <details>
+      <summary>Không thấy model? Nhập Model ID thủ công</summary>
+      <div class="grid" style="margin-top:10px">
+        <div class="field"><label for="manualModelId">Model ID</label><input id="manualModelId" placeholder="Ví dụ: gpt-5.6 hoặc google/gemini-2.5-pro"></div>
+        <div class="field"><label for="manualModelName">Tên hiển thị</label><input id="manualModelName" placeholder="Có thể để trống"></div>
+      </div>
+      <details>
+        <summary>Thiết lập model nâng cao</summary>
+        <div class="grid" style="margin-top:10px">
+          <div class="field"><label for="modelCapabilities">Capabilities (JSON)</label><textarea id="modelCapabilities" class="mono" spellcheck="false" placeholder='{"json_mode":true}'></textarea></div>
+          <div class="field"><label for="modelParameters">Default parameters (JSON)</label><textarea id="modelParameters" class="mono" spellcheck="false" placeholder='{"reasoning_effort":"high","max_output_tokens":32768}'></textarea></div>
+        </div>
+      </details>
+      <div class="actions"><button id="btnAddModel" class="primary">Thêm model</button></div>
+    </details>
   </section>
 </main>
-<script src="ai_provider.js?v=20260918-provider-control-065c"></script>
+<script src="ai_provider.js?v=20260919-provider-simple-065d"></script>
 </body>
 </html>
