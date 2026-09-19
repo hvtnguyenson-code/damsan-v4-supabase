@@ -1,4 +1,4 @@
-// 066 — one-click AI orchestration. Provider/model routing is server-side and invisible to normal authoring.
+// 066B — one-click AI orchestration + simple target-class selection.
 (() => {
   const ROUTER_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-router`;
   let autoBusy = false;
@@ -51,10 +51,59 @@
     el.className = `authority-panel ${kind}`;
   }
 
+  function mountTargetClass() {
+    if (document.getElementById('targetClass')) return;
+    const grid = document.getElementById('roomCode')?.closest('.grid4');
+    if (!grid) return;
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.innerHTML = '<label for="targetClass">Lớp / đối tượng</label><select id="targetClass"><option value="TatCa">Tất cả các lớp</option></select>';
+    grid.appendChild(field);
+
+    const previousSpec = window.aieSpec;
+    if (typeof previousSpec === 'function' && !previousSpec.__targetClass066b) {
+      const wrapped = function aieSpecTargetClass066b() {
+        const spec = previousSpec();
+        spec.target_class = document.getElementById('targetClass')?.value || 'TatCa';
+        return spec;
+      };
+      wrapped.__targetClass066b = true;
+      window.aieSpec = wrapped;
+    }
+
+    document.getElementById('gradeSelect')?.addEventListener('change', loadTargetClasses);
+    loadTargetClasses();
+  }
+
+  async function loadTargetClasses() {
+    const select = document.getElementById('targetClass');
+    const session = aieSession();
+    if (!select || !session) return;
+    const scope = aieTargetScope(session);
+    if (!scope) return;
+    const grade = Number(document.getElementById('gradeSelect')?.value || 0);
+    const previous = select.value || 'TatCa';
+    try {
+      const { data, error } = await aieSb.rpc('rpc_ai_exam_class_list', {
+        p_staff_token: session.token,
+        p_ma_gv: session.profile.ma_gv,
+        p_truong_id: scope.truong_id,
+        p_grade: Number.isInteger(grade) && grade > 0 ? grade : null
+      });
+      if (error) throw error;
+      if (!data || data.status !== 'success') throw new Error(data?.code || 'class_list_failed');
+      const classes = Array.isArray(data.classes) ? data.classes.filter(Boolean) : [];
+      select.innerHTML = '<option value="TatCa">Tất cả các lớp</option>' + classes.map((name) => `<option value="${aieEscape(name)}">${aieEscape(name)}</option>`).join('');
+      if (previous === 'TatCa' || classes.includes(previous)) select.value = previous;
+    } catch {
+      select.innerHTML = '<option value="TatCa">Tất cả các lớp</option>';
+    }
+  }
+
   async function refreshRouteStatus() {
     try {
       const data = await routerPost({ action: 'route_status' });
-      if (data.ready) setAutoStatus(`AI tự động đã sẵn sàng. Hệ thống sẽ tự chọn model, tự kiểm định và tự thử model khác khi cần.`, 'ok');
+      if (data.ready) setAutoStatus('AI tự động đã sẵn sàng. Hệ thống sẽ tự chọn model, tự kiểm định và tự thử model khác khi cần.', 'ok');
       else setAutoStatus('Chưa có kết nối AI khả dụng. Cấu hình một lần ở “Cấu hình AI”, sau đó việc ra đề chỉ cần một nút.', 'warn');
       return !!data.ready;
     } catch (error) {
@@ -108,6 +157,8 @@
   function mount() {
     const original = document.getElementById('btnCreate');
     if (!original || document.getElementById('aieAutoControls')) return;
+
+    mountTargetClass();
 
     // ai_exam.js attached its historical package-only listener first. Replacing the node removes
     // that listener while preserving the stable element id used by the rest of the page.
