@@ -1,4 +1,4 @@
-// 056 — Geography Part III presentation + compact-answer contract.
+// 071 — Geography Part III presentation + authentic-data contract.
 // Quantitative data with a natural table structure is authored as semantic HTML inside noi_dung.
 // HTML attributes use SINGLE quotes so the surrounding JSON string stays valid without manual escaping.
 (function () {
@@ -13,18 +13,32 @@
     return remote && typeof remote === 'object' && !Array.isArray(remote) ? remote : localSpec;
   }
 
-  window.aieBuildPrompt = function aieBuildPrompt056(input, units, localSpec) {
+  window.aieBuildPrompt = function aieBuildPrompt071(input, units, localSpec) {
     const prompt = previousBuildPrompt(input, units, localSpec);
     const spec = specFrom(input, localSpec);
     if (!spec?.assessment_standard || spec.assessment_standard.id !== STANDARD_ID) return prompt;
 
     const rules = [
       '',
-      'PHẦN III — 056 BẢNG SỐ LIỆU + ĐÁP ÁN TỐI ĐA 4 KÍ TỰ:',
+      'PHẦN III — 071 DỮ LIỆU THẬT + LỆNH HỎI THEO MẪU TNTHPT:',
+      '- Phần III đánh giá năng lực xử lí số liệu địa lí. Dữ liệu dùng để tính PHẢI là dữ liệu thật có trong KNOWLEDGE PACKAGE và phải được truy nguyên bằng source_refs.',
+      '- TUYỆT ĐỐI KHÔNG tự đặt số liệu để tạo phép tính đẹp. CẤM các số liệu/ngữ cảnh kiểu “giả định”, “mô phỏng”, “minh họa”, “lãnh thổ A/B”, “giá trị giả định”, hoặc các con số không tồn tại trong nguồn được dẫn.',
+      '- Mỗi giá trị trong quantitative.inputs phải xuất hiện về mặt số học trong ít nhất một knowledge_unit được trỏ bởi source_refs của chính câu đó. Không được lấy số từ kiến thức nền của mô hình, trí nhớ, suy đoán hoặc tự truy cập web.',
+      '- Hằng số/công thức như ×100 khi tính tỉ trọng, ×1000 khi đổi quy mô, hoặc hệ số đơn vị phải thể hiện bằng operation_code/scale_factor/result_divisor; KHÔNG đưa vào inputs nếu nguồn không chứa chúng.',
+      '- Nếu các bài đã chọn KHÔNG có đủ số liệu thật để tạo đủ số câu Phần III, KHÔNG được bịa số để hoàn tất đề. Khi đó dừng và trả duy nhất JSON {"schema_version":"DAMSAN_EXAM_GENERATION_BLOCKED","code":"INSUFFICIENT_AUTHENTIC_QUANTITATIVE_DATA","message":"Phạm vi kiến thức đã chọn không có đủ số liệu thật cho Phần III."}.',
+      '- Nguồn uy tín bên ngoài SGK chỉ được dùng khi dữ liệu đó đã được hệ thống đưa vào KNOWLEDGE PACKAGE dưới dạng knowledge_unit có unit_key để source_refs kiểm chứng; không tự bổ sung nguồn ngoài gói.',
+      '',
+      'CÁCH RA LỆNH HỎI — HỌC THEO ĐỀ THAM KHẢO/TNTHPT, KHÔNG HỌC VẸT CÂU CHỮ:',
+      '- Với bảng số liệu thật: nêu tên bảng, đơn vị, dữ liệu và nguồn nếu knowledge_unit có thông tin nguồn; sau bảng dùng lệnh ngắn, trực tiếp kiểu “Căn cứ vào bảng số liệu trên, hãy cho biết ... (làm tròn ...).”',
+      '- Với hai hoặc vài số liệu thật trình bày bằng câu văn: nêu rõ đối tượng, thời gian, đơn vị và các giá trị; sau đó hỏi trực tiếp “Hãy cho biết ...” hoặc “Tính ...”, kèm yêu cầu làm tròn khi cần.',
+      '- Lệnh hỏi phải buộc học sinh nhận diện đại lượng/công thức địa lí phù hợp rồi xử lí dữ liệu; không biến câu trả lời ngắn thành phép cộng/trừ cơ học không có ý nghĩa địa lí.',
+      '- Không dùng câu dẫn “trong một bài tập giả định”, “giáo viên cho các giá trị”, “một lãnh thổ giả định” để hợp thức hóa số liệu do AI tự đặt.',
+      '',
+      'ĐÁP ÁN TỐI ĐA 4 KÍ TỰ:',
       '- dap_an_dung của mỗi câu Phần III là MỘT CHUỖI SỐ tối đa 4 kí tự. Dấu âm và dấu phẩy thập phân đều tính là một kí tự.',
       '- Các dạng hợp lệ điển hình: "2", "22", "222", "2222", "22,2", "2,22", "-222", "-2,2". Không ghi đơn vị, dấu cách, dấu phân cách hàng nghìn hoặc dấu + trong dap_an_dung.',
       '- Dùng dấu phẩy làm dấu thập phân trong dap_an_dung. Nếu kết quả tính tự nhiên dài hơn 4 kí tự, phải lựa chọn đơn vị biểu diễn và/hoặc quy tắc làm tròn hợp lí ngay trong câu hỏi để đáp án cuối cùng vẫn tối đa 4 kí tự; không được cắt chữ số cơ học.',
-      '- Nếu đổi đơn vị CHỈ Ở KẾT QUẢ để thu gọn đáp án (ví dụ người -> nghìn người, ha -> nghìn ha), thêm quantitative.result_divisor là lũy thừa của 10 dùng để chia kết quả sau phép tính. Ví dụ 12345 người -> 12,3 nghìn người: result_divisor=1000, rounding_digits=1, dap_an_dung="12,3".',
+      '- Nếu đổi đơn vị CHỈ Ở KẾT QUẢ để thu gọn đáp án, thêm quantitative.result_divisor là lũy thừa của 10 dùng để chia kết quả sau phép tính.',
       '- rounding_digits phải khớp yêu cầu làm tròn nêu trong noi_dung. Server sẽ tính lại từ quantitative.inputs, operation_code, result_divisor rồi đối chiếu dap_an_dung.',
       '',
       'TRÌNH BÀY SỐ LIỆU — BẮT BUỘC JSON HỢP LỆ:',
@@ -34,7 +48,7 @@
       "- Ví dụ khung JSON-safe: <table data-damsan-p3='1'><caption>Bảng số liệu ...</caption><thead><tr><th>Năm</th><th>2020</th><th>2024</th></tr></thead><tbody><tr><th>Giá trị</th><td>...</td><td>...</td></tr></tbody></table>.",
       '- noi_dung gồm lời dẫn/yêu cầu tính toán + bảng. Không lặp lại toàn bộ số liệu của bảng thành câu văn phía trên hoặc phía dưới.',
       '- Với đúng 2 số liệu đơn giản và không có cấu trúc bảng tự nhiên, có thể trình bày trong câu văn thay vì ép thành bảng.',
-      '- Mọi giá trị dùng trong quantitative.inputs phải xuất hiện rõ trong phần văn bản hoặc các ô bảng mà học sinh nhìn thấy.',
+      '- Mọi giá trị dùng trong quantitative.inputs phải xuất hiện rõ trong phần văn bản hoặc các ô bảng mà học sinh nhìn thấy VÀ phải có thật trong source_refs.',
       '- Trước khi trả kết quả, tự kiểm tra toàn bộ output bằng JSON.parse tương đương; nếu JSON không hợp lệ thì sửa trước khi trả.',
       ''
     ].join('\n');
