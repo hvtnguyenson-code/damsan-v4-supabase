@@ -1,71 +1,12 @@
-// 068 — one-click AI generation split into bounded fragments so no provider call must outlive Edge limits.
+// 070 — Web-AI first: creating an exam never calls paid provider APIs implicitly.
 (() => {
-  const ROUTER_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-router`;
-  const FRAGMENT_ENDPOINT = `${AIE_SUPABASE_URL}/functions/v1/exam-ai-fragment`;
-  const PART_CHUNK_SIZE = { 1: 6, 2: 2, 3: 3 };
-  let autoBusy = false;
-  let manualVisible = false;
-
-  function sessionBody() {
-    const s = aieSession();
-    if (!s) throw new Error('Phiên giáo viên không còn hợp lệ.');
-    return { staff_token: s.token, ma_gv: s.profile.ma_gv };
-  }
-
-  async function postJson(endpoint, payload, fallbackCode) {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': AIE_SUPABASE_KEY },
-      cache: 'no-store',
-      body: JSON.stringify({ ...payload, ...sessionBody() })
-    });
-    let data = null;
-    try {
-      const text = await response.text();
-      data = text.trim() ? JSON.parse(text.trim()) : null;
-    } catch {
-      data = null;
-    }
-    if (!response.ok || !data || data.status !== 'success') {
-      const platformCode = response.status === 546 ? 'WORKER_RESOURCE_LIMIT' : (response.status === 504 ? 'IDLE_TIMEOUT' : '');
-      const error = new Error(data?.message || data?.code || platformCode || `${fallbackCode} trả mã ${response.status}.`);
-      error.code = data?.code || platformCode || fallbackCode;
-      error.detail = data || { status: 'error', code: error.code, http_status: response.status };
-      throw error;
-    }
-    return data;
-  }
-
-  function routerPost(payload) {
-    return postJson(ROUTER_ENDPOINT, payload, 'ai_route_failed');
-  }
-
-  function fragmentPost(payload) {
-    return postJson(FRAGMENT_ENDPOINT, payload, 'ai_fragment_failed');
-  }
-
-  function cardByHeading(prefix) {
-    return Array.from(document.querySelectorAll('section.card')).find((card) => String(card.querySelector('h2')?.textContent || '').trim().startsWith(prefix)) || null;
-  }
-
-  function setManualVisible(value) {
-    manualVisible = !!value;
-    const promptCard = cardByHeading('2. Prompt');
-    const receiveCard = cardByHeading('3. Nhận đề');
-    promptCard?.classList.toggle('hidden', !manualVisible);
-    receiveCard?.classList.toggle('hidden', !manualVisible);
-    document.getElementById('btnChatGPT')?.classList.toggle('hidden', !manualVisible);
-    document.getElementById('btnGemini')?.classList.toggle('hidden', !manualVisible);
-    const toggle = document.getElementById('btnManualAiWeb');
-    if (toggle) toggle.textContent = manualVisible ? 'Ẩn AI Web thủ công' : 'Dùng AI Web thủ công';
-  }
-
-  function setAutoStatus(text, kind = 'info') {
-    const el = document.getElementById('aieAutoStatus');
-    if (!el) return;
-    el.textContent = text || '';
-    el.className = `authority-panel ${kind}`;
-  }
+  const OTHER_URL_KEY = 'damsan_ai_exam_other_web_url';
+  const WEB_TARGETS = {
+    chatgpt: { label: 'ChatGPT', url: 'https://chatgpt.com/', provider: 'CHATGPT_WEB' },
+    gemini: { label: 'Gemini', url: 'https://gemini.google.com/app', provider: 'GEMINI_WEB' },
+    claude: { label: 'Claude', url: 'https://claude.ai/', provider: 'CLAUDE_WEB' }
+  };
+  let webBusy = false;
 
   function mountTargetClass() {
     if (document.getElementById('targetClass')) return;
@@ -116,220 +57,160 @@
     }
   }
 
-  async function refreshRouteStatus() {
+  function setWebStatus(text, kind = 'info') {
+    const el = document.getElementById('aieWebStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = `authority-panel ${kind}`;
+  }
+
+  function setButtonsDisabled(disabled) {
+    ['btnCreate', 'btnWebGemini', 'btnWebClaude', 'btnWebOther'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !!disabled;
+    });
+  }
+
+  function normalizeOtherUrl(raw) {
+    let value = String(raw || '').trim();
+    if (!value) return '';
+    if (!/^https?:\/\//i.test(value)) value = `https://${value}`;
     try {
-      const data = await routerPost({ action: 'route_status' });
-      if (data.ready) setAutoStatus('AI tự động đã sẵn sàng. Đề lớn sẽ được tạo theo các phân đoạn ngắn rồi kiểm định toàn bộ một lần.', 'ok');
-      else setAutoStatus('Chưa có kết nối AI khả dụng. Cấu hình một lần ở “Cấu hình AI”, sau đó việc ra đề chỉ cần một nút.', 'warn');
-      return !!data.ready;
-    } catch (error) {
-      setAutoStatus(`Chưa kiểm tra được AI tự động: ${error.code || error.message}`, 'warn');
+      const parsed = new URL(value);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+      return parsed.href;
+    } catch {
+      return '';
+    }
+  }
+
+  function otherTarget() {
+    let remembered = '';
+    try { remembered = localStorage.getItem(OTHER_URL_KEY) || ''; } catch { remembered = ''; }
+    const raw = window.prompt('Địa chỉ AI web muốn mở:', remembered || 'https://');
+    if (raw === null) return null;
+    const url = normalizeOtherUrl(raw);
+    if (!url) {
+      aieNotice('Địa chỉ AI web không hợp lệ. Chỉ dùng địa chỉ http/https.', 'error');
+      return null;
+    }
+    try { localStorage.setItem(OTHER_URL_KEY, url); } catch { /* URL only; persistence is optional. */ }
+    return { label: 'AI web khác', url, provider: 'OTHER_WEB_AI' };
+  }
+
+  function reserveTab() {
+    try {
+      const tab = window.open('about:blank', '_blank');
+      if (tab) tab.opener = null;
+      return tab;
+    } catch {
+      return null;
+    }
+  }
+
+  async function copyPrompt(prompt) {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      return true;
+    } catch {
+      const box = document.getElementById('promptBox');
+      if (box) {
+        box.focus();
+        box.select();
+      }
       return false;
     }
   }
 
-  function chunkPlan(spec) {
-    const counts = spec?.counts || {};
-    const plan = [];
-    let globalStart = 1;
-    for (const part of [1, 2, 3]) {
-      let remaining = Math.max(0, Number(counts[`p${part}`]) || 0);
-      let partOffset = 0;
-      const size = PART_CHUNK_SIZE[part];
-      while (remaining > 0) {
-        const count = Math.min(size, remaining);
-        const start = globalStart + partOffset;
-        const end = start + count - 1;
-        plan.push({ part, count, start, end, key: `P${part}_${start}_${end}` });
-        remaining -= count;
-        partOffset += count;
+  function bindProviderMetadata(provider) {
+    const select = document.getElementById('provider');
+    if (select) {
+      if (![...select.options].some((option) => option.value === provider)) {
+        const option = document.createElement('option');
+        option.value = provider;
+        option.textContent = provider === 'CLAUDE_WEB' ? 'Claude web' : 'AI web khác';
+        select.appendChild(option);
       }
-      globalStart += Math.max(0, Number(counts[`p${part}`]) || 0);
+      select.value = provider;
     }
-    return plan;
+    const model = document.getElementById('modelName');
+    if (model) model.value = '';
   }
 
-  function avoidSummary(questions) {
-    return questions.slice(-24).map((q) => ({
-      phan: Number(q?.phan || 0),
-      noi_dung: String(q?.noi_dung || '').replace(/\s+/g, ' ').slice(0, 220),
-      source_refs: Array.isArray(q?.source_refs) ? q.source_refs.slice(0, 4) : [],
-      operation_code: q?.quantitative?.operation_code || ''
-    }));
-  }
+  async function createPackageAndOpen(targetKey) {
+    if (webBusy) return;
+    const target = targetKey === 'other' ? otherTarget() : WEB_TARGETS[targetKey];
+    if (!target) return;
 
-  function fragmentPrompt(basePrompt, chunk, previousQuestions) {
-    const avoid = avoidSummary(previousQuestions);
-    const partNotes = chunk.part === 1
-      ? 'Phần I: mỗi câu có A/B/C/D và đúng một dap_an_dung A/B/C/D; phương án nhiễu phải cạnh tranh, đồng dạng và không tự lộ đáp án.'
-      : chunk.part === 2
-        ? 'Phần II: mỗi question là MỘT cụm gồm đúng bốn nhận định A/B/C/D; giữ statement_levels và statement_reasoning theo hợp đồng hiện có.'
-        : 'Phần III: mỗi question là trả lời ngắn; A/B/C/D rỗng; quantitative phải đủ để server tự tính lại đáp án và số liệu phải hiện trong noi_dung.';
-    return `${basePrompt}\n\n---\nCHẾ ĐỘ TẠO PHÂN ĐOẠN 068 — CHỈ THỊ CUỐI CÙNG NÀY GHI ĐÈ YÊU CẦU TẠO TOÀN BỘ ĐỀ, NHƯNG KHÔNG GHI ĐÈ CÁC RÀNG BUỘC KIẾN THỨC/CHẤT LƯỢNG.\n- Chỉ tạo chính xác ${chunk.count} question thuộc Phần ${chunk.part}, tương ứng vị trí toàn đề ${chunk.start}-${chunk.end}.\n- Tất cả question phải có phan=${chunk.part}.\n- Chỉ trả DUY NHẤT JSON object dạng {\"questions\":[...]}; không title, không schema_version, không scoring_config, không Markdown.\n- Vẫn phải tuân thủ toàn bộ KNOWLEDGE PACKAGE, source_refs, muc_do, bai_hoc, cấu trúc và tiêu chuẩn khảo thí trong prompt gốc.\n- Không lặp lại câu hỏi/ý tưởng đã tạo ở các phân đoạn trước.\n- ${partNotes}\n- Với các yêu cầu phân bố chất lượng áp dụng cho toàn phần, hãy làm phân đoạn này đóng góp cân đối và tránh dồn một kiểu thao tác/nguồn.\n\nDẤU VẾT CÁC CÂU ĐÃ TẠO TRƯỚC (chỉ để tránh lặp, không phải nguồn kiến thức):\n${JSON.stringify(avoid)}\n`;
-  }
+    const tab = reserveTab();
+    webBusy = true;
+    setButtonsDisabled(true);
+    setWebStatus(`Đang tạo Knowledge Package cho ${target.label}. Không gọi API trả phí.`, 'info');
 
-  function outputLimitFor(chunk) {
-    if (chunk.part === 1) return 5200;
-    if (chunk.part === 2) return 5200;
-    return 4200;
-  }
-
-  async function generateOneFragment(requestId, basePrompt, chunk, previousQuestions, candidates) {
-    const failures = [];
-    for (const candidate of candidates) {
-      const prompt = fragmentPrompt(basePrompt, chunk, previousQuestions);
-      setAutoStatus(`Đang tạo ${chunk.key} · ${chunk.count} câu...`, 'info');
-      try {
-        const result = await fragmentPost({
-          action: 'generate_fragment',
-          request_id: requestId,
-          provider_id: candidate.provider_id,
-          model_profile_id: candidate.model_profile_id,
-          fragment_key: chunk.key,
-          expected_part: chunk.part,
-          expected_count: chunk.count,
-          parameters: { max_output_tokens: outputLimitFor(chunk) },
-          prompt
-        });
-        if (!Array.isArray(result.questions) || result.questions.length !== chunk.count) {
-          const error = new Error('Fragment AI trả sai số câu.');
-          error.code = 'fragment_question_count_mismatch';
-          throw error;
-        }
-        return { questions: result.questions, failureCount: failures.length };
-      } catch (error) {
-        failures.push(error.code || 'ai_fragment_failed');
-      }
-    }
-    const error = new Error(`Không tạo được phân đoạn ${chunk.key}.`);
-    error.code = 'ai_fragment_exhausted';
-    error.detail = { fragment_key: chunk.key, failures };
-    throw error;
-  }
-
-  async function generateChunked(requestId, basePrompt, spec) {
-    const route = await routerPost({ action: 'route_plan' });
-    const candidates = Array.isArray(route.candidates) ? route.candidates : [];
-    if (!candidates.length) {
-      const error = new Error('Không có model AI khả dụng.');
-      error.code = 'ai_route_unavailable';
-      throw error;
-    }
-    const plan = chunkPlan(spec);
-    if (!plan.length) {
-      const error = new Error('Cấu trúc đề không có câu hỏi.');
-      error.code = 'fragment_plan_empty';
-      throw error;
-    }
-
-    const questions = [];
-    let fallbackCount = 0;
-    for (let i = 0; i < plan.length; i += 1) {
-      const chunk = plan[i];
-      setAutoStatus(`Đang tạo đề theo phân đoạn ${i + 1}/${plan.length} · ${questions.length}/${plan.reduce((n, x) => n + x.count, 0)} câu đã xong...`, 'info');
-      const result = await generateOneFragment(requestId, basePrompt, chunk, questions, candidates);
-      questions.push(...result.questions);
-      fallbackCount += result.failureCount;
-    }
-    return { questions, fragment_count: plan.length, fallback_count: fallbackCount, candidate_count: candidates.length };
-  }
-
-  function assembleExam(spec, room, questions) {
-    return {
-      schema_version: 'DAMSAN_EXAM_V1',
-      title: `Đề kiểm tra ${spec.assessment_type || ''} – ${room}`,
-      assessment_type: spec.assessment_type,
-      scoring_config: spec.scoring_config || {},
-      questions
-    };
-  }
-
-  async function validateAssembledExam(exam, requestId) {
-    const box = document.getElementById('resultBox');
-    if (box) box.value = JSON.stringify(exam);
-    aieSetBusy(false);
-    setAutoStatus(`Đã tạo đủ ${exam.questions.length} câu. Server đang kiểm định toàn bộ đề...`, 'info');
-    await window.aieValidateDraft();
-    await aieLoadRequests(requestId);
-    return Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === requestId) : null;
-  }
-
-  async function generateOneClick() {
-    if (autoBusy) return;
-    autoBusy = true;
-    const button = document.getElementById('btnCreate');
-    if (button) button.disabled = true;
-    setAutoStatus('Đang chuẩn bị phạm vi kiến thức và tiêu chuẩn đề...', 'info');
     try {
       await aieCreatePackage();
-      const prompt = document.getElementById('promptBox')?.value || '';
-      if (!aieCurrentRequestId || !prompt.trim()) return;
-      const requestId = aieCurrentRequestId;
-      const room = document.getElementById('roomCode')?.value?.trim() || 'AI_EXAM';
-      const spec = typeof window.aieSpec === 'function' ? window.aieSpec() : aieSpec();
+      const prompt = String(document.getElementById('promptBox')?.value || '').trim();
+      if (!aieCurrentRequestId || !prompt) {
+        if (tab && !tab.closed) tab.close();
+        setWebStatus('Chưa tạo được gói ra đề. Hãy kiểm tra mã phòng, môn, khối và phạm vi kiến thức.', 'error');
+        return;
+      }
 
-      aieSetBusy(true);
-      const generated = await generateChunked(requestId, prompt, spec);
-      const exam = assembleExam(spec, room, generated.questions);
-      const request = await validateAssembledExam(exam, requestId);
-      if (request?.status === 'READY_FOR_REVIEW') {
-        setAutoStatus(`Đề đã vượt kiểm định · ${generated.fragment_count} phân đoạn · ${generated.fallback_count} lượt fallback · ${exam.questions.length} câu.`, 'ok');
-        aieNotice('Đề đã sẵn sàng để duyệt. Kiểm tra nội dung rồi phê duyệt để đưa lên phòng.', 'ok');
+      bindProviderMetadata(target.provider);
+      const copied = await copyPrompt(prompt);
+
+      if (tab && !tab.closed) {
+        tab.location.replace(target.url);
       } else {
-        const diagnostic = document.getElementById('validationStatus')?.textContent || request?.status || 'validation_failed';
-        setAutoStatus(`AI đã tạo đủ câu nhưng đề chưa vượt kiểm định: ${diagnostic}`, 'error');
+        window.open(target.url, '_blank', 'noopener');
+      }
+
+      if (copied) {
+        setWebStatus(`Đã tạo gói và sao chép prompt. ${target.label} đã được mở ở tab mới; dán prompt bằng Ctrl+V.`, 'ok');
+        aieNotice(`Đã sao chép prompt. Chuyển sang ${target.label} và nhấn Ctrl+V.`, 'ok');
+      } else {
+        setWebStatus(`Đã tạo gói và mở ${target.label}. Trình duyệt không cho sao chép tự động; prompt đã được chọn để mày sao chép thủ công.`, 'warn');
+        aieNotice('Prompt đã được chọn. Hãy Ctrl+C rồi chuyển sang AI web vừa mở.', 'info');
       }
     } catch (error) {
-      const failures = Array.isArray(error.detail?.failures) ? error.detail.failures : [];
-      const suffix = failures.length ? ` (${failures.slice(0, 4).join(', ')})` : '';
-      setAutoStatus(`AI chưa tạo được đề hợp lệ: ${error.code || error.message}${suffix}`, 'error');
-      aieNotice('Request được giữ nguyên. Hệ thống có thể thử lại hoặc dùng AI Web thủ công.', 'error');
-      if (aieCurrentRequestId) await aieLoadRequests(aieCurrentRequestId);
+      if (tab && !tab.closed) tab.close();
+      setWebStatus(error?.message || 'Không tạo được gói ra đề AI Web.', 'error');
     } finally {
-      autoBusy = false;
-      aieSetBusy(false);
-      if (button) button.disabled = false;
+      webBusy = false;
+      setButtonsDisabled(false);
     }
   }
 
-  async function createWebPackageOnly() {
-    if (autoBusy) return;
-    setManualVisible(true);
-    await aieCreatePackage();
+  function replaceLegacyCreateListener() {
+    const original = document.getElementById('btnCreate');
+    if (!original) return null;
+    const button = original.cloneNode(true);
+    original.replaceWith(button);
+    return button;
   }
 
   function mount() {
-    const original = document.getElementById('btnCreate');
-    if (!original || document.getElementById('aieAutoControls')) return;
-
+    if (document.getElementById('aieWebStatus')) return;
     mountTargetClass();
 
-    const button = original.cloneNode(true);
-    button.textContent = 'TẠO ĐỀ BẰNG AI';
-    original.replaceWith(button);
-    button.addEventListener('click', generateOneClick);
+    const chatgptButton = replaceLegacyCreateListener();
+    if (!chatgptButton) return;
+    chatgptButton.textContent = 'Tạo gói & mở ChatGPT';
+    chatgptButton.addEventListener('click', () => createPackageAndOpen('chatgpt'));
 
+    document.getElementById('btnWebGemini')?.addEventListener('click', () => createPackageAndOpen('gemini'));
+    document.getElementById('btnWebClaude')?.addEventListener('click', () => createPackageAndOpen('claude'));
+    document.getElementById('btnWebOther')?.addEventListener('click', () => createPackageAndOpen('other'));
+
+    // Historical opener buttons are retained only so ai_exam.js can bind safely; they are never shown.
     document.getElementById('btnChatGPT')?.classList.add('hidden');
     document.getElementById('btnGemini')?.classList.add('hidden');
-    setManualVisible(false);
 
-    const controls = document.createElement('div');
-    controls.id = 'aieAutoControls';
-    controls.innerHTML = `
-      <div id="aieAutoStatus" class="authority-panel info">Đang kiểm tra AI tự động...</div>
-      <div class="actions" style="margin-top:8px">
-        <button id="btnManualAiWeb" class="secondary" type="button">Dùng AI Web thủ công</button>
-        <button id="btnCreateWebPackage" class="secondary hidden" type="button">Tạo gói cho AI Web</button>
-        <a href="ai_provider.html" class="secondary" style="display:inline-block;text-decoration:none;padding:10px 14px;border-radius:7px">Cấu hình AI</a>
-      </div>`;
-    document.getElementById('generationStatus')?.insertAdjacentElement('afterend', controls);
-
-    document.getElementById('btnManualAiWeb')?.addEventListener('click', () => {
-      setManualVisible(!manualVisible);
-      document.getElementById('btnCreateWebPackage')?.classList.toggle('hidden', !manualVisible);
-    });
-    document.getElementById('btnCreateWebPackage')?.addEventListener('click', createWebPackageOnly);
-    refreshRouteStatus();
+    const status = document.createElement('div');
+    status.id = 'aieWebStatus';
+    status.className = 'authority-panel ok';
+    status.textContent = 'Mặc định: AI Web. Nút tạo đề không gọi Vertex/API và không tự retry/fallback có tính phí.';
+    document.getElementById('generationStatus')?.insertAdjacentElement('afterend', status);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);

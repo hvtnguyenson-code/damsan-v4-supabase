@@ -11,7 +11,7 @@
   </style>
 </head>
 <body>
-<header><div><h1>Tạo đề bằng AI — Đam San V4</h1><p>Môn → khối → căn cứ khảo thí → phạm vi kiến thức → AI Web hoặc API → server kiểm định → giáo viên duyệt.</p></div><div class="nav"><a href="knowledge.html">Kho tri thức</a><a href="knowledge_ai.html">AI phân tích nguồn</a><a href="ai_provider.html">Kết nối API</a><a href="giaovien.html">Cổng giáo viên</a></div></header>
+<header><div><h1>Tạo đề bằng AI — Đam San V4</h1><p>Môn → khối → căn cứ khảo thí → phạm vi kiến thức → AI Web → server kiểm định → giáo viên duyệt.</p></div><div class="nav"><a href="knowledge.html">Kho tri thức</a><a href="knowledge_ai.html">AI phân tích nguồn</a><a href="ai_provider.html">API nâng cao</a><a href="giaovien.html">Cổng giáo viên</a></div></header>
 <main>
   <div id="notice" class="notice"></div>
   <section class="card">
@@ -28,12 +28,20 @@
     <div id="customWeights" class="grid4 hidden" style="margin-top:12px"><div class="field"><label for="w1">Trọng số P1</label><input id="w1" type="number" min="0" max="10" step="0.01" value="4"></div><div class="field"><label for="w2">Trọng số P2</label><input id="w2" type="number" min="0" max="10" step="0.01" value="4"></div><div class="field"><label for="w3">Trọng số P3</label><input id="w3" type="number" min="0" max="10" step="0.01" value="2"></div><div class="field"><label>Tổng</label><input id="weightSum" readonly value="10"></div></div>
     <div class="field" style="margin-top:12px"><label for="requirements">Yêu cầu nội dung / mức độ / phong cách</label><textarea id="requirements" placeholder="Ví dụ: NB 40%, TH 30%, VD 30%; văn phong tự nhiên; tránh đáp án dài nổi bật..."></textarea></div>
     <div class="field" style="margin-top:12px"><label>Phạm vi kiến thức — chọn bài cần ra đề</label><div class="sub" style="margin:2px 0 8px">Hệ thống chỉ đưa những bài được chọn vào Knowledge Pack. Chọn “Dùng toàn bộ sách” chỉ khi đề thực sự bao quát toàn bộ chương trình.</div><div id="knowledgeDocs" class="docs"><div class="doc">Hãy chọn môn và khối...</div></div></div>
-    <div class="actions"><button id="btnCreate" class="primary">Tạo gói ra đề AI</button><button id="btnRefreshDocs" class="secondary">Làm mới tài liệu</button><button id="btnChatGPT" class="secondary">Mở ChatGPT</button><button id="btnGemini" class="secondary">Mở Gemini</button></div><div id="generationStatus" class="statusline"></div>
+    <div class="actions">
+      <button id="btnCreate" class="primary">Tạo gói &amp; mở ChatGPT</button>
+      <button id="btnWebGemini" class="secondary">Tạo gói &amp; mở Gemini</button>
+      <button id="btnWebClaude" class="secondary">Tạo gói &amp; mở Claude</button>
+      <button id="btnWebOther" class="secondary">Tạo gói &amp; mở AI web khác</button>
+      <button id="btnRefreshDocs" class="secondary">Làm mới tài liệu</button>
+      <button id="btnChatGPT" class="hidden" type="button" tabindex="-1" aria-hidden="true">Mở ChatGPT</button>
+      <button id="btnGemini" class="hidden" type="button" tabindex="-1" aria-hidden="true">Mở Gemini</button>
+    </div><div id="generationStatus" class="statusline"></div>
   </section>
 
   <section class="card"><h2>2. Prompt dành cho AI</h2><p class="sub">Prompt gồm hai lớp tách biệt: <strong>ASSESSMENT AUTHORITY</strong> quyết định cách ra đề; <strong>KNOWLEDGE PACKAGE</strong> quyết định kiến thức được phép hỏi. Quy định chính thức có quyền ưu tiên cao hơn benchmark; benchmark chỉ dùng để học pattern/kỹ thuật, không được sao chép nội dung.</p><textarea id="promptBox" class="mono" readonly placeholder="Gói ra đề sẽ xuất hiện ở đây..."></textarea><div class="actions"><button id="btnCopyPrompt" class="primary">Sao chép prompt</button></div></section>
 
-  <section class="card"><h2>3. Nhận đề AI và kiểm định</h2><div class="grid"><div class="field"><label for="provider">Nguồn AI</label><select id="provider"><option value="CHATGPT_WEB">ChatGPT web</option><option value="GEMINI_WEB">Gemini web</option><option value="OTHER_WEB_AI">AI web khác</option></select></div><div class="field"><label for="modelName">Tên model — tùy chọn</label><input id="modelName" placeholder="Ví dụ: GPT-5.6 Sol"></div></div><textarea id="resultBox" class="mono" style="margin-top:12px" placeholder='{"schema_version":"DAMSAN_EXAM_V1", ...}'></textarea><div class="actions"><button id="btnPaste" class="secondary">Dán từ clipboard</button><button id="btnValidate" class="success">Gửi kiểm định đề</button></div><div id="validationStatus" class="statusline"></div></section>
+  <section class="card"><h2>3. Nhận đề AI và kiểm định</h2><div class="grid"><div class="field"><label for="provider">Nguồn AI</label><select id="provider"><option value="CHATGPT_WEB">ChatGPT web</option><option value="GEMINI_WEB">Gemini web</option><option value="CLAUDE_WEB">Claude web</option><option value="OTHER_WEB_AI">AI web khác</option></select></div><div class="field"><label for="modelName">Tên model — tùy chọn</label><input id="modelName" placeholder="Ví dụ: GPT-5.6 Sol"></div></div><textarea id="resultBox" class="mono" style="margin-top:12px" placeholder='{"schema_version":"DAMSAN_EXAM_V1", ...}'></textarea><div class="actions"><button id="btnPaste" class="secondary">Dán từ clipboard</button><button id="btnValidate" class="success">Gửi kiểm định đề</button></div><div id="validationStatus" class="statusline"></div></section>
 
   <section id="reviewCard" class="card hidden"><h2>4. Xem trước và quyết định cuối cùng</h2><p class="sub">Đây là điểm duyệt bắt buộc duy nhất. Chỉ khi bấm “Phê duyệt & đưa lên phòng” hệ thống mới gọi RPC lưu đề chính thức.</p><div id="reviewMeta" class="statusline"></div><div id="preview" class="preview" style="margin-top:12px"></div><div class="actions"><button id="btnApprove" class="success">PHÊ DUYỆT & ĐƯA LÊN PHÒNG</button><button id="btnReject" class="danger">TỪ CHỐI ĐỀ</button></div></section>
 
@@ -54,7 +62,7 @@
 <script src="ai_exam_knowledge_scope.js?v=20260913-explicit-lesson-scope-045"></script>
 <script src="ai_exam_grade_authority.js?v=20260911-grade-authority-039"></script>
 <script src="ai_exam_copy_feedback.js?v=20260910-ai-exam-copy-feedback-035"></script>
-<script src="ai_exam_api_mode_065c.js?v=20260918-api-mode-065c"></script>
+<script src="ai_exam_api_mode_065c.js?v=20260929-web-first-070"></script>
 <script src="ai_action_feedback.js?v=20260912-ai-action-feedback-041a"></script>
 </body>
 </html>
