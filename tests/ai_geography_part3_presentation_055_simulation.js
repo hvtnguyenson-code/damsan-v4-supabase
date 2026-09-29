@@ -8,7 +8,7 @@ const migration056 = fs.readFileSync('supabase/migrations/20260916230500_ai_exam
 const studentJs = fs.readFileSync('hoc_sinh.js','utf8');
 const studentHtml = fs.readFileSync('hoc_sinh.html','utf8');
 
-assert(overlay.includes('PHẦN III — 056 BẢNG SỐ LIỆU + ĐÁP ÁN TỐI ĐA 4 KÍ TỰ'), '056 Part III prompt contract missing');
+assert(overlay.includes('PHẦN III — 071 DỮ LIỆU THẬT + LỆNH HỎI THEO MẪU TNTHPT'), '071 Part III prompt contract missing');
 assert(overlay.includes('"22,2"') && overlay.includes('"2,22"') && overlay.includes('"-222"'), 'compact-answer examples missing');
 assert(overlay.includes("<table data-damsan-p3='1'>"), 'JSON-safe single-quoted table marker missing from prompt');
 assert(overlay.includes('KHÔNG chèn dấu nháy kép chưa escape'), 'prompt must explicitly forbid raw double quotes inside JSON strings');
@@ -72,4 +72,4 @@ assert.strictEqual(canonical('54.8'),'54,8','dot must canonicalize to decimal co
 assert.strictEqual(applyDivisor(12345,1000),12.345,'result_divisor should support legitimate unit scaling');
 assert.strictEqual(applyDivisor(12345,60),null,'arbitrary result scaling must be rejected');
 
-console.log('AI Geography Part III presentation 056 simulation: PASSED');
+console.log('AI Geography Part III presentation 071 simulation: PASSED');
