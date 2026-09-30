@@ -1,6 +1,6 @@
-// 071 — Geography Part III presentation + authentic-data contract.
-// Quantitative data with a natural table structure is authored as semantic HTML inside noi_dung.
-// HTML attributes use SINGLE quotes so the surrounding JSON string stays valid without manual escaping.
+// 072 — Geography Part III presentation + authentic-data contract.
+// Quantitative data may come from selected knowledge units or a tiny whitelist of authoritative web sources.
+// External datasets are not copied into Supabase; the AI returns only the evidence capsule used by the question.
 (function () {
   'use strict';
 
@@ -13,23 +13,68 @@
     return remote && typeof remote === 'object' && !Array.isArray(remote) ? remote : localSpec;
   }
 
-  window.aieBuildPrompt = function aieBuildPrompt071(input, units, localSpec) {
-    const prompt = previousBuildPrompt(input, units, localSpec);
+  function trustedSources072(spec) {
+    const sources = spec?.assessment_standard?.part3?.trusted_external_sources;
+    return Array.isArray(sources) ? sources.filter((s) => s && s.source_id) : [];
+  }
+
+  function trustedRegistryLines072(spec) {
+    const sources = trustedSources072(spec);
+    if (!sources.length) return ['- Request này không có nguồn ngoài nào được whitelist; chỉ được dùng LOCAL_GROUNDED.'];
+    return [
+      '- TRUSTED_EXTERNAL chỉ được chọn từ whitelist sau; source_url phải nằm đúng domain chính thức tương ứng:',
+      ...sources.map((s) => {
+        const domains = Array.isArray(s.allowed_domains) ? s.allowed_domains.join(', ') : '';
+        const scope = Array.isArray(s.scope_tags) ? s.scope_tags.join(', ') : '';
+        return `  * ${s.source_id}: ${s.display_name || s.organization || ''}; domain: ${domains}; phạm vi: ${scope}`;
+      })
+    ];
+  }
+
+  window.aieBuildPrompt = function aieBuildPrompt072(input, units, localSpec) {
+    let prompt = previousBuildPrompt(input, units, localSpec);
     const spec = specFrom(input, localSpec);
     if (!spec?.assessment_standard || spec.assessment_standard.id !== STANDARD_ID) return prompt;
+
+    // 053's source-only wording remains correct for curriculum/content. 072 introduces one narrow exception:
+    // raw quantitative evidence for Part III may be browsed only from the request's authoritative whitelist.
+    prompt = prompt.replace(
+      'Chỉ sử dụng KNOWLEDGE PACKAGE bên dưới. Không bổ sung kiến thức vốn có của mô hình và không bịa nguồn.',
+      'Chỉ dùng KNOWLEDGE PACKAGE bên dưới để xác định kiến thức, kĩ năng và phạm vi được hỏi. Không bổ sung kiến thức vốn có và không bịa nguồn. Riêng SỐ LIỆU THÔ Phần III được phép lấy từ trusted_external_sources trong authoritative_exam_spec theo contract 072.'
+    );
+    prompt = prompt.replace(
+      '- Không dùng kiến thức ngoài knowledge_units; source_refs phải là unit_key có thật.',
+      '- Kiến thức/kĩ năng được hỏi phải nằm trong knowledge_units và source_refs phải là unit_key có thật. Riêng dữ liệu định lượng Phần III có thể dùng TRUSTED_EXTERNAL theo whitelist 072, nhưng source_refs vẫn phải neo câu hỏi vào đúng bài đã chọn.'
+    );
 
     const rules = [
       '',
       'PHẦN III — 071 DỮ LIỆU THẬT + LỆNH HỎI THEO MẪU TNTHPT:',
-      '- Phần III đánh giá năng lực xử lí số liệu địa lí. Dữ liệu dùng để tính PHẢI là dữ liệu thật có trong KNOWLEDGE PACKAGE và phải được truy nguyên bằng source_refs.',
-      '- TUYỆT ĐỐI KHÔNG tự đặt số liệu để tạo phép tính đẹp. CẤM các số liệu/ngữ cảnh kiểu “giả định”, “mô phỏng”, “minh họa”, “lãnh thổ A/B”, “giá trị giả định”, hoặc các con số không tồn tại trong nguồn được dẫn.',
-      '- Mỗi giá trị trong quantitative.inputs phải xuất hiện về mặt số học trong ít nhất một knowledge_unit được trỏ bởi source_refs của chính câu đó. Không được lấy số từ kiến thức nền của mô hình, trí nhớ, suy đoán hoặc tự truy cập web.',
-      '- Hằng số/công thức như ×100 khi tính tỉ trọng, ×1000 khi đổi quy mô, hoặc hệ số đơn vị phải thể hiện bằng operation_code/scale_factor/result_divisor; KHÔNG đưa vào inputs nếu nguồn không chứa chúng.',
-      '- Nếu các bài đã chọn KHÔNG có đủ số liệu thật để tạo đủ số câu Phần III, KHÔNG được bịa số để hoàn tất đề. Khi đó dừng và trả duy nhất JSON {"schema_version":"DAMSAN_EXAM_GENERATION_BLOCKED","code":"INSUFFICIENT_AUTHENTIC_QUANTITATIVE_DATA","message":"Phạm vi kiến thức đã chọn không có đủ số liệu thật cho Phần III."}.',
-      '- Nguồn uy tín bên ngoài SGK chỉ được dùng khi dữ liệu đó đã được hệ thống đưa vào KNOWLEDGE PACKAGE dưới dạng knowledge_unit có unit_key để source_refs kiểm chứng; không tự bổ sung nguồn ngoài gói.',
+      '- Phần III đánh giá năng lực xử lí số liệu địa lí. TUYỆT ĐỐI KHÔNG tự đặt số liệu để tạo phép tính đẹp. CẤM “giả định”, “mô phỏng”, “số liệu minh họa”, “lãnh thổ A/B”, hoặc con số do mô hình tự nghĩ ra.',
+      '- Quy tắc 071 cũ “không tự bổ sung nguồn ngoài gói” được mở rộng có kiểm soát ở 072: kiến thức vẫn chỉ từ Knowledge Package; chỉ SỐ LIỆU THÔ Phần III được phép lấy từ whitelist chính thức bên dưới.',
+      '- source_refs luôn phải trỏ tới knowledge_unit của bài đã chọn để chứng minh câu hỏi đúng phạm vi chương trình, kể cả khi số liệu thô đến từ TRUSTED_EXTERNAL.',
+      '',
+      'MỞ RỘNG 072 — HAI NGUỒN DỮ LIỆU HỢP LỆ:',
+      '- Ưu tiên LOCAL_GROUNDED khi SGK/Knowledge Package đã có số liệu phù hợp. Khi đó quantitative.data_origin="LOCAL_GROUNDED" và KHÔNG cần external_evidence.',
+      '- LOCAL_GROUNDED: quantitative.inputs phải xuất hiện về mặt số học trong ít nhất một knowledge_unit được source_refs dẫn. Server vẫn kiểm tra lại như 071.',
+      '- Chỉ khi dữ liệu trong SGK không đủ để ra câu có ý nghĩa, được dùng quantitative.data_origin="TRUSTED_EXTERNAL".',
+      '- TRUSTED_EXTERNAL không cho phép dùng trí nhớ của mô hình. AI web PHẢI truy cập/tra cứu nguồn chính thức, lấy số thật, đối chiếu nguồn rồi mới đặt câu. Nếu không có khả năng duyệt web hoặc không xác minh được nguồn trực tiếp thì KHÔNG được tạo câu đó.',
+      '- Không dùng nguồn thứ cấp, blog, Wikipedia, báo chí hoặc domain ngoài whitelist để thay cho nguồn chính thức.',
+      ...trustedRegistryLines072(spec),
+      '',
+      'EVIDENCE CAPSULE 072 — BẮT BUỘC CHO TRUSTED_EXTERNAL:',
+      '- quantitative phải có data_origin, operation_code, inputs và các tham số tính thật sự cần thiết.',
+      '- Khi data_origin="TRUSTED_EXTERNAL", thêm quantitative.external_evidence với đúng các trường tối thiểu: source_id, source_url, dataset, retrieved_at, values.',
+      '- source_id phải đúng một mã trong whitelist. source_url phải là URL HTTPS trực tiếp tới trang/bảng/API chính thức thuộc allowed_domains của source_id; không dùng URL tìm kiếm hoặc trang trung gian.',
+      '- dataset ghi tên bộ dữ liệu/bảng/chỉ tiêu đủ để giáo viên lần ngược; retrieved_at ghi ngày truy cập dạng YYYY-MM-DD; values là mảng CHỈ gồm các số liệu thô thật đã lấy từ nguồn.',
+      '- Mọi số trong quantitative.inputs phải xuất hiện nguyên giá trị trong external_evidence.values. Không đưa kết quả suy ra, hệ số ×100, ×1000 hoặc hằng số công thức vào values/inputs nếu nguồn không cung cấp chúng.',
+      '- Nên bổ sung entity, period, indicator_code/table_name khi nguồn có để tăng khả năng kiểm chứng.',
+      '- Trong noi_dung học sinh nhìn thấy phải ghi nguồn ngắn gọn dưới bảng/đoạn số liệu, ví dụ “Nguồn: World Bank, World Development Indicators, truy cập 2026-09-30”.',
+      '- Ví dụ cấu trúc: "quantitative":{"data_origin":"TRUSTED_EXTERNAL","operation_code":"GROWTH_INDEX","inputs":[...],"external_evidence":{"source_id":"WORLD_BANK","source_url":"https://data.worldbank.org/...","dataset":"World Development Indicators - Population, total","retrieved_at":"YYYY-MM-DD","values":[...],"entity":"...","period":"..."}}.',
+      '- Nếu không đủ dữ liệu LOCAL_GROUNDED và cũng không tìm/xác minh được TRUSTED_EXTERNAL trong whitelist, dừng và trả duy nhất JSON {"schema_version":"DAMSAN_EXAM_GENERATION_BLOCKED","code":"INSUFFICIENT_AUTHENTIC_QUANTITATIVE_DATA","message":"Không đủ dữ liệu định lượng thật có thể kiểm chứng cho phạm vi đã chọn."}. Tuyệt đối không bịa số để đủ số câu.',
       '',
       'CÁCH RA LỆNH HỎI — HỌC THEO ĐỀ THAM KHẢO/TNTHPT, KHÔNG HỌC VẸT CÂU CHỮ:',
-      '- Với bảng số liệu thật: nêu tên bảng, đơn vị, dữ liệu và nguồn nếu knowledge_unit có thông tin nguồn; sau bảng dùng lệnh ngắn, trực tiếp kiểu “Căn cứ vào bảng số liệu trên, hãy cho biết ... (làm tròn ...).”',
+      '- Với bảng số liệu thật: nêu tên bảng, đơn vị, dữ liệu và nguồn; sau bảng dùng lệnh ngắn, trực tiếp kiểu “Căn cứ vào bảng số liệu trên, hãy cho biết ... (làm tròn ...).”',
       '- Với hai hoặc vài số liệu thật trình bày bằng câu văn: nêu rõ đối tượng, thời gian, đơn vị và các giá trị; sau đó hỏi trực tiếp “Hãy cho biết ...” hoặc “Tính ...”, kèm yêu cầu làm tròn khi cần.',
       '- Lệnh hỏi phải buộc học sinh nhận diện đại lượng/công thức địa lí phù hợp rồi xử lí dữ liệu; không biến câu trả lời ngắn thành phép cộng/trừ cơ học không có ý nghĩa địa lí.',
       '- Không dùng câu dẫn “trong một bài tập giả định”, “giáo viên cho các giá trị”, “một lãnh thổ giả định” để hợp thức hóa số liệu do AI tự đặt.',
@@ -48,7 +93,7 @@
       "- Ví dụ khung JSON-safe: <table data-damsan-p3='1'><caption>Bảng số liệu ...</caption><thead><tr><th>Năm</th><th>2020</th><th>2024</th></tr></thead><tbody><tr><th>Giá trị</th><td>...</td><td>...</td></tr></tbody></table>.",
       '- noi_dung gồm lời dẫn/yêu cầu tính toán + bảng. Không lặp lại toàn bộ số liệu của bảng thành câu văn phía trên hoặc phía dưới.',
       '- Với đúng 2 số liệu đơn giản và không có cấu trúc bảng tự nhiên, có thể trình bày trong câu văn thay vì ép thành bảng.',
-      '- Mọi giá trị dùng trong quantitative.inputs phải xuất hiện rõ trong phần văn bản hoặc các ô bảng mà học sinh nhìn thấy VÀ phải có thật trong source_refs.',
+      '- Mọi giá trị dùng trong quantitative.inputs phải xuất hiện rõ trong phần văn bản hoặc các ô bảng mà học sinh nhìn thấy; server còn kiểm tra nguồn gốc theo data_origin.',
       '- Trước khi trả kết quả, tự kiểm tra toàn bộ output bằng JSON.parse tương đương; nếu JSON không hợp lệ thì sửa trước khi trả.',
       ''
     ].join('\n');
@@ -85,6 +130,15 @@
     return `${aieEscape(before)}${renderTable055(match[0])}${aieEscape(after)}`;
   }
 
+  function evidencePreview072(question) {
+    const quant = question?.quantitative;
+    if (!quant || String(quant.data_origin || '').toUpperCase() !== 'TRUSTED_EXTERNAL') return '';
+    const ev = quant.external_evidence;
+    if (!ev || typeof ev !== 'object') return '<div class="source">Dữ liệu ngoài: thiếu evidence capsule</div>';
+    const parts = [ev.source_id, ev.dataset, ev.entity, ev.period, ev.source_url].filter(Boolean).map((v) => aieEscape(String(v)));
+    return `<div class="source">Dữ liệu ngoài đã khai báo: ${parts.join(' · ')}</div>`;
+  }
+
   window.aieQuestionPreview = function aieQuestionPreview055(question, index) {
     const part = String(question?.phan || question?.Phan || '1');
     if (part !== '3' || typeof previousQuestionPreview !== 'function') {
@@ -93,6 +147,6 @@
         : '';
     }
     const refs = Array.isArray(question.source_refs) ? question.source_refs : [];
-    return `<div class="question"><h3>Câu ${index + 1} · Phần 3</h3><div>${renderP3Stem055(question.noi_dung || question.NoiDung || '')}</div><div class="answer">Đáp án: ${aieEscape(question.dap_an_dung || question.DapAnDung || '')}</div>${question.loi_giai ? `<div class="source">Giải thích: ${aieEscape(question.loi_giai)}</div>` : ''}<div class="source">Nguồn: ${refs.length ? refs.map(aieEscape).join(', ') : 'server provenance đã kiểm định'}</div></div>`;
+    return `<div class="question"><h3>Câu ${index + 1} · Phần 3</h3><div>${renderP3Stem055(question.noi_dung || question.NoiDung || '')}</div><div class="answer">Đáp án: ${aieEscape(question.dap_an_dung || question.DapAnDung || '')}</div>${question.loi_giai ? `<div class="source">Giải thích: ${aieEscape(question.loi_giai)}</div>` : ''}<div class="source">Phạm vi SGK: ${refs.length ? refs.map(aieEscape).join(', ') : 'server provenance đã kiểm định'}</div>${evidencePreview072(question)}</div>`;
   };
 })();
