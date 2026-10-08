@@ -219,39 +219,82 @@
     });
   }
 
-  window.aieValidateDraft = async function aieValidateDraft053() {
-    if (aieBusy) return;
-    if (!aieCurrentRequestId) return aieNotice('Chưa có request AI để kiểm định.', 'error');
-    let exam;
-    try { exam = aieLooseJson(document.getElementById('resultBox').value); }
-    catch (error) { return aieNotice(`JSON đề không hợp lệ: ${error.message}`, 'error'); }
+  function setValidationStatus053(message) {
+    const el = document.getElementById('validationStatus');
+    if (el) el.textContent = String(message || '');
+  }
 
+  function recoverCurrentRequest053() {
+    if (aieCurrentRequestId) return aieCurrentRequestId;
+    const room = String(document.getElementById('roomCode')?.value || '').trim();
+    const candidates = (Array.isArray(aieRequests) ? aieRequests : [])
+      .filter((r) => ['AWAITING_AI','AI_WORKING'].includes(String(r?.status || '')))
+      .filter((r) => !room || String(r?.ma_phong || '') === room)
+      .sort((a,b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime());
+    if (!candidates.length) return '';
+    aieCurrentRequestId = candidates[0].request_id;
+    return aieCurrentRequestId;
+  }
+
+  window.aieValidateDraft = async function aieValidateDraft053() {
+    if (aieBusy) {
+      setValidationStatus053('CHƯA GỬI · Hệ thống đang bận một tác vụ khác. Chờ tác vụ hiện tại kết thúc rồi bấm lại.');
+      return;
+    }
+
+    const requestId = recoverCurrentRequest053();
+    if (!requestId) {
+      setValidationStatus053('CHƯA GỬI · Không xác định được request cần kiểm định. Chọn request AI_WORKING tương ứng ở “Yêu cầu gần đây” rồi bấm lại.');
+      return aieNotice('Chưa xác định được request AI để kiểm định.', 'error');
+    }
+
+    const raw = String(document.getElementById('resultBox')?.value || '').trim();
+    if (!raw) {
+      setValidationStatus053('CHƯA GỬI · Ô JSON đang trống.');
+      return aieNotice('Hãy dán JSON đề AI vào ô kết quả trước khi kiểm định.', 'error');
+    }
+
+    let exam;
+    try {
+      exam = aieLooseJson(raw);
+    } catch (error) {
+      setValidationStatus053(`CHƯA GỬI · JSON chưa hợp lệ: ${error.message}`);
+      return aieNotice(`JSON đề không hợp lệ: ${error.message}`, 'error');
+    }
+
+    const questionCount = Array.isArray(exam?.questions) ? exam.questions.length : 0;
     lastFailure053 = null;
     showRepair053(false);
     aieSetBusy(true);
-    document.getElementById('validationStatus').textContent = 'Server đang kiểm định toàn bộ đề trong một lượt...';
+    setValidationStatus053(`ĐÃ NHẬN JSON · ${questionCount} câu · đang chuẩn bị gửi tới máy chủ...`);
     try {
-      if (!aieCapability) await renewCapability053(aieCurrentRequestId);
+      if (!aieCapability) {
+        setValidationStatus053(`ĐÃ NHẬN JSON · ${questionCount} câu · đang cấp lại quyền gửi cho request hiện tại...`);
+        await renewCapability053(requestId);
+      }
+
+      setValidationStatus053(`ĐANG KIỂM ĐỊNH · ${questionCount} câu · JSON đã được gửi tới máy chủ...`);
       let result;
       try {
         result = await submit053(exam);
       } catch (error) {
         if (['capability_expired','capability_not_claimed','capability_unavailable'].includes(String(error?.code || ''))) {
-          await renewCapability053(aieCurrentRequestId);
+          setValidationStatus053(`ĐANG KIỂM ĐỊNH · ${questionCount} câu · quyền gửi đã hết hạn, đang cấp lại và gửi lại một lần...`);
+          await renewCapability053(requestId);
           result = await submit053(exam);
         } else {
           throw error;
         }
       }
-      document.getElementById('validationStatus').textContent = `VALIDATED · revision ${result.revision} · ${result.validation?.question_count || 0} câu · ${result.validation?.variant_count || 0} mã đề.`;
+      setValidationStatus053(`VALIDATED · revision ${result.revision} · ${result.validation?.question_count || 0} câu · ${result.validation?.variant_count || 0} mã đề.`);
       aieNotice('Đề đã qua hard gate. Các cảnh báo chất lượng, nếu có, sẽ hiện trong bước xem trước để giáo viên quyết định.', 'ok');
       aieCapability = '';
-      await aieLoadRequests(aieCurrentRequestId);
+      await aieLoadRequests(requestId);
     } catch (error) {
       const terminalCode = String(error?.code || '');
       let diagnostic = null;
       if (!['capability_expired','capability_not_claimed','capability_unavailable','staff_session_invalid','exam_request_unavailable'].includes(terminalCode)) {
-        const request = await readRequest053(aieCurrentRequestId);
+        const request = await readRequest053(requestId);
         diagnostic = parseFailure053(request?.processing_error);
       }
       lastFailure053 = diagnostic || {
@@ -261,7 +304,7 @@
         recoverable: !['staff_session_invalid','exam_request_unavailable'].includes(terminalCode)
       };
       const reason = failureText053(lastFailure053, terminalCode);
-      document.getElementById('validationStatus').textContent = `KHÔNG ĐẠT · ${reason}`;
+      setValidationStatus053(`KHÔNG ĐẠT · ${reason}`);
       aieNotice(`Kiểm định đã trả toàn bộ lỗi có thể xác định: ${reason}`, 'error');
       showRepair053(!!document.getElementById('resultBox').value.trim());
     } finally {

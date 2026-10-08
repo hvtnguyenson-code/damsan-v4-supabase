@@ -22,7 +22,7 @@ assert(migration.includes('grant execute on function public.rpc_ai_exam_reissue_
 
 assert(ui.includes("rpc_ai_exam_reissue_handoff"), 'UI must continue renewing the same request rather than creating a duplicate request');
 assert(ui.includes("['capability_expired','capability_not_claimed','capability_unavailable']"), 'UI must continue retrying after capability expiry/unavailability');
-assert(ui.includes('await renewCapability053(aieCurrentRequestId)'), 'UI must renew the currently selected request');
+assert(ui.includes('await renewCapability053(requestId)') || ui.includes('await renewCapability053(aieCurrentRequestId)'), 'UI must renew the currently selected or recovered request');
 
 console.log('PASS ai_exam_capability_reissue_063_simulation');
 
