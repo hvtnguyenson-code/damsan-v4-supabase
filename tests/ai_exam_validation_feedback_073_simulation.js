@@ -10,6 +10,6 @@ assert(js.includes("CHƯA GỬI · Ô JSON đang trống."), '073 must surface e
 assert(js.includes('ĐANG KIỂM ĐỊNH ·'), '073 must show visible server-validation progress');
 assert(js.includes('JSON đã được gửi tới máy chủ'), '073 must distinguish local click feedback from an actual server send');
 assert(js.includes('đang cấp lại quyền gửi cho request hiện tại'), '073 must expose capability recovery state');
-assert(html.includes('ai_exam_validation_architecture_053.js?v=20261008-validation-feedback-073'), '073 cache marker must force updated validation client');
+assert(/ai_exam_validation_architecture_053\.js\?v=(?:20261008-validation-feedback-073|20261008-item-writing-074)/.test(html), '073+ cache marker must force updated validation client');
 
 console.log('AI exam validation feedback 073 simulation: PASS');

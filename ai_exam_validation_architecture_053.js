@@ -23,7 +23,8 @@
         'source_refs','muc_do','bai_hoc','quantitative'
       ],
       part_3: 'Short answer. A/B/C/D are empty strings. quantitative is a calculation recipe: operation_code, inputs, optional rounding_digits, unit, scale_factor, group_sizes. Do not self-score skill_code, data_form or reasoning_steps; the server derives those properties.',
-      validation_contract: '053 server-canonical contract: AI supplies content plus objective calculation recipe; the server derives descriptive quality metadata and reports all hard errors together.'
+      validation_contract: '053 server-canonical contract: AI supplies content plus objective calculation recipe; the server derives descriptive quality metadata and reports all hard errors together.',
+      part_1_stem_style: 'Write standalone Vietnamese teacher-authored stems. Never mention the lesson, source package, knowledge_units, source_refs, unit_key, or the authoring process. NB must be concise and direct; TH/VD must require real reasoning rather than a memorization item wrapped in a scenario.'
     };
   }
 
@@ -33,6 +34,17 @@
     return [
       '',
       'CHUẨN KHẢO THÍ ĐỊA LÍ — 053 SERVER-CANONICAL:',
+      '',
+      'PHẦN I — CÂU DẪN VÀ PHƯƠNG ÁN:',
+      '- Câu dẫn phải đứng độc lập như câu hỏi do giáo viên viết và học sinh hiểu được khi không nhìn thấy Knowledge Package. Tuyệt đối không nhắc “bài học”, “nguồn”, Knowledge Package, knowledge_units, source_refs, unit_key hoặc quy trình tạo đề.',
+      '- Ưu tiên câu dẫn ngắn, trực tiếp, tự nhiên. Cấm các vỏ câu kiểu “theo ... được trình bày/nêu trong bài”, “phù hợp nhất với quy luật trong bài”, “theo nguồn nêu”.',
+      '- Câu NB hỏi thẳng kiến thức cốt lõi nhưng không sao chép máy móc. Câu TH phải buộc phân biệt, so sánh, giải thích hoặc xác định quan hệ. Câu VD phải có tình huống/dữ kiện làm phát sinh suy luận hoặc chuyển giao thực chất; không được bọc câu nhớ bằng một đoạn dẫn để gắn nhãn VD.',
+      '- Mọi dữ kiện trong noi_dung phải cần cho việc giải. Bỏ thông tin thừa chỉ để làm câu có vẻ khó hoặc có vẻ “vận dụng”.',
+      '- Nếu có thể viết ngắn hơn mà không mất dữ kiện cần thiết, phải viết lại ngắn hơn. Không dùng các đuôi chung chung như “dự đoán nào phù hợp nhất với quy luật trong bài?”.',
+      '- Ví dụ cần tránh: “Theo giả thuyết được trình bày trong bài học, ...?”; viết trực tiếp “Theo giả thuyết về sự hình thành Hệ Mặt Trời, Trái Đất được hình thành từ ...”.',
+      '- Trước khi xuất JSON, đọc riêng từng noi_dung như khi giáo viên duyệt đề: rõ chủ thể, rõ nhiệm vụ, không lộ đáp án, không chứa lời bình về SGK/nguồn/hệ thống.',
+      '',
+      'PHẦN III:',
       '- Mục tiêu Phần III: đánh giá xử lí số liệu địa lí, không tạo phép tính số học tùy tiện từ các fact rời rạc.',
       '- Chuỗi mong muốn: dữ liệu thô hiển thị cho học sinh → xác định đại lượng/công thức → tính toán → làm tròn → một đáp án số.',
       '- Ưu tiên: biên độ; tổng/trung bình/chênh lệch chuỗi; mật độ; năng suất; tỉ trọng; tốc độ tăng trưởng; bình quân đầu người; tỉ số; cán cân; suy thành phần hoặc tổng.',
@@ -124,6 +136,7 @@
 
   const issueMessages053 = {
     quality_part1_duplicate_options_invalid: 'phương án Phần I bị trùng hoặc rỗng.',
+    quality_part1_meta_stem_invalid: 'câu dẫn Phần I chứa lời dẫn meta về bài học/nguồn/hệ thống; phải viết lại thành câu hỏi độc lập cho học sinh.',
     quality_part2_statements_invalid: 'bốn nhận định Phần II bị trùng, rỗng hoặc quá ngắn.',
     quality_part2_truth_pattern_invalid: 'đáp án Đúng/Sai không đúng định dạng.',
     quality_part3_numeric_answer_invalid: 'đáp án Phần III không phải một số hợp lệ.',

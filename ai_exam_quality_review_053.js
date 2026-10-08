@@ -8,6 +8,8 @@
     lesson_label_missing: 'Thiếu nhãn bài học mô tả; grounding source_refs vẫn được server kiểm riêng.',
     explanation_too_short: 'Lời giải/giải thích quá ngắn để hỗ trợ rà soát.',
     part1_option_length_imbalance: 'Các phương án Phần I chênh lệch độ dài nhiều; kiểm tra khả năng lộ đáp án.',
+    part1_generic_judgement_shell: 'Câu dẫn dùng vỏ chung chung kiểu “nhận định/dự đoán/kết luận phù hợp nhất”; kiểm tra xem có thể viết trực tiếp và tự nhiên hơn.',
+    part1_nb_stem_overlong: 'Câu Nhận biết có câu dẫn dài; kiểm tra dữ kiện thừa hoặc cách diễn đạt vòng.',
     part2_stimulus_short: 'Stimulus Phần II ngắn; kiểm tra xem bốn nhận định có thực sự khai thác một ngữ cảnh chung.',
     part2_all_same_truth_pattern: 'Cả bốn nhận định Phần II cùng Đúng hoặc cùng Sai; nên xem lại độ tự nhiên của cụm.',
     part3_rounding_instruction_missing: 'Phần III chưa nêu rõ yêu cầu làm tròn trong nội dung học sinh thấy.',
