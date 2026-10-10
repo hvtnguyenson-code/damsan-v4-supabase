@@ -2245,9 +2245,13 @@ function scheduleAutoSubmitInitialSend(delayMs) {
     const delay = (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : getAutoSubmitInitialJitterMs();
     autoSubmitInitialSendTimer = setTimeout(async () => {
         autoSubmitInitialSendTimer = null;
-        if (state.isOffline || studentSessionInvalidated || isSubmitting) return;
         const currentSnap = getFinalSnapshot();
         if (!currentSnap || currentSnap.state !== SUBMISSION_STATE.FINAL_PENDING) return;
+        if (studentSessionInvalidated) return;
+        if (state.isOffline || isSubmitting) {
+            scheduleDelayedSubmissionRetry();
+            return;
+        }
         await receiveFinalSubmission();
     }, delay);
 }
@@ -2475,7 +2479,9 @@ async function receiveFinalSubmission() {
         isSubmitting = false;
         if (shouldScheduleRetry) {
             const currentSnap = getFinalSnapshot();
-            if (currentSnap && currentSnap.state === SUBMISSION_STATE.FINAL_PENDING && !state.isOffline && !studentSessionInvalidated) {
+            if (currentSnap && currentSnap.state === SUBMISSION_STATE.FINAL_PENDING && !studentSessionInvalidated) {
+                // Schedule even if the browser has switched to offline meanwhile.
+                // The retry timer itself will re-arm without issuing an RPC while offline.
                 scheduleDelayedSubmissionRetry();
             }
         }

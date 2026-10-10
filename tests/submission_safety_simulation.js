@@ -3483,11 +3483,75 @@ assert.strictEqual(timerCallbacks195.length, 2, "R195: busy timer firing re-arms
 assert.notStrictEqual(envR195.api.getDelayedRetryTimer(), null, "R195: replacement retry timer remains active while busy");
 recordR('R195');
 
-for (let i = 25; i <= 195; i++) {
+// R196: auto-submit initial jitter firing while offline hands off to the durable delayed-retry loop
+const envR196 = createStudentEnvironment();
+const snap196 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-196',
+  phong_id: 'room-196',
+  hs_id: 'hs-196',
+  truong_id: 'sch-196',
+  room_opened_at: 1000,
+  ma_de: '196',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR196.api.setState({ hs_id: 'hs-196', truong_id: 'sch-196', phong_id: 'room-196', room_opened_at: 1000, ma_de: '196', isOffline: true });
+envR196.localStore.set('final_damsan_room-196_hs-196', JSON.stringify(snap196));
+const timerCallbacks196 = [];
+envR196.sandbox.setTimeout = (fn, ms) => {
+  timerCallbacks196.push({ fn, ms });
+  return timerCallbacks196.length;
+};
+envR196.api.scheduleAutoSubmitInitialSend(1);
+assert.strictEqual(timerCallbacks196.length, 1, "R196: initial auto-submit timer scheduled");
+await timerCallbacks196[0].fn();
+assert.strictEqual(envR196.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission').length, 0, "R196: no receive RPC while offline");
+assert.strictEqual(timerCallbacks196.length, 2, "R196: auto-submit timer hands off to delayed retry instead of dying");
+assert.notStrictEqual(envR196.api.getDelayedRetryTimer(), null, "R196: delayed retry remains armed");
+recordR('R196');
+
+// R197: if transport failure flips the client offline before finally, a retry timer is still armed
+const envR197 = createStudentEnvironment();
+const snap197 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-197',
+  phong_id: 'room-197',
+  hs_id: 'hs-197',
+  truong_id: 'sch-197',
+  room_opened_at: 1000,
+  ma_de: '197',
+  raw_answers: [{ cau: 1, chon: 'D' }]
+};
+envR197.api.setState({ hs_id: 'hs-197', truong_id: 'sch-197', phong_id: 'room-197', room_opened_at: 1000, ma_de: '197', isOffline: false });
+envR197.localStore.set('final_damsan_room-197_hs-197', JSON.stringify(snap197));
+envR197.sandbox.callRpcWithTimeout = async (p) => await p;
+envR197.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    envR197.api.setState({ isOffline: true });
+    return { data: null, error: { message: 'network_down' } };
+  }
+  return { data: null, error: null };
+};
+let retryTimerCount197 = 0;
+envR197.sandbox.setTimeout = () => {
+  retryTimerCount197++;
+  return retryTimerCount197;
+};
+await envR197.api.receiveFinalSubmission();
+assert.strictEqual(envR197.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission').length, 1, "R197: one receive RPC attempted");
+assert.strictEqual(retryTimerCount197, 1, "R197: retry timer armed even though state became offline before finally");
+assert.notStrictEqual(envR197.api.getDelayedRetryTimer(), null, "R197: delayed retry remains active");
+const snapAfter197 = JSON.parse(envR197.localStore.get('final_damsan_room-197_hs-197'));
+assert.strictEqual(snapAfter197.state, 'FINAL_PENDING', "R197: FINAL_PENDING preserved");
+recordR('R197');
+
+for (let i = 25; i <= 197; i++) {
   assert(rCoverage['R' + i], "missing coverage for R" + i);
 }
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R195; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R197; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);
