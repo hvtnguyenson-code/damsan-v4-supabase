@@ -1267,11 +1267,11 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20260904-submission-safety-010a');
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261010-submission-retry-liveness-076');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20260904-submission-safety-010a'));
-    assert(hsJsSource.includes("const VERSION = '20260904-submission-safety-010a';"));
-    assert(swJsSource.includes("const VERSION = '20260904-submission-safety-010a';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261010-submission-retry-liveness-076'));
+    assert(hsJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"));
+    assert(swJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"));
     console.log('  -> PASSED');
   }
 

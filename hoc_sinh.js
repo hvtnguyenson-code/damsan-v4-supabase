@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20260904-submission-safety-010a';
+const VERSION = '20261010-submission-retry-liveness-076';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -2245,9 +2245,13 @@ function scheduleAutoSubmitInitialSend(delayMs) {
     const delay = (typeof delayMs === 'number' && delayMs >= 0) ? delayMs : getAutoSubmitInitialJitterMs();
     autoSubmitInitialSendTimer = setTimeout(async () => {
         autoSubmitInitialSendTimer = null;
-        if (state.isOffline || studentSessionInvalidated || isSubmitting) return;
         const currentSnap = getFinalSnapshot();
         if (!currentSnap || currentSnap.state !== SUBMISSION_STATE.FINAL_PENDING) return;
+        if (studentSessionInvalidated) return;
+        if (state.isOffline || isSubmitting) {
+            scheduleDelayedSubmissionRetry();
+            return;
+        }
         await receiveFinalSubmission();
     }, delay);
 }
@@ -2275,7 +2279,8 @@ function showReceivedState(receipt) {
 
 // SUBMISSION-SAFETY-010A: RPC Timeout and Delayed Retry (Low Background Load)
 const RECEIVE_RPC_TIMEOUT_MS = 9000;
-const MAX_SUBMISSION_RETRIES = 6;
+const SUBMISSION_FAST_RETRY_LIMIT = 6;
+const SUBMISSION_MEDIUM_RETRY_LIMIT = 12;
 let delayedSubmissionRetryTimer = null;
 let submissionRetryCount = 0;
 
@@ -2287,26 +2292,33 @@ function clearSubmissionRetryTimer() {
 }
 
 function getDelayedRetryDelayMs() {
-    return 12000 + Math.floor(Math.random() * 8001);
+    // Preserve the proven 12–20s cadence for the first six delayed retries.
+    if (submissionRetryCount < SUBMISSION_FAST_RETRY_LIMIT) {
+        return 12000 + Math.floor(Math.random() * 8001);
+    }
+    // Keep retrying after prolonged failure, but reduce background pressure.
+    if (submissionRetryCount < SUBMISSION_MEDIUM_RETRY_LIMIT) {
+        return 45000 + Math.floor(Math.random() * 30001);
+    }
+    return 90000 + Math.floor(Math.random() * 60001);
 }
 
 function scheduleDelayedSubmissionRetry(delayMs) {
     if (delayedSubmissionRetryTimer) return;
-    if (submissionRetryCount >= MAX_SUBMISSION_RETRIES) {
-        console.warn('Reached maximum automatic delayed submission retries (' + MAX_SUBMISSION_RETRIES + '). Stopping automatic retry loop.');
-        const retryMsg = document.getElementById('retry-status-msg');
-        if (retryMsg) {
-            retryMsg.style.display = '';
-            retryMsg.innerText = '⚠️ Bài đã được chốt an toàn trên thiết bị nhưng máy chủ chưa xác nhận. Không đóng hoặc xóa dữ liệu trình duyệt. Hãy báo giáo viên.';
-        }
-        return;
-    }
     const delay = (typeof delayMs === 'number' && delayMs > 0) ? delayMs : getDelayedRetryDelayMs();
     delayedSubmissionRetryTimer = setTimeout(async () => {
         delayedSubmissionRetryTimer = null;
-        if (state.isOffline || studentSessionInvalidated || isSubmitting) return;
         const snapshot = getFinalSnapshot();
         if (!snapshot || snapshot.state !== SUBMISSION_STATE.FINAL_PENDING) return;
+        if (studentSessionInvalidated) return;
+
+        // If the timer fires while offline or another receive request is still
+        // in flight, never consume the only retry timer. Re-arm instead.
+        if (state.isOffline || isSubmitting) {
+            scheduleDelayedSubmissionRetry();
+            return;
+        }
+
         submissionRetryCount++;
         await receiveFinalSubmission();
     }, delay);
@@ -2467,7 +2479,9 @@ async function receiveFinalSubmission() {
         isSubmitting = false;
         if (shouldScheduleRetry) {
             const currentSnap = getFinalSnapshot();
-            if (currentSnap && currentSnap.state === SUBMISSION_STATE.FINAL_PENDING && !state.isOffline && !studentSessionInvalidated) {
+            if (currentSnap && currentSnap.state === SUBMISSION_STATE.FINAL_PENDING && !studentSessionInvalidated) {
+                // Schedule even if the browser has switched to offline meanwhile.
+                // The retry timer itself will re-arm without issuing an RPC while offline.
                 scheduleDelayedSubmissionRetry();
             }
         }

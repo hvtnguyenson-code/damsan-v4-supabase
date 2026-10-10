@@ -1422,7 +1422,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20260904-submission-safety-010a');
+assert.strictEqual(clientVersion, '20261010-submission-retry-liveness-076');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -2252,7 +2252,7 @@ assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: match
 recordR('R145');
 
 // R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
-const expectedVersion = '20260904-submission-safety-010a';
+const expectedVersion = '20261010-submission-retry-liveness-076';
 assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
 assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
 assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");
@@ -2785,7 +2785,7 @@ envR166.api.scheduleDelayedSubmissionRetry(15000);
 assert.strictEqual(timerCount166, 1, "R166: duplicate scheduleDelayedSubmissionRetry calls create only ONE timer");
 recordR('R166');
 
-// R167: after maximum 6 automatic delayed retries: no further timer, FINAL_PENDING remains, server receipt is not invented
+// R167: after six delayed retries, automatic recovery continues with a slower jitter and FINAL_PENDING remains authoritative
 const envR167 = createStudentEnvironment();
 const snap167 = {
   version: 1,
@@ -2800,20 +2800,20 @@ const snap167 = {
 };
 envR167.api.setState({ hs_id: 'hs-167', truong_id: 'sch-167', phong_id: 'room-167', room_opened_at: 1000, ma_de: '167' });
 envR167.localStore.set('final_damsan_room-167_hs-167', JSON.stringify(snap167));
-
 envR167.api.setSubmissionRetryCount(6);
 
-let timerScheduled167 = false;
-envR167.sandbox.setTimeout = () => { timerScheduled167 = true; return 1; };
+let timerDelay167 = null;
+const random167 = envR167.sandbox.Math.random;
+envR167.sandbox.Math.random = () => 0.5;
+envR167.sandbox.setTimeout = (fn, ms) => { timerDelay167 = ms; return 1; };
+envR167.api.scheduleDelayedSubmissionRetry();
+envR167.sandbox.Math.random = random167;
 
-envR167.api.scheduleDelayedSubmissionRetry(15000);
-
-assert.strictEqual(timerScheduled167, false, "R167: no further timer scheduled after 6 retries");
+assert(timerDelay167 >= 45000 && timerDelay167 <= 75000, "R167: retry after count 6 must continue with 45-75s jitter");
+assert.notStrictEqual(envR167.api.getDelayedRetryTimer(), null, "R167: retry timer remains active after six failures");
 const snapAfter167 = JSON.parse(envR167.localStore.get('final_damsan_room-167_hs-167'));
 assert.strictEqual(snapAfter167.state, 'FINAL_PENDING', "R167: FINAL_PENDING preserved");
 assert.strictEqual(envR167.localStore.has('receipt_damsan_room-167_hs-167'), false, "R167: no receipt invented");
-const retryMsgEl = envR167.sandbox.document.getElementById('retry-status-msg');
-assert(retryMsgEl.innerText.includes('Hãy báo giáo viên'), "R167: teacher report warning message displayed");
 recordR('R167');
 
 // R168: invalid_session: no retry timer, FINAL preserved, login recovery maintained
@@ -3414,11 +3414,145 @@ assert(envR192.intervals.every(i => i.ms !== 12000 || i.cleared), 'R192: no post
 assert.strictEqual(envR192.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R192: no post-receipt Realtime channel subscribed');
 recordR('R192');
 
-for (let i = 25; i <= 192; i++) {
+// R193: prolonged retry count >=12 is throttled to the 90-150s background cadence
+const envR193 = createStudentEnvironment();
+envR193.api.setSubmissionRetryCount(12);
+let timerDelay193 = null;
+const random193 = envR193.sandbox.Math.random;
+envR193.sandbox.Math.random = () => 0.5;
+envR193.sandbox.setTimeout = (fn, ms) => { timerDelay193 = ms; return 1; };
+envR193.api.scheduleDelayedSubmissionRetry();
+envR193.sandbox.Math.random = random193;
+assert(timerDelay193 >= 90000 && timerDelay193 <= 150000, "R193: prolonged retry delay must be 90-150s");
+recordR('R193');
+
+// R194: offline timer firing re-arms automatic recovery instead of losing the only retry path
+const envR194 = createStudentEnvironment();
+const snap194 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-194',
+  phong_id: 'room-194',
+  hs_id: 'hs-194',
+  truong_id: 'sch-194',
+  room_opened_at: 1000,
+  ma_de: '194',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR194.api.setState({ hs_id: 'hs-194', truong_id: 'sch-194', phong_id: 'room-194', room_opened_at: 1000, ma_de: '194', isOffline: true });
+envR194.localStore.set('final_damsan_room-194_hs-194', JSON.stringify(snap194));
+const timerCallbacks194 = [];
+envR194.sandbox.setTimeout = (fn, ms) => {
+  timerCallbacks194.push({ fn, ms });
+  return timerCallbacks194.length;
+};
+envR194.api.scheduleDelayedSubmissionRetry(1);
+assert.strictEqual(timerCallbacks194.length, 1, "R194: initial retry timer scheduled");
+await timerCallbacks194[0].fn();
+assert.strictEqual(envR194.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission').length, 0, "R194: no receive RPC while offline");
+assert.strictEqual(timerCallbacks194.length, 2, "R194: offline timer firing re-arms automatic retry");
+assert.notStrictEqual(envR194.api.getDelayedRetryTimer(), null, "R194: replacement retry timer remains active");
+recordR('R194');
+
+// R195: busy timer firing preserves single-flight and re-arms retry instead of dying
+const envR195 = createStudentEnvironment();
+const snap195 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-195',
+  phong_id: 'room-195',
+  hs_id: 'hs-195',
+  truong_id: 'sch-195',
+  room_opened_at: 1000,
+  ma_de: '195',
+  raw_answers: [{ cau: 1, chon: 'B' }]
+};
+envR195.api.setState({ hs_id: 'hs-195', truong_id: 'sch-195', phong_id: 'room-195', room_opened_at: 1000, ma_de: '195', isOffline: false });
+envR195.localStore.set('final_damsan_room-195_hs-195', JSON.stringify(snap195));
+envR195.api.setIsSubmitting(true);
+const timerCallbacks195 = [];
+envR195.sandbox.setTimeout = (fn, ms) => {
+  timerCallbacks195.push({ fn, ms });
+  return timerCallbacks195.length;
+};
+envR195.api.scheduleDelayedSubmissionRetry(1);
+await timerCallbacks195[0].fn();
+assert.strictEqual(envR195.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission').length, 0, "R195: no overlapping receive RPC while busy");
+assert.strictEqual(timerCallbacks195.length, 2, "R195: busy timer firing re-arms retry");
+assert.notStrictEqual(envR195.api.getDelayedRetryTimer(), null, "R195: replacement retry timer remains active while busy");
+recordR('R195');
+
+// R196: auto-submit initial jitter firing while offline hands off to the durable delayed-retry loop
+const envR196 = createStudentEnvironment();
+const snap196 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-196',
+  phong_id: 'room-196',
+  hs_id: 'hs-196',
+  truong_id: 'sch-196',
+  room_opened_at: 1000,
+  ma_de: '196',
+  raw_answers: [{ cau: 1, chon: 'A' }]
+};
+envR196.api.setState({ hs_id: 'hs-196', truong_id: 'sch-196', phong_id: 'room-196', room_opened_at: 1000, ma_de: '196', isOffline: true });
+envR196.localStore.set('final_damsan_room-196_hs-196', JSON.stringify(snap196));
+const timerCallbacks196 = [];
+envR196.sandbox.setTimeout = (fn, ms) => {
+  timerCallbacks196.push({ fn, ms });
+  return timerCallbacks196.length;
+};
+envR196.api.scheduleAutoSubmitInitialSend(1);
+assert.strictEqual(timerCallbacks196.length, 1, "R196: initial auto-submit timer scheduled");
+await timerCallbacks196[0].fn();
+assert.strictEqual(envR196.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission').length, 0, "R196: no receive RPC while offline");
+assert.strictEqual(timerCallbacks196.length, 2, "R196: auto-submit timer hands off to delayed retry instead of dying");
+assert.notStrictEqual(envR196.api.getDelayedRetryTimer(), null, "R196: delayed retry remains armed");
+recordR('R196');
+
+// R197: if transport failure flips the client offline before finally, a retry timer is still armed
+const envR197 = createStudentEnvironment();
+const snap197 = {
+  version: 1,
+  state: 'FINAL_PENDING',
+  attempt_id: 'att-197',
+  phong_id: 'room-197',
+  hs_id: 'hs-197',
+  truong_id: 'sch-197',
+  room_opened_at: 1000,
+  ma_de: '197',
+  raw_answers: [{ cau: 1, chon: 'D' }]
+};
+envR197.api.setState({ hs_id: 'hs-197', truong_id: 'sch-197', phong_id: 'room-197', room_opened_at: 1000, ma_de: '197', isOffline: false });
+envR197.localStore.set('final_damsan_room-197_hs-197', JSON.stringify(snap197));
+envR197.sandbox.callRpcWithTimeout = async (p) => await p;
+let receiveCalls197 = 0;
+envR197.mockSupabase.rpc = async (name) => {
+  if (name === 'rpc_hoc_sinh_receive_submission') {
+    receiveCalls197++;
+    envR197.api.setState({ isOffline: true });
+    return { data: null, error: { message: 'network_down' } };
+  }
+  return { data: null, error: null };
+};
+let retryTimerCount197 = 0;
+envR197.sandbox.setTimeout = () => {
+  retryTimerCount197++;
+  return retryTimerCount197;
+};
+await envR197.api.receiveFinalSubmission();
+assert.strictEqual(receiveCalls197, 1, "R197: one receive RPC attempted");
+assert.strictEqual(retryTimerCount197, 1, "R197: retry timer armed even though state became offline before finally");
+assert.notStrictEqual(envR197.api.getDelayedRetryTimer(), null, "R197: delayed retry remains active");
+const snapAfter197 = JSON.parse(envR197.localStore.get('final_damsan_room-197_hs-197'));
+assert.strictEqual(snapAfter197.state, 'FINAL_PENDING', "R197: FINAL_PENDING preserved");
+recordR('R197');
+
+for (let i = 25; i <= 197; i++) {
   assert(rCoverage['R' + i], "missing coverage for R" + i);
 }
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R192; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R197; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);

@@ -1,4 +1,4 @@
-const VERSION = '20260904-submission-safety-010a';
+const VERSION = '20261010-submission-retry-liveness-076';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 const ASSETS = [
   './hoc_sinh.html',
