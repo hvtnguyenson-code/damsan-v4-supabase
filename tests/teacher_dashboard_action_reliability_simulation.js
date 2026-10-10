@@ -799,21 +799,21 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  // 26. Student HTML/JS exact: 20260904-submission-safety-010a
-  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20260904-submission-safety-010a');
+  // 26. Student HTML/JS exact: 20261010-submission-retry-liveness-076
+  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261010-submission-retry-liveness-076');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20260904-submission-safety-010a'),
-      'hoc_sinh.html must include hoc_sinh.js?v=20260904-submission-safety-010a');
-    assert(hsJsSource.includes("const VERSION = '20260904-submission-safety-010a';"),
-      'hoc_sinh.js must define const VERSION = 20260904-submission-safety-010a');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261010-submission-retry-liveness-076'),
+      'hoc_sinh.html must include hoc_sinh.js?v=20261010-submission-retry-liveness-076');
+    assert(hsJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"),
+      'hoc_sinh.js must define const VERSION = 20261010-submission-retry-liveness-076');
     console.log('  -> PASSED');
   }
 
-  // 27. sw.js exact: 20260904-submission-safety-010a
-  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20260904-submission-safety-010a');
+  // 27. sw.js exact: 20261010-submission-retry-liveness-076
+  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261010-submission-retry-liveness-076');
   {
-    assert(swJsSource.includes("const VERSION = '20260904-submission-safety-010a';"),
-      'sw.js must define const VERSION = 20260904-submission-safety-010a');
+    assert(swJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"),
+      'sw.js must define const VERSION = 20261010-submission-retry-liveness-076');
     console.log('  -> PASSED');
   }
 
