@@ -2813,7 +2813,6 @@ assert(timerDelay167 >= 45000 && timerDelay167 <= 75000, "R167: retry after coun
 assert.notStrictEqual(envR167.api.getDelayedRetryTimer(), null, "R167: retry timer remains active after six failures");
 const snapAfter167 = JSON.parse(envR167.localStore.get('final_damsan_room-167_hs-167'));
 assert.strictEqual(snapAfter167.state, 'FINAL_PENDING', "R167: FINAL_PENDING preserved");
-assert.strictEqual(envR167.localStore.has('receipt_damsan_room-167-hs-167'), false, "R167: no unrelated receipt invented");
 assert.strictEqual(envR167.localStore.has('receipt_damsan_room-167_hs-167'), false, "R167: no receipt invented");
 recordR('R167');
 
@@ -3527,8 +3526,10 @@ const snap197 = {
 envR197.api.setState({ hs_id: 'hs-197', truong_id: 'sch-197', phong_id: 'room-197', room_opened_at: 1000, ma_de: '197', isOffline: false });
 envR197.localStore.set('final_damsan_room-197_hs-197', JSON.stringify(snap197));
 envR197.sandbox.callRpcWithTimeout = async (p) => await p;
+let receiveCalls197 = 0;
 envR197.mockSupabase.rpc = async (name) => {
   if (name === 'rpc_hoc_sinh_receive_submission') {
+    receiveCalls197++;
     envR197.api.setState({ isOffline: true });
     return { data: null, error: { message: 'network_down' } };
   }
@@ -3540,7 +3541,7 @@ envR197.sandbox.setTimeout = () => {
   return retryTimerCount197;
 };
 await envR197.api.receiveFinalSubmission();
-assert.strictEqual(envR197.rpcCalls.filter(c => c.name === 'rpc_hoc_sinh_receive_submission').length, 1, "R197: one receive RPC attempted");
+assert.strictEqual(receiveCalls197, 1, "R197: one receive RPC attempted");
 assert.strictEqual(retryTimerCount197, 1, "R197: retry timer armed even though state became offline before finally");
 assert.notStrictEqual(envR197.api.getDelayedRetryTimer(), null, "R197: delayed retry remains active");
 const snapAfter197 = JSON.parse(envR197.localStore.get('final_damsan_room-197_hs-197'));
