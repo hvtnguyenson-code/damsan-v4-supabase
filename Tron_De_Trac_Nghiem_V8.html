@@ -24,6 +24,7 @@
       tryNext();
     })();
   </script>
+  <script src="print_docx_exporter.js?v=20261013-native-docx-077"></script>
 
   <style>
     :root{
@@ -1172,10 +1173,50 @@ table.da th, table.da td { border: 1px solid black; padding: 5px; } table.da th 
     try { downloadWord(content, `DapAn_CacMaDe.doc`); } catch(e) { alert("Lỗi khi tải file Word Đáp án: " + e.message); }
   }
 
-  function downloadWord(html, filename){
+  // Rollback path 077: the legacy HTML-as-.doc exporter is preserved verbatim.
+  // Set window.DAM_SAN_NATIVE_DOCX_ENABLED = false before export to return to it immediately.
+  function downloadLegacyWord(html, filename){
     const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
     const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename;
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  }
+
+  if (typeof window.DAM_SAN_NATIVE_DOCX_ENABLED === 'undefined') {
+    window.DAM_SAN_NATIVE_DOCX_ENABLED = true;
+  }
+
+  function nativeDocxExportOptions(html, filename) {
+    return {
+      html,
+      filename: String(filename || 'DeThi.doc').replace(/\.doc$/i, '.docx'),
+      bodyStyle: JSON.parse(JSON.stringify(fpConfig.body || {})),
+      marginsCm: {
+        top: document.getElementById("fp_margin_top").value,
+        bottom: document.getElementById("fp_margin_bottom").value,
+        left: document.getElementById("fp_margin_left").value,
+        right: document.getElementById("fp_margin_right").value
+      }
+    };
+  }
+
+  function downloadWord(html, filename){
+    if (window.DAM_SAN_NATIVE_DOCX_ENABLED === false) {
+      return downloadLegacyWord(html, filename);
+    }
+
+    if (!window.DamSanDocxExporter || typeof window.DamSanDocxExporter.downloadHtml !== 'function') {
+      alert("Lỗi khi tải bộ tạo DOCX chuẩn. Chưa xuất file để tránh tạo Word giả.");
+      return;
+    }
+
+    window.DamSanDocxExporter.downloadHtml(nativeDocxExportOptions(html, filename))
+      .then(result => {
+        console.log("Native DOCX exported:", result.filename, result.size);
+      })
+      .catch(error => {
+        console.error("Native DOCX export failed:", error);
+        alert("Không thể tạo file Word chuẩn (.docx): " + (error && error.message ? error.message : error));
+      });
   }
 
   function exportWordAll(){ xuatBaoCaoWord(true, true); }
