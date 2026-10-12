@@ -24,6 +24,7 @@ jobs:
           node --check hoc_sinh.js
           node --check giaovien.js
           node --check sw.js
+          node --check print_docx_exporter.js
           node --check knowledge.js
           node --check knowledge_reader.js
           node --check knowledge_reader_hardening.js
@@ -45,6 +46,7 @@ jobs:
           node --check ai_action_feedback.js
           node --check tests/browser_ocr_runtime_probe.js
           node --check tests/run_browser_ocr_probe.mjs
+          node --check tests/native_docx_print_export_077_simulation.js
           node --check tests/ai_exam_copy_feedback_simulation.js
           node --check tests/ai_geography_assessment_standard_simulation.js
           node --check tests/ai_geography_part3_quality_048_simulation.js
@@ -100,6 +102,50 @@ jobs:
           echo "=== Chrome diagnostics ==="
           tail -n 120 /tmp/ocr-chrome.log || true
           exit "$PROBE_EXIT"
+      - name: Native DOCX package probe
+        run: |
+          curl -fL --retry 3 --retry-delay 2 -o /tmp/docx-9.10.0.cjs https://cdn.jsdelivr.net/npm/docx@9.10.0/dist/index.umd.cjs
+          node - <<'NODE'
+          const fs = require('fs');
+          const docx = require('/tmp/docx-9.10.0.cjs');
+          const doc = new docx.Document({
+            sections: [{
+              properties: {
+                page: {
+                  size: { width: 11906, height: 16838, orientation: docx.PageOrientation.PORTRAIT },
+                  margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 }
+                }
+              },
+              footers: {
+                default: new docx.Footer({
+                  children: [new docx.Paragraph({
+                    children: [new docx.TextRun({ children: ['Trang ', docx.PageNumber.CURRENT, ' / ', docx.PageNumber.TOTAL_PAGES] })]
+                  })]
+                })
+              },
+              children: [new docx.Paragraph('DAMSAN NATIVE DOCX 077')]
+            }]
+          });
+          docx.Packer.toBuffer(doc).then((buffer) => {
+            fs.writeFileSync('/tmp/native-docx-077.docx', buffer);
+          }).catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          python3 - <<'PY'
+          import zipfile
+          path = '/tmp/native-docx-077.docx'
+          with zipfile.ZipFile(path) as z:
+              names = set(z.namelist())
+              required = {'[Content_Types].xml', 'word/document.xml', 'word/_rels/document.xml.rels'}
+              missing = required - names
+              assert not missing, f'missing OOXML parts: {missing}'
+              xml = z.read('word/document.xml').decode('utf-8')
+              assert 'DAMSAN NATIVE DOCX 077' in xml
+          print('PASS native DOCX OOXML package probe')
+          PY
+          node tests/native_docx_print_export_077_simulation.js
       - name: Submission safety simulation
         run: node tests/submission_safety_simulation.js
       - name: Account import regression simulations
