@@ -19,7 +19,7 @@ must(html, /id="knowledgeDocs"/, 'A031B2-04 knowledge source selector exists');
 must(html, /DAMSAN_EXAM_V1/, 'A031B2-05 canonical schema is visible');
 must(html, /PHÊ DUYỆT & ĐƯA LÊN PHÒNG/, 'A031B2-06 explicit final approval exists');
 must(html, /TỪ CHỐI ĐỀ/, 'A031B2-07 explicit rejection exists');
-must(html, /ai_exam\.js\?v=20261013-canonical-room-docx-079/, 'A031B2-08 cache-busted script is loaded');
+must(html, /ai_exam\.js\?v=20261013-canonical-room-print-080/, 'A031B2-08 cache-busted script is loaded');
 console.log('A031B2-01..08 UI contract: PASSED');
 
 must(html, /id="subjectSelect"/, 'A046-01 visible subject selector exists');

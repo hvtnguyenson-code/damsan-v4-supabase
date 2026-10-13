@@ -52,6 +52,8 @@ jobs:
           node --check tests/native_docx_print_export_077_simulation.js
           node --check tests/browser_native_docx_runtime_probe.js
           node --check tests/run_native_docx_browser_probe.mjs
+          node --check tests/browser_canonical_print_metadata_probe.js
+          node --check tests/run_canonical_print_metadata_browser_probe.mjs
           node --check tests/ai_exam_copy_feedback_simulation.js
           node --check tests/ai_geography_assessment_standard_simulation.js
           node --check tests/ai_geography_part3_quality_048_simulation.js
@@ -211,6 +213,42 @@ jobs:
           assert paras[q_index + 1].startswith('A. Một'), paras[q_index:q_index+3]
           print('PASS no empty DOCX paragraph between question and answers')
           PY
+      - name: Canonical room print metadata browser probe
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium not found on runner"
+            exit 1
+          fi
+          python3 -m http.server 8767 --bind 127.0.0.1 >/tmp/print-meta-http.log 2>&1 &
+          SERVER_PID=$!
+          "$CHROME" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-timer-throttling \
+            --remote-debugging-address=127.0.0.1 \
+            --remote-debugging-port=9234 \
+            --user-data-dir=/tmp/damsan-print-meta-chrome \
+            about:blank >/tmp/print-meta-chrome.out 2>/tmp/print-meta-chrome.log &
+          CHROME_PID=$!
+          cleanup() {
+            kill "$CHROME_PID" >/dev/null 2>&1 || true
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8767/tests/browser_canonical_print_metadata_probe.html >/dev/null && curl -fsS http://127.0.0.1:9234/json/version >/dev/null; then break; fi
+            sleep 1
+          done
+          set +e
+          timeout 100s node tests/run_canonical_print_metadata_browser_probe.mjs
+          PROBE_EXIT=$?
+          set -e
+          echo "=== Canonical print metadata Chrome diagnostics ==="
+          tail -n 120 /tmp/print-meta-chrome.log || true
+          exit "$PROBE_EXIT"
       - name: Canonical room DOCX export simulation
         run: node tests/canonical_room_docx_export_079_simulation.js
       - name: Submission safety simulation

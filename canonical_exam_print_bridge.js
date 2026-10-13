@@ -1,4 +1,4 @@
-/* Canonical room exam -> existing A4/DOCX print bridge 079.
+/* Canonical room exam -> existing A4/DOCX print bridge 080.
  * Read-only: consumes canonical exam rows already returned by rpc_staff_exam_preview.
  * Never writes room/exam state.
  */
@@ -9,8 +9,8 @@
 })(typeof window !== 'undefined' ? window : null, function (root) {
   'use strict';
 
-  const VERSION = '20261013-canonical-room-docx-079';
-  const FRAME_SRC = 'Tron_De_Trac_Nghiem_V8.html?v=20261013-canonical-room-docx-079';
+  const VERSION = '20261013-canonical-room-print-080';
+  const FRAME_SRC = 'Tron_De_Trac_Nghiem_V8.html?v=20261013-canonical-room-print-080';
   const FRAME_ID = 'canonicalPrintBridgeFrame';
   const REQUEST_TIMEOUT_MS = 20000;
 
@@ -162,7 +162,10 @@
     return requestBridge(frame, 'DAMSAN_EXPORT_CANONICAL_PRINT', {
       payload,
       exportMode: options.exportMode || 'exam',
-      source: options.source || 'canonical-room'
+      source: options.source || 'canonical-room',
+      printContext: options.printContext && typeof options.printContext === 'object'
+        ? options.printContext
+        : null
     });
   }
 
