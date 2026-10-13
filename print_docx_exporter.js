@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  const VERSION = '20261013-native-docx-077';
+  const VERSION = '20261013-native-docx-078';
   const DOCX_VERSION = '9.10.0';
   const MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const A4_WIDTH_TWIP = 11906;
