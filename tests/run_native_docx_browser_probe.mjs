@@ -82,6 +82,17 @@ process.stdout.write('=== DOCX probe console ===\n');
 for (const line of consoleLines.slice(-80)) process.stdout.write(line + '\n');
 process.stdout.write('=== DOCX probe result ===\n' + JSON.stringify(snapshot, null, 2) + '\n');
 
+if (snapshot && snapshot.state === 'PASS') {
+  const packed = await send('Runtime.evaluate', {
+    expression: "window.__nativeDocxProbeBase64 || ''",
+    returnByValue: true
+  });
+  const base64 = packed?.result?.value || '';
+  if (!base64) throw new Error('Native DOCX browser probe did not expose packed bytes');
+  const fs = await import('node:fs');
+  fs.writeFileSync('/tmp/native-docx-browser-078.docx', Buffer.from(base64, 'base64'));
+}
+
 try { ws.close(); } catch {}
 
 if (!snapshot || snapshot.state !== 'PASS') {
