@@ -43,11 +43,12 @@
 
   <section class="card"><h2>3. Nhận đề AI và kiểm định</h2><div class="grid"><div class="field"><label for="provider">Nguồn AI</label><select id="provider"><option value="CHATGPT_WEB">ChatGPT web</option><option value="GEMINI_WEB">Gemini web</option><option value="CLAUDE_WEB">Claude web</option><option value="OTHER_WEB_AI">AI web khác</option></select></div><div class="field"><label for="modelName">Tên model — tùy chọn</label><input id="modelName" placeholder="Ví dụ: GPT-5.6 Sol"></div></div><textarea id="resultBox" class="mono" style="margin-top:12px" placeholder='{"schema_version":"DAMSAN_EXAM_V1", ...}'></textarea><div class="actions"><button id="btnPaste" class="secondary">Dán từ clipboard</button><button id="btnValidate" class="success">Gửi kiểm định đề</button></div><div id="validationStatus" class="statusline"></div></section>
 
-  <section id="reviewCard" class="card hidden"><h2>4. Xem trước và quyết định cuối cùng</h2><p class="sub">Đây là điểm duyệt bắt buộc duy nhất. Chỉ khi bấm “Phê duyệt & đưa lên phòng” hệ thống mới gọi RPC lưu đề chính thức.</p><div id="reviewMeta" class="statusline"></div><div id="preview" class="preview" style="margin-top:12px"></div><div class="actions"><button id="btnApprove" class="success">PHÊ DUYỆT & ĐƯA LÊN PHÒNG</button><button id="btnReject" class="danger">TỪ CHỐI ĐỀ</button></div></section>
+  <section id="reviewCard" class="card hidden"><h2>4. Xem trước và quyết định cuối cùng</h2><p class="sub">Đây là điểm duyệt bắt buộc duy nhất. Chỉ khi bấm “Phê duyệt & đưa lên phòng” hệ thống mới gọi RPC lưu đề chính thức.</p><div id="reviewMeta" class="statusline"></div><div id="preview" class="preview" style="margin-top:12px"></div><div class="actions"><button id="btnApprove" class="success">PHÊ DUYỆT & ĐƯA LÊN PHÒNG</button><button id="btnReject" class="danger">TỪ CHỐI ĐỀ</button><button id="btnExportWord" class="secondary hidden">📄 XUẤT WORD (.DOCX)</button></div></section>
 
   <section class="card"><h2>Yêu cầu gần đây</h2><p class="sub">Hard gate chỉ chặn lỗi có thể làm đề sai hoặc không kiểm chứng được. Các tiêu chí phong cách/chất lượng được giữ thành cảnh báo để giáo viên xem ở bước duyệt. Request AI_WORKING có thể được cấp lại capability tự động khi gửi lại.</p><div id="requestList" class="request-list"><div class="request">Đang tải...</div></div></section>
 </main>
-<script src="ai_exam.js?v=20260910-ai-exam-ui-031b2"></script>
+<script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-docx-079"></script>
+<script src="ai_exam.js?v=20261013-canonical-room-docx-079"></script>
 <script src="ai_exam_subject_scope.js?v=20260914-visible-subject-scope-046"></script>
 <script src="ai_exam_resilience.js?v=20260910-ai-exam-resilience-031c"></script>
 <!-- Legacy cache marker retained for regression compatibility: ai_exam_assessment_profile.js?v=20260911-assessment-authority-039 -->
