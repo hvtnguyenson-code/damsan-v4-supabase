@@ -316,13 +316,30 @@
     }
 
     // Safety invariant: exporting a canonical room exam must not destroy the
-    // user's current mixing workspace. Swap only while the existing A4 renderer
-    // builds the document, then restore the exact previous references.
+    // user's current mixing workspace or the saved/manual print form. Canonical
+    // room metadata is applied only for this render and then restored exactly.
     const previousDanhSach = danhSachDeThi;
     const previousMaDes = lastMaDes;
     const previousCounts = lastCounts;
+    const printFieldIds = ['pcCoQuan','pcTruong','pcKyThi','pcMon','pcLop','pcThoiGian'];
+    const previousPrintFields = Object.fromEntries(printFieldIds.map(id => {
+      const el = document.getElementById(id);
+      return [id, el ? el.value : ''];
+    }));
+    const previousFpConfig = JSON.parse(JSON.stringify(fpConfig));
+    const printContext = (data.printContext && typeof data.printContext === 'object')
+      ? data.printContext
+      : null;
 
     try {
+      if (printContext) {
+        for (const id of printFieldIds) {
+          if (!Object.prototype.hasOwnProperty.call(printContext, id)) continue;
+          const el = document.getElementById(id);
+          if (el) el.value = String(printContext[id] ?? '');
+        }
+      }
+
       danhSachDeThi = payload;
       lastMaDes = [...new Set(payload.map(item => String(item.MaDe || '')).filter(Boolean))];
       lastCounts = {
@@ -361,6 +378,12 @@
       danhSachDeThi = previousDanhSach;
       lastMaDes = previousMaDes;
       lastCounts = previousCounts;
+      fpConfig = previousFpConfig;
+      for (const id of printFieldIds) {
+        const el = document.getElementById(id);
+        if (el) el.value = previousPrintFields[id];
+      }
+      loadFpUI();
     }
   });
 
