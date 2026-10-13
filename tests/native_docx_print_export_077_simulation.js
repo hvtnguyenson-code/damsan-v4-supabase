@@ -6,7 +6,7 @@ const v8 = fs.readFileSync('Tron_De_Trac_Nghiem_V8.html', 'utf8');
 const teacherHtml = fs.readFileSync('giaovien.html', 'utf8');
 
 // N077-01: native exporter is versioned and pinned to an explicit docx.js release.
-assert(exporter.includes("20261013-native-docx-077"), 'N077-01 exporter version marker missing');
+assert(exporter.includes("20261013-native-docx-078"), 'N077-01 exporter version marker missing');
 assert(exporter.includes("const DOCX_VERSION = '9.10.0'"), 'N077-01 docx.js version must be pinned');
 assert(exporter.includes('cdn.jsdelivr.net/npm/docx@') && exporter.includes('unpkg.com/docx@'), 'N077-01 CDN fallback pair missing');
 
@@ -48,8 +48,8 @@ assert(v8.includes("replace(/\\.doc$/i, '.docx')"), 'N077-07 output extension mu
 assert(v8.includes('Chưa xuất file để tránh tạo Word giả'), 'N077-07 native failure must not silently emit a fake .doc');
 
 // N077-08: frame cache is busted so deployed browsers receive the new exporter immediately.
-assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261013-native-docx-077'), 'N077-08 iframe cache marker missing');
-assert(v8.includes('print_docx_exporter.js?v=20261013-native-docx-077'), 'N077-08 exporter cache marker missing');
+assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261013-native-docx-078'), 'N077-08 iframe cache marker missing');
+assert(v8.includes('print_docx_exporter.js?v=20261013-native-docx-078'), 'N077-08 exporter cache marker missing');
 
 // N077-09: online-room bridge remains present and independent.
 assert(v8.includes("data.type !== 'DAMSAN_GET_EXAMS'") && v8.includes("type: 'DAMSAN_EXAMS'"), 'N077-09 iframe bridge changed/missing');
