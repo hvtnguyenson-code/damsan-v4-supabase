@@ -354,6 +354,16 @@
     return output;
   }
 
+  function isIgnorableEmptyParagraph(el) {
+    if (!el || String(el.tagName || '').toLowerCase() !== 'p') return false;
+    const text = String(el.textContent || '').replace(/\u00a0/g, ' ').trim();
+    if (text) return false;
+    // Preserve genuinely intentional visual content. The empty <p></p> artifacts
+    // produced around Word <br> normalization must not become a real DOCX line.
+    if (el.querySelector && el.querySelector('img,table,hr,br')) return false;
+    return true;
+  }
+
   async function paragraphFromElement(api, el, inherited, ctx) {
     const style = styleFromElement(el, inherited);
     const runs = await inlineChildren(api, el, style, ctx);
@@ -498,6 +508,7 @@
 
       if (tag === 'p' || /^h[1-6]$/.test(tag)) {
         await flushInline();
+        if (tag === 'p' && isIgnorableEmptyParagraph(child)) continue;
         out.push(await paragraphFromElement(api, child, inherited, ctx));
       } else if (tag === 'table') {
         await flushInline();
