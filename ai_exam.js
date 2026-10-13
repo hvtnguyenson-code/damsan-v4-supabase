@@ -47,7 +47,7 @@ function aieNotice(message, kind = 'info') {
 
 function aieSetBusy(value) {
   aieBusy = value;
-  for (const id of ['btnCreate','btnRefreshDocs','btnValidate','btnApprove','btnReject']) {
+  for (const id of ['btnCreate','btnRefreshDocs','btnValidate','btnApprove','btnReject','btnExportWord']) {
     const el = document.getElementById(id);
     if (el) el.disabled = value;
   }
@@ -348,6 +348,11 @@ function aieOpenRequest(requestId) {
   document.getElementById('preview').innerHTML = questions.length ? questions.map(aieQuestionPreview).join('') : '<div class="question">Không có câu hỏi để hiển thị.</div>';
   document.getElementById('btnApprove').disabled = request.status !== 'READY_FOR_REVIEW';
   document.getElementById('btnReject').disabled = request.status === 'PUBLISHED';
+  const exportWord = document.getElementById('btnExportWord');
+  if (exportWord) {
+    exportWord.classList.toggle('hidden', request.status !== 'PUBLISHED');
+    exportWord.disabled = request.status !== 'PUBLISHED';
+  }
   card.classList.remove('hidden');
   card.scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -369,6 +374,46 @@ async function aieApprove() {
     await aieLoadRequests(aieCurrentRequestId);
   } catch (error) { aieNotice(error.message || 'Publish thất bại.', 'error'); }
   finally { aieSetBusy(false); }
+}
+
+async function aieExportPublishedWord() {
+  if (aieBusy || !aieCurrentRequestId) return;
+  const session = aieRequireSession(); if (!session) return;
+  const request = aieRequests.find((item) => item.request_id === aieCurrentRequestId);
+  if (!request || request.status !== 'PUBLISHED') {
+    return aieNotice('Chỉ có thể xuất Word từ đề đã được phê duyệt và ghi chính thức vào phòng thi.', 'error');
+  }
+  const roomId = request.publish_result?.phong_id;
+  if (!roomId) {
+    return aieNotice('Không xác định được phong_id canonical của đề đã publish. Không xuất từ draft AI để tránh sai khác với đề trong phòng.', 'error');
+  }
+  if (!window.DamSanCanonicalPrint || typeof window.DamSanCanonicalPrint.exportCanonicalExams !== 'function') {
+    return aieNotice('Bộ cầu nối xuất Word chưa sẵn sàng. Hãy tải lại trang.', 'error');
+  }
+
+  aieSetBusy(true);
+  try {
+    const { data, error } = await aieSb.rpc('rpc_staff_exam_preview', {
+      p_staff_token: session.token,
+      p_phong_id: roomId
+    });
+    if (error) throw error;
+    if (!data || data.status !== 'success') {
+      throw new Error(data?.message || 'Không đọc được đề chính thức trong phòng thi.');
+    }
+    const exams = Array.isArray(data.exams) ? data.exams : [];
+    if (!exams.length) throw new Error('Phòng thi chưa có đề chính thức để xuất.');
+
+    const result = await window.DamSanCanonicalPrint.exportCanonicalExams(exams, {
+      source: 'ai-published-room',
+      exportMode: 'exam'
+    });
+    aieNotice(`Đã bắt đầu xuất ${Number(result?.variantCount || exams.length)} mã đề Word (.docx) từ đúng dữ liệu đã publish trong phòng ${request.ma_phong}.`, 'ok');
+  } catch (error) {
+    aieNotice(error?.message || 'Không xuất được Word từ đề đã publish.', 'error');
+  } finally {
+    aieSetBusy(false);
+  }
 }
 
 async function aieReject() {
@@ -429,6 +474,7 @@ function aieBind() {
   document.getElementById('btnValidate').addEventListener('click', aieValidateDraft);
   document.getElementById('btnApprove').addEventListener('click', aieApprove);
   document.getElementById('btnReject').addEventListener('click', aieReject);
+  document.getElementById('btnExportWord').addEventListener('click', aieExportPublishedWord);
   document.getElementById('profile').addEventListener('change', aieProfileChange);
   ['w1','w2','w3'].forEach((id) => document.getElementById(id).addEventListener('input', aieWeightSum));
   document.getElementById('btnChatGPT').addEventListener('click', () => window.open('https://chatgpt.com/','_blank','noopener'));
