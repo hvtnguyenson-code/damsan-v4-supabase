@@ -273,16 +273,94 @@
   // ==========================================
   window.addEventListener('message', (ev) => {
     const data = ev.data || {};
-    if (!data || data.type !== 'DAMSAN_GET_EXAMS') return;
+    if (!data || !data.type) return;
+
     const requestId = data.requestId;
     const targetOrigin = (ev.origin && ev.origin !== "null") ? ev.origin : "*";
+
+    if (data.type === 'DAMSAN_GET_EXAMS') {
+      try {
+        ev.source?.postMessage(
+          { type: 'DAMSAN_EXAMS', requestId, payload: danhSachDeThi || [] },
+          targetOrigin
+        );
+      } catch (e) {
+        // Best-effort: if postMessage fails, do nothing.
+      }
+      return;
+    }
+
+    if (data.type !== 'DAMSAN_EXPORT_CANONICAL_PRINT') return;
+
+    // Canonical room export is same-origin only. It must never become a generic
+    // cross-origin endpoint that can inject arbitrary exam content into downloads.
+    if (!ev.origin || ev.origin === "null" || ev.origin !== window.location.origin) {
+      try {
+        ev.source?.postMessage(
+          { type: 'DAMSAN_CANONICAL_PRINT_RESULT', requestId, status: 'error', message: 'Nguồn yêu cầu xuất Word không hợp lệ.' },
+          targetOrigin
+        );
+      } catch (e) {}
+      return;
+    }
+
+    const payload = Array.isArray(data.payload) ? data.payload : [];
+    if (!payload.length) {
+      try {
+        ev.source?.postMessage(
+          { type: 'DAMSAN_CANONICAL_PRINT_RESULT', requestId, status: 'error', message: 'Không có đề chính thức để xuất Word.' },
+          targetOrigin
+        );
+      } catch (e) {}
+      return;
+    }
+
+    // Safety invariant: exporting a canonical room exam must not destroy the
+    // user's current mixing workspace. Swap only while the existing A4 renderer
+    // builds the document, then restore the exact previous references.
+    const previousDanhSach = danhSachDeThi;
+    const previousMaDes = lastMaDes;
+    const previousCounts = lastCounts;
+
     try {
+      danhSachDeThi = payload;
+      lastMaDes = [...new Set(payload.map(item => String(item.MaDe || '')).filter(Boolean))];
+      lastCounts = {
+        p1: payload.filter(item => String(item.Phan) === '1').length,
+        p2: payload.filter(item => String(item.Phan) === '2').length,
+        p3: payload.filter(item => String(item.Phan) === '3').length,
+        total: payload.length
+      };
+
+      if (data.exportMode === 'answer') exportWordAnswerOnly();
+      else exportWordExamOnly();
+
       ev.source?.postMessage(
-        { type: 'DAMSAN_EXAMS', requestId, payload: danhSachDeThi || [] },
+        {
+          type: 'DAMSAN_CANONICAL_PRINT_RESULT',
+          requestId,
+          status: 'accepted',
+          variantCount: lastMaDes.length,
+          questionCount: payload.length
+        },
         targetOrigin
       );
-    } catch (e) {
-      // Best-effort: if postMessage fails, do nothing.
+    } catch (error) {
+      try {
+        ev.source?.postMessage(
+          {
+            type: 'DAMSAN_CANONICAL_PRINT_RESULT',
+            requestId,
+            status: 'error',
+            message: error && error.message ? error.message : String(error)
+          },
+          targetOrigin
+        );
+      } catch (e) {}
+    } finally {
+      danhSachDeThi = previousDanhSach;
+      lastMaDes = previousMaDes;
+      lastCounts = previousCounts;
     }
   });
 
