@@ -47,7 +47,7 @@ function aieNotice(message, kind = 'info') {
 
 function aieSetBusy(value) {
   aieBusy = value;
-  for (const id of ['btnCreate','btnRefreshDocs','btnValidate','btnApprove','btnReject','btnExportWord']) {
+  for (const id of ['btnCreate','btnRefreshDocs','btnValidate','btnApprove','btnReject']) {
     const el = document.getElementById(id);
     if (el) el.disabled = value;
   }
@@ -391,7 +391,9 @@ async function aieExportPublishedWord() {
     return aieNotice('Bộ cầu nối xuất Word chưa sẵn sàng. Hãy tải lại trang.', 'error');
   }
 
-  aieSetBusy(true);
+  const exportButton = document.getElementById('btnExportWord');
+  aieBusy = true;
+  if (exportButton) exportButton.disabled = true;
   try {
     const { data, error } = await aieSb.rpc('rpc_staff_exam_preview', {
       p_staff_token: session.token,
@@ -412,7 +414,9 @@ async function aieExportPublishedWord() {
   } catch (error) {
     aieNotice(error?.message || 'Không xuất được Word từ đề đã publish.', 'error');
   } finally {
-    aieSetBusy(false);
+    aieBusy = false;
+    const current = aieRequests.find((item) => item.request_id === aieCurrentRequestId);
+    if (exportButton) exportButton.disabled = current?.status !== 'PUBLISHED';
   }
 }
 
