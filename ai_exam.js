@@ -376,6 +376,57 @@ async function aieApprove() {
   finally { aieSetBusy(false); }
 }
 
+function aieCanonicalPrintTitle080(rawValue) {
+  const raw = String(rawValue || '').trim();
+  const folded = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  if (/KTTX|THUONG[ _-]*XUYEN/.test(folded)) return 'KIỂM TRA THƯỜNG XUYÊN';
+  if (/KTGK|GIUA[ _-]*KY/.test(folded)) return 'KIỂM TRA GIỮA KỲ';
+  if (/KTCK|CUOI[ _-]*KY/.test(folded)) return 'KIỂM TRA CUỐI KỲ';
+  return raw;
+}
+
+async function aieCanonicalRoomPrintContext080(session, request, roomId) {
+  const [{ data: roomData, error: roomError }, { data: subjectData, error: subjectError }] = await Promise.all([
+    aieSb.rpc('rpc_lay_danh_sach_phong_thi_gv', {
+      p_staff_token: session.token,
+      p_ma_gv: session.profile.ma_gv,
+      p_truong_id: request.truong_id,
+      p_mon_id: request.mon_id,
+      p_xem_toan_bo: false
+    }),
+    aieSb.from('mon_hoc').select('id,ten_mon').eq('id', request.mon_id).limit(1)
+  ]);
+
+  if (roomError) throw roomError;
+  if (!roomData || roomData.status !== 'success') {
+    throw new Error(roomData?.message || 'Không đọc được metadata phòng thi để dàn trang Word.');
+  }
+
+  const room = (Array.isArray(roomData.rooms) ? roomData.rooms : [])
+    .find((item) => String(item.id) === String(roomId));
+  if (!room) throw new Error('Không tìm thấy metadata của phòng đã publish.');
+
+  const visibleSubject = document.getElementById('subjectSelect');
+  const visibleSubjectName = visibleSubject && String(visibleSubject.value) === String(request.mon_id)
+    ? (visibleSubject.options[visibleSubject.selectedIndex]?.textContent || '').trim()
+    : '';
+  const subjectName = !subjectError && Array.isArray(subjectData) && subjectData.length
+    ? String(subjectData[0].ten_mon || '').trim()
+    : visibleSubjectName;
+
+  const className = String(room.doi_tuong || '').trim();
+  const duration = Number(room.thoi_gian);
+  return {
+    pcTruong: String(room.ten_truong || session.profile.truong_ten || '').trim(),
+    pcKyThi: aieCanonicalPrintTitle080(room.ten_dot),
+    pcMon: subjectName,
+    pcLop: (!className || /^TatCa$/i.test(className)) ? '' : className,
+    pcThoiGian: Number.isFinite(duration) && duration > 0
+      ? duration + ' phút (không kể thời gian phát đề)'
+      : ''
+  };
+}
+
 async function aieExportPublishedWord() {
   if (aieBusy || !aieCurrentRequestId) return;
   const session = aieRequireSession(); if (!session) return;
@@ -395,10 +446,14 @@ async function aieExportPublishedWord() {
   aieBusy = true;
   if (exportButton) exportButton.disabled = true;
   try {
-    const { data, error } = await aieSb.rpc('rpc_staff_exam_preview', {
-      p_staff_token: session.token,
-      p_phong_id: roomId
-    });
+    const [printContext, previewResult] = await Promise.all([
+      aieCanonicalRoomPrintContext080(session, request, roomId),
+      aieSb.rpc('rpc_staff_exam_preview', {
+        p_staff_token: session.token,
+        p_phong_id: roomId
+      })
+    ]);
+    const { data, error } = previewResult;
     if (error) throw error;
     if (!data || data.status !== 'success') {
       throw new Error(data?.message || 'Không đọc được đề chính thức trong phòng thi.');
@@ -408,7 +463,8 @@ async function aieExportPublishedWord() {
 
     const result = await window.DamSanCanonicalPrint.exportCanonicalExams(exams, {
       source: 'ai-published-room',
-      exportMode: 'exam'
+      exportMode: 'exam',
+      printContext
     });
     aieNotice(`Đã bắt đầu xuất ${Number(result?.variantCount || exams.length)} mã đề Word (.docx) từ đúng dữ liệu đã publish trong phòng ${request.ma_phong}.`, 'ok');
   } catch (error) {
