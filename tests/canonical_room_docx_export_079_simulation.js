@@ -41,16 +41,16 @@ assert.strictEqual(normalized[3].DapAnDung, 'D');
 
 // C079-02: teacher export consumes only rpc_staff_exam_preview data already loaded in previewExamData.
 assert(teacherHtml.includes('id="btnExportPreviewWord"'));
-assert(teacherHtml.includes('canonical_exam_print_bridge.js?v=20261013-canonical-room-docx-079'));
-assert(teacherHtml.includes('teacher_canonical_export_079.js?v=20261013-canonical-room-docx-079'));
+assert(teacherHtml.includes('canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080'));
+assert(teacherHtml.includes('teacher_canonical_export_079.js?v=20261013-canonical-room-print-080'));
 assert(teacherOverlay.includes('previewExamData'));
 assert(teacherOverlay.includes('DamSanCanonicalPrint.exportCanonicalExams'));
 assert(!/\.from\(['"]de_thi['"]\)/.test(teacherOverlay));
 
 // C079-03: AI export is available only after PUBLISHED and re-reads canonical room state.
 assert(aiHtml.includes('id="btnExportWord"'));
-assert(aiHtml.includes('canonical_exam_print_bridge.js?v=20261013-canonical-room-docx-079'));
-assert(aiHtml.includes('ai_exam.js?v=20261013-canonical-room-docx-079'));
+assert(aiHtml.includes('canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080'));
+assert(aiHtml.includes('ai_exam.js?v=20261013-canonical-room-print-080'));
 assert(aiJs.includes("request.status !== 'PUBLISHED'"));
 assert(aiJs.includes('request.publish_result?.phong_id'));
 assert(aiJs.includes("rpc_staff_exam_preview"));
@@ -70,6 +70,6 @@ assert(v8.includes("type: 'DAMSAN_CANONICAL_PRINT_RESULT'"));
 // C079-05: no alternate Word renderer is introduced.
 assert(!teacherOverlay.includes('Packer'));
 assert(!aiJs.includes('Packer'));
-assert(bridge.version === '20261013-canonical-room-docx-079');
+assert(bridge.version === '20261013-canonical-room-print-080');
 
 console.log('PASS canonical_room_docx_export_079_simulation');
