@@ -52,7 +52,7 @@ assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261013-canonical-ro
 assert(v8.includes('print_docx_exporter.js?v=20261013-native-docx-078'), 'N077-08 exporter cache marker missing');
 
 // N077-09: online-room bridge remains present and independent.
-assert(v8.includes("data.type !== 'DAMSAN_GET_EXAMS'") && v8.includes("type: 'DAMSAN_EXAMS'"), 'N077-09 iframe bridge changed/missing');
+assert(v8.includes("data.type === 'DAMSAN_GET_EXAMS'") && v8.includes("type: 'DAMSAN_EXAMS'"), 'N077-09 original DAMSAN_GET_EXAMS bridge must remain available');
 
 // N077-10: answer export still uses the existing renderer and routes only at the final download boundary.
 assert(v8.includes('function xuatDapAnWord('), 'N077-10 answer renderer missing');
