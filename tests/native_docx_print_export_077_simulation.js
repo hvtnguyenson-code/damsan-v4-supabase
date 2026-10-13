@@ -48,7 +48,7 @@ assert(v8.includes("replace(/\\.doc$/i, '.docx')"), 'N077-07 output extension mu
 assert(v8.includes('Chưa xuất file để tránh tạo Word giả'), 'N077-07 native failure must not silently emit a fake .doc');
 
 // N077-08: frame cache is busted so deployed browsers receive the new exporter immediately.
-assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261013-canonical-room-docx-079'), 'N077-08 iframe cache marker missing');
+assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261013-canonical-room-print-080'), 'N077-08 iframe cache marker missing');
 assert(v8.includes('print_docx_exporter.js?v=20261013-native-docx-078'), 'N077-08 exporter cache marker missing');
 
 // N077-09: online-room bridge remains present and independent.
