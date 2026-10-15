@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20261010-submission-retry-liveness-076';
+const VERSION = '20261015-android-pwa-installability-081';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -331,33 +331,205 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Hỗ trợ sự kiện cài đặt PWA (cho Chrome/Android/Desktop)
-let deferredPrompt;
+// PWA-INSTALL-081: Android/Chrome install flow with deterministic manual fallback.
+let deferredPrompt = null;
+let installFallbackTimer = null;
+
+function isPwaStandaloneMode() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
+}
+
+function isIOSDevice() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isAndroidDevice() {
+    return /Android/i.test(navigator.userAgent || '');
+}
+
+function isChromiumAndroid() {
+    const ua = navigator.userAgent || '';
+    return /Android/i.test(ua) && /(Chrome|Chromium|CriOS)/i.test(ua) && !/(EdgA|OPR|SamsungBrowser)/i.test(ua);
+}
+
+function setPwaInstallStatus(message, kind = 'info') {
+    const el = document.getElementById('pwa-install-status');
+    if (!el) return;
+    el.textContent = message || '';
+    el.style.color = kind === 'ok' ? '#188038' : (kind === 'warn' ? '#b06000' : '#5f6368');
+    el.style.fontWeight = kind === 'ok' ? '700' : '400';
+}
+
+function showAndroidInstallFallback(message = '') {
+    const box = document.getElementById('android-instructions');
+    const btn = document.getElementById('btn-auto-install');
+    if (box) box.style.display = isAndroidDevice() ? 'block' : 'none';
+    if (btn) {
+        btn.style.display = 'block';
+        btn.textContent = deferredPrompt ? '✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨' : '📱 HƯỚNG DẪN CÀI ĐẶT';
+    }
+    if (message) setPwaInstallStatus(message, 'warn');
+}
+
+function schedulePwaInstallFallback() {
+    if (installFallbackTimer) clearTimeout(installFallbackTimer);
+    installFallbackTimer = setTimeout(() => {
+        installFallbackTimer = null;
+        if (deferredPrompt || isPwaStandaloneMode() || isIOSDevice()) return;
+        showAndroidInstallFallback('Chrome chưa mở hộp thoại cài tự động. Hãy dùng menu ⋮ theo hướng dẫn bên dưới.');
+        void capNhatChanDoanPWA(false);
+    }, 1800);
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    checkAndShowInstallButton();
+    if (installFallbackTimer) {
+        clearTimeout(installFallbackTimer);
+        installFallbackTimer = null;
+    }
+    const btn = document.getElementById('btn-auto-install');
+    if (btn) {
+        btn.style.display = 'block';
+        btn.textContent = '✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨';
+    }
+    const androidBox = document.getElementById('android-instructions');
+    if (androidBox) androidBox.style.display = 'none';
+    setPwaInstallStatus('Thiết bị đã sẵn sàng cài ứng dụng.', 'ok');
+    void capNhatChanDoanPWA(false);
+});
+
+window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    try { localStorage.setItem('damsan_pwa_installed', '1'); } catch(e) {}
+    const btn = document.getElementById('btn-auto-install');
+    if (btn) btn.style.display = 'none';
+    const androidBox = document.getElementById('android-instructions');
+    if (androidBox) androidBox.style.display = 'none';
+    setPwaInstallStatus('Đã cài ứng dụng. Hãy mở Đam San Exam từ màn hình chính.', 'ok');
+    void capNhatChanDoanPWA(false);
 });
 
 function checkAndShowInstallButton() {
     const btn = document.getElementById('btn-auto-install');
-    if (btn && deferredPrompt) {
-        btn.style.display = 'block';
-    } else if (btn) {
-        // Nếu không có deferredPrompt (có thể đã cài rồi hoặc trình duyệt ko hỗ trợ auto)
-        // Ta có thể hiện một thông báo nhỏ hoặc giữ nút ẩn
+    const iosBox = document.getElementById('ios-instructions');
+    const androidBox = document.getElementById('android-instructions');
+    if (isPwaStandaloneMode()) {
+        if (btn) btn.style.display = 'none';
+        if (iosBox) iosBox.style.display = 'none';
+        if (androidBox) androidBox.style.display = 'none';
+        return;
+    }
+
+    if (isIOSDevice()) {
+        if (btn) btn.style.display = 'none';
+        if (iosBox) iosBox.style.display = 'block';
+        if (androidBox) androidBox.style.display = 'none';
+        setPwaInstallStatus('Trên iPhone/iPad, hãy thêm ứng dụng vào Màn hình chính bằng Safari.');
+        return;
+    }
+
+    if (iosBox) iosBox.style.display = 'none';
+    if (deferredPrompt) {
+        if (btn) {
+            btn.style.display = 'block';
+            btn.textContent = '✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨';
+        }
+        if (androidBox) androidBox.style.display = 'none';
+        setPwaInstallStatus('Thiết bị đã sẵn sàng cài ứng dụng.', 'ok');
+        return;
+    }
+
+    if (isAndroidDevice()) {
+        showAndroidInstallFallback('Đang chờ Chrome xác nhận khả năng cài đặt...');
+        schedulePwaInstallFallback();
+    } else {
+        if (btn) {
+            btn.style.display = 'block';
+            btn.textContent = '📱 HƯỚNG DẪN CÀI ĐẶT';
+        }
+        setPwaInstallStatus('Nếu trình duyệt không hiện hộp thoại cài, hãy dùng chức năng cài ứng dụng trong menu trình duyệt.');
     }
 }
 
 async function kichHoatCaiDatPWA() {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-        console.log('User accepted the install prompt');
+    if (!deferredPrompt) {
+        showAndroidInstallFallback('Chrome chưa cung cấp hộp thoại cài tự động. Hãy cài bằng menu ⋮ theo hướng dẫn.');
+        await capNhatChanDoanPWA(true);
+        return;
     }
+
+    const promptEvent = deferredPrompt;
     deferredPrompt = null;
-    document.getElementById('btn-auto-install').style.display = 'none';
+    try {
+        await promptEvent.prompt();
+        const { outcome } = await promptEvent.userChoice;
+        if (outcome === 'accepted') {
+            setPwaInstallStatus('Đã chấp nhận cài đặt. Chờ Android hoàn tất...', 'ok');
+        } else {
+            showAndroidInstallFallback('Bạn đã đóng hộp thoại cài. Có thể cài lại từ menu ⋮ của Chrome.');
+        }
+    } catch (error) {
+        console.warn('[PWA install]', error);
+        showAndroidInstallFallback('Không mở được hộp thoại cài tự động. Hãy dùng menu ⋮ của Chrome.');
+    }
+    await capNhatChanDoanPWA(false);
+}
+
+async function capNhatChanDoanPWA(showPanel = false) {
+    const panel = document.getElementById('pwa-diagnostics');
+    if (!panel) return null;
+
+    const diagnostics = {
+        secure: window.isSecureContext || location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1',
+        chromeAndroid: isChromiumAndroid(),
+        manifest: false,
+        icons: false,
+        serviceWorker: false,
+        installPrompt: !!deferredPrompt,
+        installedHint: false
+    };
+
+    try { diagnostics.installedHint = localStorage.getItem('damsan_pwa_installed') === '1'; } catch(e) {}
+
+    try {
+        const manifestLink = document.querySelector('link[rel="manifest"]');
+        if (manifestLink) {
+            const response = await fetch(manifestLink.href, { cache: 'no-store' });
+            if (response.ok) {
+                const manifest = await response.json();
+                diagnostics.manifest = !!manifest.start_url && manifest.display === 'standalone';
+                const icons = Array.isArray(manifest.icons) ? manifest.icons : [];
+                diagnostics.icons = icons.some(icon => String(icon.sizes || '').split(/\\s+/).includes('192x192'))
+                    && icons.some(icon => String(icon.sizes || '').split(/\\s+/).includes('512x512'));
+            }
+        }
+    } catch(e) {}
+
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = swRegistration || await navigator.serviceWorker.getRegistration('./');
+            diagnostics.serviceWorker = !!registration && !!(registration.active || registration.waiting || registration.installing);
+        } catch(e) {}
+    }
+
+    const row = (label, ok, okText, badText) =>
+        '<div class="pwa-diag-row"><span>' + label + '</span><span class="' + (ok ? 'pwa-diag-ok' : 'pwa-diag-warn') + '">' + (ok ? okText : badText) + '</span></div>';
+
+    panel.innerHTML = [
+        row('Kết nối an toàn (HTTPS)', diagnostics.secure, 'OK', 'Chưa đạt'),
+        row('Manifest ứng dụng', diagnostics.manifest, 'OK', 'Chưa tải được'),
+        row('Icon 192 / 512', diagnostics.icons, 'OK', 'Thiếu'),
+        row('Service Worker', diagnostics.serviceWorker, 'OK', 'Chưa sẵn sàng'),
+        row('Chrome Android', diagnostics.chromeAndroid, 'Đúng', isAndroidDevice() ? 'Trình duyệt khác' : 'Không phải Android'),
+        row('Hộp thoại cài tự động', diagnostics.installPrompt, 'Sẵn sàng', 'Chưa được Chrome cấp')
+    ].join('');
+
+    if (diagnostics.installedHint && !isPwaStandaloneMode()) {
+        panel.innerHTML += '<div style="margin-top:8px;color:#174ea6;"><b>Gợi ý:</b> thiết bị này từng báo cài thành công. Hãy tìm “Đam San Exam” trên màn hình chính và mở từ biểu tượng đó.</div>';
+    }
+    if (showPanel) panel.classList.add('show');
+    return diagnostics;
 }
 
 // ==========================================

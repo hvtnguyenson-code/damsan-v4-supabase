@@ -5,7 +5,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; connect-src 'self' https://xcervjnwlchwfqvbeahy.supabase.co wss://xcervjnwlchwfqvbeahy.supabase.co; img-src 'self' data: blob: https://cdn-icons-png.flaticon.com; font-src 'self' data: https://cdnjs.cloudflare.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Phòng Thi Trực Tuyến - Hệ Thống Đam San V4</title>
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="manifest.json?v=20261015-android-pwa-installability-081">\r\n    <link rel="icon" type="image/png" sizes="192x192" href="./icons/exam-192.png">
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
@@ -203,7 +203,24 @@
             50% { transform: scale(1.05); box-shadow: 0 15px 30px rgba(26,115,232,0.5); }
             100% { transform: scale(1); box-shadow: 0 10px 20px rgba(26,115,232,0.3); }
         }
-        .ios-manual-box { display: none; margin-top: 20px; }
+        .ios-manual-box, .android-manual-box { display: none; margin-top: 20px; }
+        .android-manual-box .install-step, .pwa-diagnostics {
+            text-align: left;
+            background: #f8fbff;
+            border: 1px solid #d2e3fc;
+            border-radius: 10px;
+            padding: 14px 16px;
+            line-height: 1.5;
+        }
+        .android-manual-box h4 { margin: 9px 0; font-size: 14px; color: #202124; }
+        .pwa-install-status { min-height: 20px; margin-top: 10px; color: #5f6368; font-size: 13px; line-height: 1.45; }
+        .pwa-diagnostics { display: none; margin-top: 14px; font-size: 12px; color: #3c4043; }
+        .pwa-diagnostics.show { display: block; }
+        .pwa-diag-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid #eef2f7; }
+        .pwa-diag-row:last-child { border-bottom: 0; }
+        .pwa-diag-ok { color: #188038; font-weight: 700; }
+        .pwa-diag-warn { color: #b06000; font-weight: 700; }
+        .pwa-help-btn { margin-top: 10px; border: 0; background: transparent; color: #1a73e8; font-weight: 700; cursor: pointer; text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -211,25 +228,38 @@
     <div id="pwa-install-section" class="section">
         <div class="pwa-container">
             <div style="background: #e8f0fe; width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto;">
-                <img src="https://cdn-icons-png.flaticon.com/512/3413/3413535.png" width="60" alt="App Icon">
+                <img src="./icons/exam-192.png" width="72" height="72" alt="Biểu tượng ứng dụng Đam San">
             </div>
             <h2 class="auth-title">KÍCH HOẠT ỨNG DỤNG THI</h2>
-            <p style="color: #5f6368; font-size: 16px; margin-bottom: 30px; line-height: 1.6;">Để đảm bảo tính công bằng và ổn định tuyệt đối, bài thi yêu cầu bạn tham gia thông qua <b>Ứng dụng Đam San</b> đã được cài đặt trên thiết bị.</p>
-            
-            <!-- Nút cài đặt tự động (Hiện trên Android/Chrome/Windows) -->
-            <button id="btn-auto-install" onclick="kichHoatCaiDatPWA()" class="btn-install-pwa">✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨</button>
+            <p style="color: #5f6368; font-size: 16px; margin-bottom: 20px; line-height: 1.6;">Để đảm bảo tính công bằng và ổn định, bài thi yêu cầu bạn tham gia qua <b>Ứng dụng Đam San</b> đã được cài trên thiết bị.</p>
 
-            <!-- Hướng dẫn thủ công cho iOS (Hiện trên iPhone/iPad) -->
+            <button id="btn-auto-install" onclick="kichHoatCaiDatPWA()" class="btn-install-pwa">✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨</button>
+            <div id="pwa-install-status" class="pwa-install-status">Đang kiểm tra khả năng cài đặt trên thiết bị...</div>
+
+            <div id="android-instructions" class="android-manual-box">
+                <div class="install-step" style="border-left: 5px solid #1a73e8;">
+                    <span class="platform-badge" style="background:#e8f0fe;color:#174ea6;">Android / Google Chrome</span>
+                    <h4>1. Nhấn menu <b>⋮</b> ở góc trên bên phải Chrome.</h4>
+                    <h4>2. Chọn <b>“Cài đặt ứng dụng”</b> hoặc <b>“Thêm vào màn hình chính”</b>.</h4>
+                    <h4>3. Chọn <b>“Cài đặt”</b>, sau đó mở <b>Đam San Exam</b> từ màn hình chính.</h4>
+                    <h4>Nếu không thấy hai mục trên: cập nhật Chrome trong CH Play, đóng toàn bộ tab Đam San, mở lại đúng bằng Chrome rồi thử lại.</h4>
+                    <p style="margin:10px 0 0;color:#5f6368;font-size:12px;"><b>Không mở bằng trình duyệt bên trong Zalo, Messenger, Facebook...</b></p>
+                </div>
+            </div>
+
             <div id="ios-instructions" class="ios-manual-box">
                 <div class="install-step" style="border-left: 5px solid #000;">
                     <span class="platform-badge badge-ios">Dành cho iPhone / iPad (Safari)</span>
-                    <h4 style="color: #000;">1. Nhấn nút <b>Chia sẻ (Share)</b> <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d4/Ios-share-icon.svg/1024px-Ios-share-icon.svg.png" width="20"> ở cuối màn hình.</h4>
-                    <h4 style="color: #000;">2. Chọn <b>"Thêm vào màn hình chính" (Add to Home Screen)</b>.</h4>
+                    <h4 style="color: #000;">1. Nhấn nút <b>Chia sẻ (Share)</b> ở cuối màn hình.</h4>
+                    <h4 style="color: #000;">2. Chọn <b>“Thêm vào màn hình chính” (Add to Home Screen)</b>.</h4>
                     <h4 style="color: #000;">3. Mở ứng dụng từ màn hình chính để vào thi.</h4>
                 </div>
             </div>
 
-            <p style="font-size: 13px; color: #9aa0a6; margin-top: 40px;">Sau khi cài đặt, vui lòng mở ứng dụng từ màn hình chính.<br>Nếu đã cài đặt nhưng vẫn thấy trang này, hãy nhấn <a href="javascript:location.reload()" style="color: #1a73e8; font-weight: bold;">Tải lại trang</a>.</p>
+            <button id="btn-pwa-diagnostics" class="pwa-help-btn" type="button" onclick="capNhatChanDoanPWA(true)">Kiểm tra khả năng cài đặt</button>
+            <div id="pwa-diagnostics" class="pwa-diagnostics" aria-live="polite"></div>
+
+            <p style="font-size: 13px; color: #9aa0a6; margin-top: 28px;">Sau khi cài đặt, hãy mở ứng dụng từ màn hình chính.<br>Nếu đã cài nhưng vẫn thấy trang này, hãy đóng tab Chrome và mở biểu tượng <b>Đam San Exam</b> trên màn hình chính.</p>
         </div>
     </div>
 
@@ -366,6 +396,6 @@
         <button class="btn-warning" onclick="closeCheatWarning()">TÔI ĐÃ HIỂU VÀ SẼ KHÔNG TÁI PHẠM</button>
     </div>
 
-    <script src="hoc_sinh.js?v=20261010-submission-retry-liveness-076"></script>
+    <script src="hoc_sinh.js?v=20261015-android-pwa-installability-081"></script>
 </body>
 </html>

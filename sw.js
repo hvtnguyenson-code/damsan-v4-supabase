@@ -1,16 +1,24 @@
-const VERSION = '20261010-submission-retry-liveness-076';
+const VERSION = '20261015-android-pwa-installability-081';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
-const ASSETS = [
+
+// PWA-INSTALL-081: only same-origin essentials are allowed to decide whether
+// the Service Worker installs successfully. External CDNs are optional cache
+// warmups; one blocked CDN must never make Android consider the PWA broken.
+const CORE_ASSETS = [
   './hoc_sinh.html',
   './hoc_sinh.js',
   './manifest.json',
+  './icons/exam-192.png',
+  './icons/exam-512.png'
+];
+
+const OPTIONAL_ASSETS = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
-  'https://cdn-icons-png.flaticon.com/512/3413/3413535.png'
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
 ];
 
 // 1. Cài đặt và lưu cache ban đầu
@@ -19,8 +27,11 @@ self.addEventListener('install', (event) => {
   // để tránh kích hoạt và reload giữa chừng khi học sinh đang làm bài hoặc nộp bài.
   // Service Worker mới sẽ chờ tin nhắn SKIP_WAITING từ hoc_sinh.js khi an toàn.
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await cache.addAll(CORE_ASSETS);
+      await Promise.allSettled(
+        OPTIONAL_ASSETS.map((url) => cache.add(url))
+      );
     })
   );
 });
@@ -75,9 +86,15 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => {
-        // NÃ¡ÂºÂ¿u mÃ¡ÂºÂ¥t mÃ¡ÂºÂ¡ng hoÃ¡ÂºÂ·c lÃ¡Â»â€”i kÃ¡ÂºÂ¿t nÃ¡Â»â€˜i, dÃƒÂ¹ng bÃ¡ÂºÂ£n lÃ†Â°u gÃ¡ÂºÂ§n nhÃ¡ÂºÂ¥t trong cache
-        return caches.match(event.request);
+      .catch(async () => {
+        // Nếu mất mạng, ưu tiên exact cache. Với static asset cùng origin có
+        // query cache-bust (?v=...), cho phép dùng bản core tương ứng không query.
+        const exact = await caches.match(event.request);
+        if (exact) return exact;
+        if (requestUrl.origin === self.location.origin) {
+          return caches.match(event.request, { ignoreSearch: true });
+        }
+        return undefined;
       })
   );
 });

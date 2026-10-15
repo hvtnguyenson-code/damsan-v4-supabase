@@ -1267,11 +1267,11 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261010-submission-retry-liveness-076');
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261015-android-pwa-installability-081');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261010-submission-retry-liveness-076'));
-    assert(hsJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"));
-    assert(swJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261015-android-pwa-installability-081'));
+    assert(hsJsSource.includes("const VERSION = '20261015-android-pwa-installability-081';"));
+    assert(swJsSource.includes("const VERSION = '20261015-android-pwa-installability-081';"));
     console.log('  -> PASSED');
   }
 

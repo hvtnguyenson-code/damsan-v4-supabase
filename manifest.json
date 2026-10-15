@@ -1,15 +1,25 @@
 {
+  "id": "./hoc_sinh.html",
   "name": "Thi Trực Tuyến Đam San",
   "short_name": "Đam San Exam",
+  "description": "Ứng dụng làm bài kiểm tra trực tuyến Đam San",
   "start_url": "./hoc_sinh.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#1a73e8",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3413/3413535.png",
+      "src": "./icons/exam-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/exam-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
