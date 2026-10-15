@@ -1010,12 +1010,12 @@ async function runAllTests() {
     assert(roomActTest.includes('20260906-logout-session-race-028a'), 'teacher_room_control must require 028a');
 
     // Student / SW current exact version
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261010-submission-retry-liveness-076'),
-      'hoc_sinh.html must remain 20261010-submission-retry-liveness-076');
-    assert(hsJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"),
-      'hoc_sinh.js must remain 20261010-submission-retry-liveness-076');
-    assert(swJsSource.includes("const VERSION = '20261010-submission-retry-liveness-076';"),
-      'sw.js must remain 20261010-submission-retry-liveness-076');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261015-android-pwa-installability-081'),
+      'hoc_sinh.html must remain 20261015-android-pwa-installability-081');
+    assert(hsJsSource.includes("const VERSION = '20261015-android-pwa-installability-081';"),
+      'hoc_sinh.js must remain 20261015-android-pwa-installability-081');
+    assert(swJsSource.includes("const VERSION = '20261015-android-pwa-installability-081';"),
+      'sw.js must remain 20261015-android-pwa-installability-081');
     console.log('  -> PASSED');
   }
 
