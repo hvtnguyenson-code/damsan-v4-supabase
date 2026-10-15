@@ -86,9 +86,15 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => {
-        // NÃ¡ÂºÂ¿u mÃ¡ÂºÂ¥t mÃ¡ÂºÂ¡ng hoÃ¡ÂºÂ·c lÃ¡Â»â€”i kÃ¡ÂºÂ¿t nÃ¡Â»â€˜i, dÃƒÂ¹ng bÃ¡ÂºÂ£n lÃ†Â°u gÃ¡ÂºÂ§n nhÃ¡ÂºÂ¥t trong cache
-        return caches.match(event.request);
+      .catch(async () => {
+        // Nếu mất mạng, ưu tiên exact cache. Với static asset cùng origin có
+        // query cache-bust (?v=...), cho phép dùng bản core tương ứng không query.
+        const exact = await caches.match(event.request);
+        if (exact) return exact;
+        if (requestUrl.origin === self.location.origin) {
+          return caches.match(event.request, { ignoreSearch: true });
+        }
+        return undefined;
       })
   );
 });
