@@ -52,6 +52,8 @@ jobs:
           node --check tests/native_docx_print_export_077_simulation.js
           node --check tests/browser_native_docx_runtime_probe.js
           node --check tests/run_native_docx_browser_probe.mjs
+          node --check tests/android_pwa_installability_081_simulation.js
+          node --check tests/run_android_pwa_browser_probe_081.mjs
           node --check tests/browser_canonical_print_metadata_probe.js
           node --check tests/run_canonical_print_metadata_browser_probe.mjs
           node --check tests/ai_exam_copy_feedback_simulation.js
@@ -73,6 +75,60 @@ jobs:
           node --check tests/ai_action_feedback_041a_simulation.js
           node --check tests/chunked_normalization_042_simulation.js
           node --check tests/ai_room_boundary_invariant_simulation.js
+      - name: Android PWA installability static probe
+        run: |
+          node tests/android_pwa_installability_081_simulation.js
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+
+          for path, expected in [
+              ('icons/exam-192.png', (192, 192)),
+              ('icons/exam-512.png', (512, 512)),
+          ]:
+              data = Path(path).read_bytes()
+              assert data[:8] == b'\x89PNG\r\n\x1a\n', f'{path}: invalid PNG signature'
+              assert data[12:16] == b'IHDR', f'{path}: missing IHDR'
+              width, height = struct.unpack('>II', data[16:24])
+              assert (width, height) == expected, f'{path}: expected {expected}, got {(width, height)}'
+          print('PASS local PWA PNG icons 192/512')
+          PY
+      - name: Android Chrome PWA runtime probe
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium not found on runner"
+            exit 1
+          fi
+          python3 -m http.server 8768 --bind 127.0.0.1 >/tmp/pwa-http.log 2>&1 &
+          SERVER_PID=$!
+          "$CHROME" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --disable-background-timer-throttling \
+            --remote-debugging-address=127.0.0.1 \
+            --remote-debugging-port=9235 \
+            --user-data-dir=/tmp/damsan-pwa-chrome \
+            about:blank >/tmp/pwa-chrome.out 2>/tmp/pwa-chrome.log &
+          CHROME_PID=$!
+          cleanup() {
+            kill "$CHROME_PID" >/dev/null 2>&1 || true
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8768/hoc_sinh.html >/dev/null && curl -fsS http://127.0.0.1:9235/json/version >/dev/null; then break; fi
+            sleep 1
+          done
+          set +e
+          timeout 100s node tests/run_android_pwa_browser_probe_081.mjs
+          PROBE_EXIT=$?
+          set -e
+          echo "=== Android PWA Chrome diagnostics ==="
+          tail -n 120 /tmp/pwa-chrome.log || true
+          exit "$PROBE_EXIT"
       - name: Browser OCR runtime probe
         run: |
           CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
