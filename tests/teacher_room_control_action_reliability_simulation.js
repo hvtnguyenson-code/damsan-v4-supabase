@@ -338,10 +338,10 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20260906-logout-session-race-028a in giaovien.html');
+  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20261018-teacher-dashboard-refresh-082 in giaovien.html');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260906-logout-session-race-028a'),
-      'giaovien.html must include giaovien.js?v=20260906-logout-session-race-028a');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'),
+      'giaovien.html must include giaovien.js?v=20261018-teacher-dashboard-refresh-082');
     console.log('  -> PASSED');
   }
 
@@ -1262,17 +1262,17 @@ async function runAllTests() {
   // J. INVARIANTS (Tests 59 - 63)
   // =======================================================================
 
-  console.log('Test ROOM-ACT-59: Teacher exact version is 20260906-logout-session-race-028a across all test suites');
+  console.log('Test ROOM-ACT-59: Teacher exact version is 20261018-teacher-dashboard-refresh-082 across all test suites');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20260906-logout-session-race-028a'));
+    assert(gvHtmlSource.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'));
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('giaovien.js?v=20260906-logout-session-race-028a'));
+    assert(adminTest.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'));
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('giaovien.js?v=20260906-logout-session-race-028a'));
+    assert(cspTest.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'));
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('giaovien.js?v=20260906-logout-session-race-028a'));
+    assert(scoreTest.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'));
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('giaovien.js?v=20260906-logout-session-race-028a'));
+    assert(dashTest.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'));
     console.log('  -> PASSED');
   }
 
