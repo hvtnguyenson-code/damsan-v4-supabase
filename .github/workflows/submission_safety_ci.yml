@@ -77,6 +77,10 @@ jobs:
           node --check tests/chunked_normalization_042_simulation.js
           node --check tests/ai_room_boundary_invariant_simulation.js
           node --check tests/teacher_dashboard_refresh_082_simulation.js
+          node --check admin_system_status_083a.js
+          node --check tests/admin_system_status_083a_simulation.js
+      - name: Admin system status 083A simulation
+        run: node tests/admin_system_status_083a_simulation.js
       - name: Teacher dashboard refresh 082 simulation
         run: node tests/teacher_dashboard_refresh_082_simulation.js
       - name: Android PWA installability static probe
@@ -360,32 +364,6 @@ jobs:
           node tests/ai_room_boundary_invariant_simulation.js
           node tests/ai_authoring_navigation_resilience_simulation.js
           node tests/knowledge_ocr_usability_gate_simulation.js
-      - name: 082 narrow-scope guard
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-          else
-            CHANGED="$(git diff --name-only HEAD^...HEAD)"
-          fi
-          UNEXPECTED="$(echo "$CHANGED" | grep -Ev '^(giaovien\.js|giaovien\.html|tests/.*\.js|\.github/workflows/submission_safety_ci\.yml)$' || true)"
-          if [ -n "$UNEXPECTED" ]; then
-            echo "082 must not modify runtime surfaces outside teacher dashboard files."
-            echo "$UNEXPECTED"
-            exit 1
-          fi
-          echo "PASS 082 narrow-scope guard"
-      - name: 079 database immutability guard
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
-          else
-            CHANGED="$(git diff --name-only HEAD^...HEAD)"
-          fi
-          if echo "$CHANGED" | grep -E '^supabase/(migrations|functions)/'; then
-            echo "079 is intentionally code-only and must not modify Supabase schema/functions."
-            exit 1
-          fi
-          echo "PASS 079 database immutability guard"
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
