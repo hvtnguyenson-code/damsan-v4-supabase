@@ -23,7 +23,7 @@ assert(toggle.includes('fetchDashboard(true);'), '082 fallback must reuse existi
 assert(html.includes('Tự động làm mới dự phòng (20s)'), '082 teacher UI must show 20-second fallback cadence');
 assert(html.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'), '082 teacher cache-bust marker missing');
 
-const realtime = section('function kichHoatLienKetRealtimeGiaoVien()', '/* =======================================================\n   LOGIC CHUYỂN TAB');
+const realtime = section('function kichHoatLienKetRealtimeGiaoVien()', 'function switchTab');
 assert(realtime.includes("sb.channel('gv-ket-qua-master')"), '082 must preserve existing Realtime channel');
 assert(realtime.includes("table: 'ket_qua'"), '082 must preserve ket_qua subscription');
 assert(realtime.includes('payload.new?.phong_id || payload.old?.phong_id'), '082 must preserve room-scoped Realtime filter');
