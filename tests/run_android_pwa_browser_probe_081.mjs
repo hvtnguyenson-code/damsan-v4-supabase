@@ -77,6 +77,11 @@ while (Date.now() < deadline) {
       return JSON.stringify({
         ready:true,
         diagnostics:d,
+        dependencies:{
+          supabase: typeof window.supabase?.createClient === 'function',
+          dompurify: typeof window.DOMPurify?.sanitize === 'function',
+          cryptojs: typeof window.CryptoJS?.SHA256 === 'function'
+        },
         buttonDisplay:document.getElementById('btn-auto-install')?.style?.display || '',
         buttonText:document.getElementById('btn-auto-install')?.textContent || '',
         androidDisplay:document.getElementById('android-instructions')?.style?.display || '',
@@ -106,6 +111,9 @@ try { ws.close(); } catch {}
 if (!snapshot?.ready) throw new Error('PWA runtime did not become ready');
 for (const key of ['secure','manifest','icons','serviceWorker','chromeAndroid']) {
   if (!snapshot.diagnostics?.[key]) throw new Error('PWA diagnostic failed: ' + key);
+}
+for (const key of ['supabase','dompurify','cryptojs']) {
+  if (!snapshot.dependencies?.[key]) throw new Error('Local student dependency failed to load: ' + key);
 }
 if (snapshot.buttonDisplay !== 'block') throw new Error('Android fallback button is not visible without relying on beforeinstallprompt');
 if (snapshot.androidDisplay !== 'block' && !snapshot.diagnostics?.installPrompt) {

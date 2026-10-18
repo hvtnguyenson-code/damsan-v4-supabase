@@ -27,7 +27,7 @@ assert.strictEqual(JSON.parse(jsonSafeFixture).noi_dung.includes("data-damsan-p3
 // Student UI already has the safe rich-text path and table CSS. Reuse it rather than adding a second room payload.
 assert(/safeHTML\(cau\.noi_dung\s*\|\|\s*cau\.NoiDung\)/.test(studentJs), 'student question renderer no longer renders sanitized noi_dung');
 assert(/\.q-text\s+table/.test(studentHtml), 'student UI table styling for question stems is missing');
-assert(/dompurify\/3\.0\.6\/purify\.min\.js/i.test(studentHtml), 'student UI must sanitize authored table HTML with DOMPurify');
+assert(/vendor\/student\/dompurify-3\.0\.6\.min\.js/i.test(studentHtml), 'student UI must load the pinned local DOMPurify runtime');
 
 assert(/profile_version='055'/i.test(migration), '055 profile version not persisted');
 assert(/answer_max_characters\":4/.test(migration), '055 max answer length not in profile');
