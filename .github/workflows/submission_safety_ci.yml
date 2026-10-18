@@ -77,6 +77,10 @@ jobs:
           node --check tests/chunked_normalization_042_simulation.js
           node --check tests/ai_room_boundary_invariant_simulation.js
           node --check tests/teacher_dashboard_refresh_082_simulation.js
+          node --check admin_system_status_083a.js
+          node --check tests/admin_system_status_083a_simulation.js
+      - name: Admin system status 083A simulation
+        run: node tests/admin_system_status_083a_simulation.js
       - name: Teacher dashboard refresh 082 simulation
         run: node tests/teacher_dashboard_refresh_082_simulation.js
       - name: Android PWA installability static probe
