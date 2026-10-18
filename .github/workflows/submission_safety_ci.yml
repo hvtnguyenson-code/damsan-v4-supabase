@@ -53,6 +53,7 @@ jobs:
           node --check tests/browser_native_docx_runtime_probe.js
           node --check tests/run_native_docx_browser_probe.mjs
           node --check tests/android_pwa_installability_081_simulation.js
+          node --check tests/student_runtime_local_deps_081a_simulation.js
           node --check tests/run_android_pwa_browser_probe_081.mjs
           node --check tests/browser_canonical_print_metadata_probe.js
           node --check tests/run_canonical_print_metadata_browser_probe.mjs
@@ -78,6 +79,7 @@ jobs:
       - name: Android PWA installability static probe
         run: |
           node tests/android_pwa_installability_081_simulation.js
+          node tests/student_runtime_local_deps_081a_simulation.js
           python3 - <<'PY'
           import struct
           from pathlib import Path
@@ -370,7 +372,7 @@ jobs:
       - name: Whitespace errors in branch diff
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
+            git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD" -- . ':(exclude)vendor/student/**'
           else
-            git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check HEAD^...HEAD
+            git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check HEAD^...HEAD -- . ':(exclude)vendor/student/**'
           fi

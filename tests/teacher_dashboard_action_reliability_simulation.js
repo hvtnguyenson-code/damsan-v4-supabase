@@ -799,21 +799,21 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  // 26. Student HTML/JS exact: 20261015-android-pwa-installability-081
-  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261015-android-pwa-installability-081');
+  // 26. Student HTML/JS exact: 20261018-student-local-deps-081a
+  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261018-student-local-deps-081a');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261015-android-pwa-installability-081'),
-      'hoc_sinh.html must include hoc_sinh.js?v=20261015-android-pwa-installability-081');
-    assert(hsJsSource.includes("const VERSION = '20261015-android-pwa-installability-081';"),
-      'hoc_sinh.js must define const VERSION = 20261015-android-pwa-installability-081');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261018-student-local-deps-081a'),
+      'hoc_sinh.html must include hoc_sinh.js?v=20261018-student-local-deps-081a');
+    assert(hsJsSource.includes("const VERSION = '20261018-student-local-deps-081a';"),
+      'hoc_sinh.js must define const VERSION = 20261018-student-local-deps-081a');
     console.log('  -> PASSED');
   }
 
-  // 27. sw.js exact: 20261015-android-pwa-installability-081
-  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261015-android-pwa-installability-081');
+  // 27. sw.js exact: 20261018-student-local-deps-081a
+  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261018-student-local-deps-081a');
   {
-    assert(swJsSource.includes("const VERSION = '20261015-android-pwa-installability-081';"),
-      'sw.js must define const VERSION = 20261015-android-pwa-installability-081');
+    assert(swJsSource.includes("const VERSION = '20261018-student-local-deps-081a';"),
+      'sw.js must define const VERSION = 20261018-student-local-deps-081a');
     console.log('  -> PASSED');
   }
 

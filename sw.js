@@ -1,25 +1,21 @@
-const VERSION = '20261015-android-pwa-installability-081';
+const VERSION = '20261018-student-local-deps-081a';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 
-// PWA-INSTALL-081: only same-origin essentials are allowed to decide whether
-// the Service Worker installs successfully. External CDNs are optional cache
-// warmups; one blocked CDN must never make Android consider the PWA broken.
+// PWA-INSTALL-081A: all student runtime dependencies required before login
+// are same-origin CORE_ASSETS. A public CDN outage must not prevent the PWA
+// from installing or starting on a newly provisioned Android device.
 const CORE_ASSETS = [
   './hoc_sinh.html',
   './hoc_sinh.js',
   './manifest.json',
   './icons/exam-192.png',
-  './icons/exam-512.png'
+  './icons/exam-512.png',
+  './vendor/student/supabase-js-2.118.0.min.js',
+  './vendor/student/dompurify-3.0.6.min.js',
+  './vendor/student/crypto-js-4.1.1.min.js'
 ];
 
-const OPTIONAL_ASSETS = [
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'
-];
+const OPTIONAL_ASSETS = [];
 
 // 1. Cài đặt và lưu cache ban đầu
 self.addEventListener('install', (event) => {
