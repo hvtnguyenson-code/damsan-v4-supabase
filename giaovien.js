@@ -1108,10 +1108,8 @@ async function khoiTaoDuLieu() {
         if (gvData.quyen === 'Admin') { fetchStudents(true); fetchTeachers(true); }
         taiDanhSachPhong(); 
         
-        // Kích hoạt ngay chức năng Auto-Refresh 5s từ giao diện HTML
+        // Realtime là kênh chính; polling 20s chỉ là lớp đối soát dự phòng.
         toggleAutoRefresh();
-
-        // Kích hoạt thêm kênh Realtime dự phòng (nếu Supabase của bạn đã bật)
         kichHoatLienKetRealtimeGiaoVien();
     } catch(e){
         console.error("Lỗi khởi tạo:", e);
@@ -1119,7 +1117,7 @@ async function khoiTaoDuLieu() {
 }
 
 // =======================================================
-// CƠ CHẾ AUTO-REFRESH 5 GIÂY (CHỐNG MÙ BẢNG ĐIỂM)
+// CƠ CHẾ POLLING DỰ PHÒNG 20 GIÂY (REALTIME LÀ KÊNH CHÍNH)
 // =======================================================
 function toggleAutoRefresh() {
     let toggleBtn = document.getElementById('autoRefreshToggle');
@@ -1135,8 +1133,8 @@ function toggleAutoRefresh() {
             if (dashTab && dashTab.classList.contains('active') && maPhong) {
                 fetchDashboard(true);
             }
-        }, 5000);
-        console.log("Đã bật quét tự động 5s/lần");
+        }, 20000);
+        console.log("Đã bật đối soát dự phòng 20s/lần");
     } else {
         if(autoRefreshInterval) clearInterval(autoRefreshInterval);
         console.log("Đã tắt quét tự động");
@@ -1330,7 +1328,7 @@ function renderDashboardTable() {
     
 }
 
-// BỘ BẮT SÓNG REALTIME DỰ PHÒNG
+// REALTIME: KÊNH CẬP NHẬT CHÍNH CỦA DASHBOARD
 function kichHoatLienKetRealtimeGiaoVien() {
     if (ketQuaChannel) {
         sb.removeChannel(ketQuaChannel);
@@ -4168,7 +4166,7 @@ async function refreshDashboardManually() {
     });
 }
 
-// BỘ TẢI ĐIỂM CỰC MẠNH (HỖ TRỢ ĐỌC DỮ LIỆU TỪ 2 LUỒNG: REALTIME & AUTO REFRESH 5S)
+// BỘ TẢI ĐIỂM (DÙNG CHUNG CHO REALTIME, POLLING DỰ PHÒNG VÀ REFRESH THỦ CÔNG)
 async function fetchDashboard(isAuto = false) {
     if (isAuto && dashboardManualRefreshActive) {
         return { status: 'skipped' };
