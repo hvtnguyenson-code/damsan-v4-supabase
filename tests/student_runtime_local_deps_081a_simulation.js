@@ -48,8 +48,8 @@ assert(!/<script[^>]+src=["']https?:\/\//i.test(html), 'student HTML still loads
 assert(!/cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|cdn-icons-png\.flaticon\.com/i.test(html), 'student HTML/CSP still depends on public CDN hosts');
 assert(!/cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|cdn-icons-png\.flaticon\.com/i.test(sw), 'student service worker still references public CDN hosts');
 assert(/script-src 'self' 'unsafe-inline';/.test(html), 'student CSP script-src should be self-contained');
-assert(html.includes('<link rel="manifest" href="manifest.json?v=' + VERSION + '">\n    <link rel="icon"'), 'manifest/icon markup must use a real newline, not a literal \\r\\n sequence');
-assert(!html.includes('>\\r\\n    <link rel="icon"'), 'literal CRLF escape leaked into HTML markup');
+assert(new RegExp('<link rel="manifest" href="manifest\\.json\\?v=' + VERSION + '">\\r?\\n\\s*<link rel="icon"').test(html), 'manifest/icon markup must use a real LF or CRLF newline');
+assert(!html.includes('>\\\\r\\\\n    <link rel="icon"'), 'literal \\r\\n escape leaked into HTML markup');
 
 const coreStart = sw.indexOf('const CORE_ASSETS = [');
 const coreEnd = sw.indexOf('];', coreStart);
