@@ -79,6 +79,10 @@ jobs:
           node --check tests/teacher_dashboard_refresh_082_simulation.js
           node --check admin_system_status_083a.js
           node --check tests/admin_system_status_083a_simulation.js
+          node --check admin_system_maintenance_083b.js
+          node --check tests/admin_maintenance_cleanup_083b_simulation.js
+      - name: Admin maintenance cleanup 083B simulation
+        run: node tests/admin_maintenance_cleanup_083b_simulation.js
       - name: Admin system status 083A simulation
         run: node tests/admin_system_status_083a_simulation.js
       - name: Teacher dashboard refresh 082 simulation

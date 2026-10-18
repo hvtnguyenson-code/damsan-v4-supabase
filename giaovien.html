@@ -426,7 +426,7 @@
                             <button id="btnSubGv" onclick="switchSubTabTK('gv'); closeSidebarMobile()">👨‍🏫 Quản lý Giáo viên</button>
                             <button id="btnSubImport" onclick="switchSubTabTK('import'); closeSidebarMobile()">📥 Nạp dữ liệu Excel</button>
                             <button id="btnSubSys" onclick="switchSubTabTK('sys'); closeSidebarMobile(); loadSysData()">⚙️ Quản lý Trường & Môn</button>
-                            <button id="btnSubStatus" onclick="switchSubTabTK('status'); closeSidebarMobile(); loadSystemStatus083A()">🩺 Trạng thái hệ thống</button>
+                            <button id="btnSubStatus" onclick="switchSubTabTK('status'); closeSidebarMobile(); loadSystemStatus083A(); loadMaintenancePreview083B()">🩺 Trạng thái hệ thống</button>
                         </div>
                     </div>
 
@@ -909,6 +909,25 @@
                                 <div>Request AI dang dở không gắn với phòng thi thật: <b id="sys083Ai">-</b></div>
                             </div>
 
+                            <div style="margin-top:18px; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:15px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+                                    <h4 style="margin:0; color:#9a3412;">🧹 DỮ LIỆU TẠM</h4>
+                                    <button id="sys083bPreviewBtn" type="button" onclick="loadMaintenancePreview083B()" style="background:#fff; color:#9a3412; border:1px solid #fdba74; padding:7px 11px; border-radius:5px; font-weight:bold; cursor:pointer;">🔄 Quét lại dữ liệu tạm</button>
+                                </div>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px;">
+                                    <div>Session học sinh đủ điều kiện dọn: <b id="sys083bStudent">-</b></div>
+                                    <div>Session giáo viên đủ điều kiện dọn: <b id="sys083bStaff">-</b></div>
+                                    <div>Session Admin đủ điều kiện dọn: <b id="sys083bAdmin">-</b></div>
+                                    <div>Request AI rác đủ điều kiện dọn: <b id="sys083bAi">-</b></div>
+                                </div>
+                                <div id="sys083bPolicy" style="margin-top:10px; color:#7c2d12; font-size:12px;"></div>
+                                <div style="margin-top:12px;">
+                                    <button id="sys083bCleanupBtn" type="button" onclick="cleanupMaintenance083B()" disabled style="background:#c2410c; color:#fff; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; opacity:.55;">🧹 Dọn dữ liệu tạm</button>
+                                </div>
+                                <div style="margin-top:8px; color:#7c2d12; font-size:12px;">Chỉ xóa session cũ và request AI dang dở không gắn với phòng thi thật. Không đụng bài nộp, điểm, đề thi, phòng thi, học sinh hoặc giáo viên.</div>
+                                <div id="sys083bError" style="margin-top:10px; color:#b91c1c; font-weight:bold;"></div>
+                            </div>
+
                             <div id="sys083Error" style="margin-top:12px; color:#b91c1c; font-weight:bold;"></div>
                             <div style="margin-top:12px; color:#64748b; font-size:12px;">Cập nhật máy chủ: <span id="sys083Updated">-</span></div>
                         </div>
@@ -984,6 +1003,7 @@
     <script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080"></script>
     <script src="giaovien.js?v=20261018-teacher-dashboard-refresh-082"></script>
     <script src="admin_system_status_083a.js?v=20261018-admin-system-status-083a"></script>
+    <script src="admin_system_maintenance_083b.js?v=20261018-admin-maintenance-083b"></script>
     <script src="teacher_canonical_export_079.js?v=20261013-canonical-room-print-080"></script>
 </body>
 </html>
