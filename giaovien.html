@@ -685,6 +685,8 @@
                             <button id="dashRefreshBtn" class="dashboard-action-btn" style="background: #f39c12;" onclick="refreshDashboardManually()">🔄 Cập nhật Bảng Điểm</button>
                             <button id="dashRegradeBtn" class="dashboard-action-btn" style="background: #6c5ce7;" onclick="khoiPhucChamDiemPhong()">🛠️ Chấm lại bài đang chờ</button>
                             <button id="dashExportBtn" class="dashboard-action-btn" style="background: #16a085;" onclick="xuatExcel()">📥 Tải Excel</button>
+                            <button id="dashResetSelectedBtn" class="dashboard-action-btn" style="background: #8e44ad;" onclick="resetSelectedStudentsInRoom()">↻ Reset HS đã chọn</button>
+
                             <button id="dashDeleteResultsBtn" class="dashboard-action-btn" style="background: #c0392b;" onclick="xoaDiemPhong()">🗑️ Xóa điểm phòng này</button>
                         </div>
                         <!-- SUBMISSION-SAFETY-010C: Authoritative Server Receipt Check (Dashboard) -->
@@ -747,8 +749,8 @@
                         </div>
                         <div class="table-responsive">
                             <table id="bangDiem">
-                                <thead><tr><th style="width:80px;">SBD</th><th>Họ và Tên</th><th>Lớp</th><th>Trạng thái</th><th>Mã đề</th><th style="background:#d4edda; width: 100px;">Tổng Điểm</th><th style="background:#e2eef9;">P. I</th><th style="background:#e2eef9;">P. II</th><th style="background:#e2eef9;">P. III</th><th>Vi phạm</th></tr></thead>
-                                <tbody id="dashBody"><tr><td colspan="10">Chưa có dữ liệu...</td></tr></tbody>
+                                <thead><tr><th style="width:42px;"><input type="checkbox" id="dashResetAll" onclick="toggleAllDashboardReset(this)" title="Chọn tất cả học sinh đang hiển thị"></th><th style="width:80px;">SBD</th><th>Họ và Tên</th><th>Lớp</th><th>Trạng thái</th><th>Mã đề</th><th style="background:#d4edda; width: 100px;">Tổng Điểm</th><th style="background:#e2eef9;">P. I</th><th style="background:#e2eef9;">P. II</th><th style="background:#e2eef9;">P. III</th><th>Vi phạm</th></tr></thead>
+                                <tbody id="dashBody"><tr><td colspan="11">Chưa có dữ liệu...</td></tr></tbody>
                             </table>
                         </div>
                     </div>
@@ -1001,7 +1003,7 @@
         }
     </script>
     <script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080"></script>
-    <script src="giaovien.js?v=20261018-teacher-dashboard-refresh-082"></script>
+    <script src="giaovien.js?v=20261023-room-reset-targeted-084"></script>
     <script src="admin_system_status_083a.js?v=20261018-admin-system-status-083a"></script>
     <script src="admin_system_maintenance_083b.js?v=20261018-admin-maintenance-083b"></script>
     <script src="teacher_canonical_export_079.js?v=20261013-canonical-room-print-080"></script>

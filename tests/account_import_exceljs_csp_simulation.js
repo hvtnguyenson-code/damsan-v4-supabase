@@ -57,12 +57,12 @@ function runCspAndVendorStaticAssertions() {
   );
   console.log('C5 (CSP strictly preserves policy without unsafe-eval): PASSED');
 
-  // C6: giaovien.js cache-bust version in giaovien.html is 20261018-teacher-dashboard-refresh-082
+  // C6: giaovien.js cache-bust version in giaovien.html is 20261023-room-reset-targeted-084
   assert(
-    htmlContent.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'),
-    'C6 FAIL: giaovien.html script version must be giaovien.js?v=20261018-teacher-dashboard-refresh-082'
+    htmlContent.includes('giaovien.js?v=20261023-room-reset-targeted-084'),
+    'C6 FAIL: giaovien.html script version must be giaovien.js?v=20261023-room-reset-targeted-084'
   );
-  console.log('C6 (giaovien.js cache-bust is 20261018-teacher-dashboard-refresh-082): PASSED');
+  console.log('C6 (giaovien.js cache-bust is 20261023-room-reset-targeted-084): PASSED');
 
   // C7: vendor JS exists, size > 1MB, not HTML
   assert(fs.existsSync(vendorJsPath), 'C7 FAIL: vendor/exceljs-4.3.0.bare.min.js must exist');

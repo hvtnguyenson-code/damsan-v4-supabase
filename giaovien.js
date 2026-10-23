@@ -1283,6 +1283,7 @@ function renderDashboardTable() {
         let viPhamDisplay = (hs.ViPham > 0 ? `<b style="color: ${violationColor}; font-size: 16px;">${displayViPham}</b>` : "") + flagHtml;
         
         html += `<tr style="${trStyle}">
+            <td><input type="checkbox" class="dash-reset-hs" value="${hs.id || ''}" ${hs.id ? '' : 'disabled'} aria-label="Chọn học sinh để reset lượt làm bài"></td>
             <td><b>${hs.MaHS || '-'}</b></td>
             <td style="text-align:left;"><b>${hs.HoTen}</b></td>
             <td>${hs.Lop}</td>
@@ -4237,6 +4238,39 @@ function renderDashboardSubTabs() { let groups = new Set(); duLieuBangDiem.forEa
 function filterDashboard(filter) { currentDashFilter = filter; renderDashboardSubTabs(); renderDashboardTable(); }
 
 
+
+function toggleAllDashboardReset(source) {
+    document.querySelectorAll('.dash-reset-hs:not(:disabled)').forEach(cb => { cb.checked = !!source.checked; });
+}
+
+async function resetSelectedStudentsInRoom() {
+    const currentRoom = getSelectedRoom('dashMaPhong');
+    if (!currentRoom) return alert('⚠️ Vui lòng chọn phòng thi trước.');
+    const selected = Array.from(document.querySelectorAll('.dash-reset-hs:checked')).map(cb => cb.value).filter(Boolean);
+    if (!selected.length) return alert('⚠️ Hãy tích chọn ít nhất 1 học sinh cần reset.');
+    const maPhong = currentRoom.MaPhong || currentRoom.ma_phong || 'Phòng thi';
+    if (!confirm('Reset lượt làm bài của ' + selected.length + ' học sinh đã chọn trong [' + maPhong + ']?\nChỉ các học sinh được chọn bị xóa bài/điểm và nhận lượt mới; các học sinh khác không bị ảnh hưởng.')) return;
+
+    const btn = document.getElementById('dashResetSelectedBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang reset...'; }
+    try {
+        const data = await staffRpc('rpc_reset_students_in_room', {
+            p_ma_gv: gvData.ma_gv,
+            p_truong_id: getRoomTargetSchoolId(currentRoom),
+            p_phong_id: currentRoom.id,
+            p_hs_ids: selected
+        });
+        if (!data || data.status !== 'success') throw new Error(data?.message || 'Reset học sinh thất bại.');
+        alert('✅ Đã reset ' + (data.targets || selected.length) + ' học sinh. Xóa ' + (data.ket_qua_deleted || 0) + ' kết quả và ' + (data.submissions_deleted || 0) + ' receipt. Máy học sinh đang mở bài sẽ tự đồng bộ lượt mới.');
+        await fetchDashboard(true);
+        if (typeof fetchReceiptRoomCounts === 'function') void fetchReceiptRoomCounts(currentRoom, 'dashboard');
+    } catch (e) {
+        console.error('resetSelectedStudentsInRoom:', e);
+        alert('❌ Không thể reset học sinh đã chọn: ' + (e?.message || e));
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Reset HS đã chọn'; }
+    }
+}
 
 async function xoaDiemPhong() {
     return runDashboardAction('delete', async () => {

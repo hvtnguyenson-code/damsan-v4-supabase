@@ -2,7 +2,7 @@ const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
 
-const VERSION = '20261018-student-local-deps-081a';
+const VERSION = '20261023-room-reset-targeted-084';
 const html = fs.readFileSync('hoc_sinh.html', 'utf8');
 const js = fs.readFileSync('hoc_sinh.js', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
