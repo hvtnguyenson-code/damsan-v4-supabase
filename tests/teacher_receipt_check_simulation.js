@@ -33,7 +33,7 @@
  *           Never hard-coded 35.
  * C010C-13: Roster load failure keeps denominator unknown (never renders as /0).
  * C010C-14: Teacher cache-bust release delivery invariant:
- *           giaovien.html loads giaovien.js?v=20261018-teacher-dashboard-refresh-082
+ *           giaovien.html loads giaovien.js?v=20261023-room-reset-targeted-084
  *           and does NOT load giaovien.js?v=20260904-flex-lite-009a.
  */
 
@@ -794,20 +794,20 @@ async function runTests() {
 
   // -------------------------------------------------------------
   // Test C010C-14: Teacher cache-bust release delivery invariant
-  // giaovien.html must load exactly giaovien.js?v=20261018-teacher-dashboard-refresh-082
+  // giaovien.html must load exactly giaovien.js?v=20261023-room-reset-targeted-084
   // and must NOT load giaovien.js?v=20260904-flex-lite-009a
   // -------------------------------------------------------------
   {
     assert.ok(
-      gvHtmlSource.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'),
-      'giaovien.html must load exactly giaovien.js?v=20261018-teacher-dashboard-refresh-082'
+      gvHtmlSource.includes('giaovien.js?v=20261023-room-reset-targeted-084'),
+      'giaovien.html must load exactly giaovien.js?v=20261023-room-reset-targeted-084'
     );
     assert.ok(
       !gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
       'giaovien.html must NOT load stale giaovien.js?v=20260904-flex-lite-009a'
     );
 
-    console.log('PASS: C010C-14 - giaovien.html loads exactly 20261018-teacher-dashboard-refresh-082.');
+    console.log('PASS: C010C-14 - giaovien.html loads exactly 20261023-room-reset-targeted-084.');
   }
 
   console.log('\nALL 14 SUBMISSION-SAFETY-010C TESTS PASSED SUCCESSFULLY!\n');

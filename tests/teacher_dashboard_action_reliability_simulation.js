@@ -789,31 +789,31 @@ async function runAllTests() {
   // E. VERSION / VISUAL / INVARIANTS
   // =======================================================================
 
-  // 25. Teacher exact: 20261018-teacher-dashboard-refresh-082
-  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20261018-teacher-dashboard-refresh-082');
+  // 25. Teacher exact: 20261023-room-reset-targeted-084
+  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20261023-room-reset-targeted-084');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'),
-      'giaovien.html must include giaovien.js?v=20261018-teacher-dashboard-refresh-082');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261023-room-reset-targeted-084'),
+      'giaovien.html must include giaovien.js?v=20261023-room-reset-targeted-084');
     assert(!gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
       'giaovien.html must not contain old 20260904-flex-lite-009a');
     console.log('  -> PASSED');
   }
 
-  // 26. Student HTML/JS exact: 20261018-student-local-deps-081a
-  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261018-student-local-deps-081a');
+  // 26. Student HTML/JS exact: 20261023-room-reset-targeted-084
+  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261023-room-reset-targeted-084');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261018-student-local-deps-081a'),
-      'hoc_sinh.html must include hoc_sinh.js?v=20261018-student-local-deps-081a');
-    assert(hsJsSource.includes("const VERSION = '20261018-student-local-deps-081a';"),
-      'hoc_sinh.js must define const VERSION = 20261018-student-local-deps-081a');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261023-room-reset-targeted-084'),
+      'hoc_sinh.html must include hoc_sinh.js?v=20261023-room-reset-targeted-084');
+    assert(hsJsSource.includes("const VERSION = '20261023-room-reset-targeted-084';"),
+      'hoc_sinh.js must define const VERSION = 20261023-room-reset-targeted-084');
     console.log('  -> PASSED');
   }
 
-  // 27. sw.js exact: 20261018-student-local-deps-081a
-  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261018-student-local-deps-081a');
+  // 27. sw.js exact: 20261023-room-reset-targeted-084
+  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261023-room-reset-targeted-084');
   {
-    assert(swJsSource.includes("const VERSION = '20261018-student-local-deps-081a';"),
-      'sw.js must define const VERSION = 20261018-student-local-deps-081a');
+    assert(swJsSource.includes("const VERSION = '20261023-room-reset-targeted-084';"),
+      'sw.js must define const VERSION = 20261023-room-reset-targeted-084');
     console.log('  -> PASSED');
   }
 

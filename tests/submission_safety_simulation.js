@@ -841,14 +841,14 @@ recordR('R44');
 // R45-R57: P0-006A Post-Receipt Lifecycle Watcher Invariants
 // ==========================================================
 
-// R45: batDauPostReceiptLifecycleWatcher helper creates lifecycle channel and 12s poll timer in isolation
+// R45: post-receipt lifecycle uses secure polling instead of direct postgres_changes under anon RLS
 const envR45 = createStudentEnvironment();
 envR45.api.setState({ phong_id: 'room-r45', room_opened_at: 45000, hs_id: 'hs-45', truong_id: 'school-45' });
 envR45.api.batDauPostReceiptLifecycleWatcher();
 const r45Channel = envR45.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r45');
-assert(r45Channel && r45Channel.subscribed, 'R45: batDauPostReceiptLifecycleWatcher in isolation must subscribe post-receipt-lifecycle channel');
-const r45Poll = envR45.intervals.find(i => i.ms === 12000 && !i.cleared);
-assert(r45Poll, 'R45: batDauPostReceiptLifecycleWatcher in isolation must start 12s lifecycle poll timer');
+assert.strictEqual(r45Channel, undefined, 'R45: post-receipt watcher must not depend on direct phong_thi postgres_changes');
+const r45Poll = envR45.intervals.find(i => i.ms === 4000 && !i.cleared);
+assert(r45Poll, 'R45: batDauPostReceiptLifecycleWatcher must start 4s secure lifecycle poll timer');
 recordR('R45');
 
 // R46: Invoke production realtime callback: generation old -> null kích hoạt checkTeacherCommand(true) / authoritative reconciliation path
@@ -869,8 +869,6 @@ const snapR46 = {
 envR46.localStore.set('final_damsan_room-r46_hs-46', JSON.stringify(snapR46));
 envR46.api.setState({ phong_id: 'room-r46', room_opened_at: 46000, hs_id: 'hs-46', truong_id: 'school-46' });
 envR46.api.batDauPostReceiptLifecycleWatcher();
-const r46Channel = envR46.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r46');
-assert(r46Channel, 'R46: channel must exist');
 
 envR46.mockSupabase._fromData = {
   phong_thi: { id: 'room-r46', trang_thai: 'CHO_THI', thoi_gian_mo: null },
@@ -878,7 +876,7 @@ envR46.mockSupabase._fromData = {
 };
 envR46.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
 
-r46Channel.triggerPostgresChanges({ new: { id: 'room-r46', thoi_gian_mo: null } });
+await envR46.api._postReceiptLifecycleTick();
 await new Promise(resolve => setTimeout(resolve, 20));
 
 assert.strictEqual(envR46.localStore.has('final_damsan_room-r46_hs-46'), false, 'R46: active snapshot must be cleared on confirmed reset');
@@ -904,8 +902,6 @@ const snapR47 = {
 envR47.localStore.set('final_damsan_room-r47_hs-47', JSON.stringify(snapR47));
 envR47.api.setState({ phong_id: 'room-r47', room_opened_at: 47000, hs_id: 'hs-47', truong_id: 'school-47' });
 envR47.api.batDauPostReceiptLifecycleWatcher();
-const r47Channel = envR47.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r47');
-assert(r47Channel, 'R47: channel must exist');
 
 envR47.mockSupabase._fromData = {
   phong_thi: { id: 'room-r47', trang_thai: 'CHO_THI', thoi_gian_mo: 47999 },
@@ -913,7 +909,7 @@ envR47.mockSupabase._fromData = {
 };
 envR47.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
 
-r47Channel.triggerPostgresChanges({ new: { id: 'room-r47', thoi_gian_mo: 47999 } });
+await envR47.api._postReceiptLifecycleTick();
 await new Promise(resolve => setTimeout(resolve, 20));
 
 assert.strictEqual(envR47.localStore.has('final_damsan_room-r47_hs-47'), false, 'R47: active snapshot cleared on new generation');
@@ -943,9 +939,9 @@ r48ResultSection.classList.add('active');
 
 envR48.api.batDauPostReceiptLifecycleWatcher();
 const r48Channel = envR48.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r48');
-assert(r48Channel && r48Channel.subscribed, 'R48: watcher must stay active on GRADED result screen');
-const r48Poll = envR48.intervals.find(i => i.ms === 12000 && !i.cleared);
-assert(r48Poll, 'R48: poll timer must stay active on GRADED result screen');
+assert.strictEqual(r48Channel, undefined, 'R48: GRADED watcher must remain RPC-poll based');
+const r48Poll = envR48.intervals.find(i => i.ms === 4000 && !i.cleared);
+assert(r48Poll, 'R48: 4s poll timer must stay active on GRADED result screen');
 
 // Tick on GRADED result screen still checks teacher command
 envR48.mockSupabase._fromData = {
@@ -976,8 +972,8 @@ const snapR49 = {
 envR49.localStore.set('final_damsan_room-r49_hs-49', JSON.stringify(snapR49));
 envR49.api.setState({ phong_id: 'room-r49', room_opened_at: 49000, hs_id: 'hs-49', truong_id: 'school-49' });
 envR49.api.batDauPostReceiptLifecycleWatcher();
-const r49Poll = envR49.intervals.find(i => i.ms === 12000 && !i.cleared);
-assert(r49Poll, 'R49: 12s poll timer must be registered');
+const r49Poll = envR49.intervals.find(i => i.ms === 4000 && !i.cleared);
+assert(r49Poll, 'R49: 4s secure poll timer must be registered');
 
 envR49.mockSupabase._fromData = {
   phong_thi: { id: 'room-r49', trang_thai: 'CHO_THI', thoi_gian_mo: 49999 },
@@ -1159,22 +1155,22 @@ assert.strictEqual(envR54.api.getState().phong_id, null, 'R54: state.phong_id cl
 assert.strictEqual(envR54.api.getState().room_opened_at, null, 'R54: state.room_opened_at cleared to null');
 recordR('R54');
 
-// R55: Gọi start watcher 2 lần với CÙNG context: -> chỉ 1 active channel -> chỉ 1 active timer -> KHÔNG recreate không cần thiết
+// R55: Gọi start watcher 2 lần với CÙNG context: chỉ 1 secure poll timer, không tạo direct postgres_changes channel
 const envR55 = createStudentEnvironment();
 envR55.api.setState({ phong_id: 'room-r55', room_opened_at: 55000, hs_id: 'hs-55', truong_id: 'school-55' });
 envR55.api.batDauPostReceiptLifecycleWatcher();
 const channelCount1 = envR55.mockChannels.length;
 const timerCount1 = envR55.intervals.filter(i => !i.cleared).length;
-assert.strictEqual(channelCount1, 1, 'R55: initial start creates 1 channel');
+assert.strictEqual(channelCount1, 0, 'R55: secure post-receipt watcher creates no direct table channel');
 assert.strictEqual(timerCount1, 1, 'R55: initial start creates 1 timer');
 
 // Call start watcher second time with SAME context
 envR55.api.batDauPostReceiptLifecycleWatcher();
 const channelCount2 = envR55.mockChannels.length;
 const timerCount2 = envR55.intervals.filter(i => !i.cleared).length;
-assert.strictEqual(channelCount2, 1, 'R55: repeated start with same context must NOT create duplicate channel');
+assert.strictEqual(channelCount2, 0, 'R55: repeated start keeps zero direct table channels');
 assert.strictEqual(timerCount2, 1, 'R55: repeated start with same context must NOT create duplicate timer');
-assert.strictEqual(envR55.removedChannels.length, 0, 'R55: repeated start must not unnecessarily remove/recreate channel');
+assert.strictEqual(envR55.removedChannels.length, 0, 'R55: repeated start must not remove nonexistent channels');
 recordR('R55');
 
 // R56: Room deletion (room_exists=false) -> archives with room_deleted reason and tears down context
@@ -1206,20 +1202,19 @@ assert.strictEqual(archived56.reason, 'room_deleted', 'R56: archive reason must 
 assert.strictEqual(envR56.api.getState().phong_id, null, 'R56: state.phong_id cleared on room deletion');
 recordR('R56');
 
-// R57: Changed context replaces old watcher exactly once
+// R57: Changed context replaces old secure poll watcher exactly once
 const envR57 = createStudentEnvironment();
 envR57.api.setState({ phong_id: 'room-r57-old', room_opened_at: 57000, hs_id: 'hs-57', truong_id: 'school-57' });
 envR57.api.batDauPostReceiptLifecycleWatcher();
-const oldCh = envR57.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r57-old');
-assert(oldCh && oldCh.subscribed, 'R57: old channel subscribed');
+const oldPoll = envR57.intervals.find(i => i.ms === 4000 && !i.cleared);
+assert(oldPoll, 'R57: old context secure poll registered');
 
 // Change context to new room
 envR57.api.setState({ phong_id: 'room-r57-new', room_opened_at: 57001 });
 envR57.api.batDauPostReceiptLifecycleWatcher();
 
-const newCh = envR57.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r57-new');
-assert(newCh && newCh.subscribed, 'R57: new channel subscribed');
-assert.strictEqual(oldCh.subscribed, false, 'R57: old channel was unsubscribed/removed');
+assert.strictEqual(envR57.mockChannels.length, 0, 'R57: no direct table channels are created for either context');
+assert.strictEqual(oldPoll.cleared, true, 'R57: old context poll timer was cleared');
 assert.strictEqual(envR57.intervals.filter(i => !i.cleared).length, 1, 'R57: exactly 1 active poll timer remains');
 recordR('R57');
 
@@ -1330,8 +1325,8 @@ const snapR61 = {
 envR61.localStore.set('final_damsan_room-r61_hs-61', JSON.stringify(snapR61));
 envR61.api.setState({ phong_id: 'room-r61', room_opened_at: 61000, hs_id: 'hs-61', truong_id: 'school-61' });
 envR61.api.batDauPostReceiptLifecycleWatcher();
-const r61Poll = envR61.intervals.find(i => i.ms === 12000 && !i.cleared);
-assert(r61Poll, 'R61: 12s poll timer registered');
+const r61Poll = envR61.intervals.find(i => i.ms === 4000 && !i.cleared);
+assert(r61Poll, 'R61: 4s secure poll timer registered');
 
 envR61.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
 envR61.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
@@ -1344,7 +1339,7 @@ assert.strictEqual(envR61.localStore.has('recovery_damsan_room-r61_hs-61_att-r61
 assert.strictEqual(envR61.api.getState().phong_id, null, 'R61: phong_id cleared on polling reset');
 recordR('R61');
 
-// R62: REALTIME EVENT UNDER REAL PRODUCTION PERMISSION MODEL — realtime event triggers receipt-status cleanup when SELECT denied
+// R62: UNDER REAL PRODUCTION PERMISSION MODEL — no direct table realtime; secure RPC lifecycle cleanup still succeeds
 const envR62 = createStudentEnvironment();
 const snapR62 = {
   version: 1,
@@ -1362,18 +1357,17 @@ const snapR62 = {
 envR62.localStore.set('final_damsan_room-r62_hs-62', JSON.stringify(snapR62));
 envR62.api.setState({ phong_id: 'room-r62', room_opened_at: 62000, hs_id: 'hs-62', truong_id: 'school-62' });
 envR62.api.batDauPostReceiptLifecycleWatcher();
-const r62Channel = envR62.mockChannels.find(c => c.name === 'post-receipt-lifecycle-room-r62');
-assert(r62Channel, 'R62: channel must exist');
+assert.strictEqual(envR62.mockChannels.some(c => c.name === 'post-receipt-lifecycle-room-r62'), false, 'R62: no direct table realtime channel');
 
 envR62.mockSupabase._fromErrors = { phong_thi: { message: 'permission denied for table phong_thi' } };
 envR62.mockSupabase._receiptStatusResult = { data: { status: 'missing', reset_confirmed: true, room_exists: true }, error: null };
 
-r62Channel.triggerPostgresChanges({ new: { id: 'room-r62', thoi_gian_mo: null } });
+await envR62.api._postReceiptLifecycleTick();
 await new Promise(resolve => setTimeout(resolve, 20));
 
-assert.strictEqual(envR62.localStore.has('final_damsan_room-r62_hs-62'), false, 'R62: realtime trigger under RLS cleared snapshot');
-assert.strictEqual(envR62.localStore.has('recovery_damsan_room-r62_hs-62_att-r62'), true, 'R62: realtime trigger archived snapshot');
-assert.strictEqual(envR62.api.getState().phong_id, null, 'R62: phong_id cleared on realtime reset');
+assert.strictEqual(envR62.localStore.has('final_damsan_room-r62_hs-62'), false, 'R62: secure lifecycle tick under RLS cleared snapshot');
+assert.strictEqual(envR62.localStore.has('recovery_damsan_room-r62_hs-62_att-r62'), true, 'R62: secure lifecycle tick archived snapshot');
+assert.strictEqual(envR62.api.getState().phong_id, null, 'R62: phong_id cleared on authoritative reset');
 recordR('R62');
 
 // Verify all R25-R62 assertions passed
@@ -1415,14 +1409,16 @@ assert(client.includes('function dungPostReceiptLifecycleWatcher'));
 assert(client.includes('function batDauPostReceiptLifecycleWatcher'));
 assert(client.includes('function _postReceiptContextValid'));
 assert(client.includes('async function _postReceiptLifecycleTick'));
-assert(client.includes("'post-receipt-lifecycle-' + capturedPhongId"));
-assert(client.includes('setInterval(() => { void _postReceiptLifecycleTick(); }, 12000)'));
+assert(!client.includes("'post-receipt-lifecycle-' + capturedPhongId"));
+assert(client.includes('setInterval(() => { void _postReceiptLifecycleTick(); }, 4000)'));
+assert(client.includes("rpc_hoc_sinh_runtime_sync"));
+assert(client.includes(".on('broadcast', { event: 'room_sync' }"));
 assert(client.includes('batDauPostReceiptLifecycleWatcher()'));
 assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20261018-student-local-deps-081a');
+assert.strictEqual(clientVersion, '20261023-room-reset-targeted-084');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -2252,7 +2248,7 @@ assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: match
 recordR('R145');
 
 // R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
-const expectedVersion = '20261018-student-local-deps-081a';
+const expectedVersion = '20261023-room-reset-targeted-084';
 assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
 assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
 assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");
@@ -3188,14 +3184,14 @@ assert.strictEqual(envR183.api.getRealtimeChannel(), null, "R183: realtimeChanne
 assert.strictEqual(envR183.api.getRealtimeResultChannel(), null, "R183: realtimeResultChannel cleared");
 recordR('R183');
 
-// R184: valid receipt tears down post-receipt realtime + 12s polling timer
+// R184: valid receipt tears down post-receipt secure 4s polling timer
 const envR184 = createStudentEnvironment();
 envR184.api.setState({ phong_id: 'room-184', room_opened_at: 1000 });
 envR184.api.batDauPostReceiptLifecycleWatcher();
-assert(envR184.intervals.some(i => i.ms === 12000 && !i.cleared), "R184: 12s polling timer was active");
+assert(envR184.intervals.some(i => i.ms === 4000 && !i.cleared), "R184: 4s polling timer was active");
 
 envR184.api.teardownStudentBackgroundAfterReceipt();
-assert(envR184.intervals.every(i => i.ms !== 12000 || i.cleared), "R184: 12s polling timer cleared");
+assert(envR184.intervals.every(i => i.ms !== 4000 || i.cleared), "R184: 4s polling timer cleared");
 recordR('R184');
 
 // R185: showReceivedState does NOT call batDauPostReceiptLifecycleWatcher
@@ -3205,7 +3201,7 @@ const mockReceipt185 = { submission_id: 'sub-185', received_at: '2026-09-04T00:0
 
 envR185.api.showReceivedState(mockReceipt185);
 
-assert(envR185.intervals.every(i => i.ms !== 12000 || i.cleared), "R185: no 12s post-receipt poll timer created by showReceivedState");
+assert(envR185.intervals.every(i => i.ms !== 4000 || i.cleared), "R185: no 4s post-receipt poll timer created by showReceivedState");
 assert.strictEqual(envR185.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, "R185: no post-receipt channel active");
 recordR('R185');
 
@@ -3228,7 +3224,7 @@ envR186.localStore.set('final_damsan_room-186_hs-186', JSON.stringify(snap186));
 envR186.dispatchWindowEvent('online');
 
 assert.strictEqual(envR186.mockChannels.some(c => c.subscribed), false, "R186: no realtime channels started on online");
-assert(envR186.intervals.every(i => i.ms !== 12000 || i.cleared), "R186: no post-receipt lifecycle polling started on online");
+assert(envR186.intervals.every(i => i.ms !== 4000 || i.cleared), "R186: no post-receipt lifecycle polling started on online");
 recordR('R186');
 
 // R187: FINAL_PENDING online recovery still attempts safe submission
@@ -3340,7 +3336,7 @@ assert.strictEqual(receiveRpcCalls190.length, 0, 'R190: zero receive RPC on visi
 assert.strictEqual(resultStatusRpcCalls190.length, 0, 'R190: zero result-status RPC on visibilitychange for SERVER_RECEIVED');
 assert.strictEqual(envR190.rpcCalls.length, 0, 'R190: zero RPC calls overall on visibilitychange for SERVER_RECEIVED');
 assert.strictEqual(envR190.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R190: zero Realtime channel subscribed');
-assert(envR190.intervals.every(i => i.ms !== 12000 || i.cleared), 'R190: zero 12s polling timer active');
+assert(envR190.intervals.every(i => i.ms !== 4000 || i.cleared), 'R190: zero 4s polling timer active');
 const snapAfter190 = JSON.parse(envR190.localStore.get('final_damsan_room-r190_hs-190'));
 assert.strictEqual(snapAfter190.state, 'SERVER_RECEIVED', 'R190: FINAL remains SERVER_RECEIVED');
 recordR('R190');
@@ -3369,7 +3365,7 @@ await new Promise(resolve => setTimeout(resolve, 50));
 
 assert.strictEqual(envR191.rpcCalls.length, 0, 'R191: zero automatic Supabase RPC on visibilitychange for GRADED');
 assert.strictEqual(envR191.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R191: zero Realtime channel subscribed');
-assert(envR191.intervals.every(i => i.ms !== 12000 || i.cleared), 'R191: zero 12s polling timer active');
+assert(envR191.intervals.every(i => i.ms !== 4000 || i.cleared), 'R191: zero 4s polling timer active');
 const snapAfter191 = JSON.parse(envR191.localStore.get('final_damsan_room-r191_hs-191'));
 assert.strictEqual(snapAfter191.state, 'GRADED', 'R191: FINAL remains GRADED');
 recordR('R191');
@@ -3410,7 +3406,7 @@ const receiveCall192 = envR192.rpcCalls.find(c => c.name === 'rpc_hoc_sinh_recei
 assert(receiveCall192, 'R192: receive submission RPC must be invoked on visibilitychange for FINAL_PENDING while online');
 assert.strictEqual(receiveCall192.params.p_attempt_id, 'att-r192', 'R192: same attempt_id preserved during foreground recovery');
 assert.deepStrictEqual(receiveCall192.params.p_raw_answers, [{ chon: 'C' }], 'R192: same raw_answers preserved during foreground recovery');
-assert(envR192.intervals.every(i => i.ms !== 12000 || i.cleared), 'R192: no post-receipt 12s poll timer created');
+assert(envR192.intervals.every(i => i.ms !== 4000 || i.cleared), 'R192: no post-receipt 4s poll timer created');
 assert.strictEqual(envR192.mockChannels.some(c => c.name.startsWith('post-receipt-lifecycle-') && c.subscribed), false, 'R192: no post-receipt Realtime channel subscribed');
 recordR('R192');
 

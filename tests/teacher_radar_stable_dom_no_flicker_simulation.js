@@ -1261,21 +1261,21 @@ async function runAllTests() {
   // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
   // =======================================================================
 
-  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261018-teacher-dashboard-refresh-082');
+  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261023-room-reset-targeted-084');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261018-teacher-dashboard-refresh-082'), 'Must load 20261018-teacher-dashboard-refresh-082');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261023-room-reset-targeted-084'), 'Must load 20261023-room-reset-targeted-084');
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261018-student-local-deps-081a');
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261023-room-reset-targeted-084');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261018-student-local-deps-081a'));
-    assert(hsJsSource.includes("const VERSION = '20261018-student-local-deps-081a';"));
-    assert(swJsSource.includes("const VERSION = '20261018-student-local-deps-081a';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261023-room-reset-targeted-084'));
+    assert(hsJsSource.includes("const VERSION = '20261023-room-reset-targeted-084';"));
+    assert(swJsSource.includes("const VERSION = '20261023-room-reset-targeted-084';"));
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-41: Other test suites are updated to 20261018-teacher-dashboard-refresh-082');
+  console.log('Test STABLE-41: Other test suites are updated to 20261023-room-reset-targeted-084');
   {
     const suites = [
       'tests/account_import_exceljs_csp_simulation.js',
@@ -1287,7 +1287,7 @@ async function runAllTests() {
     ];
     for (const s of suites) {
       const content = fs.readFileSync(path.join(repoRoot, s), 'utf8');
-      assert(content.includes('20261018-teacher-dashboard-refresh-082'), `${s} must require 20261018-teacher-dashboard-refresh-082`);
+      assert(content.includes('20261023-room-reset-targeted-084'), `${s} must require 20261023-room-reset-targeted-084`);
     }
     console.log('  -> PASSED');
   }

@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20261018-student-local-deps-081a';
+const VERSION = '20261023-room-reset-targeted-084';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -87,8 +87,10 @@ function handleStudentInvalidSession(customMessage = null, options = {}) {
     }
 }
 
-let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
+let state = { truong_id: null, hs_id: null, ma_hs: '', ho_ten: '', lop: '', phong_id: null, ma_phong_text: '', room_opened_at: null, student_reset_version: 0, ma_de: '', cau_hoi: new Array(), user_result: null, flagged: new Array(), isOffline: !navigator.onLine };
 let realtimeChannel = null;
+let activeRoomSyncPollTimer = null;
+let activeRoomSyncInFlight = false;
 let realtimeResultChannel = null;   // [Fix 1B] Channel riêng cho màn kết quả sau khi nộp bài
 let realtimeResultCleanupTimer = null; // Timer tự dọn channel sau 30 phút
 let postReceiptLifecycleChannel = null;   // P0-006A: Watcher độc lập theo dõi vòng đời phòng sau receipt
@@ -1431,6 +1433,7 @@ async function joinRoom(maPhongAuto = null) {
 
         state.phong_id = phongData.id;
         state.room_opened_at = phongData.thoi_gian_mo;
+        state.student_reset_version = Number(phongData.student_reset_version || 0);
         kichHoatLienKetRealtime();
 
         const { data: statusData, error: statusError } = await _supabase.rpc('rpc_hoc_sinh_result_status', {
@@ -1545,30 +1548,86 @@ async function joinRoom(maPhongAuto = null) {
     } catch (error) { alert(error.message); }
 }
 
+async function syncActiveRoomRuntime(reason = 'poll') {
+    if (activeRoomSyncInFlight || studentSessionInvalidated || state.isOffline || !state.phong_id) return;
+    const token = getStudentToken();
+    if (!token) return;
+    activeRoomSyncInFlight = true;
+    try {
+        const { data, error } = await _supabase.rpc('rpc_hoc_sinh_runtime_sync', {
+            p_student_token: token,
+            p_phong_id: state.phong_id
+        });
+        if (error || !data) return;
+        if (data.code === 'invalid_session') {
+            handleStudentInvalidSession(data.message);
+            return;
+        }
+        if (data.status === 'missing' || !data.room) {
+            clearActiveSubmissionKeys();
+            state.phong_id = null; state.room_opened_at = null; state.student_reset_version = 0;
+            state.ma_de = ''; state.cau_hoi = []; state.user_result = null; cheatCount = 0;
+            dongTatCaRealtimeHocSinh();
+            dungPostReceiptLifecycleWatcher();
+            showSection('room-section');
+            timPhongThiTuDong();
+            return;
+        }
+        const room = data.room;
+        const norm = v => (v === null || v === undefined) ? null : String(v);
+        const roomGenerationChanged = norm(state.room_opened_at) !== norm(room.thoi_gian_mo);
+        const studentGenerationChanged = Number(state.student_reset_version || 0) !== Number(room.student_reset_version || 0);
+        if (roomGenerationChanged || studentGenerationChanged) {
+            const snapshot = getFinalSnapshot();
+            if (snapshot) archiveFinalSnapshot(snapshot, studentGenerationChanged ? 'student_targeted_reset' : 'room_attempt_changed');
+            clearActiveSubmissionKeys();
+            localStorage.removeItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
+            state.room_opened_at = room.thoi_gian_mo;
+            state.student_reset_version = Number(room.student_reset_version || 0);
+            state.ma_de = ''; state.cau_hoi = []; state.user_result = null; cheatCount = 0;
+            if (examTimer) { clearInterval(examTimer); examTimer = null; }
+            tatAntiCheat();
+            isExamActive = false;
+            alert(studentGenerationChanged
+                ? 'Giáo viên đã reset lượt làm bài của bạn. Hệ thống sẽ tải lượt mới ngay.'
+                : 'Phòng thi đã được reset. Hệ thống sẽ đồng bộ lượt thi mới ngay.');
+            showSection('room-section');
+            timPhongThiTuDong();
+            return;
+        }
+        if ((room.trang_thai === 'THU_BAI' || room.trang_thai === 'XEM_DAP_AN')
+            && document.getElementById('exam-section')?.classList.contains('active')) {
+            gradeAndSubmit(true);
+        }
+    } catch (e) {
+        console.warn('[room-runtime-sync]', reason, e?.message || e);
+    } finally {
+        activeRoomSyncInFlight = false;
+    }
+}
+
 function kichHoatLienKetRealtime() {
-    if (realtimeChannel) _supabase.removeChannel(realtimeChannel);
-    realtimeChannel = _supabase.channel('room-updates')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'phong_thi', filter: `id=eq.${state.phong_id}` }, payload => {
-            const newStatus = payload.new.trang_thai;
-            const newOpenedAt = payload.new.thoi_gian_mo;
-            // P0-006: Generation change detection — authoritative reset evidence
-            const _normG = v => (v === null || v === undefined) ? null : String(v);
-            if (_normG(state.room_opened_at) !== null && _normG(newOpenedAt) !== _normG(state.room_opened_at)) {
-                checkTeacherCommand(true);
-                return;
-            }
-            if ((newStatus === 'THU_BAI' || newStatus === 'XEM_DAP_AN') && document.getElementById('exam-section').classList.contains('active')) {
-                // [Fix B] XEM_DAP_AN cũng trigger nộp bài — học sinh chưa nộp khi GV công bố đáp án sẽ được thu bài tự động
-                alert("⏳ HẾT GIỜ! Giáo viên đã khóa phòng thi. Hệ thống đang tự động thu bài của bạn!");
-                gradeAndSubmit(true);
-            }
-            else if ((newStatus === 'CONG_BO_DIEM' || newStatus === 'XEM_DAP_AN' || newStatus === 'THU_BAI') && document.getElementById('result-section').classList.contains('active')) {
-                checkTeacherCommand(true);
-            }
-        }).subscribe();
+    if (realtimeChannel) { try { _supabase.removeChannel(realtimeChannel); } catch(e) {} realtimeChannel = null; }
+    if (activeRoomSyncPollTimer) { clearInterval(activeRoomSyncPollTimer); activeRoomSyncPollTimer = null; }
+    if (!state.phong_id) return;
+    const capturedPhongId = state.phong_id;
+    try {
+        realtimeChannel = _supabase
+            .channel('room:' + capturedPhongId)
+            .on('broadcast', { event: 'room_sync' }, () => {
+                if (state.phong_id === capturedPhongId) void syncActiveRoomRuntime('broadcast');
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED' && state.phong_id === capturedPhongId) void syncActiveRoomRuntime('subscribe');
+            });
+    } catch (e) {
+        console.warn('[room-broadcast]', e);
+    }
+    activeRoomSyncPollTimer = setInterval(() => { void syncActiveRoomRuntime('poll'); }, 3000);
 }
 
 function dongTatCaRealtimeHocSinh() {
+    if (activeRoomSyncPollTimer) { clearInterval(activeRoomSyncPollTimer); activeRoomSyncPollTimer = null; }
     if (realtimeChannel) { _supabase.removeChannel(realtimeChannel); realtimeChannel = null; }
     if (realtimeResultCleanupTimer) { clearTimeout(realtimeResultCleanupTimer); realtimeResultCleanupTimer = null; }
     if (realtimeResultChannel) { _supabase.removeChannel(realtimeResultChannel); realtimeResultChannel = null; }
@@ -1638,21 +1697,8 @@ function batDauPostReceiptLifecycleWatcher() {
     postReceiptLifecycleContextKey = currentKey;
     const capturedPhongId = state.phong_id;
     const capturedOpenedAt = state.room_opened_at;
-    try {
-        postReceiptLifecycleChannel = _supabase
-            .channel('post-receipt-lifecycle-' + capturedPhongId)
-            .on('postgres_changes', {
-                event: 'UPDATE', schema: 'public', table: 'phong_thi',
-                filter: 'id=eq.' + capturedPhongId
-            }, (payload) => {
-                if (state.phong_id !== capturedPhongId) return;
-                const _normG = v => (v === null || v === undefined) ? null : String(v);
-                const serverGen = _normG(payload.new && payload.new.thoi_gian_mo);
-                const localGen = _normG(capturedOpenedAt);
-                if (localGen !== null && serverGen !== localGen) { void _postReceiptLifecycleTick(); }
-            }).subscribe();
-    } catch(e) { console.warn('[post-receipt-watcher]', e); }
-    postReceiptLifecyclePollTimer = setInterval(() => { void _postReceiptLifecycleTick(); }, 12000);
+    // Token-bound RPC polling is authoritative; avoid direct table postgres_changes under anon RLS.
+    postReceiptLifecyclePollTimer = setInterval(() => { void _postReceiptLifecycleTick(); }, 4000);
 }
 
 function renderExam() {
@@ -2125,6 +2171,7 @@ function findRecoverableFinalSnapshotsForCurrentStudent() {
 function hydrateSubmissionContext(snapshot) {
     state.phong_id = snapshot.phong_id;
     state.room_opened_at = snapshot.room_opened_at;
+    state.student_reset_version = Number(snapshot.student_reset_version || 0);
     state.ma_de = snapshot.ma_de || state.ma_de;
 }
 
@@ -2341,6 +2388,7 @@ function finalizeSubmissionOnce(autoSubmit = false) {
                 candidate.room_opened_at !== undefined &&
                 candidate.room_opened_at !== null &&
                 candidate.room_opened_at === state.room_opened_at &&
+                Number(candidate.student_reset_version || 0) === Number(state.student_reset_version || 0) &&
                 candidate.ma_de !== undefined &&
                 candidate.ma_de === state.ma_de &&
                 candidate.state &&
@@ -2369,6 +2417,7 @@ function finalizeSubmissionOnce(autoSubmit = false) {
             hs_id: state.hs_id,
             ma_de: state.ma_de,
             room_opened_at: state.room_opened_at,
+            student_reset_version: Number(state.student_reset_version || 0),
             raw_answers: collectAnswers(),
             client_submitted_at: new Date().toISOString(),
             auto_submit: Boolean(autoSubmit)
@@ -2562,7 +2611,8 @@ async function receiveFinalSubmission() {
                 p_ma_de: snapshot.ma_de,
                 p_raw_answers: snapshot.raw_answers,
                 p_client_submitted_at: snapshot.client_submitted_at,
-                p_room_opened_at: snapshot.room_opened_at
+                p_room_opened_at: snapshot.room_opened_at,
+                p_student_reset_version: Number(snapshot.student_reset_version || 0)
             }), RECEIVE_RPC_TIMEOUT_MS);
         } catch (rpcErr) {
             lastError = rpcErr?.message || 'Lỗi mạng hoặc timeout';
@@ -2601,7 +2651,7 @@ async function receiveFinalSubmission() {
             return;
         }
 
-        if (!error && data?.code === 'room_attempt_changed') {
+        if (!error && (data?.code === 'room_attempt_changed' || data?.code === 'student_attempt_changed')) {
             clearSubmissionRetryTimer();
             clearAutoSubmitInitialSendTimer();
             submissionRetryCount = 0;
