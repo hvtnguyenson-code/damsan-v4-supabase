@@ -426,16 +426,16 @@ console.log('Test SCORE-UI-14: SHORT_ONLY puts full score into P3');
 }
 
 // -------------------------------------------------------------------------
-// SCORE-UI-15: Version cache invalidation matches 20260902-flex-lite-004 for teacher and 20261023-room-reset-targeted-084 for student
+// SCORE-UI-15: Version cache invalidation matches 20260902-flex-lite-004 for teacher and 20261024-login-enter-085 for student
 // -------------------------------------------------------------------------
 console.log('Test SCORE-UI-15: Version cache invalidation across all files');
 {
-    const teacherVersion = '20261023-room-reset-targeted-084';
-    const studentVersion = '20261023-room-reset-targeted-084';
-    assert(gvHtmlSource.includes(`giaovien.js?v=${teacherVersion}`), 'SCORE-UI-15: giaovien.html must include giaovien.js?v=20261023-room-reset-targeted-084');
-    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${studentVersion}`), 'SCORE-UI-15: hoc_sinh.html must include hoc_sinh.js?v=20261023-room-reset-targeted-084');
-    assert(hsJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: hoc_sinh.js must define const VERSION = 20261023-room-reset-targeted-084');
-    assert(swJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: sw.js must define const VERSION = 20261023-room-reset-targeted-084');
+    const teacherVersion = '20261024-login-enter-085';
+    const studentVersion = '20261024-login-enter-085';
+    assert(gvHtmlSource.includes(`giaovien.js?v=${teacherVersion}`), 'SCORE-UI-15: giaovien.html must include giaovien.js?v=20261024-login-enter-085');
+    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${studentVersion}`), 'SCORE-UI-15: hoc_sinh.html must include hoc_sinh.js?v=20261024-login-enter-085');
+    assert(hsJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: hoc_sinh.js must define const VERSION = 20261024-login-enter-085');
+    assert(swJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: sw.js must define const VERSION = 20261024-login-enter-085');
     console.log('  -> PASSED');
 }
 
