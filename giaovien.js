@@ -570,6 +570,17 @@ function isLegacyPlainPassword(v) {
 }
 
 window.onload = function() { 
+    const loginEnterHandler = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const btn = document.getElementById('btnDangNhapGV');
+        if (btn && !btn.disabled) btn.click();
+    };
+    ['gvUser', 'gvPass'].forEach((id) => {
+        const input = document.getElementById(id);
+        if (input) input.addEventListener('keydown', loginEnterHandler);
+    });
+
     let script = document.createElement('script');
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js";
     document.head.appendChild(script);

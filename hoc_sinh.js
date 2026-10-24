@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20261023-room-reset-targeted-084';
+const VERSION = '20261024-login-enter-085';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -285,6 +285,17 @@ document.addEventListener('DOMContentLoaded', () => {
             e.target.placeholder = 'Mật khẩu';
         });
     }
+
+    const loginEnterHandler = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const btn = document.getElementById('btn-login');
+        if (btn && !btn.disabled) btn.click();
+    };
+    ['ma_hs', 'mat_khau'].forEach((id) => {
+        const input = document.getElementById(id);
+        if (input) input.addEventListener('keydown', loginEnterHandler);
+    });
 
     // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
