@@ -327,7 +327,7 @@ function createHarness(options = {}) {
       const n = typeof t === 'number' ? t : Date.parse(t);
       return isNaN(n) ? 0 : n;
     },
-    setTimeout: (fn, d) => { fn(); return 1; },
+    setTimeout: (fn, d) => { if (Number(d) < 6000) fn(); return 1; },
     clearTimeout: () => {},
     alert: (msg) => { metrics.alerts.push(msg); },
     confirm: (msg) => {
