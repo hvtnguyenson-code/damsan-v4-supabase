@@ -1261,21 +1261,21 @@ async function runAllTests() {
   // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
   // =======================================================================
 
-  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261024-login-enter-085');
+  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261026-room-control-watchdog-086');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261024-login-enter-085'), 'Must load 20261024-login-enter-085');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261026-room-control-watchdog-086'), 'Must load 20261026-room-control-watchdog-086');
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261024-login-enter-085');
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261026-room-control-watchdog-086');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261024-login-enter-085'));
-    assert(hsJsSource.includes("const VERSION = '20261024-login-enter-085';"));
-    assert(swJsSource.includes("const VERSION = '20261024-login-enter-085';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261026-room-control-watchdog-086'));
+    assert(hsJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"));
+    assert(swJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"));
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-41: Other test suites are updated to 20261024-login-enter-085');
+  console.log('Test STABLE-41: Other test suites are updated to 20261026-room-control-watchdog-086');
   {
     const suites = [
       'tests/account_import_exceljs_csp_simulation.js',
@@ -1287,7 +1287,7 @@ async function runAllTests() {
     ];
     for (const s of suites) {
       const content = fs.readFileSync(path.join(repoRoot, s), 'utf8');
-      assert(content.includes('20261024-login-enter-085'), `${s} must require 20261024-login-enter-085`);
+      assert(content.includes('20261026-room-control-watchdog-086'), `${s} must require 20261026-room-control-watchdog-086`);
     }
     console.log('  -> PASSED');
   }

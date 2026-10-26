@@ -2842,6 +2842,8 @@ async function runRoomControlAction(actionKey, actionFn, options = {}) {
     if (targetRoomIds.length > 0) {
         const hasBusyRoom = targetRoomIds.some(id => activeRoomMutationIds.has(id));
         if (hasBusyRoom) {
+            const logEl = document.getElementById('ctrlLog');
+            if (logEl) logEl.innerText = '⏳ Lệnh trước đang xử lý. Vui lòng thử lại sau vài giây.';
             return { status: 'skipped', reason: 'room_busy' };
         }
         targetRoomIds.forEach(id => activeRoomMutationIds.add(id));
@@ -5499,9 +5501,40 @@ function xuLyLiveSearch() {
 }
 
 async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot = null, thoiGian = null, setOpenTime = false) {
+    const withClientTimeout = (promise, timeoutMs, code = 'client_timeout') => {
+        let timer = null;
+        return Promise.race([
+            Promise.resolve(promise),
+            new Promise((_, reject) => {
+                timer = setTimeout(() => {
+                    const err = new Error(code);
+                    err.code = code;
+                    reject(err);
+                }, timeoutMs);
+            })
+        ]).finally(() => {
+            if (timer) clearTimeout(timer);
+        });
+    };
+
+    const reconcileAfterTimeout = async () => {
+        try {
+            const rooms = await withClientTimeout(rpcLayDanhSachPhongThi(), 3000, 'reconcile_timeout');
+            const fresh = (rooms || []).find((item) => String(item.id) === String(roomId));
+            if (!fresh) return false;
+            const actualStatus = fresh.TrangThai ?? fresh.trang_thai ?? null;
+            const actualTarget = fresh.DoiTuong ?? fresh.doi_tuong ?? null;
+            const statusOk = trangThai === null || trangThai === undefined || String(actualStatus) === String(trangThai);
+            const targetOk = doiTuong === null || doiTuong === undefined || String(actualTarget) === String(doiTuong);
+            return statusOk && targetOk;
+        } catch (_) {
+            return false;
+        }
+    };
     const room = (allRoomsData || []).find((item) => String(item.id) === String(roomId));
     if (!room) throw new Error('Không xác định được trường đích của phòng thi.');
-    const data = await staffRpc('rpc_dieu_khien_phong_thi', {
+
+    const rpcPromise = staffRpc('rpc_dieu_khien_phong_thi', {
         p_ma_gv: gvData.ma_gv,
         p_truong_id: getRoomTargetSchoolId(room),
         p_room_id: roomId,
@@ -5511,10 +5544,29 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
         p_thoi_gian: thoiGian,
         p_set_open_time: setOpenTime
     });
-    if (!data || data.status !== 'success') {
-        throw new Error(data?.message || "Khong the dieu khien phong thi");
+
+    try {
+        const data = await withClientTimeout(rpcPromise, 6000, 'room_control_timeout');
+        if (!data || data.status !== 'success') {
+            throw new Error(data?.message || 'Không thể điều khiển phòng thi');
+        }
+        return data;
+    } catch (err) {
+        if (err?.code !== 'room_control_timeout') throw err;
+
+        const confirmed = await reconcileAfterTimeout();
+        if (confirmed) {
+            return {
+                status: 'success',
+                reconciled_after_timeout: true,
+                message: 'Máy chủ đã áp dụng lệnh; phản hồi trình duyệt bị chậm.'
+            };
+        }
+
+        const timeoutErr = new Error('Lệnh chưa được xác nhận sau 6 giây. Hệ thống đã nhả khóa; vui lòng thử lại.');
+        timeoutErr.code = 'room_control_unconfirmed';
+        throw timeoutErr;
     }
-    return data;
 }
 
 // ==========================================================
