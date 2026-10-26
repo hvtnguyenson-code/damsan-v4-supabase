@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20261024-login-enter-085';
+const VERSION = '20261026-room-control-watchdog-086';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -1634,7 +1634,7 @@ function kichHoatLienKetRealtime() {
     } catch (e) {
         console.warn('[room-broadcast]', e);
     }
-    activeRoomSyncPollTimer = setInterval(() => { void syncActiveRoomRuntime('poll'); }, 3000);
+    activeRoomSyncPollTimer = setInterval(() => { void syncActiveRoomRuntime('poll'); }, 5000);
 }
 
 function dongTatCaRealtimeHocSinh() {

@@ -789,31 +789,31 @@ async function runAllTests() {
   // E. VERSION / VISUAL / INVARIANTS
   // =======================================================================
 
-  // 25. Teacher exact: 20261024-login-enter-085
-  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20261024-login-enter-085');
+  // 25. Teacher exact: 20261026-room-control-watchdog-086
+  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20261026-room-control-watchdog-086');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261024-login-enter-085'),
-      'giaovien.html must include giaovien.js?v=20261024-login-enter-085');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261026-room-control-watchdog-086'),
+      'giaovien.html must include giaovien.js?v=20261026-room-control-watchdog-086');
     assert(!gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
       'giaovien.html must not contain old 20260904-flex-lite-009a');
     console.log('  -> PASSED');
   }
 
-  // 26. Student HTML/JS exact: 20261024-login-enter-085
-  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261024-login-enter-085');
+  // 26. Student HTML/JS exact: 20261026-room-control-watchdog-086
+  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261026-room-control-watchdog-086');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261024-login-enter-085'),
-      'hoc_sinh.html must include hoc_sinh.js?v=20261024-login-enter-085');
-    assert(hsJsSource.includes("const VERSION = '20261024-login-enter-085';"),
-      'hoc_sinh.js must define const VERSION = 20261024-login-enter-085');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261026-room-control-watchdog-086'),
+      'hoc_sinh.html must include hoc_sinh.js?v=20261026-room-control-watchdog-086');
+    assert(hsJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"),
+      'hoc_sinh.js must define const VERSION = 20261026-room-control-watchdog-086');
     console.log('  -> PASSED');
   }
 
-  // 27. sw.js exact: 20261024-login-enter-085
-  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261024-login-enter-085');
+  // 27. sw.js exact: 20261026-room-control-watchdog-086
+  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261026-room-control-watchdog-086');
   {
-    assert(swJsSource.includes("const VERSION = '20261024-login-enter-085';"),
-      'sw.js must define const VERSION = 20261024-login-enter-085');
+    assert(swJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"),
+      'sw.js must define const VERSION = 20261026-room-control-watchdog-086');
     console.log('  -> PASSED');
   }
 

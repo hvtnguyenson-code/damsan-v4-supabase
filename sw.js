@@ -1,4 +1,4 @@
-const VERSION = '20261024-login-enter-085';
+const VERSION = '20261026-room-control-watchdog-086';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 
 // PWA-INSTALL-081A: all student runtime dependencies required before login

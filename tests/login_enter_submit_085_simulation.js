@@ -14,7 +14,7 @@ assert(teacher.includes("document.getElementById('btnDangNhapGV')"), 'Teacher En
 assert(teacher.includes("if (e.key !== 'Enter') return;"), 'Teacher login must filter Enter');
 assert(studentHtml.includes('id="btn-login"'), 'Student login button missing');
 assert(teacherHtml.includes('id="btnDangNhapGV"'), 'Teacher login button missing');
-assert(studentHtml.includes('20261024-login-enter-085'), 'Student HTML cache bust missing');
-assert(teacherHtml.includes('20261024-login-enter-085'), 'Teacher HTML cache bust missing');
+assert(studentHtml.includes('20261026-room-control-watchdog-086'), 'Student HTML cache bust missing');
+assert(teacherHtml.includes('20261026-room-control-watchdog-086'), 'Teacher HTML cache bust missing');
 
 console.log('LOGIN_ENTER_SUBMIT_085_PASS');
