@@ -674,10 +674,10 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
 // -------------------------------------------------------------------------
 (async () => {
     console.log('Test SESSION-RESULT-15: Version synchronization across hoc_sinh.js, sw.js, hoc_sinh.html');
-    const expectedVersion = '20261026-room-control-watchdog-086';
-    assert(hsJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: hoc_sinh.js VERSION is 20261026-room-control-watchdog-086');
-    assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20261026-room-control-watchdog-086');
-    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20261026-room-control-watchdog-086');
+    const expectedVersion = '20261027-pwa-installability-087';
+    assert(hsJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: hoc_sinh.js VERSION is 20261027-pwa-installability-087');
+    assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20261027-pwa-installability-087');
+    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20261027-pwa-installability-087');
     console.log('  -> PASSED');
 })()).then(() =>
 
