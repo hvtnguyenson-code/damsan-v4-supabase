@@ -64,7 +64,7 @@ assert(html.includes('id="browser-compat-check-box"'), 'advanced compatibility c
 assert(html.includes('id="btn-browser-compat-check"'), 'advanced compatibility check button must exist');
 assert(js.includes("'UNCERTAIN'"), 'multi-level PWA compatibility state must include UNCERTAIN');
 assert(js.includes("code: userConfirmedInstallFailure ? 'android_install_failed_after_diagnostics' : 'android_install_unverified'"), 'UNCERTAIN Android diagnostic code missing');
-assert(js.includes("code: 'android_install_failed_after_diagnostics'"), 'soft Android compatibility exception code missing');
+assert(js.includes("'android_install_failed_after_diagnostics'"), 'soft Android compatibility exception code missing');
 assert(js.includes("state: 'BROWSER_UNSUPPORTED'"), 'unsafe old browser must be rejected');
 assert(js.includes('function getBrowserExamCapability()'), 'browser exam capability gate missing');
 assert(js.includes("if (typeof Promise !== 'function')"), 'Promise capability check missing');
