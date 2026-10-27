@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20261026-room-control-watchdog-086';
+const VERSION = '20261027-pwa-installability-087';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -529,13 +529,22 @@ async function capNhatChanDoanPWA(showPanel = false) {
     const row = (label, ok, okText, badText) =>
         '<div class="pwa-diag-row"><span>' + label + '</span><span class="' + (ok ? 'pwa-diag-ok' : 'pwa-diag-warn') + '">' + (ok ? okText : badText) + '</span></div>';
 
+    const platformRows = isIOSDevice()
+        ? [
+            row('iPhone / iPad', true, 'Safari / Home Screen', ''),
+            row('Cách cài đặt', true, 'Chia sẻ → Thêm vào màn hình chính', '')
+        ]
+        : [
+            row('Chrome Android', diagnostics.chromeAndroid, 'Đúng', isAndroidDevice() ? 'Trình duyệt khác' : 'Không phải Android'),
+            row('Khả năng cài tự động', diagnostics.installPrompt, 'Sẵn sàng', 'Chưa được trình duyệt cấp')
+        ];
+
     panel.innerHTML = [
         row('Kết nối an toàn (HTTPS)', diagnostics.secure, 'OK', 'Chưa đạt'),
         row('Manifest ứng dụng', diagnostics.manifest, 'OK', 'Chưa tải được'),
         row('Icon 192 / 512', diagnostics.icons, 'OK', 'Thiếu'),
         row('Service Worker', diagnostics.serviceWorker, 'OK', 'Chưa sẵn sàng'),
-        row('Chrome Android', diagnostics.chromeAndroid, 'Đúng', isAndroidDevice() ? 'Trình duyệt khác' : 'Không phải Android'),
-        row('Hộp thoại cài tự động', diagnostics.installPrompt, 'Sẵn sàng', 'Chưa được Chrome cấp')
+        ...platformRows
     ].join('');
 
     if (diagnostics.installedHint && !isPwaStandaloneMode()) {

@@ -5,7 +5,7 @@ const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const html = fs.readFileSync('hoc_sinh.html', 'utf8');
 const js = fs.readFileSync('hoc_sinh.js', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-const version = '20261026-room-control-watchdog-086';
+const version = '20261027-pwa-installability-087';
 
 console.log('=== ANDROID PWA INSTALLABILITY 081 ===');
 
@@ -24,12 +24,17 @@ const icon192 = manifest.icons.find((x) => x.sizes === '192x192');
 const icon512 = manifest.icons.find((x) => x.sizes === '512x512');
 assert(icon192 && icon192.src === './icons/exam-192.png' && icon192.type === 'image/png');
 assert(icon512 && icon512.src === './icons/exam-512.png' && icon512.type === 'image/png');
+const installSvg = manifest.icons.find((x) => x.src === './icons/exam-installable.svg');
+assert(installSvg && installSvg.sizes === 'any' && installSvg.type === 'image/svg+xml' && installSvg.purpose === 'any');
+assert(fs.existsSync('icons/exam-installable.svg'), 'Chrome-compatible SVG install icon must exist');
+assert(html.includes('rel="apple-touch-icon"'), 'iOS apple-touch-icon must be declared');
 assert(!manifest.icons.some((x) => /^https?:/i.test(x.src)), 'manifest icons must be same-origin');
 
 // P081-03: SW install cannot fail because an external CDN is unavailable.
 assert(sw.includes('const CORE_ASSETS = ['));
 assert(sw.includes("'./icons/exam-192.png'"));
 assert(sw.includes("'./icons/exam-512.png'"));
+assert(sw.includes("'./icons/exam-installable.svg'"));
 const coreBlock = sw.slice(sw.indexOf('const CORE_ASSETS'), sw.indexOf('const OPTIONAL_ASSETS'));
 assert(!/https?:\/\//.test(coreBlock), 'CORE_ASSETS must be same-origin only');
 assert(sw.includes('Promise.allSettled'));

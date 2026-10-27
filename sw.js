@@ -1,4 +1,4 @@
-const VERSION = '20261026-room-control-watchdog-086';
+const VERSION = '20261027-pwa-installability-087';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 
 // PWA-INSTALL-081A: all student runtime dependencies required before login
@@ -10,6 +10,7 @@ const CORE_ASSETS = [
   './manifest.json',
   './icons/exam-192.png',
   './icons/exam-512.png',
+  './icons/exam-installable.svg',
   './vendor/student/supabase-js-2.118.0.min.js',
   './vendor/student/dompurify-3.0.6.min.js',
   './vendor/student/crypto-js-4.1.1.min.js'

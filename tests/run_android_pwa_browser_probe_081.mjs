@@ -102,9 +102,18 @@ while (Date.now() < deadline) {
 }
 
 const manifestInfo = await send('Page.getAppManifest');
+const installabilityErrors = await send('Page.getInstallabilityErrors');
+
+await send('Network.setUserAgentOverride', {
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+  platform: 'Windows'
+});
+await send('Page.reload', { ignoreCache: true });
+await sleep(1200);
+const desktopInstallabilityErrors = await send('Page.getInstallabilityErrors');
 process.stdout.write('=== PWA browser probe console ===\n');
 for (const line of consoleLines.slice(-80)) process.stdout.write(line + '\n');
-process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo }, null, 2) + '\n');
+process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors, desktopInstallabilityErrors }, null, 2) + '\n');
 
 try { ws.close(); } catch {}
 
@@ -124,3 +133,7 @@ if (!manifestInfo?.url || !manifestInfo.url.includes('manifest.json')) throw new
 if (Array.isArray(manifestInfo.errors) && manifestInfo.errors.some((e) => e.critical === 2)) {
   throw new Error('Chrome reported critical manifest errors: ' + JSON.stringify(manifestInfo.errors));
 }
+const androidErrors = installabilityErrors?.installabilityErrors || [];
+const desktopErrors = desktopInstallabilityErrors?.installabilityErrors || [];
+if (androidErrors.length) throw new Error('Android Chrome installability errors: ' + JSON.stringify(androidErrors));
+if (desktopErrors.length) throw new Error('Desktop Chrome installability errors: ' + JSON.stringify(desktopErrors));
