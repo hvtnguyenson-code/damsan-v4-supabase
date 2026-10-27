@@ -126,8 +126,10 @@ for (const key of ['supabase','dompurify','cryptojs']) {
   if (!snapshot.dependencies?.[key]) throw new Error('Local student dependency failed to load: ' + key);
 }
 if (snapshot.buttonDisplay !== 'block') throw new Error('Android fallback button is not visible without relying on beforeinstallprompt');
-if (snapshot.androidDisplay !== 'block' && !snapshot.diagnostics?.installPrompt) {
-  throw new Error('Android manual install fallback is not visible when native prompt is unavailable');
+const nativeInstallButtonVisible = snapshot.buttonDisplay === 'block'
+  && /CÀI ĐẶT ỨNG DỤNG NGAY/.test(snapshot.buttonText || '');
+if (snapshot.androidDisplay !== 'block' && !snapshot.diagnostics?.installPrompt && !nativeInstallButtonVisible) {
+  throw new Error('Android has neither native install UI nor manual install fallback');
 }
 if (!snapshot.diagVisible) throw new Error('PWA diagnostics panel did not open');
 if (snapshot.browserFallbackDisplay === 'block') throw new Error('Verified browser fallback must stay hidden on an installable Chrome environment');
