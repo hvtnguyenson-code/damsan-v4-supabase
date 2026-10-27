@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 const devtoolsHost = process.env.PWA_DEVTOOLS_HOST || 'http://127.0.0.1:9235';
 const targetUrl = process.env.PWA_PROBE_URL || 'http://127.0.0.1:8768/hoc_sinh.html';
 const deadline = Date.now() + 90000;
@@ -103,9 +104,18 @@ while (Date.now() < deadline) {
 
 const manifestInfo = await send('Page.getAppManifest');
 const installabilityErrors = await send('Page.getInstallabilityErrors');
+const pngDimensions = (path) => {
+  const buf = fs.readFileSync(path);
+  if (buf.length < 24 || buf.toString('ascii', 1, 4) !== 'PNG') return null;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20), bytes: buf.length };
+};
+const iconFiles = {
+  icon192: pngDimensions('icons/exam-192.png'),
+  icon512: pngDimensions('icons/exam-512.png')
+};
 process.stdout.write('=== PWA browser probe console ===\n');
 for (const line of consoleLines.slice(-80)) process.stdout.write(line + '\n');
-process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors }, null, 2) + '\n');
+process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors, iconFiles }, null, 2) + '\n');
 
 try { ws.close(); } catch {}
 
