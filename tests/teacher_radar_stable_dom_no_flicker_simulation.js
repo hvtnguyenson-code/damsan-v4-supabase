@@ -1267,11 +1267,11 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261027-pwa-installability-087');
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261027-browser-fallback-088');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-pwa-installability-087'));
-    assert(hsJsSource.includes("const VERSION = '20261027-pwa-installability-087';"));
-    assert(swJsSource.includes("const VERSION = '20261027-pwa-installability-087';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-fallback-088'));
+    assert(hsJsSource.includes("const VERSION = '20261027-browser-fallback-088';"));
+    assert(swJsSource.includes("const VERSION = '20261027-browser-fallback-088';"));
     console.log('  -> PASSED');
   }
 
