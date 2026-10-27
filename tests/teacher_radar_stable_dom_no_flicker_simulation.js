@@ -1267,11 +1267,11 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261027-browser-fallback-088');
+  console.log('Test STABLE-40: Student HTML/JS and Service Worker are exact 20261027-browser-compat-088b');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-fallback-088'));
-    assert(hsJsSource.includes("const VERSION = '20261027-browser-fallback-088';"));
-    assert(swJsSource.includes("const VERSION = '20261027-browser-fallback-088';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-compat-088b'));
+    assert(hsJsSource.includes("const VERSION = '20261027-browser-compat-088b';"));
+    assert(swJsSource.includes("const VERSION = '20261027-browser-compat-088b';"));
     console.log('  -> PASSED');
   }
 

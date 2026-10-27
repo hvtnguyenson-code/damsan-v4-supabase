@@ -800,20 +800,20 @@ async function runAllTests() {
   }
 
   // 26. Student HTML/JS exact: 20261027-pwa-installability-087
-  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261027-browser-fallback-088');
+  console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261027-browser-compat-088b');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-fallback-088'),
-      'hoc_sinh.html must include hoc_sinh.js?v=20261027-browser-fallback-088');
-    assert(hsJsSource.includes("const VERSION = '20261027-browser-fallback-088';"),
-      'hoc_sinh.js must define const VERSION = 20261027-browser-fallback-088');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-compat-088b'),
+      'hoc_sinh.html must include hoc_sinh.js?v=20261027-browser-compat-088b');
+    assert(hsJsSource.includes("const VERSION = '20261027-browser-compat-088b';"),
+      'hoc_sinh.js must define const VERSION = 20261027-browser-compat-088b');
     console.log('  -> PASSED');
   }
 
-  // 27. sw.js exact: 20261027-browser-fallback-088
-  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261027-browser-fallback-088');
+  // 27. sw.js exact: 20261027-browser-compat-088b
+  console.log('Test DASH-ACT-27: sw.js VERSION constant is exact 20261027-browser-compat-088b');
   {
-    assert(swJsSource.includes("const VERSION = '20261027-browser-fallback-088';"),
-      'sw.js must define const VERSION = 20261027-browser-fallback-088');
+    assert(swJsSource.includes("const VERSION = '20261027-browser-compat-088b';"),
+      'sw.js must define const VERSION = 20261027-browser-compat-088b');
     console.log('  -> PASSED');
   }
 

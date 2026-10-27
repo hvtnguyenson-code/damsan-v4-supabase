@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Đam San Exam">
     <title>Phòng Thi Trực Tuyến - Hệ Thống Đam San V4</title>
-    <link rel="manifest" href="manifest.json?v=20261027-browser-fallback-088">
+    <link rel="manifest" href="manifest.json?v=20261027-browser-compat-088b">
     <link rel="icon" type="image/png" sizes="192x192" href="./icons/exam-192.png">
     <link rel="apple-touch-icon" sizes="192x192" href="./icons/exam-192.png">
 
@@ -264,13 +264,21 @@
             <button id="btn-pwa-diagnostics" class="pwa-help-btn" type="button" onclick="capNhatChanDoanPWA(true)">Kiểm tra khả năng cài đặt</button>
             <div id="pwa-diagnostics" class="pwa-diagnostics" aria-live="polite"></div>
 
+            <div id="browser-compat-check-box" style="display:none;margin-top:14px;padding:14px;border:1px dashed #dadce0;border-radius:10px;background:#f8f9fa;text-align:left;">
+                <div style="font-weight:700;color:#3c4043;margin-bottom:7px;">Vẫn không cài được ứng dụng?</div>
+                <div style="font-size:12px;line-height:1.5;color:#5f6368;margin-bottom:10px;">Nếu đã thử cài theo hướng dẫn nhưng thiết bị vẫn không cài được, hãy chạy kiểm tra nâng cao. Hệ thống chỉ mở chế độ trình duyệt khi phiên hiện tại đủ điều kiện làm bài an toàn.</div>
+                <button id="btn-browser-compat-check" type="button" onclick="yeuCauKiemTraTuongThichTrinhDuyet()" style="width:100%;padding:11px 14px;border:1px solid #5f6368;border-radius:8px;background:#fff;color:#3c4043;font-weight:700;cursor:pointer;">
+                    TÔI VẪN KHÔNG THỂ CÀI ỨNG DỤNG
+                </button>
+            </div>
+
             <div id="browser-fallback-box" style="display:none;margin-top:18px;padding:16px;border:1px solid #f9ab00;border-radius:10px;background:#fff8e1;text-align:left;">
                 <div style="font-weight:800;color:#8a4b00;margin-bottom:8px;">CHẾ ĐỘ TƯƠNG THÍCH TRÌNH DUYỆT</div>
                 <div id="browser-fallback-reason" style="font-size:13px;line-height:1.5;color:#5f3b00;margin-bottom:12px;"></div>
                 <button id="btn-browser-fallback" type="button" onclick="kichHoatCheDoTrinhDuyetDaXacMinh()" style="width:100%;padding:13px 16px;border:0;border-radius:8px;background:#8a4b00;color:#fff;font-weight:800;cursor:pointer;">
                     LÀM BÀI TRÊN TRÌNH DUYỆT
                 </button>
-                <div style="margin-top:9px;font-size:11px;line-height:1.45;color:#7a5b2a;">Nút này chỉ xuất hiện khi hệ thống xác minh thiết bị hiện tại không đáp ứng điều kiện kỹ thuật bắt buộc để cài PWA.</div>
+                <div style="margin-top:9px;font-size:11px;line-height:1.45;color:#7a5b2a;">Nút này chỉ xuất hiện sau khi hệ thống xác minh lỗi cài PWA hoặc cấp ngoại lệ tương thích tạm thời sau kiểm tra nâng cao.</div>
             </div>
 
             <p style="font-size: 13px; color: #9aa0a6; margin-top: 28px;">Sau khi cài đặt, hãy mở ứng dụng từ màn hình chính.<br>Nếu đã cài nhưng vẫn thấy trang này, hãy đóng tab Chrome và mở biểu tượng <b>Đam San Exam</b> trên màn hình chính.</p>
@@ -410,6 +418,6 @@
         <button class="btn-warning" onclick="closeCheatWarning()">TÔI ĐÃ HIỂU VÀ SẼ KHÔNG TÁI PHẠM</button>
     </div>
 
-    <script src="hoc_sinh.js?v=20261027-browser-fallback-088"></script>
+    <script src="hoc_sinh.js?v=20261027-browser-compat-088b"></script>
 </body>
 </html>

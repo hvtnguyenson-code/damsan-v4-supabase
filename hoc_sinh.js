@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const VERSION = '20261027-browser-fallback-088';
+const VERSION = '20261027-browser-compat-088b';
 
 // P0-007: Student token session helpers (ephemeral in sessionStorage only)
 function getStudentToken() {
@@ -368,6 +368,7 @@ function isChromiumAndroid() {
 }
 
 const VERIFIED_BROWSER_FALLBACK_SESSION_KEY = 'damsan_verified_browser_fallback';
+const BROWSER_FALLBACK_TTL_MS = 2 * 60 * 60 * 1000;
 
 function getPwaHardInstallBlock() {
     if (isPwaStandaloneMode()) return null;
@@ -376,6 +377,7 @@ function getPwaHardInstallBlock() {
     const secure = window.isSecureContext || location.protocol === 'https:' || localDev;
     if (!secure) {
         return {
+            state: 'PWA_UNAVAILABLE',
             code: 'insecure_context',
             message: 'Thiết bị đang ở môi trường không an toàn (không có HTTPS), nên PWA không thể được cài đặt.'
         };
@@ -383,6 +385,7 @@ function getPwaHardInstallBlock() {
 
     if (!('serviceWorker' in navigator)) {
         return {
+            state: 'PWA_UNAVAILABLE',
             code: 'service_worker_unsupported',
             message: 'Trình duyệt trên thiết bị này không hỗ trợ Service Worker — điều kiện bắt buộc của ứng dụng PWA Đam San.'
         };
@@ -391,48 +394,221 @@ function getPwaHardInstallBlock() {
     return null;
 }
 
-function getVerifiedBrowserFallbackSession() {
-    const hardBlock = getPwaHardInstallBlock();
-    if (!hardBlock) {
-        try { sessionStorage.removeItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY); } catch(e) {}
-        return null;
+function getBrowserExamCapability() {
+    const missing = [];
+    if (typeof Promise !== 'function') missing.push('Promise');
+    if (typeof fetch !== 'function') missing.push('fetch');
+    if (typeof TextEncoder !== 'function') missing.push('TextEncoder');
+
+    try {
+        const key = '__damsan_browser_capability_probe__';
+        localStorage.setItem(key, '1');
+        localStorage.removeItem(key);
+    } catch(e) {
+        missing.push('localStorage');
     }
 
+    return {
+        ok: missing.length === 0,
+        missing
+    };
+}
+
+function getAndroidCompatibilitySignals() {
+    const ua = navigator.userAgent || '';
+    const androidMatch = ua.match(/Android\s+(\d+)(?:\.(\d+))?/i);
+    const chromeMatch = ua.match(/(?:Chrome|Chromium)\/(\d+)/i);
+    const androidMajor = androidMatch ? Number(androidMatch[1]) : null;
+    const chromeMajor = chromeMatch ? Number(chromeMatch[1]) : null;
+
+    return {
+        androidMajor,
+        chromeMajor,
+        legacyAndroid: Number.isFinite(androidMajor) && androidMajor <= 8,
+        legacyChromium: Number.isFinite(chromeMajor) && chromeMajor < 100,
+        nonChromiumAndroid: isAndroidDevice() && !isChromiumAndroid()
+    };
+}
+
+function classifyPwaCompatibility(diagnostics = null, userConfirmedInstallFailure = false) {
+    const hardBlock = getPwaHardInstallBlock();
+    if (hardBlock) return hardBlock;
+
+    if (isPwaStandaloneMode()) {
+        return { state: 'INSTALLABLE', code: 'already_standalone', message: 'Ứng dụng đang chạy ở chế độ PWA.' };
+    }
+
+    if (deferredPrompt) {
+        return { state: 'INSTALLABLE', code: 'install_prompt_available', message: 'Trình duyệt đã xác nhận thiết bị có thể cài PWA.' };
+    }
+
+    if (isIOSDevice()) {
+        return { state: 'INSTALLABLE', code: 'ios_home_screen', message: 'iPhone/iPad cài bằng Safari → Chia sẻ → Thêm vào màn hình chính.' };
+    }
+
+    const browser = getBrowserExamCapability();
+    if (!browser.ok) {
+        return {
+            state: 'BROWSER_UNSUPPORTED',
+            code: 'browser_exam_capability_missing',
+            message: 'Trình duyệt này quá cũ để làm bài an toàn. Thiếu: ' + browser.missing.join(', ') + '.'
+        };
+    }
+
+    const diagnosticsReady = !!diagnostics
+        && diagnostics.secure
+        && diagnostics.manifest
+        && diagnostics.icons
+        && diagnostics.serviceWorker;
+
+    if (isAndroidDevice() && diagnosticsReady && !diagnostics.installPrompt) {
+        const signals = getAndroidCompatibilitySignals();
+        return {
+            state: userConfirmedInstallFailure ? 'PWA_UNAVAILABLE' : 'UNCERTAIN',
+            code: userConfirmedInstallFailure ? 'android_install_failed_after_diagnostics' : 'android_install_unverified',
+            message: userConfirmedInstallFailure
+                ? 'Thiết bị Android đã vượt qua kiểm tra làm bài trên trình duyệt nhưng vẫn không cài được PWA sau khi thử theo hướng dẫn. Chế độ tương thích được mở tạm thời cho phiên này.'
+                : 'Hệ thống chưa nhận được xác nhận cài PWA từ trình duyệt. Nếu đã thử cài theo hướng dẫn mà vẫn thất bại, có thể chạy kiểm tra nâng cao.',
+            signals
+        };
+    }
+
+    return {
+        state: 'INSTALLABLE',
+        code: 'pwa_required',
+        message: 'Chưa có đủ bằng chứng để mở chế độ trình duyệt. Tiếp tục cài PWA theo hướng dẫn.'
+    };
+}
+
+function saveBrowserFallbackPermit(result, mode) {
+    const permit = {
+        mode,
+        code: result.code,
+        verified_at: Date.now(),
+        expires_at: Date.now() + BROWSER_FALLBACK_TTL_MS
+    };
+    try {
+        sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY, JSON.stringify(permit));
+    } catch(e) {}
+    return permit;
+}
+
+function clearBrowserFallbackPermit() {
+    try { sessionStorage.removeItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY); } catch(e) {}
+}
+
+function getVerifiedBrowserFallbackSession() {
     try {
         const raw = sessionStorage.getItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY);
         if (!raw) return null;
         const saved = JSON.parse(raw);
-        if (saved && saved.code === hardBlock.code) return hardBlock;
+        if (!saved || !saved.expires_at || Date.now() >= Number(saved.expires_at)) {
+            clearBrowserFallbackPermit();
+            return null;
+        }
+
+        if (saved.mode === 'hard') {
+            const hardBlock = getPwaHardInstallBlock();
+            if (!hardBlock || hardBlock.code !== saved.code) {
+                clearBrowserFallbackPermit();
+                return null;
+            }
+            return saved;
+        }
+
+        if (saved.mode === 'compatibility') {
+            const browser = getBrowserExamCapability();
+            if (!isAndroidDevice() || isPwaStandaloneMode() || !browser.ok) {
+                clearBrowserFallbackPermit();
+                return null;
+            }
+            return saved;
+        }
     } catch(e) {}
+
+    clearBrowserFallbackPermit();
     return null;
 }
 
-function capNhatBrowserFallbackDaXacMinh() {
-    const box = document.getElementById('browser-fallback-box');
+function renderBrowserFallbackState(result = null) {
+    const requestBox = document.getElementById('browser-compat-check-box');
+    const fallbackBox = document.getElementById('browser-fallback-box');
     const reason = document.getElementById('browser-fallback-reason');
-    if (!box) return null;
 
-    const hardBlock = getPwaHardInstallBlock();
-    box.style.display = hardBlock ? 'block' : 'none';
-    if (reason) reason.textContent = hardBlock ? hardBlock.message : '';
-    return hardBlock;
+    const permit = getVerifiedBrowserFallbackSession();
+    const finalResult = result || (permit ? {
+        state: 'PWA_UNAVAILABLE',
+        code: permit.code,
+        message: permit.mode === 'compatibility'
+            ? 'Chế độ tương thích trình duyệt đã được cấp tạm thời cho phiên này.'
+            : 'Thiết bị hiện không đáp ứng điều kiện cài PWA.'
+    } : null);
+
+    if (fallbackBox) fallbackBox.style.display = permit ? 'block' : 'none';
+    if (reason && permit) reason.textContent = finalResult?.message || '';
+
+    const showRequest = !permit && finalResult?.state === 'UNCERTAIN';
+    if (requestBox) requestBox.style.display = showRequest ? 'block' : 'none';
+
+    return finalResult;
 }
 
-function kichHoatCheDoTrinhDuyetDaXacMinh() {
+function capNhatBrowserFallbackDaXacMinh(diagnostics = null) {
     const hardBlock = getPwaHardInstallBlock();
-    if (!hardBlock) {
-        try { sessionStorage.removeItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY); } catch(e) {}
-        capNhatBrowserFallbackDaXacMinh();
-        setPwaInstallStatus('Thiết bị hiện không còn thuộc trường hợp được phép dùng chế độ trình duyệt. Hãy cài PWA theo hướng dẫn.', 'warn');
+    if (hardBlock) {
+        saveBrowserFallbackPermit(hardBlock, 'hard');
+        renderBrowserFallbackState(hardBlock);
+        return hardBlock;
+    }
+
+    const existing = getVerifiedBrowserFallbackSession();
+    if (existing) {
+        return renderBrowserFallbackState();
+    }
+
+    const result = diagnostics ? classifyPwaCompatibility(diagnostics, false) : null;
+    renderBrowserFallbackState(result);
+    return result;
+}
+
+async function yeuCauKiemTraTuongThichTrinhDuyet() {
+    setPwaInstallStatus('Đang kiểm tra nâng cao khả năng cài đặt và khả năng làm bài trên trình duyệt...', 'info');
+
+    await new Promise(resolve => setTimeout(resolve, 1800));
+    const diagnostics = await capNhatChanDoanPWA(false);
+    const result = classifyPwaCompatibility(diagnostics, true);
+
+    if (result.state === 'PWA_UNAVAILABLE' && result.code === 'android_install_failed_after_diagnostics') {
+        saveBrowserFallbackPermit(result, 'compatibility');
+        renderBrowserFallbackState(result);
+        setPwaInstallStatus('Đã mở chế độ tương thích trình duyệt cho phiên hiện tại.', 'warn');
         return;
     }
 
-    try {
-        sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY, JSON.stringify({
-            code: hardBlock.code,
-            verified_at: Date.now()
-        }));
-    } catch(e) {}
+    if (result.state === 'PWA_UNAVAILABLE') {
+        saveBrowserFallbackPermit(result, 'hard');
+        renderBrowserFallbackState(result);
+        return;
+    }
+
+    clearBrowserFallbackPermit();
+    renderBrowserFallbackState(result);
+
+    if (result.state === 'BROWSER_UNSUPPORTED') {
+        setPwaInstallStatus(result.message, 'warn');
+        return;
+    }
+
+    setPwaInstallStatus('Thiết bị hiện vẫn có khả năng cài PWA. Hãy tiếp tục cài ứng dụng theo hướng dẫn.', 'warn');
+}
+
+function kichHoatCheDoTrinhDuyetDaXacMinh() {
+    const permit = getVerifiedBrowserFallbackSession();
+    if (!permit) {
+        renderBrowserFallbackState();
+        setPwaInstallStatus('Quyền dùng chế độ trình duyệt chưa được xác minh hoặc đã hết hiệu lực. Hãy chạy kiểm tra lại.', 'warn');
+        return;
+    }
 
     renderSavedAccounts();
     showSection('login-section');
@@ -492,6 +668,8 @@ window.addEventListener('appinstalled', () => {
     if (btn) btn.style.display = 'none';
     const androidBox = document.getElementById('android-instructions');
     if (androidBox) androidBox.style.display = 'none';
+    clearBrowserFallbackPermit();
+    renderBrowserFallbackState({ state: 'INSTALLABLE', code: 'appinstalled' });
     setPwaInstallStatus('Đã cài ứng dụng. Hãy mở Đam San Exam từ màn hình chính.', 'ok');
     void capNhatChanDoanPWA(false);
 });
@@ -626,8 +804,16 @@ async function capNhatChanDoanPWA(showPanel = false) {
     if (diagnostics.installedHint && !isPwaStandaloneMode()) {
         panel.innerHTML += '<div style="margin-top:8px;color:#174ea6;"><b>Gợi ý:</b> thiết bị này từng báo cài thành công. Hãy tìm “Đam San Exam” trên màn hình chính và mở từ biểu tượng đó.</div>';
     }
-    const hardBlock = capNhatBrowserFallbackDaXacMinh();
-    diagnostics.hardInstallBlock = hardBlock ? hardBlock.code : null;
+    const compatibility = classifyPwaCompatibility(diagnostics, false);
+    diagnostics.compatibilityState = compatibility.state;
+    diagnostics.compatibilityCode = compatibility.code;
+    diagnostics.hardInstallBlock = compatibility.state === 'PWA_UNAVAILABLE' ? compatibility.code : null;
+
+    if (compatibility.state === 'PWA_UNAVAILABLE' && getPwaHardInstallBlock()) {
+        capNhatBrowserFallbackDaXacMinh(diagnostics);
+    } else if (showPanel) {
+        renderBrowserFallbackState(compatibility);
+    }
 
     if (showPanel) panel.classList.add('show');
     return diagnostics;

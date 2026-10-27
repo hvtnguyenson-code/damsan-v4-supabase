@@ -5,7 +5,7 @@ const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const html = fs.readFileSync('hoc_sinh.html', 'utf8');
 const js = fs.readFileSync('hoc_sinh.js', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-const version = '20261027-browser-fallback-088';
+const version = '20261027-browser-compat-088b';
 
 console.log('=== ANDROID PWA INSTALLABILITY 081 ===');
 
@@ -60,6 +60,22 @@ assert(js.includes("code: 'insecure_context'"), 'insecure-context hard-negative 
 assert(js.includes("sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY"), 'browser fallback permission must be session-scoped');
 assert(js.includes('getVerifiedBrowserFallbackSession()'), 'reload must revalidate browser fallback');
 assert(!js.includes("if (!deferredPrompt) {\n        sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY"), 'missing install prompt must never grant browser fallback');
+assert(html.includes('id="browser-compat-check-box"'), 'advanced compatibility check box must exist');
+assert(html.includes('id="btn-browser-compat-check"'), 'advanced compatibility check button must exist');
+assert(js.includes("'UNCERTAIN'"), 'multi-level PWA compatibility state must include UNCERTAIN');
+assert(js.includes("code: userConfirmedInstallFailure ? 'android_install_failed_after_diagnostics' : 'android_install_unverified'"), 'UNCERTAIN Android diagnostic code missing');
+assert(js.includes("'android_install_failed_after_diagnostics'"), 'soft Android compatibility exception code missing');
+assert(js.includes("state: 'BROWSER_UNSUPPORTED'"), 'unsafe old browser must be rejected');
+assert(js.includes('function getBrowserExamCapability()'), 'browser exam capability gate missing');
+assert(js.includes("if (typeof Promise !== 'function')"), 'Promise capability check missing');
+assert(js.includes("if (typeof fetch !== 'function')"), 'fetch capability check missing');
+assert(js.includes("if (typeof TextEncoder !== 'function')"), 'TextEncoder capability check missing');
+assert(js.includes("localStorage.setItem(key, '1')"), 'writable localStorage capability check missing');
+assert(js.includes('BROWSER_FALLBACK_TTL_MS = 2 * 60 * 60 * 1000'), 'compatibility permit must expire after 2 hours');
+assert(js.includes("isAndroidDevice() && diagnosticsReady && !diagnostics.installPrompt"), 'soft fallback must remain Android-only and diagnostics-gated');
+assert(js.includes("classifyPwaCompatibility(diagnostics, true)"), 'manual failure confirmation must trigger advanced classification');
+assert(js.includes("saveBrowserFallbackPermit(result, 'compatibility')"), 'compatibility permit must be explicitly issued');
+
 
 // P081-05: diagnostics cover the actionable install prerequisites.
 for (const token of [
