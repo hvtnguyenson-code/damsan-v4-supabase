@@ -313,7 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
             checkAndShowInstallButton();
         }
         capNhatBrowserFallbackDaXacMinh();
-        return; 
+        return;
     }
 
     // 2. KHÔI PHỤC DANH SÁCH TÀI KHOẢN ĐÃ LƯU (NẾU CÓ)
