@@ -21,7 +21,7 @@ assert(toggle.includes("dashTab.classList.contains('active')"), '082 must keep a
 assert(toggle.includes('maPhong'), '082 must keep selected-room guard');
 assert(toggle.includes('fetchDashboard(true);'), '082 fallback must reuse existing auto dashboard fetch');
 assert(html.includes('Tự động làm mới dự phòng (20s)'), '082 teacher UI must show 20-second fallback cadence');
-assert(html.includes('giaovien.js?v=20261026-room-control-watchdog-086'), '082 teacher cache-bust marker missing');
+assert(html.includes('giaovien.js?v=20261027-pwa-installability-087'), '082 teacher cache-bust marker missing');
 
 const realtime = section('function kichHoatLienKetRealtimeGiaoVien()', 'function switchTab');
 assert(realtime.includes("sb.channel('gv-ket-qua-master')"), '082 must preserve existing Realtime channel');
