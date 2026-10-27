@@ -300,7 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. KIỂM TRA CHẾ ĐỘ PWA (STANDALONE)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone || false;
     
-    if (!isStandalone && !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1')) {
+    const verifiedBrowserFallback = getVerifiedBrowserFallbackSession();
+    if (!isStandalone && !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1') && !verifiedBrowserFallback) {
         showSection('pwa-install-section');
         
         // KIỂM TRA NỀN TẢNG ĐỂ HIỂN THỊ UI PHÙ HỢP
@@ -311,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Chrome/Android/Desktop: Chờ deferredPrompt để hiện nút
             checkAndShowInstallButton();
         }
+        capNhatBrowserFallbackDaXacMinh();
         return; 
     }
 
@@ -363,6 +365,77 @@ function isAndroidDevice() {
 function isChromiumAndroid() {
     const ua = navigator.userAgent || '';
     return /Android/i.test(ua) && /(Chrome|Chromium|CriOS)/i.test(ua) && !/(EdgA|OPR|SamsungBrowser)/i.test(ua);
+}
+
+const VERIFIED_BROWSER_FALLBACK_SESSION_KEY = 'damsan_verified_browser_fallback';
+
+function getPwaHardInstallBlock() {
+    if (isPwaStandaloneMode()) return null;
+
+    const localDev = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const secure = window.isSecureContext || location.protocol === 'https:' || localDev;
+    if (!secure) {
+        return {
+            code: 'insecure_context',
+            message: 'Thiết bị đang ở môi trường không an toàn (không có HTTPS), nên PWA không thể được cài đặt.'
+        };
+    }
+
+    if (!('serviceWorker' in navigator)) {
+        return {
+            code: 'service_worker_unsupported',
+            message: 'Trình duyệt trên thiết bị này không hỗ trợ Service Worker — điều kiện bắt buộc của ứng dụng PWA Đam San.'
+        };
+    }
+
+    return null;
+}
+
+function getVerifiedBrowserFallbackSession() {
+    const hardBlock = getPwaHardInstallBlock();
+    if (!hardBlock) {
+        try { sessionStorage.removeItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY); } catch(e) {}
+        return null;
+    }
+
+    try {
+        const raw = sessionStorage.getItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY);
+        if (!raw) return null;
+        const saved = JSON.parse(raw);
+        if (saved && saved.code === hardBlock.code) return hardBlock;
+    } catch(e) {}
+    return null;
+}
+
+function capNhatBrowserFallbackDaXacMinh() {
+    const box = document.getElementById('browser-fallback-box');
+    const reason = document.getElementById('browser-fallback-reason');
+    if (!box) return null;
+
+    const hardBlock = getPwaHardInstallBlock();
+    box.style.display = hardBlock ? 'block' : 'none';
+    if (reason) reason.textContent = hardBlock ? hardBlock.message : '';
+    return hardBlock;
+}
+
+function kichHoatCheDoTrinhDuyetDaXacMinh() {
+    const hardBlock = getPwaHardInstallBlock();
+    if (!hardBlock) {
+        try { sessionStorage.removeItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY); } catch(e) {}
+        capNhatBrowserFallbackDaXacMinh();
+        setPwaInstallStatus('Thiết bị hiện không còn thuộc trường hợp được phép dùng chế độ trình duyệt. Hãy cài PWA theo hướng dẫn.', 'warn');
+        return;
+    }
+
+    try {
+        sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY, JSON.stringify({
+            code: hardBlock.code,
+            verified_at: Date.now()
+        }));
+    } catch(e) {}
+
+    renderSavedAccounts();
+    showSection('login-section');
 }
 
 function setPwaInstallStatus(message, kind = 'info') {
@@ -431,8 +504,11 @@ function checkAndShowInstallButton() {
         if (btn) btn.style.display = 'none';
         if (iosBox) iosBox.style.display = 'none';
         if (androidBox) androidBox.style.display = 'none';
+        capNhatBrowserFallbackDaXacMinh();
         return;
     }
+
+    capNhatBrowserFallbackDaXacMinh();
 
     if (isIOSDevice()) {
         if (btn) btn.style.display = 'none';
@@ -550,6 +626,9 @@ async function capNhatChanDoanPWA(showPanel = false) {
     if (diagnostics.installedHint && !isPwaStandaloneMode()) {
         panel.innerHTML += '<div style="margin-top:8px;color:#174ea6;"><b>Gợi ý:</b> thiết bị này từng báo cài thành công. Hãy tìm “Đam San Exam” trên màn hình chính và mở từ biểu tượng đó.</div>';
     }
+    const hardBlock = capNhatBrowserFallbackDaXacMinh();
+    diagnostics.hardInstallBlock = hardBlock ? hardBlock.code : null;
+
     if (showPanel) panel.classList.add('show');
     return diagnostics;
 }
