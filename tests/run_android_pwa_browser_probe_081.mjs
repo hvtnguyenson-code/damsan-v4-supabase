@@ -104,6 +104,15 @@ while (Date.now() < deadline) {
 
 const manifestInfo = await send('Page.getAppManifest');
 const installabilityErrors = await send('Page.getInstallabilityErrors');
+
+await send('Network.setUserAgentOverride', {
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+  platform: 'Windows'
+});
+await send('Page.reload', { ignoreCache: true });
+await sleep(1200);
+const desktopManifestInfo = await send('Page.getAppManifest');
+const desktopInstallabilityErrors = await send('Page.getInstallabilityErrors');
 const pngDimensions = (path) => {
   const buf = fs.readFileSync(path);
   if (buf.length < 24 || buf.toString('ascii', 1, 4) !== 'PNG') return null;
@@ -115,7 +124,7 @@ const iconFiles = {
 };
 process.stdout.write('=== PWA browser probe console ===\n');
 for (const line of consoleLines.slice(-80)) process.stdout.write(line + '\n');
-process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors, iconFiles }, null, 2) + '\n');
+process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors, desktopManifestInfo, desktopInstallabilityErrors, iconFiles }, null, 2) + '\n');
 
 try { ws.close(); } catch {}
 
