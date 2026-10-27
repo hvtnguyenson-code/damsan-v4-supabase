@@ -1,4 +1,4 @@
-const VERSION = '20261027-browser-fallback-088';
+const VERSION = '20261027-browser-compat-088b';
 const CACHE_NAME = 'damsan-exam-v' + VERSION;
 
 // PWA-INSTALL-081A: all student runtime dependencies required before login
