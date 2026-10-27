@@ -338,10 +338,10 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20261026-room-control-watchdog-086 in giaovien.html');
+  console.log('Test ROOM-ACT-05: Teacher cache bust is exact 20261027-pwa-installability-087 in giaovien.html');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261026-room-control-watchdog-086'),
-      'giaovien.html must include giaovien.js?v=20261026-room-control-watchdog-086');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261027-pwa-installability-087'),
+      'giaovien.html must include giaovien.js?v=20261027-pwa-installability-087');
     console.log('  -> PASSED');
   }
 
@@ -1262,30 +1262,30 @@ async function runAllTests() {
   // J. INVARIANTS (Tests 59 - 63)
   // =======================================================================
 
-  console.log('Test ROOM-ACT-59: Teacher exact version is 20261026-room-control-watchdog-086 across all test suites');
+  console.log('Test ROOM-ACT-59: Teacher exact version is 20261027-pwa-installability-087 across all test suites');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261026-room-control-watchdog-086'));
+    assert(gvHtmlSource.includes('giaovien.js?v=20261027-pwa-installability-087'));
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('giaovien.js?v=20261026-room-control-watchdog-086'));
+    assert(adminTest.includes('giaovien.js?v=20261027-pwa-installability-087'));
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('giaovien.js?v=20261026-room-control-watchdog-086'));
+    assert(cspTest.includes('giaovien.js?v=20261027-pwa-installability-087'));
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('giaovien.js?v=20261026-room-control-watchdog-086'));
+    assert(scoreTest.includes('giaovien.js?v=20261027-pwa-installability-087'));
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('giaovien.js?v=20261026-room-control-watchdog-086'));
+    assert(dashTest.includes('giaovien.js?v=20261027-pwa-installability-087'));
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-60: Student HTML/JS exact version is 20261026-room-control-watchdog-086');
+  console.log('Test ROOM-ACT-60: Student HTML/JS exact version is 20261027-pwa-installability-087');
   {
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261026-room-control-watchdog-086'));
-    assert(hsJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"));
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-pwa-installability-087'));
+    assert(hsJsSource.includes("const VERSION = '20261027-pwa-installability-087';"));
     console.log('  -> PASSED');
   }
 
-  console.log('Test ROOM-ACT-61: sw.js exact version is 20261026-room-control-watchdog-086');
+  console.log('Test ROOM-ACT-61: sw.js exact version is 20261027-pwa-installability-087');
   {
-    assert(swJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"));
+    assert(swJsSource.includes("const VERSION = '20261027-pwa-installability-087';"));
     console.log('  -> PASSED');
   }
 
