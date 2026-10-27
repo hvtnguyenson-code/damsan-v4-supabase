@@ -5,7 +5,7 @@ const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const html = fs.readFileSync('hoc_sinh.html', 'utf8');
 const js = fs.readFileSync('hoc_sinh.js', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-const version = '20261027-pwa-installability-087';
+const version = '20261027-browser-fallback-088';
 
 console.log('=== ANDROID PWA INSTALLABILITY 081 ===');
 
@@ -52,6 +52,14 @@ assert(js.includes('function schedulePwaInstallFallback'));
 assert(js.includes('if (!deferredPrompt)'));
 assert(js.includes("btn.textContent = deferredPrompt ? '✨ CÀI ĐẶT ỨNG DỤNG NGAY ✨' : '📱 HƯỚNG DẪN CÀI ĐẶT'"));
 assert(js.includes("window.addEventListener('appinstalled'"));
+assert(html.includes('id="btn-browser-fallback"'), 'verified browser fallback button must exist');
+assert(html.includes('id="browser-fallback-box"'), 'verified browser fallback container must exist');
+assert(js.includes("if (!('serviceWorker' in navigator))"), 'browser fallback hard-negative must require missing Service Worker');
+assert(js.includes("code: 'service_worker_unsupported'"), 'missing Service Worker hard-negative code missing');
+assert(js.includes("code: 'insecure_context'"), 'insecure-context hard-negative code missing');
+assert(js.includes("sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY"), 'browser fallback permission must be session-scoped');
+assert(js.includes('getVerifiedBrowserFallbackSession()'), 'reload must revalidate browser fallback');
+assert(!js.includes("if (!deferredPrompt) {\n        sessionStorage.setItem(VERIFIED_BROWSER_FALLBACK_SESSION_KEY"), 'missing install prompt must never grant browser fallback');
 
 // P081-05: diagnostics cover the actionable install prerequisites.
 for (const token of [
