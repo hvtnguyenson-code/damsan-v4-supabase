@@ -5,7 +5,7 @@ const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
 const html = fs.readFileSync('hoc_sinh.html', 'utf8');
 const js = fs.readFileSync('hoc_sinh.js', 'utf8');
 const sw = fs.readFileSync('sw.js', 'utf8');
-const version = '20261026-room-control-watchdog-086';
+const version = '20261027-pwa-installability-087';
 
 console.log('=== ANDROID PWA INSTALLABILITY 081 ===');
 
