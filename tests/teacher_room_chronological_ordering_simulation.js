@@ -993,21 +993,21 @@ async function runAllTests() {
     assert(gvHtmlSource.includes('giaovien.js?v=20261027-pwa-installability-087'),
       'giaovien.html must include giaovien.js?v=20261027-pwa-installability-087');
 
-    // Verify all other test suites require exact 028a
+    // Verify teacher-side test suites keep the exact teacher release marker
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('20261027-pwa-installability-087'), 'account_import_exceljs_csp must require 028a');
+    assert(cspTest.includes('20261027-pwa-installability-087'), 'account_import_exceljs_csp must keep the exact teacher release marker');
 
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('20261027-pwa-installability-087'), 'admin_frontend_session must require 028a');
+    assert(adminTest.includes('20261027-pwa-installability-087'), 'admin_frontend_session must keep the exact teacher release marker');
 
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('20261027-pwa-installability-087'), 'score_presentation must require 028a');
+    assert(scoreTest.includes('20261027-pwa-installability-087'), 'score_presentation must keep the exact teacher release marker');
 
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('20261027-pwa-installability-087'), 'teacher_dashboard must require 028a');
+    assert(dashTest.includes('20261027-pwa-installability-087'), 'teacher_dashboard must keep the exact teacher release marker');
 
     const roomActTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_room_control_action_reliability_simulation.js'), 'utf8');
-    assert(roomActTest.includes('20261027-pwa-installability-087'), 'teacher_room_control must require 028a');
+    assert(roomActTest.includes('20261027-pwa-installability-087'), 'teacher_room_control must keep the exact teacher release marker');
 
     // Student / SW current exact version
     assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-fallback-088'),
