@@ -102,9 +102,10 @@ while (Date.now() < deadline) {
 }
 
 const manifestInfo = await send('Page.getAppManifest');
+const installabilityErrors = await send('Page.getInstallabilityErrors');
 process.stdout.write('=== PWA browser probe console ===\n');
 for (const line of consoleLines.slice(-80)) process.stdout.write(line + '\n');
-process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo }, null, 2) + '\n');
+process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors }, null, 2) + '\n');
 
 try { ws.close(); } catch {}
 
