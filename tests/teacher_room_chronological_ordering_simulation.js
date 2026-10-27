@@ -988,7 +988,7 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ORDER-39: Version invariants: teacher exact 20261027-pwa-installability-087; student/SW exact 20261027-browser-fallback-088');
+  console.log('Test ORDER-39: Version invariants: teacher exact 20261027-pwa-installability-087; student/SW exact 20261027-browser-compat-088b');
   {
     assert(gvHtmlSource.includes('giaovien.js?v=20261027-pwa-installability-087'),
       'giaovien.html must include giaovien.js?v=20261027-pwa-installability-087');
@@ -1010,12 +1010,12 @@ async function runAllTests() {
     assert(roomActTest.includes('20261027-pwa-installability-087'), 'teacher_room_control must keep the exact teacher release marker');
 
     // Student / SW current exact version
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-fallback-088'),
-      'hoc_sinh.html must be 20261027-browser-fallback-088');
-    assert(hsJsSource.includes("const VERSION = '20261027-browser-fallback-088';"),
-      'hoc_sinh.js must be 20261027-browser-fallback-088');
-    assert(swJsSource.includes("const VERSION = '20261027-browser-fallback-088';"),
-      'sw.js must be 20261027-browser-fallback-088');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-browser-compat-088b'),
+      'hoc_sinh.html must be 20261027-browser-compat-088b');
+    assert(hsJsSource.includes("const VERSION = '20261027-browser-compat-088b';"),
+      'hoc_sinh.js must be 20261027-browser-compat-088b');
+    assert(swJsSource.includes("const VERSION = '20261027-browser-compat-088b';"),
+      'sw.js must be 20261027-browser-compat-088b');
     console.log('  -> PASSED');
   }
 
