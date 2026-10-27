@@ -529,13 +529,22 @@ async function capNhatChanDoanPWA(showPanel = false) {
     const row = (label, ok, okText, badText) =>
         '<div class="pwa-diag-row"><span>' + label + '</span><span class="' + (ok ? 'pwa-diag-ok' : 'pwa-diag-warn') + '">' + (ok ? okText : badText) + '</span></div>';
 
+    const platformRows = isIOSDevice()
+        ? [
+            row('iPhone / iPad', true, 'Safari / Home Screen', ''),
+            row('Cách cài đặt', true, 'Chia sẻ → Thêm vào màn hình chính', '')
+        ]
+        : [
+            row('Chrome Android', diagnostics.chromeAndroid, 'Đúng', isAndroidDevice() ? 'Trình duyệt khác' : 'Không phải Android'),
+            row('Khả năng cài tự động', diagnostics.installPrompt, 'Sẵn sàng', 'Chưa được trình duyệt cấp')
+        ];
+
     panel.innerHTML = [
         row('Kết nối an toàn (HTTPS)', diagnostics.secure, 'OK', 'Chưa đạt'),
         row('Manifest ứng dụng', diagnostics.manifest, 'OK', 'Chưa tải được'),
         row('Icon 192 / 512', diagnostics.icons, 'OK', 'Thiếu'),
         row('Service Worker', diagnostics.serviceWorker, 'OK', 'Chưa sẵn sàng'),
-        row('Chrome Android', diagnostics.chromeAndroid, 'Đúng', isAndroidDevice() ? 'Trình duyệt khác' : 'Không phải Android'),
-        row('Hộp thoại cài tự động', diagnostics.installPrompt, 'Sẵn sàng', 'Chưa được Chrome cấp')
+        ...platformRows
     ].join('');
 
     if (diagnostics.installedHint && !isPwaStandaloneMode()) {
