@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const verifiedBrowserFallback = getVerifiedBrowserFallbackSession();
     if (!isStandalone && !location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1') && !verifiedBrowserFallback) {
         showSection('pwa-install-section');
-        
+
         // KIỂM TRA NỀN TẢNG ĐỂ HIỂN THỊ UI PHÙ HỢP
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         if (isIOS) {
