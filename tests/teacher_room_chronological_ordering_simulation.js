@@ -988,34 +988,34 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ORDER-39: Version invariants: teacher exact 20261026-room-control-watchdog-086; student/SW exact 010a');
+  console.log('Test ORDER-39: Version invariants: teacher exact 20261027-pwa-installability-087; student/SW exact 010a');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261026-room-control-watchdog-086'),
-      'giaovien.html must include giaovien.js?v=20261026-room-control-watchdog-086');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261027-pwa-installability-087'),
+      'giaovien.html must include giaovien.js?v=20261027-pwa-installability-087');
 
     // Verify all other test suites require exact 028a
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('20261026-room-control-watchdog-086'), 'account_import_exceljs_csp must require 028a');
+    assert(cspTest.includes('20261027-pwa-installability-087'), 'account_import_exceljs_csp must require 028a');
 
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('20261026-room-control-watchdog-086'), 'admin_frontend_session must require 028a');
+    assert(adminTest.includes('20261027-pwa-installability-087'), 'admin_frontend_session must require 028a');
 
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('20261026-room-control-watchdog-086'), 'score_presentation must require 028a');
+    assert(scoreTest.includes('20261027-pwa-installability-087'), 'score_presentation must require 028a');
 
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('20261026-room-control-watchdog-086'), 'teacher_dashboard must require 028a');
+    assert(dashTest.includes('20261027-pwa-installability-087'), 'teacher_dashboard must require 028a');
 
     const roomActTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_room_control_action_reliability_simulation.js'), 'utf8');
-    assert(roomActTest.includes('20261026-room-control-watchdog-086'), 'teacher_room_control must require 028a');
+    assert(roomActTest.includes('20261027-pwa-installability-087'), 'teacher_room_control must require 028a');
 
     // Student / SW current exact version
-    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261026-room-control-watchdog-086'),
-      'hoc_sinh.html must remain 20261026-room-control-watchdog-086');
-    assert(hsJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"),
-      'hoc_sinh.js must remain 20261026-room-control-watchdog-086');
-    assert(swJsSource.includes("const VERSION = '20261026-room-control-watchdog-086';"),
-      'sw.js must remain 20261026-room-control-watchdog-086');
+    assert(hsHtmlSource.includes('hoc_sinh.js?v=20261027-pwa-installability-087'),
+      'hoc_sinh.html must remain 20261027-pwa-installability-087');
+    assert(hsJsSource.includes("const VERSION = '20261027-pwa-installability-087';"),
+      'hoc_sinh.js must remain 20261027-pwa-installability-087');
+    assert(swJsSource.includes("const VERSION = '20261027-pwa-installability-087';"),
+      'sw.js must remain 20261027-pwa-installability-087');
     console.log('  -> PASSED');
   }
 
