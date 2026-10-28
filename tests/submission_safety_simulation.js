@@ -1382,7 +1382,7 @@ assert(client.includes('if (!statusData.has_result) {') || client.includes('if (
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
-assert(client.includes('archiveFinalSnapshot(snapshot, \'room_attempt_changed\')'));
+assert(client.includes("'student_targeted_reset_receive'") && client.includes("'room_attempt_changed'"));
 assert(client.includes('return matches(JSON.parse(localStorage.getItem(key)))'));
 assert(client.includes('if (!archived) {'));
 assert(client.includes('p_student_token: token') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
