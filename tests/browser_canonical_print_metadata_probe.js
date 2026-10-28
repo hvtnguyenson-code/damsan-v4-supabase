@@ -62,6 +62,11 @@
           if (!rendered.includes('Thời gian: 20 phút (không kể thời gian phát đề)')) throw new Error('canonical duration missing');
           if (rendered.includes('Môn: Lịch sử - Lớp: 11')) throw new Error('stale subject/class leaked into canonical export');
 
+          if (!rendered.includes('data-choice-columns="4"')) throw new Error('short choices were not rendered as one 4-column row');
+          if (!rendered.includes('data-choice-columns="2"')) throw new Error('medium choices were not rendered as two equal columns');
+          if (!rendered.includes('data-choice-columns="1"')) throw new Error('long choices were not rendered as four single-column rows');
+          if (/tab-stops:|mso-tab-count/.test(rendered)) throw new Error('obsolete tab-based choice spacing leaked into canonical export');
+
           if (captured.bodyStyle?.font !== 'Arial' || Number(captured.bodyStyle?.size) !== 11) {
             throw new Error('manual Trộn đề font profile was not preserved');
           }
@@ -93,13 +98,35 @@
         payload: [{
           Phan: '1',
           MucDo: 'NB',
-          NoiDung: 'Nội dung câu hỏi Địa lí.',
-          DapAnA: 'Phương án A',
-          DapAnB: 'Phương án B',
-          DapAnC: 'Phương án C',
-          DapAnD: 'Phương án D',
+          NoiDung: 'Câu ngắn kiểm tra bố cục bốn phương án.',
+          DapAnA: '22/6.',
+          DapAnB: '22/12.',
+          DapAnC: '23/9.',
+          DapAnD: '21/3.',
           DapAnDung: 'A',
           CauSo: 'P1_1',
+          MaDe: '1041'
+        }, {
+          Phan: '1',
+          MucDo: 'TH',
+          NoiDung: 'Câu vừa kiểm tra bố cục hai phương án trên một hàng.',
+          DapAnA: 'phần dưới của lớp manti Trái Đất.',
+          DapAnB: 'toàn bộ lớp manti của Trái Đất.',
+          DapAnC: 'phần trên của lớp manti Trái Đất.',
+          DapAnD: 'nhân ngoài nằm sâu trong Trái Đất.',
+          DapAnDung: 'C',
+          CauSo: 'P1_2',
+          MaDe: '1041'
+        }, {
+          Phan: '1',
+          MucDo: 'VD',
+          NoiDung: 'Câu dài kiểm tra bố cục mỗi phương án trên một hàng riêng.',
+          DapAnA: 'hướng và tốc độ di chuyển của đối tượng địa lí trong toàn bộ khu vực nghiên cứu.',
+          DapAnB: 'phạm vi phân bố của đối tượng địa lí trên một vùng lãnh thổ rộng lớn và phức tạp.',
+          DapAnC: 'số lượng đối tượng tại từng điểm cụ thể trong toàn bộ không gian lãnh thổ được khảo sát.',
+          DapAnD: 'giá trị tổng cộng của hiện tượng theo từng đơn vị lãnh thổ trong phạm vi nghiên cứu.',
+          DapAnDung: 'B',
+          CauSo: 'P1_3',
           MaDe: '1041'
         }],
         printContext: {
