@@ -6,7 +6,7 @@ const v8 = fs.readFileSync('Tron_De_Trac_Nghiem_V8.html', 'utf8');
 const teacherHtml = fs.readFileSync('giaovien.html', 'utf8');
 
 // N077-01: native exporter is versioned and pinned to an explicit docx.js release.
-assert(exporter.includes("20261028-choice-grid-090"), 'N077-01 exporter version marker missing');
+assert(exporter.includes("20261028-choice-tabs-091"), 'N077-01 exporter version marker missing');
 assert(exporter.includes("const DOCX_VERSION = '9.10.0'"), 'N077-01 docx.js version must be pinned');
 assert(exporter.includes('cdn.jsdelivr.net/npm/docx@') && exporter.includes('unpkg.com/docx@'), 'N077-01 CDN fallback pair missing');
 
@@ -35,12 +35,14 @@ assert(exporter.includes("if (!type) throw new Error"), 'N077-05 unsupported ima
 assert(v8.includes('@page WordSection1 { size: 595.3pt 841.9pt; margin: ${top}pt ${right}pt ${bot}pt ${left}pt;'), 'N077-06 legacy A4 layout source changed');
 assert(v8.includes('function getChoiceColumnCount(a, b, c, d)'), 'N077-06 measured choice layout selector missing');
 assert(v8.includes("ctx.measureText(text).width * 72 / 96"), 'N077-06 real text-width measurement missing');
-assert(v8.includes("class=\"choice-grid choice-cols-"), 'N077-06 equal-width choice grid missing');
-assert(v8.includes("width:' + widthPercent + '%"), 'N077-06 explicit equal cell widths missing');
-assert(!v8.includes('tab-stops:120.0pt 240.0pt 360.0pt;'), 'N077-06 obsolete four-choice tab stops must be removed');
-assert(!v8.includes('mso-tab-count:1'), 'N077-06 obsolete tab-count spacing must be removed');
-assert(exporter.includes("compactChoiceGrid"), 'N077-06 native exporter must compact choice grids');
-assert(exporter.includes("cantSplit: compactChoiceGrid"), 'N077-06 choice rows must stay together in Word');
+assert(v8.includes('class="choice-tab-row choice-cols-'), 'N077-06 paragraph choice rows missing');
+assert(v8.includes('data-choice-item="1"'), 'N077-06 choice item markers missing');
+assert(!v8.includes('class="choice-grid'), 'N077-06 answer layout tables must be removed');
+assert(!v8.includes('mso-tab-count:1'), 'N077-06 legacy HTML tab-count spacing must be removed');
+assert(exporter.includes('choiceParagraphFromElement'), 'N077-06 native choice paragraph mapper missing');
+assert(exporter.includes('type: api.TabStopType.LEFT'), 'N077-06 native Word tab stops missing');
+assert(exporter.includes("text: '\\t'"), 'N077-06 native tab run missing');
+assert(exporter.includes("verticalValue === 'bottom'") && exporter.includes('api.VerticalAlign.TOP'), 'N077-06 table cell vertical alignment mapping missing');
 assert(v8.includes('Mã đề ${md} - Trang') && v8.includes('NUMPAGES'), 'N077-06 footer layout source changed');
 assert(v8.includes('----------HẾT---------'), 'N077-06 end-of-exam layout changed');
 
@@ -53,8 +55,8 @@ assert(v8.includes("replace(/\\.doc$/i, '.docx')"), 'N077-07 output extension mu
 assert(v8.includes('Chưa xuất file để tránh tạo Word giả'), 'N077-07 native failure must not silently emit a fake .doc');
 
 // N077-08: frame cache is busted so deployed browsers receive the new exporter immediately.
-assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261028-choice-layout-090'), 'N077-08 iframe cache marker missing');
-assert(v8.includes('print_docx_exporter.js?v=20261028-choice-grid-090'), 'N077-08 exporter cache marker missing');
+assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261028-choice-tabs-091'), 'N077-08 iframe cache marker missing');
+assert(v8.includes('print_docx_exporter.js?v=20261028-choice-tabs-091'), 'N077-08 exporter cache marker missing');
 
 // N077-09: online-room bridge remains present and independent.
 assert(v8.includes("data.type === 'DAMSAN_GET_EXAMS'") && v8.includes("type: 'DAMSAN_EXAMS'"), 'N077-09 original DAMSAN_GET_EXAMS bridge must remain available');
