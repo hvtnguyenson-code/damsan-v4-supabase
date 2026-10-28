@@ -24,7 +24,7 @@
       tryNext();
     })();
   </script>
-  <script src="print_docx_exporter.js?v=20261013-native-docx-078"></script>
+  <script src="print_docx_exporter.js?v=20261028-choice-grid-090"></script>
 
   <style>
     :root{
@@ -995,20 +995,95 @@
     return t.innerHTML.replace(/<br\s*\/?>/gi, '</p><p>').replace(/<p>\s*<\/p>/gi, '').trim();
   }
 
+  let choiceMeasureCanvas = null;
+
+  function choicePlainText(htmlCode) {
+    const holder = document.createElement('div');
+    holder.innerHTML = htmlCode || '';
+    return (holder.textContent || holder.innerText || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function choiceHasComplexBlock(htmlCode) {
+    return /<(?:img|table|br)\b/i.test(String(htmlCode || ''));
+  }
+
+  function printableContentWidthPt() {
+    const leftEl = document.getElementById('fp_margin_left');
+    const rightEl = document.getElementById('fp_margin_right');
+    const leftCm = Number(leftEl && leftEl.value) || 2;
+    const rightCm = Number(rightEl && rightEl.value) || 2;
+    return Math.max(280, 595.3 - cmToPt(leftCm) - cmToPt(rightCm));
+  }
+
+  function measureChoiceWidthPt(label, htmlCode) {
+    if (choiceHasComplexBlock(htmlCode)) return Number.POSITIVE_INFINITY;
+
+    const bodyCfg = fpConfig.body || {};
+    const sizePt = Number(bodyCfg.size) || 12;
+    const fontName = bodyCfg.font || 'Times New Roman';
+    const text = label + ' ' + choicePlainText(htmlCode);
+
+    try {
+      if (!choiceMeasureCanvas) choiceMeasureCanvas = document.createElement('canvas');
+      const ctx = choiceMeasureCanvas.getContext('2d');
+      if (ctx) {
+        ctx.font = sizePt + 'pt "' + fontName.replace(/"/g, '') + '"';
+        return ctx.measureText(text).width * 72 / 96;
+      }
+    } catch (e) {}
+
+    // Conservative fallback when canvas measurement is unavailable.
+    return text.length * sizePt * 0.48;
+  }
+
+  function getChoiceColumnCount(a, b, c, d) {
+    const raw = [a, b, c, d];
+    if (raw.some(choiceHasComplexBlock)) return 1;
+
+    const labels = ['A.', 'B.', 'C.', 'D.'];
+    const widths = raw.map((value, index) => measureChoiceWidthPt(labels[index], value));
+    const contentWidth = printableContentWidthPt();
+
+    // Reserve breathing room inside every invisible cell so Word never crowds choices.
+    const fourColumnLimit = contentWidth / 4 - 8;
+    if (widths.every(width => width <= fourColumnLimit)) return 4;
+
+    const twoColumnLimit = contentWidth / 2 - 10;
+    if (widths.every(width => width <= twoColumnLimit)) return 2;
+
+    return 1;
+  }
+
+  function choiceCellHtml(label, safeHtml, widthPercent) {
+    return '<td style="width:' + widthPercent + '%; border:none; padding:0 6pt 0 0; vertical-align:top; text-align:left;">'
+      + '<p style="margin:0; text-align:left; line-height:inherit;">' + label + ' ' + safeHtml + '</p>'
+      + '</td>';
+  }
+
   function getLayoutHtml(a, b, c, d, isPreview = false) {
-    let sa=safeTextForWord(a), sb=safeTextForWord(b), sc=safeTextForWord(c), sd=safeTextForWord(d);
-    let maxL = Math.max(sa.length, sb.length, sc.length, sd.length) + (a.includes('<img')||b.includes('<img')||c.includes('<img')||d.includes('<img')?40:0);
-    
-    if (isPreview) {
-      if (maxL > 35) return `<div style="margin-top:4px;"><div>A. ${sa}</div><div>B. ${sb}</div><div>C. ${sc}</div><div>D. ${sd}</div></div>`;
-      if (maxL > 14) return `<div style="margin-top:4px;"><div class="preview-flex-row"><div class="preview-flex-col">A. ${sa}</div><div class="preview-flex-col">B. ${sb}</div></div><div class="preview-flex-row"><div class="preview-flex-col">C. ${sc}</div><div class="preview-flex-col">D. ${sd}</div></div></div>`;
-      return `<div class="preview-flex-row" style="margin-top:4px;"><div class="preview-flex-col">A. ${sa}</div><div class="preview-flex-col">B. ${sb}</div><div class="preview-flex-col">C. ${sc}</div><div class="preview-flex-col">D. ${sd}</div></div>`;
-    } else {
-      const t = `<span style="mso-tab-count:1">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>`;
-      if (maxL > 35) return `<p>A. ${sa}</p><p>B. ${sb}</p><p>C. ${sc}</p><p>D. ${sd}</p>`;
-      if (maxL > 14) return `<p style="tab-stops:240.0pt;">A. ${sa}${t}B. ${sb}</p><p style="tab-stops:240.0pt;">C. ${sc}${t}D. ${sd}</p>`;
-      return `<p style="tab-stops:120.0pt 240.0pt 360.0pt;">A. ${sa}${t}B. ${sb}${t}C. ${sc}${t}D. ${sd}</p>`;
+    const safe = [safeTextForWord(a), safeTextForWord(b), safeTextForWord(c), safeTextForWord(d)];
+    const labels = ['A.', 'B.', 'C.', 'D.'];
+    const columns = getChoiceColumnCount(a, b, c, d);
+    const widthPercent = columns === 4 ? 25 : (columns === 2 ? 50 : 100);
+    const rows = [];
+
+    for (let start = 0; start < 4; start += columns) {
+      let cells = '';
+      for (let offset = 0; offset < columns; offset++) {
+        const index = start + offset;
+        if (index < 4) cells += choiceCellHtml(labels[index], safe[index], widthPercent);
+      }
+      rows.push('<tr>' + cells + '</tr>');
     }
+
+    return '<table class="choice-grid choice-cols-' + columns + '" border="0" cellspacing="0" cellpadding="0" '
+      + 'data-choice-columns="' + columns + '" '
+      + 'style="width:100%; border:none; border-collapse:collapse; table-layout:fixed; margin:'
+      + (isPreview ? '4px' : '0') + ' 0 0 0;">'
+      + rows.join('')
+      + '</table>';
   }
 
   function renderLine(cfgKey, text) {
