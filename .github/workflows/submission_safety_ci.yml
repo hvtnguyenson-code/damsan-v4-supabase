@@ -281,15 +281,14 @@ jobs:
           assert choice.tag == '{%s}p' % NS['w'], 'choice block must be a normal Word paragraph, not a table'
 
           choice_text = ''.join((t.text or '') for t in choice.findall('.//w:t', NS))
-          assert choice_text == 'A. MộtB. HaiC. BaD. Bốn', choice_text
+          assert choice_text.split('\t') == ['A. Một', 'B. Hai', 'C. Ba', 'D. Bốn'], repr(choice_text)
 
           tab_defs = choice.findall('./w:pPr/w:tabs/w:tab', NS)
           assert len(tab_defs) == 3, f'expected 3 native tab stops, got {len(tab_defs)}'
           positions = [int(tab.attrib['{%s}pos' % NS['w']]) for tab in tab_defs]
           spacings = [positions[0], positions[1] - positions[0], positions[2] - positions[1]]
           assert max(spacings) - min(spacings) <= 1, f'tab stops are not evenly spaced: {positions}'
-          tab_runs = choice.findall('.//w:tab', NS)
-          assert len(tab_runs) >= 3, f'expected native tab characters, got {len(tab_runs)}'
+          assert choice_text.count('\t') == 3, f'expected 3 tab characters, got {repr(choice_text)}'
 
           first_table = next(child for child in children if child.tag == '{%s}tbl' % NS['w'])
           header_cells = first_table.findall('./w:tr/w:tc', NS)
