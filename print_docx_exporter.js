@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  const VERSION = '20261028-choice-grid-090';
+  const VERSION = '20261028-choice-tabs-091';
   const DOCX_VERSION = '9.10.0';
   const MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const A4_WIDTH_TWIP = 11906;
@@ -364,7 +364,52 @@
     return true;
   }
 
+  async function choiceParagraphFromElement(api, el, inherited, ctx) {
+    const style = styleFromElement(el, inherited);
+    style.alignment = 'left';
+    style.beforePt = 0;
+    style.afterPt = 0;
+
+    const columns = Math.max(1, Math.min(4, Number(el.getAttribute('data-choice-columns')) || 1));
+    const items = Array.from(el.children || []).filter(function (child) {
+      return child.getAttribute && child.getAttribute('data-choice-item') === '1';
+    });
+
+    const runs = [];
+    for (let i = 0; i < items.length; i++) {
+      if (i > 0) {
+        runs.push(new api.TextRun({
+          text: '\t',
+          font: style.font || 'Times New Roman',
+          size: ptToHalfPoint(style.sizePt || 12)
+        }));
+      }
+      runs.push.apply(runs, await inlineChildren(api, items[i], styleFromElement(items[i], style), ctx));
+    }
+
+    const options = Object.assign(paragraphOptions(api, style), {
+      children: runs,
+      keepLines: true
+    });
+
+    if (columns > 1) {
+      const tabStops = [];
+      for (let i = 1; i < columns; i++) {
+        tabStops.push({
+          type: api.TabStopType.LEFT,
+          position: Math.round(ctx.contentWidthTwip * i / columns)
+        });
+      }
+      options.tabStops = tabStops;
+    }
+
+    return new api.Paragraph(options);
+  }
+
   async function paragraphFromElement(api, el, inherited, ctx) {
+    if (el.classList && el.classList.contains('choice-tab-row')) {
+      return choiceParagraphFromElement(api, el, inherited, ctx);
+    }
     const style = styleFromElement(el, inherited);
     const runs = await inlineChildren(api, el, style, ctx);
     return new api.Paragraph(Object.assign(paragraphOptions(api, style), { children: runs }));
@@ -425,7 +470,6 @@
     const columnPercents = inferColumnPercentages(table, maxColumns);
     const columnWidths = columnPercents.map(function (p) { return Math.max(1, Math.round(tableWidth * p / 100)); });
     const tableBordered = isBorderedTable(table);
-    const compactChoiceGrid = !!(table.classList && table.classList.contains('choice-grid'));
     const rows = [];
 
     for (const rowEl of rowElements) {
@@ -437,11 +481,6 @@
         colIndex += span;
 
         let cellStyle = styleFromElement(cellEl, inherited);
-        if (compactChoiceGrid) {
-          cellStyle.alignment = 'left';
-          cellStyle.beforePt = 0;
-          cellStyle.afterPt = 0;
-        }
         if (table.classList && table.classList.contains('da')) cellStyle.alignment = 'center';
         if (String(cellEl.tagName || '').toLowerCase() === 'th') {
           cellStyle.bold = true;
@@ -452,14 +491,19 @@
         if (!children.length) children = [new api.Paragraph({ children: [] })];
 
         const useBorder = tableBordered || cellHasBorder(cellEl);
+        const verticalValue = String((cellEl.style && cellEl.style.verticalAlign) || '').toLowerCase();
+        const verticalAlign = verticalValue === 'bottom'
+          ? api.VerticalAlign.BOTTOM
+          : (verticalValue === 'middle' || verticalValue === 'center')
+            ? api.VerticalAlign.CENTER
+            : api.VerticalAlign.TOP;
+
         const cellOptions = {
           children: children,
-          verticalAlign: api.VerticalAlign.CENTER,
+          verticalAlign: verticalAlign,
           width: { size: widthTwip, type: api.WidthType.DXA },
           borders: useBorder ? borderSingle(api) : borderNone(api),
-          margins: compactChoiceGrid
-            ? { top: 0, bottom: 0, left: 24, right: 72 }
-            : { top: 72, bottom: 72, left: 90, right: 90 }
+          margins: { top: 72, bottom: 72, left: 90, right: 90 }
         };
         if (span > 1) cellOptions.columnSpan = span;
         if (String(cellEl.tagName || '').toLowerCase() === 'th' && api.ShadingType) {
@@ -468,7 +512,7 @@
         cells.push(new api.TableCell(cellOptions));
       }
 
-      rows.push(new api.TableRow({ children: cells, cantSplit: compactChoiceGrid }));
+      rows.push(new api.TableRow({ children: cells, cantSplit: false }));
     }
 
     return new api.Table({
