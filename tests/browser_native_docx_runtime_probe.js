@@ -22,7 +22,12 @@
       '<p style="font-family:Times New Roman;font-size:12pt;font-weight:bold;text-align:justify;margin-top:12pt;margin-bottom:6pt">PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn.</p>',
       '<p style="font-family:Times New Roman;font-size:12pt;text-align:justify"><b>Câu 1:</b> Nội dung kiểm tra DOCX chuẩn.</p>',
       '<p></p>',
-      '<p style="font-family:Times New Roman;font-size:12pt">A. Một<span>&nbsp;&nbsp;</span>B. Hai<span>&nbsp;&nbsp;</span>C. Ba<span>&nbsp;&nbsp;</span>D. Bốn</p>',
+      '<table class="choice-grid choice-cols-4" data-choice-columns="4" border="0" cellspacing="0" cellpadding="0" style="width:100%;border:none;border-collapse:collapse;table-layout:fixed"><tr>' +
+        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">A. Một</p></td>' +
+        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">B. Hai</p></td>' +
+        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">C. Ba</p></td>' +
+        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">D. Bốn</p></td>' +
+      '</tr></table>',
       '<div align="center"><img src="' + tinyPng + '"></div>',
       '<table border="1" style="width:80%;margin:6pt auto"><tr><th>Năm</th><th>Giá trị</th></tr><tr><td>2025</td><td>100</td></tr></table>',
       '<p style="text-align:center;font-weight:bold;font-size:12pt;margin-top:20pt;margin-bottom:6pt">----------HẾT---------</p>',
