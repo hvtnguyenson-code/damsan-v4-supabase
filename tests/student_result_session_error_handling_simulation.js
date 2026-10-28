@@ -674,10 +674,10 @@ console.log('Test SESSION-RESULT-01: checkTeacherCommand manual + invalid_sessio
 // -------------------------------------------------------------------------
 (async () => {
     console.log('Test SESSION-RESULT-15: Version synchronization across hoc_sinh.js, sw.js, hoc_sinh.html');
-    const expectedVersion = '20261027-browser-compat-088b';
-    assert(hsJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: hoc_sinh.js VERSION is 20261027-browser-compat-088b');
-    assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20261027-browser-compat-088b');
-    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20261027-browser-compat-088b');
+    const expectedVersion = '20261028-targeted-reset-recovery-089';
+    assert(hsJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: hoc_sinh.js VERSION is 20261028-targeted-reset-recovery-089');
+    assert(swJsSource.includes(`const VERSION = '${expectedVersion}';`), 'SESSION-RESULT-15: sw.js VERSION is 20261028-targeted-reset-recovery-089');
+    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${expectedVersion}`), 'SESSION-RESULT-15: hoc_sinh.html script tag uses 20261028-targeted-reset-recovery-089');
     console.log('  -> PASSED');
 })()).then(() =>
 
