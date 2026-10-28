@@ -278,19 +278,29 @@ jobs:
           )
           assert q_pos + 1 < len(children), 'missing choice block after question'
           choice = children[q_pos + 1]
-          assert choice.tag == '{%s}tbl' % NS['w'], 'choice block must be an equal-width table, not tab-spaced text'
+          assert choice.tag == '{%s}p' % NS['w'], 'choice block must be a normal Word paragraph, not a table'
 
-          cells = choice.findall('./w:tr/w:tc', NS)
-          assert len(cells) == 4, f'expected 4 choice cells, got {len(cells)}'
-          texts = [''.join((t.text or '') for t in cell.findall('.//w:t', NS)) for cell in cells]
-          assert texts == ['A. Một', 'B. Hai', 'C. Ba', 'D. Bốn'], texts
+          choice_text = ''.join((t.text or '') for t in choice.findall('.//w:t', NS))
+          assert choice_text == 'A. MộtB. HaiC. BaD. Bốn', choice_text
 
-          grid = choice.find('w:tblGrid', NS)
-          widths = [int(col.attrib['{%s}w' % NS['w']]) for col in grid.findall('w:gridCol', NS)]
-          assert len(widths) == 4, widths
-          assert max(widths) - min(widths) <= 1, f'choice columns are not equal width: {widths}'
+          tab_defs = choice.findall('./w:pPr/w:tabs/w:tab', NS)
+          assert len(tab_defs) == 3, f'expected 3 native tab stops, got {len(tab_defs)}'
+          positions = [int(tab.attrib['{%s}pos' % NS['w']]) for tab in tab_defs]
+          spacings = [positions[0], positions[1] - positions[0], positions[2] - positions[1]]
+          assert max(spacings) - min(spacings) <= 1, f'tab stops are not evenly spaced: {positions}'
+          tab_runs = choice.findall('.//w:tab', NS)
+          assert len(tab_runs) >= 3, f'expected native tab characters, got {len(tab_runs)}'
 
-          print('PASS native DOCX choice grid uses four equal-width columns immediately after question')
+          first_table = next(child for child in children if child.tag == '{%s}tbl' % NS['w'])
+          header_cells = first_table.findall('./w:tr/w:tc', NS)
+          assert len(header_cells) >= 2, 'header table must contain two cells'
+          top_values = []
+          for cell in header_cells[:2]:
+              valign = cell.find('./w:tcPr/w:vAlign', NS)
+              top_values.append(None if valign is None else valign.attrib.get('{%s}val' % NS['w']))
+          assert top_values == ['top', 'top'], f'header cells must be top-aligned: {top_values}'
+
+          print('PASS native DOCX uses normal paragraph tabs for choices and top-aligned header cells')
           PY
       - name: Canonical room print metadata browser probe
         run: |
