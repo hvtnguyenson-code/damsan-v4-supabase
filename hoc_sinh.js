@@ -1717,8 +1717,35 @@ async function joinRoom(maPhongAuto = null) {
         }
 
         state.phong_id = phongData.id;
-        state.room_opened_at = phongData.thoi_gian_mo;
-        state.student_reset_version = Number(phongData.student_reset_version || 0);
+
+        const authoritativeRoomOpenedAt = phongData.thoi_gian_mo;
+        const authoritativeStudentResetVersion = Number(phongData.student_reset_version || 0);
+        const localSnapshotBeforeJoin = getFinalSnapshot();
+
+        if (localSnapshotBeforeJoin) {
+            const normGeneration = (value) => (value === null || value === undefined) ? null : String(value);
+            const roomGenerationChanged = normGeneration(localSnapshotBeforeJoin.room_opened_at) !== normGeneration(authoritativeRoomOpenedAt);
+            const studentGenerationChanged = Number(localSnapshotBeforeJoin.student_reset_version || 0) !== authoritativeStudentResetVersion;
+
+            if (roomGenerationChanged || studentGenerationChanged) {
+                const archiveReason = studentGenerationChanged ? 'student_targeted_reset_join' : 'room_attempt_changed_join';
+                const archived = archiveFinalSnapshot(localSnapshotBeforeJoin, archiveReason);
+                if (!archived) {
+                    localSnapshotBeforeJoin.recovery_archive_failed = true;
+                    localStorage.setItem(submissionKeys().final, JSON.stringify(localSnapshotBeforeJoin));
+                    throw new Error('Giáo viên đã reset lượt thi nhưng thiết bị chưa thể lưu bản sao bài cũ an toàn. Vui lòng báo giám thị trước khi vào lượt mới.');
+                }
+
+                clearSubmissionRetryTimer();
+                clearAutoSubmitInitialSendTimer();
+                clearActiveSubmissionKeys();
+                localStorage.removeItem('fatal_violation_' + state.ma_hs + '_' + state.phong_id);
+                isSubmitting = false;
+            }
+        }
+
+        state.room_opened_at = authoritativeRoomOpenedAt;
+        state.student_reset_version = authoritativeStudentResetVersion;
         kichHoatLienKetRealtime();
 
         const { data: statusData, error: statusError } = await _supabase.rpc('rpc_hoc_sinh_result_status', {
@@ -2940,13 +2967,28 @@ async function receiveFinalSubmission() {
             clearSubmissionRetryTimer();
             clearAutoSubmitInitialSendTimer();
             submissionRetryCount = 0;
-            const archived = archiveFinalSnapshot(snapshot, 'room_attempt_changed');
+            const archived = archiveFinalSnapshot(snapshot, data?.code === 'student_attempt_changed' ? 'student_targeted_reset_receive' : 'room_attempt_changed');
             if (!archived) {
                 console.warn('Room attempt changed but final evidence could not be archived; active keys preserved.');
                 alert('Không thể tạo bản sao khôi phục an toàn. Bài đã chốt vẫn được giữ trên thiết bị; vui lòng báo giám thị trước khi bắt đầu lượt mới.');
                 return;
             }
-            clearActiveSubmissionKeys();
+
+            const normGeneration = (value) => (value === null || value === undefined) ? null : String(value);
+            const clientAlreadyMovedToNewGeneration =
+                normGeneration(snapshot.room_opened_at) !== normGeneration(state.room_opened_at)
+                || Number(snapshot.student_reset_version || 0) !== Number(state.student_reset_version || 0);
+
+            const currentSnapshot = getFinalSnapshot();
+            if (!currentSnapshot || currentSnapshot.attempt_id === snapshot.attempt_id) {
+                clearActiveSubmissionKeys();
+            }
+
+            if (clientAlreadyMovedToNewGeneration) {
+                console.log('[submission-reset] Ignoring late stale-attempt response after client moved to the new generation.');
+                return;
+            }
+
             state.phong_id = null; state.room_opened_at = null; state.ma_de = '';
             state.cau_hoi = []; state.user_result = null; cheatCount = 0;
             dongTatCaRealtimeHocSinh();
