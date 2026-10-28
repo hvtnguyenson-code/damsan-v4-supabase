@@ -24,7 +24,7 @@
       tryNext();
     })();
   </script>
-  <script src="print_docx_exporter.js?v=20261028-choice-grid-090"></script>
+  <script src="print_docx_exporter.js?v=20261028-choice-tabs-091"></script>
 
   <style>
     :root{
@@ -1056,34 +1056,43 @@
     return 1;
   }
 
-  function choiceCellHtml(label, safeHtml, widthPercent) {
-    return '<td style="width:' + widthPercent + '%; border:none; padding:0 6pt 0 0; vertical-align:top; text-align:left;">'
-      + '<p style="margin:0; text-align:left; line-height:inherit;">' + label + ' ' + safeHtml + '</p>'
-      + '</td>';
+  function choiceItemHtml(label, safeHtml) {
+    return '<span class="choice-item" data-choice-item="1">' + label + ' ' + safeHtml + '</span>';
+  }
+
+  function choiceRowHtml(items, columns, isPreview) {
+    const gap = columns === 4 ? '0' : '0';
+    return '<p class="choice-tab-row choice-cols-' + columns + '" data-choice-columns="' + columns + '" '
+      + 'style="margin:' + (isPreview ? '4px' : '0') + ' 0 0 0; text-align:left; '
+      + 'display:grid; grid-template-columns:repeat(' + columns + ', minmax(0, 1fr)); column-gap:' + gap + ';">'
+      + items.join('')
+      + '</p>';
   }
 
   function getLayoutHtml(a, b, c, d, isPreview = false) {
-    const safe = [safeTextForWord(a), safeTextForWord(b), safeTextForWord(c), safeTextForWord(d)];
+    const raw = [a, b, c, d];
+    const safe = raw.map(safeTextForWord);
     const labels = ['A.', 'B.', 'C.', 'D.'];
     const columns = getChoiceColumnCount(a, b, c, d);
-    const widthPercent = columns === 4 ? 25 : (columns === 2 ? 50 : 100);
-    const rows = [];
 
-    for (let start = 0; start < 4; start += columns) {
-      let cells = '';
-      for (let offset = 0; offset < columns; offset++) {
-        const index = start + offset;
-        if (index < 4) cells += choiceCellHtml(labels[index], safe[index], widthPercent);
-      }
-      rows.push('<tr>' + cells + '</tr>');
+    if (columns === 1 && raw.some(choiceHasComplexBlock)) {
+      return safe.map((value, index) =>
+        '<div class="choice-single-block" data-choice-columns="1" style="margin:0; text-align:left;">'
+        + '<span class="choice-label">' + labels[index] + ' </span>' + value
+        + '</div>'
+      ).join('');
     }
 
-    return '<table class="choice-grid choice-cols-' + columns + '" border="0" cellspacing="0" cellpadding="0" '
-      + 'data-choice-columns="' + columns + '" '
-      + 'style="width:100%; border:none; border-collapse:collapse; table-layout:fixed; margin:'
-      + (isPreview ? '4px' : '0') + ' 0 0 0;">'
-      + rows.join('')
-      + '</table>';
+    const rows = [];
+    for (let start = 0; start < 4; start += columns) {
+      const items = [];
+      for (let offset = 0; offset < columns; offset++) {
+        const index = start + offset;
+        if (index < 4) items.push(choiceItemHtml(labels[index], safe[index]));
+      }
+      rows.push(choiceRowHtml(items, columns, isPreview));
+    }
+    return rows.join('');
   }
 
   function renderLine(cfgKey, text) {
