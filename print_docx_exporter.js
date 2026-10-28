@@ -5,7 +5,7 @@
 (function (global) {
   'use strict';
 
-  const VERSION = '20261013-native-docx-078';
+  const VERSION = '20261028-choice-grid-090';
   const DOCX_VERSION = '9.10.0';
   const MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
   const A4_WIDTH_TWIP = 11906;
@@ -425,6 +425,7 @@
     const columnPercents = inferColumnPercentages(table, maxColumns);
     const columnWidths = columnPercents.map(function (p) { return Math.max(1, Math.round(tableWidth * p / 100)); });
     const tableBordered = isBorderedTable(table);
+    const compactChoiceGrid = !!(table.classList && table.classList.contains('choice-grid'));
     const rows = [];
 
     for (const rowEl of rowElements) {
@@ -436,6 +437,11 @@
         colIndex += span;
 
         let cellStyle = styleFromElement(cellEl, inherited);
+        if (compactChoiceGrid) {
+          cellStyle.alignment = 'left';
+          cellStyle.beforePt = 0;
+          cellStyle.afterPt = 0;
+        }
         if (table.classList && table.classList.contains('da')) cellStyle.alignment = 'center';
         if (String(cellEl.tagName || '').toLowerCase() === 'th') {
           cellStyle.bold = true;
@@ -451,7 +457,9 @@
           verticalAlign: api.VerticalAlign.CENTER,
           width: { size: widthTwip, type: api.WidthType.DXA },
           borders: useBorder ? borderSingle(api) : borderNone(api),
-          margins: { top: 72, bottom: 72, left: 90, right: 90 }
+          margins: compactChoiceGrid
+            ? { top: 0, bottom: 0, left: 24, right: 72 }
+            : { top: 72, bottom: 72, left: 90, right: 90 }
         };
         if (span > 1) cellOptions.columnSpan = span;
         if (String(cellEl.tagName || '').toLowerCase() === 'th' && api.ShadingType) {
@@ -460,7 +468,7 @@
         cells.push(new api.TableCell(cellOptions));
       }
 
-      rows.push(new api.TableRow({ children: cells, cantSplit: false }));
+      rows.push(new api.TableRow({ children: cells, cantSplit: compactChoiceGrid }));
     }
 
     return new api.Table({
