@@ -14,20 +14,20 @@
       '<html><head><meta charset="utf-8"></head><body>',
       '<div class="WordSection1">',
       '<table border="0" style="width:100%"><tr>',
-      '<td style="white-space:nowrap;text-align:center"><p style="font-family:Times New Roman;font-size:12pt;font-weight:bold;text-align:center">TRƯỜNG PTDTNT THPT ĐAM SAN</p></td>',
-      '<td style="white-space:nowrap;text-align:center"><p style="font-family:Times New Roman;font-size:12pt;font-weight:bold;text-align:center">KIỂM TRA</p></td>',
+      '<td style="white-space:nowrap;text-align:center;vertical-align:top"><p style="font-family:Times New Roman;font-size:12pt;font-weight:bold;text-align:center">TRƯỜNG PTDTNT THPT ĐAM SAN</p></td>',
+      '<td style="white-space:nowrap;text-align:center;vertical-align:top"><p style="font-family:Times New Roman;font-size:12pt;font-weight:bold;text-align:center">KIỂM TRA</p></td>',
       '</tr></table>',
       '<hr/>',
       '<table style="width:100%"><tr><td>Họ tên học sinh: ................................ Lớp: ............</td><td><table><tr><td style="border:1pt solid #000;text-align:center"><b>MÃ ĐỀ: 101</b></td></tr></table></td></tr></table>',
       '<p style="font-family:Times New Roman;font-size:12pt;font-weight:bold;text-align:justify;margin-top:12pt;margin-bottom:6pt">PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn.</p>',
       '<p style="font-family:Times New Roman;font-size:12pt;text-align:justify"><b>Câu 1:</b> Nội dung kiểm tra DOCX chuẩn.</p>',
       '<p></p>',
-      '<table class="choice-grid choice-cols-4" data-choice-columns="4" border="0" cellspacing="0" cellpadding="0" style="width:100%;border:none;border-collapse:collapse;table-layout:fixed"><tr>' +
-        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">A. Một</p></td>' +
-        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">B. Hai</p></td>' +
-        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">C. Ba</p></td>' +
-        '<td style="width:25%;border:none;padding:0 6pt 0 0"><p style="margin:0;text-align:left">D. Bốn</p></td>' +
-      '</tr></table>',
+      '<p class="choice-tab-row choice-cols-4" data-choice-columns="4" style="margin:0;text-align:left">' +
+        '<span class="choice-item" data-choice-item="1">A. Một</span>' +
+        '<span class="choice-item" data-choice-item="1">B. Hai</span>' +
+        '<span class="choice-item" data-choice-item="1">C. Ba</span>' +
+        '<span class="choice-item" data-choice-item="1">D. Bốn</span>' +
+      '</p>',
       '<div align="center"><img src="' + tinyPng + '"></div>',
       '<table border="1" style="width:80%;margin:6pt auto"><tr><th>Năm</th><th>Giá trị</th></tr><tr><td>2025</td><td>100</td></tr></table>',
       '<p style="text-align:center;font-weight:bold;font-size:12pt;margin-top:20pt;margin-bottom:6pt">----------HẾT---------</p>',
