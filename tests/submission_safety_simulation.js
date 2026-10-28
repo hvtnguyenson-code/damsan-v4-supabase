@@ -1382,7 +1382,7 @@ assert(client.includes('if (!statusData.has_result) {') || client.includes('if (
 assert(client.includes('snapshot.state === SUBMISSION_STATE.SERVER_RECEIVED'));
 assert(client.includes('requestGrading(receipt.submission_id);'));
 assert(client.includes("data?.code === 'room_attempt_changed'"));
-assert(client.includes('archiveFinalSnapshot(snapshot, \'room_attempt_changed\')'));
+assert(client.includes("'student_targeted_reset_receive'") && client.includes("'room_attempt_changed'"));
 assert(client.includes('return matches(JSON.parse(localStorage.getItem(key)))'));
 assert(client.includes('if (!archived) {'));
 assert(client.includes('p_student_token: token') && client.includes('p_room_opened_at: snapshot.room_opened_at'));
@@ -1418,7 +1418,7 @@ assert(client.includes('dungPostReceiptLifecycleWatcher()'));
 const clientVersion = client.match(/const VERSION = '([^']+)'/)[1];
 const serviceWorkerVersion = serviceWorker.match(/const VERSION = '([^']+)'/)[1];
 assert.strictEqual(clientVersion, serviceWorkerVersion); // R19
-assert.strictEqual(clientVersion, '20261027-browser-compat-088b');
+assert.strictEqual(clientVersion, '20261028-targeted-reset-recovery-089');
 const migration01 = fs.readFileSync('supabase/migrations/20260828000001_submission_safety_p0.sql', 'utf8').replace(/\r\n/g, '\n');
 assert(!migration01.includes('v_legacy := public.nop_bai_va_cham_diem'));
 assert(migration01.includes('rpc_reset_room_results') && migration01.includes('rpc_grade_pending_room'));
@@ -2248,7 +2248,7 @@ assert(hsJs008b.includes("snapshot.truong_id === state.truong_id"), "R145: match
 recordR('R145');
 
 // R146: VERSION synchronized across hoc_sinh.js, sw.js, hoc_sinh.html script query
-const expectedVersion = '20261027-browser-compat-088b';
+const expectedVersion = '20261028-targeted-reset-recovery-089';
 assert(hsJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: hoc_sinh.js has updated VERSION");
 assert(swJs008b.includes(`const VERSION = '${expectedVersion}';`), "R146: sw.js has updated VERSION");
 assert(hsHtml008b.includes(`hoc_sinh.js?v=${expectedVersion}`), "R146: hoc_sinh.html has updated script query version");
@@ -3544,11 +3544,66 @@ const snapAfter197 = JSON.parse(envR197.localStore.get('final_damsan_room-197_hs
 assert.strictEqual(snapAfter197.state, 'FINAL_PENDING', "R197: FINAL_PENDING preserved");
 recordR('R197');
 
-for (let i = 25; i <= 197; i++) {
+// R198-R201: targeted reset must invalidate stale local FINAL evidence before join recovery.
+function reconcileJoinGenerationModel(snapshot, room, archiveOk = true) {
+  if (!snapshot) return { action: 'new_attempt', cleared: false, reason: null };
+  const norm = v => (v === null || v === undefined) ? null : String(v);
+  const roomChanged = norm(snapshot.room_opened_at) !== norm(room.thoi_gian_mo);
+  const studentChanged = Number(snapshot.student_reset_version || 0) !== Number(room.student_reset_version || 0);
+  if (!roomChanged && !studentChanged) return { action: 'recover_existing', cleared: false, reason: null };
+  if (!archiveOk) return { action: 'blocked', cleared: false, reason: null };
+  return {
+    action: 'new_attempt',
+    cleared: true,
+    reason: studentChanged ? 'student_targeted_reset_join' : 'room_attempt_changed_join'
+  };
+}
+const staleTargeted198 = { room_opened_at: 1000, student_reset_version: 0, attempt_id: 'old-198' };
+const room198 = { thoi_gian_mo: 1000, student_reset_version: 1 };
+const r198 = reconcileJoinGenerationModel(staleTargeted198, room198);
+assert.strictEqual(r198.action, 'new_attempt', 'R198: targeted reset must bypass stale FINAL recovery');
+assert.strictEqual(r198.cleared, true, 'R198: stale active submission keys cleared after verified archive');
+assert.strictEqual(r198.reason, 'student_targeted_reset_join', 'R198: targeted reset archived with explicit reason');
+assert(clientSource.includes('const localSnapshotBeforeJoin = getFinalSnapshot();'), 'R198: joinRoom checks local FINAL before recovery');
+assert(clientSource.includes("'student_targeted_reset_join'"), 'R198: joinRoom archives stale targeted-reset snapshot');
+recordR('R198');
+
+const staleRoom199 = { room_opened_at: 1000, student_reset_version: 0, attempt_id: 'old-199' };
+const r199 = reconcileJoinGenerationModel(staleRoom199, { thoi_gian_mo: 2000, student_reset_version: 0 });
+assert.strictEqual(r199.action, 'new_attempt', 'R199: room generation reset must bypass stale FINAL recovery');
+assert.strictEqual(r199.reason, 'room_attempt_changed_join', 'R199: room reset archive reason retained');
+recordR('R199');
+
+const sameGeneration200 = reconcileJoinGenerationModel(
+  { room_opened_at: 1000, student_reset_version: 2, attempt_id: 'same-200' },
+  { thoi_gian_mo: 1000, student_reset_version: 2 }
+);
+assert.strictEqual(sameGeneration200.action, 'recover_existing', 'R200: same-generation FINAL remains recoverable');
+recordR('R200');
+
+function lateResetResponseModel(oldSnapshot, currentState, currentSnapshot) {
+  const norm = v => (v === null || v === undefined) ? null : String(v);
+  const moved = norm(oldSnapshot.room_opened_at) !== norm(currentState.room_opened_at)
+    || Number(oldSnapshot.student_reset_version || 0) !== Number(currentState.student_reset_version || 0);
+  const clearCurrent = !currentSnapshot || currentSnapshot.attempt_id === oldSnapshot.attempt_id;
+  return { moved, clearCurrent, resetUi: !moved };
+}
+const r201 = lateResetResponseModel(
+  { attempt_id: 'old-201', room_opened_at: 1000, student_reset_version: 0 },
+  { room_opened_at: 1000, student_reset_version: 1 },
+  { attempt_id: 'new-201', room_opened_at: 1000, student_reset_version: 1 }
+);
+assert.strictEqual(r201.moved, true, 'R201: late response recognizes newer targeted-reset generation');
+assert.strictEqual(r201.clearCurrent, false, 'R201: late old-attempt response must not clear new attempt');
+assert.strictEqual(r201.resetUi, false, 'R201: late old-attempt response must not kick user out of new attempt');
+assert(clientSource.includes('clientAlreadyMovedToNewGeneration'), 'R201: runtime contains late-response generation guard');
+recordR('R201');
+
+for (let i = 25; i <= 201; i++) {
   assert(rCoverage['R' + i], "missing coverage for R" + i);
 }
 
-console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R197; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
+console.log('PASS: deterministic P0 recovery simulation (C1-C12, R1-R201; P0-006A post-receipt lifecycle watcher; P0-007 student result publication status; P0-008A/B token-bound student RPC cutover V2; 010A low-load retry, deadline smoothing & quiescence; not a Supabase load test)');
 
 })().catch(err => {
   console.error(err);
