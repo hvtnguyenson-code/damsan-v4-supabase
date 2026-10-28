@@ -65,7 +65,9 @@
           if (!rendered.includes('data-choice-columns="4"')) throw new Error('short choices were not rendered as one 4-column row');
           if (!rendered.includes('data-choice-columns="2"')) throw new Error('medium choices were not rendered as two equal columns');
           if (!rendered.includes('data-choice-columns="1"')) throw new Error('long choices were not rendered as four single-column rows');
-          if (/tab-stops:|mso-tab-count/.test(rendered)) throw new Error('obsolete tab-based choice spacing leaked into canonical export');
+          if (/tab-stops:|mso-tab-count/.test(rendered)) throw new Error('legacy HTML tab spacing leaked into canonical export');
+          if (!rendered.includes('class="choice-tab-row')) throw new Error('native paragraph choice rows missing');
+          if (rendered.includes('class="choice-grid')) throw new Error('answer choices must not be wrapped in Word layout tables');
 
           if (captured.bodyStyle?.font !== 'Arial' || Number(captured.bodyStyle?.size) !== 11) {
             throw new Error('manual Trộn đề font profile was not preserved');
