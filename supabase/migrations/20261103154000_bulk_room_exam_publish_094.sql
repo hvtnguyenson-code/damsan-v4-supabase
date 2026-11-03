@@ -22,6 +22,8 @@ declare
   v_result jsonb;
   v_results jsonb := '[]'::jsonb;
   v_count integer := 0;
+  v_error_detail text;
+  v_error_message text;
 begin
   if p_ma_phong_list is null or cardinality(p_ma_phong_list) = 0 then
     return jsonb_build_object('status','error','code','room_list_empty','message','Danh sách phòng không được để trống.');
@@ -75,11 +77,14 @@ begin
       v_count := v_count + 1;
     end loop;
   exception when others then
+    get stacked diagnostics
+      v_error_detail = PG_EXCEPTION_DETAIL,
+      v_error_message = MESSAGE_TEXT;
     return jsonb_build_object(
       'status','error',
       'code','bulk_room_publish_failed',
       'message','Đẩy đồng loạt thất bại; toàn bộ thay đổi trong lần này đã được rollback.',
-      'detail', coalesce(pg_exception_detail, sqlerrm)
+      'detail', coalesce(nullif(v_error_detail,''), v_error_message)
     );
   end;
 
