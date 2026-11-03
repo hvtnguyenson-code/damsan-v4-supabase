@@ -30,7 +30,7 @@ console.log('=== AUTOHEIGHT + MULTIROOM PUBLISH 094 ===');
 
 // Scroll: parent owns the only vertical scrollbar.
 assert(teacherHtml.includes('scrolling="no"'), 'A094-01 iframe scrolling=no missing');
-assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-autoheight-094'), 'A094-02 iframe cache marker missing');
+assert(teacherHtml.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-preview-scroll-095'), 'A094-02 iframe cache marker missing');
 assert(mixer.includes("type: 'DAMSAN_FRAME_HEIGHT'"), 'A094-03 child height message missing');
 assert(mixer.includes("data.type === 'DAMSAN_REQUEST_FRAME_HEIGHT'"), 'A094-04 parent height request handler missing');
 assert(mixer.includes("document.documentElement.style.overflowY = 'hidden'"), 'A094-05 embedded root scrollbar must be hidden');
@@ -41,6 +41,17 @@ const autoHeightBody = body(teacherJs, 'initMixerAutoHeight');
 assert(autoHeightBody.includes("data.type !== 'DAMSAN_FRAME_HEIGHT'"), 'A094-09 parent height listener missing');
 assert(autoHeightBody.includes("currentFrame.style.height = Math.ceil(height + 2) + 'px'"), 'A094-10 parent must resize iframe height');
 assert(autoHeightBody.includes("frame.setAttribute('scrolling', 'no')"), 'A094-11 parent must explicitly disable iframe scroll');
+
+// 095: measure stable natural content, never the iframe viewport, so ResizeObserver cannot ratchet height forever.
+const childHeightBody = body(mixer, 'getEmbeddedContentHeight');
+assert(childHeightBody.includes("document.querySelector('.container')"), 'A095-01 stable content root missing');
+assert(childHeightBody.includes('getBoundingClientRect()'), 'A095-02 natural content measurement missing');
+assert(!childHeightBody.includes('scrollHeight'), 'A095-03 viewport-coupled scrollHeight must not drive embedded height');
+assert(mixer.includes('const height = getEmbeddedContentHeight();'), 'A095-04 height bridge must use stable content measurement');
+assert(mixer.includes('max-height:min(1123px, calc(100% - 40px))'), 'A095-05 preview must be capped instead of stretching the page');
+assert(mixer.includes('overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-gutter:stable;'), 'A095-06 preview must own its vertical scroll');
+const previewBody = body(mixer, 'previewExam');
+assert(previewBody.includes('previewContent.scrollTop = 0'), 'A095-07 preview scroll must reset to the top when opened');
 
 // Multiple room codes: normalize/dedupe, same draft regardless of target order.
 const parseBody = body(teacherJs, 'parseRoomCodeList');

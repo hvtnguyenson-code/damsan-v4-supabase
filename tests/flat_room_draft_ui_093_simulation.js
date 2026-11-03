@@ -29,7 +29,7 @@ assert(js.includes("addBtn.style.display = supported ? 'inline-block' : 'none';"
 assert(js.includes("legacyBtn.style.display = supported ? 'none' : 'inline-block';"), 'UI093-13 legacy button must reappear on rollback');
 assert(js.includes('class="room-exam-draft-item"'), 'UI093-14 flat draft row renderer missing');
 assert(!js.includes('background:#f0fdf4'), 'UI093-15 nested green draft cards must be removed');
-assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-autoheight-094'), 'UI093-16 print/mixer 091 must remain untouched');
+assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-preview-scroll-095'), 'UI093-16 print/mixer 091 must remain untouched');
 assert(js.includes('const MULTI_SOURCE_ROOM_DRAFT_ENABLED = true;'), 'UI093-17 092 feature logic must remain enabled');
 
 console.log('FLAT_ROOM_DRAFT_UI_093_PASS');

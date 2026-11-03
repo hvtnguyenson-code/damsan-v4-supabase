@@ -31,7 +31,7 @@ assert(js.includes('const MULTI_SOURCE_ROOM_DRAFT_ENABLED = true;'), 'MS092-01 f
 assert(html.includes('id="legacyRoomExamDirectPushBtn"') && html.includes('onclick="layDeTuIframe(this)"'), 'MS092-02 legacy direct push must remain in DOM');
 assert(html.includes('id="roomExamDraftPanel"') && html.includes('id="btnAddMixerBatchToDraft"') && html.includes('id="btnPublishRoomExamDraft"'), 'MS092-03 draft UI missing');
 assert(html.indexOf('id="roomExamDraftPanel"') < html.indexOf('id="frameV8"'), 'MS092-04 draft UI must stay outside mixer iframe');
-assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-autoheight-094'), 'MS092-05 print/mixer 091 must remain unchanged');
+assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-preview-scroll-095'), 'MS092-05 print/mixer 091 must remain unchanged');
 
 // 06-09: local-only draft storage.
 assert(js.includes("ROOM_EXAM_DRAFT_DB_NAME = 'damsan_room_exam_drafts_v1'"), 'MS092-06 IndexedDB draft store missing');
