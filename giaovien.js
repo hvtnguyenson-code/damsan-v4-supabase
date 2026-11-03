@@ -654,9 +654,11 @@ async function roomExamDraftReadCurrentMixer() {
 function initMultiSourceRoomDraftUi() {
     const panel = document.getElementById('roomExamDraftPanel');
     const legacyBtn = document.getElementById('legacyRoomExamDirectPushBtn');
-    if (!panel || !legacyBtn) return;
+    const addBtn = document.getElementById('btnAddMixerBatchToDraft');
+    if (!panel || !legacyBtn || !addBtn) return;
     const supported = MULTI_SOURCE_ROOM_DRAFT_ENABLED && !!window.indexedDB;
     panel.style.display = supported ? 'block' : 'none';
+    addBtn.style.display = supported ? 'inline-block' : 'none';
     legacyBtn.style.display = supported ? 'none' : 'inline-block';
     if (!supported) return;
 
@@ -710,10 +712,10 @@ async function renderRoomExamDraftUi() {
         list.innerHTML = draft.batches.map((batch, index) => {
             const codes = roomExamDraftCodes(batch.exams || []);
             const perCode = roomExamDraftQuestionCountPerCode(batch.exams || [], codes);
-            return '<div style="display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid #d1fae5; border-radius:6px; background:#f0fdf4;">'
-                + '<div><b>' + safeHTML(batch.sourceLabel || ('Đề gốc ' + (index + 1))) + '</b><span style="color:#64748b;"> — '
+            return '<div class="room-exam-draft-item">'
+                + '<div><b>' + safeHTML(batch.sourceLabel || ('Đề gốc ' + (index + 1))) + '</b><span class="room-exam-draft-meta"> — '
                 + codes.length + ' mã: ' + safeHTML(codes.join(', ')) + (perCode ? ' • ' + perCode + ' câu/mã' : '') + '</span></div>'
-                + '<button type="button" onclick="xoaMotDeGocKhoiBoDePhong(\'' + batch.batchId + '\')" style="border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:5px; padding:5px 8px; cursor:pointer;">Xóa khỏi bộ tạm</button></div>';
+                + '<button class="room-exam-draft-remove" type="button" onclick="xoaMotDeGocKhoiBoDePhong(\'' + batch.batchId + '\')">Xóa</button></div>';
         }).join('');
 
         if (log) log.innerText = "Draft chỉ lưu trên máy này; chưa ghi dữ liệu nào vào phòng thi.";
