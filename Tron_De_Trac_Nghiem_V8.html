@@ -272,8 +272,14 @@
 
   function notifyParentFrameHeight() {
     if (window.parent === window) return;
-    if (frameHeightRaf) cancelAnimationFrame(frameHeightRaf);
-    frameHeightRaf = requestAnimationFrame(() => {
+    if (frameHeightRaf) {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frameHeightRaf);
+      else clearTimeout(frameHeightRaf);
+    }
+    const scheduleFrame = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (callback) => setTimeout(callback, 0);
+    frameHeightRaf = scheduleFrame(() => {
       frameHeightRaf = 0;
       const bodyHeight = document.body ? document.body.scrollHeight : 0;
       const rootHeight = document.documentElement ? document.documentElement.scrollHeight : 0;
@@ -288,14 +294,16 @@
   }
 
   if (window.parent !== window) {
-    document.documentElement.style.overflowY = 'hidden';
-    if (document.body) document.body.style.overflowY = 'hidden';
+    if (document.documentElement && document.documentElement.style) {
+      document.documentElement.style.overflowY = 'hidden';
+    }
+    if (document.body && document.body.style) document.body.style.overflowY = 'hidden';
     window.addEventListener('load', notifyParentFrameHeight);
     window.addEventListener('resize', notifyParentFrameHeight);
 
     if (typeof ResizeObserver === 'function') {
       const frameResizeObserver = new ResizeObserver(() => notifyParentFrameHeight());
-      frameResizeObserver.observe(document.documentElement);
+      if (document.documentElement) frameResizeObserver.observe(document.documentElement);
       if (document.body) frameResizeObserver.observe(document.body);
     }
 
