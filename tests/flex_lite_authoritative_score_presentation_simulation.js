@@ -430,12 +430,12 @@ console.log('Test SCORE-UI-14: SHORT_ONLY puts full score into P3');
 // -------------------------------------------------------------------------
 console.log('Test SCORE-UI-15: Version cache invalidation across all files');
 {
-    const teacherVersion = '20261027-pwa-installability-087';
+    const teacherVersion = '20261028-multi-source-room-draft-092';
     const studentVersion = '20261028-targeted-reset-recovery-089';
-    assert(gvHtmlSource.includes(`giaovien.js?v=${teacherVersion}`), 'SCORE-UI-15: giaovien.html must include giaovien.js?v=20261027-pwa-installability-087');
-    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${studentVersion}`), 'SCORE-UI-15: hoc_sinh.html must include hoc_sinh.js?v=20261027-pwa-installability-087');
-    assert(hsJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: hoc_sinh.js must define const VERSION = 20261027-pwa-installability-087');
-    assert(swJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: sw.js must define const VERSION = 20261027-pwa-installability-087');
+    assert(gvHtmlSource.includes(`giaovien.js?v=${teacherVersion}`), 'SCORE-UI-15: giaovien.html must include giaovien.js?v=20261028-multi-source-room-draft-092');
+    assert(hsHtmlSource.includes(`hoc_sinh.js?v=${studentVersion}`), 'SCORE-UI-15: hoc_sinh.html must include hoc_sinh.js?v=20261028-multi-source-room-draft-092');
+    assert(hsJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: hoc_sinh.js must define const VERSION = 20261028-multi-source-room-draft-092');
+    assert(swJsSource.includes(`const VERSION = '${studentVersion}';`), 'SCORE-UI-15: sw.js must define const VERSION = 20261028-multi-source-room-draft-092');
     console.log('  -> PASSED');
 }
 
