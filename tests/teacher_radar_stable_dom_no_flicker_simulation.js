@@ -1261,9 +1261,9 @@ async function runAllTests() {
   // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
   // =======================================================================
 
-  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261027-pwa-installability-087');
+  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261028-multi-source-room-draft-092');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261027-pwa-installability-087'), 'Must load 20261027-pwa-installability-087');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261028-multi-source-room-draft-092'), 'Must load 20261028-multi-source-room-draft-092');
     console.log('  -> PASSED');
   }
 
@@ -1275,7 +1275,7 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-41: Other test suites are updated to 20261027-pwa-installability-087');
+  console.log('Test STABLE-41: Other test suites are updated to 20261028-multi-source-room-draft-092');
   {
     const suites = [
       'tests/account_import_exceljs_csp_simulation.js',
@@ -1287,7 +1287,7 @@ async function runAllTests() {
     ];
     for (const s of suites) {
       const content = fs.readFileSync(path.join(repoRoot, s), 'utf8');
-      assert(content.includes('20261027-pwa-installability-087'), `${s} must require 20261027-pwa-installability-087`);
+      assert(content.includes('20261028-multi-source-room-draft-092'), `${s} must require 20261028-multi-source-room-draft-092`);
     }
     console.log('  -> PASSED');
   }

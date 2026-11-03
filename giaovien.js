@@ -9,6 +9,10 @@ let activeWorkspaceMonId = null;
 let activeWorkspaceTruongId = null;
 
 const FLEX_LITE_TEACHER_CONFIG_ENABLED = true;
+const MULTI_SOURCE_ROOM_DRAFT_ENABLED = true;
+const ROOM_EXAM_DRAFT_DB_NAME = 'damsan_room_exam_drafts_v1';
+const ROOM_EXAM_DRAFT_STORE = 'drafts';
+const ROOM_EXAM_DRAFT_SCHEMA = 1;
 
 function readFlexLiteWeight(id) {
     const raw = document.getElementById(id)?.value;
@@ -522,6 +526,341 @@ let g_sysMonList = new Array();
 let autoRefreshInterval = null;
 let globalFetchDashId = 0; 
 let qrtState = { pending: new Array(), valid: new Array(), mode: '', params: {} };
+let roomExamDraftDbPromise = null;
+let roomExamDraftUiBound = false;
+
+function roomExamDraftOpenDb() {
+    if (!MULTI_SOURCE_ROOM_DRAFT_ENABLED || !window.indexedDB) {
+        return Promise.reject(new Error("Trình duyệt không hỗ trợ vùng lưu bộ đề tạm an toàn."));
+    }
+    if (roomExamDraftDbPromise) return roomExamDraftDbPromise;
+    roomExamDraftDbPromise = new Promise((resolve, reject) => {
+        const req = window.indexedDB.open(ROOM_EXAM_DRAFT_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(ROOM_EXAM_DRAFT_STORE)) {
+                db.createObjectStore(ROOM_EXAM_DRAFT_STORE, { keyPath: 'key' });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error("Không mở được bộ đề tạm."));
+        req.onblocked = () => reject(new Error("Bộ đề tạm đang bị khóa bởi tab khác."));
+    });
+    return roomExamDraftDbPromise;
+}
+
+async function roomExamDraftGet(key) {
+    const db = await roomExamDraftOpenDb();
+    return new Promise((resolve, reject) => {
+        const req = db.transaction(ROOM_EXAM_DRAFT_STORE, 'readonly').objectStore(ROOM_EXAM_DRAFT_STORE).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error || new Error("Không đọc được bộ đề tạm."));
+    });
+}
+
+async function roomExamDraftPut(draft) {
+    const db = await roomExamDraftOpenDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(ROOM_EXAM_DRAFT_STORE, 'readwrite');
+        tx.objectStore(ROOM_EXAM_DRAFT_STORE).put(draft);
+        tx.oncomplete = () => resolve(draft);
+        tx.onerror = () => reject(tx.error || new Error("Không lưu được bộ đề tạm."));
+        tx.onabort = () => reject(tx.error || new Error("Lưu bộ đề tạm bị hủy."));
+    });
+}
+
+async function roomExamDraftDelete(key) {
+    const db = await roomExamDraftOpenDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(ROOM_EXAM_DRAFT_STORE, 'readwrite');
+        tx.objectStore(ROOM_EXAM_DRAFT_STORE).delete(key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error || new Error("Không xóa được bộ đề tạm."));
+    });
+}
+
+function roomExamDraftContext(maPhong) {
+    const roomCode = String(maPhong || '').trim();
+    if (!roomCode) throw new Error("Vui lòng nhập Mã Phòng Thi.");
+    const teacherKey = String(gvData?.id || gvData?.ma_gv || '').trim();
+    const schoolId = String((activeWorkspaceTruongId && activeWorkspaceTruongId !== 'ALL') ? activeWorkspaceTruongId : (gvData?.truong_id || '')).trim();
+    const monId = String((activeWorkspaceMonId && activeWorkspaceMonId !== 'ALL') ? activeWorkspaceMonId : (gvData?.mon_id || '')).trim();
+    if (!teacherKey || !schoolId || !monId) throw new Error("Chưa xác định đủ giáo viên, trường và bộ môn.");
+    return {
+        teacherKey, schoolId, monId, roomCode,
+        key: [ROOM_EXAM_DRAFT_SCHEMA, teacherKey, schoolId, monId, roomCode.toUpperCase()].join('::')
+    };
+}
+
+function roomExamDraftConfigSignature(config) {
+    if (!config) return 'null';
+    const sc = config.scoring_config || {};
+    return JSON.stringify({
+        assessment_type: config.assessment_type || null,
+        scoring_config: { p1_weight: sc.p1_weight ?? null, p2_weight: sc.p2_weight ?? null, p3_weight: sc.p3_weight ?? null }
+    });
+}
+
+function roomExamDraftCodes(exams) {
+    return Array.from(new Set((exams || []).map(q => String(q.MaDe ?? q.ma_de ?? '').trim()).filter(Boolean)))
+        .sort((a, b) => a.localeCompare(b, 'vi', { numeric: true }));
+}
+
+function roomExamDraftCombinedExams(draft) {
+    const all = [];
+    for (const batch of (draft?.batches || [])) for (const exam of (batch.exams || [])) all.push(exam);
+    return all;
+}
+
+function roomExamDraftQuestionCountPerCode(exams, codes) {
+    if (!codes?.length) return 0;
+    return Math.min(...codes.map(code => (exams || []).filter(q => String(q.MaDe ?? q.ma_de ?? '') === code).length));
+}
+
+async function roomExamDraftReadCurrentMixer() {
+    const iframeEl = document.getElementById('frameV8');
+    if (!iframeEl || !iframeEl.contentWindow) throw new Error("Công cụ Trộn đề chưa sẵn sàng.");
+
+    const iframeWindow = iframeEl.contentWindow;
+    let iframeOrigin = window.location.origin;
+    try {
+        const parsed = new URL(iframeEl.src, window.location.href);
+        iframeOrigin = parsed.origin && parsed.origin !== 'null' ? parsed.origin : window.location.origin;
+    } catch (e) {}
+    if (!iframeOrigin || iframeOrigin === 'null') throw new Error("Bridge Trộn đề chỉ hỗ trợ HTTP/HTTPS cùng origin.");
+
+    const requestId = 'room_draft_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+    const payload = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            window.removeEventListener('message', onMsg);
+            reject(new Error("Không nhận được dữ liệu. Hãy bấm 'Quét & Trộn' trong khung Trộn đề trước."));
+        }, 2500);
+        function onMsg(ev) {
+            if (ev.source !== iframeWindow || ev.origin !== iframeOrigin) return;
+            const data = ev.data || {};
+            if (data.type !== 'DAMSAN_EXAMS' || data.requestId !== requestId) return;
+            clearTimeout(timeout);
+            window.removeEventListener('message', onMsg);
+            resolve(data.payload || []);
+        }
+        window.addEventListener('message', onMsg);
+        iframeWindow.postMessage({ type: 'DAMSAN_GET_EXAMS', requestId }, iframeOrigin);
+    });
+
+    if (!Array.isArray(payload) || payload.length === 0) throw new Error("Khung Trộn đề chưa có dữ liệu.");
+    return JSON.parse(JSON.stringify(payload));
+}
+
+function initMultiSourceRoomDraftUi() {
+    const panel = document.getElementById('roomExamDraftPanel');
+    const legacyBtn = document.getElementById('legacyRoomExamDirectPushBtn');
+    if (!panel || !legacyBtn) return;
+    const supported = MULTI_SOURCE_ROOM_DRAFT_ENABLED && !!window.indexedDB;
+    panel.style.display = supported ? 'block' : 'none';
+    legacyBtn.style.display = supported ? 'none' : 'inline-block';
+    if (!supported) return;
+
+    const input = document.getElementById('maPhongLienKet');
+    if (input && !roomExamDraftUiBound) {
+        input.addEventListener('change', () => void renderRoomExamDraftUi());
+        input.addEventListener('blur', () => void renderRoomExamDraftUi());
+        roomExamDraftUiBound = true;
+    }
+    void renderRoomExamDraftUi();
+}
+
+async function renderRoomExamDraftUi() {
+    const panel = document.getElementById('roomExamDraftPanel');
+    const summary = document.getElementById('roomExamDraftSummary');
+    const list = document.getElementById('roomExamDraftList');
+    const log = document.getElementById('roomExamDraftLog');
+    const publishBtn = document.getElementById('btnPublishRoomExamDraft');
+    const clearBtn = document.getElementById('btnClearRoomExamDraft');
+    if (!panel || panel.style.display === 'none' || !summary || !list) return;
+
+    const roomInput = document.getElementById('maPhongLienKet');
+    const maPhong = String(roomInput?.value || '').trim();
+    if (!maPhong) {
+        summary.innerText = "Nhập Mã Phòng để tạo hoặc khôi phục bộ đề tạm.";
+        list.innerHTML = '';
+        if (log) log.innerText = '';
+        if (publishBtn) publishBtn.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
+        return;
+    }
+
+    try {
+        const ctx = roomExamDraftContext(maPhong);
+        const draft = await roomExamDraftGet(ctx.key);
+        if (String(roomInput?.value || '').trim() !== maPhong) return;
+
+        if (!draft?.batches?.length) {
+            summary.innerText = "Chưa có đề gốc nào trong bộ tạm của phòng [" + maPhong + "].";
+            list.innerHTML = '';
+            if (log) log.innerText = "Trộn đề gốc thứ nhất bên dưới rồi bấm “Thêm đề đang trộn”.";
+            if (publishBtn) publishBtn.disabled = true;
+            if (clearBtn) clearBtn.disabled = true;
+            return;
+        }
+
+        const allExams = roomExamDraftCombinedExams(draft);
+        const allCodes = roomExamDraftCodes(allExams);
+        summary.innerText = draft.batches.length + " đề gốc • " + allCodes.length + " mã đề • Phòng [" + maPhong + "] • " + (draft.assessmentConfig?.assessment_type || 'LEGACY');
+
+        list.innerHTML = draft.batches.map((batch, index) => {
+            const codes = roomExamDraftCodes(batch.exams || []);
+            const perCode = roomExamDraftQuestionCountPerCode(batch.exams || [], codes);
+            return '<div style="display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 10px; border:1px solid #d1fae5; border-radius:6px; background:#f0fdf4;">'
+                + '<div><b>' + safeHTML(batch.sourceLabel || ('Đề gốc ' + (index + 1))) + '</b><span style="color:#64748b;"> — '
+                + codes.length + ' mã: ' + safeHTML(codes.join(', ')) + (perCode ? ' • ' + perCode + ' câu/mã' : '') + '</span></div>'
+                + '<button type="button" onclick="xoaMotDeGocKhoiBoDePhong(\'' + batch.batchId + '\')" style="border:1px solid #fecaca; background:#fff; color:#b91c1c; border-radius:5px; padding:5px 8px; cursor:pointer;">Xóa khỏi bộ tạm</button></div>';
+        }).join('');
+
+        if (log) log.innerText = "Draft chỉ lưu trên máy này; chưa ghi dữ liệu nào vào phòng thi.";
+        if (publishBtn) publishBtn.disabled = false;
+        if (clearBtn) clearBtn.disabled = false;
+    } catch (err) {
+        summary.innerText = "Không đọc được bộ đề tạm.";
+        list.innerHTML = '';
+        if (log) log.innerText = "⚠️ " + err.message + " — Luồng đẩy trực tiếp cũ vẫn còn để rollback.";
+        if (publishBtn) publishBtn.disabled = true;
+        if (clearBtn) clearBtn.disabled = true;
+    }
+}
+
+async function themDeHienTaiVaoBoDePhong(btnElement) {
+    if (!MULTI_SOURCE_ROOM_DRAFT_ENABLED) return layDeTuIframe(btnElement);
+    if (!checkWorkspaceAction()) return;
+    const maPhong = String(document.getElementById('maPhongLienKet')?.value || '').trim();
+    if (!maPhong) return alert("⚠️ Vui lòng nhập Mã Phòng Thi.");
+
+    const oldText = btnElement?.innerText || '';
+    if (btnElement) { btnElement.disabled = true; btnElement.innerText = "⏳ Đang lưu bộ tạm..."; }
+    try {
+        const ctx = roomExamDraftContext(maPhong);
+        const current = await roomExamDraftReadCurrentMixer();
+        current.forEach(q => { q.MaPhong = maPhong; });
+
+        const assessmentConfig = snapshotFlexLiteAssessmentConfig();
+        validateFlexLiteAssessmentForSave(current, assessmentConfig);
+        const currentCodes = roomExamDraftCodes(current);
+        if (!currentCodes.length) throw new Error("Không tìm thấy mã đề trong bộ đang trộn.");
+
+        let draft = await roomExamDraftGet(ctx.key);
+        if (!draft) {
+            draft = {
+                key: ctx.key, schema: ROOM_EXAM_DRAFT_SCHEMA, teacherKey: ctx.teacherKey,
+                schoolId: ctx.schoolId, monId: ctx.monId, roomCode: maPhong,
+                assessmentConfig, batches: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+            };
+        }
+
+        if (roomExamDraftConfigSignature(draft.assessmentConfig) !== roomExamDraftConfigSignature(assessmentConfig)) {
+            throw new Error("Cấu hình loại bài/thang điểm hiện tại khác bộ đề tạm.");
+        }
+
+        const existingCodes = roomExamDraftCodes(roomExamDraftCombinedExams(draft));
+        const duplicated = currentCodes.filter(code => existingCodes.includes(code));
+        if (duplicated.length) throw new Error("Mã đề trùng với bộ tạm: " + duplicated.join(', ') + ". Hãy đổi mã bắt đầu.");
+
+        const prospective = roomExamDraftCombinedExams(draft).concat(current);
+        validateFlexLiteAssessmentForSave(prospective, draft.assessmentConfig);
+
+        const sourceInput = document.getElementById('roomExamSourceLabel');
+        const sourceLabel = String(sourceInput?.value || '').trim() || ("Đề gốc " + (draft.batches.length + 1));
+        draft.batches.push({
+            batchId: 'batch_' + Date.now() + '_' + Math.random().toString(16).slice(2),
+            sourceLabel, maDeList: currentCodes, exams: current, addedAt: new Date().toISOString()
+        });
+        draft.updatedAt = new Date().toISOString();
+
+        await roomExamDraftPut(draft);
+        if (sourceInput) sourceInput.value = '';
+        await renderRoomExamDraftUi();
+
+        const perCode = roomExamDraftQuestionCountPerCode(current, currentCodes);
+        alert("✅ Đã thêm " + sourceLabel + ": " + currentCodes.length + " mã" + (perCode ? " × " + perCode + " câu/mã" : "") + ".\nChưa ghi dữ liệu nào lên phòng thi.");
+    } catch (err) {
+        alert("❌ Không thêm được vào bộ đề tạm: " + err.message);
+    } finally {
+        if (btnElement) { btnElement.disabled = false; btnElement.innerText = oldText; }
+    }
+}
+
+async function xoaMotDeGocKhoiBoDePhong(batchId) {
+    const maPhong = String(document.getElementById('maPhongLienKet')?.value || '').trim();
+    if (!maPhong || !batchId) return;
+    try {
+        const ctx = roomExamDraftContext(maPhong);
+        const draft = await roomExamDraftGet(ctx.key);
+        if (!draft) return renderRoomExamDraftUi();
+        const batch = (draft.batches || []).find(item => item.batchId === batchId);
+        if (!batch) return renderRoomExamDraftUi();
+        if (!confirm("Xóa [" + (batch.sourceLabel || "đề gốc") + "] khỏi bộ đề tạm?\nKhông ảnh hưởng máy chủ.")) return;
+
+        draft.batches = draft.batches.filter(item => item.batchId !== batchId);
+        draft.updatedAt = new Date().toISOString();
+        if (!draft.batches.length) await roomExamDraftDelete(ctx.key);
+        else await roomExamDraftPut(draft);
+        await renderRoomExamDraftUi();
+    } catch (err) {
+        alert("❌ Không xóa được đề gốc khỏi bộ tạm: " + err.message);
+    }
+}
+
+async function xoaToanBoBoDePhongTam() {
+    const maPhong = String(document.getElementById('maPhongLienKet')?.value || '').trim();
+    if (!maPhong) return;
+    if (!confirm("Hủy toàn bộ bộ đề tạm của phòng [" + maPhong + "]?\nKhông có dữ liệu máy chủ bị xóa.")) return;
+    try {
+        const ctx = roomExamDraftContext(maPhong);
+        await roomExamDraftDelete(ctx.key);
+        await renderRoomExamDraftUi();
+    } catch (err) {
+        alert("❌ Không hủy được bộ đề tạm: " + err.message);
+    }
+}
+
+async function dayBoDePhongLenMayChu(btnElement) {
+    if (!MULTI_SOURCE_ROOM_DRAFT_ENABLED) return layDeTuIframe(btnElement);
+    if (!checkWorkspaceAction()) return;
+    const maPhong = String(document.getElementById('maPhongLienKet')?.value || '').trim();
+    if (!maPhong) return alert("⚠️ Vui lòng nhập Mã Phòng Thi.");
+
+    const oldText = btnElement?.innerText || '';
+    if (btnElement) { btnElement.disabled = true; btnElement.innerText = "⏳ Đang đẩy toàn bộ..."; }
+    try {
+        const ctx = roomExamDraftContext(maPhong);
+        const draft = await roomExamDraftGet(ctx.key);
+        if (!draft?.batches?.length) throw new Error("Bộ đề tạm đang trống.");
+
+        const combined = roomExamDraftCombinedExams(draft).map(q => ({ ...q, MaPhong: maPhong }));
+        const codes = roomExamDraftCodes(combined);
+        const seenCodes = new Set();
+        for (const batch of draft.batches) {
+            for (const code of roomExamDraftCodes(batch.exams || [])) {
+                if (seenCodes.has(code)) throw new Error("Mã đề trùng giữa các đề gốc: " + code);
+                seenCodes.add(code);
+            }
+        }
+        validateFlexLiteAssessmentForSave(combined, draft.assessmentConfig);
+
+        if (!confirm("ĐẨY BỘ ĐỀ VÀO PHÒNG [" + maPhong + "]?\n\n• " + draft.batches.length + " đề gốc\n• "
+            + codes.length + " mã đề: " + codes.join(', ') + "\n\nMáy chủ sẽ ghi toàn bộ bộ đề trong MỘT LẦN.")) return;
+
+        const result = await luuDeThiLenSupabase(combined, draft.assessmentConfig);
+        if (!result || result.status !== 'success') throw new Error(result?.message || "Không đẩy được bộ đề.");
+        await roomExamDraftDelete(ctx.key);
+        await renderRoomExamDraftUi();
+        alert("🎉 HOÀN TẤT! Đã đẩy " + codes.length + " mã từ " + draft.batches.length + " đề gốc vào phòng [" + maPhong + "] trong một lần ghi.");
+    } catch (err) {
+        const log = document.getElementById('roomExamDraftLog');
+        if (log) log.innerText = "❌ Đẩy thất bại; bộ đề tạm vẫn được giữ nguyên. " + err.message;
+        alert("❌ Không đẩy được bộ đề phòng: " + err.message + "\n\nBộ đề tạm vẫn còn nguyên để thử lại.");
+    } finally {
+        if (btnElement) { btnElement.disabled = false; btnElement.innerText = oldText; }
+    }
+}
 
 function parseTimeSafely(timeVal) {
     if (!timeVal || timeVal === 'null') return 0;
@@ -1442,6 +1781,7 @@ function switchSubTabTaoDe(mode) {
 
     if (mode === 'manage') fetchFullBank(true);
     if (mode === 'matrix') loadBankMeta();
+    if (mode === 'offline') initMultiSourceRoomDraftUi();
 }
 
 function switchSubTabTK(mode) {
