@@ -414,6 +414,8 @@
             display: block;
             width: 100%;
             height: 900px;
+            min-height: 600px;
+            overflow: hidden;
             border: 1px solid #d7dee7;
             border-radius: 8px;
             background: #fff;
@@ -672,7 +674,7 @@
                         <div id="subTabOffline" class="sub-tab-content room-exam-workspace">
                             <div class="room-exam-toolbar">
                                 <span class="room-exam-toolbar-title">Đưa đề vào phòng thi</span>
-                                <input type="text" id="maPhongLienKet" class="room-exam-toolbar-input" placeholder="Nhập Mã Phòng...">
+                                <input type="text" id="maPhongLienKet" class="room-exam-toolbar-input" placeholder="Mã phòng đích, VD: 12A1, 12A2, 12A3">
                                 <button id="btnAddMixerBatchToDraft" class="room-exam-draft-btn room-exam-add-btn" type="button" onclick="themDeHienTaiVaoBoDePhong(this)">➕ Lưu đề đang trộn</button>
                                 <button id="legacyRoomExamDirectPushBtn" class="room-exam-draft-btn room-exam-publish-btn" onclick="layDeTuIframe(this)">🚀 Hút đề & Đẩy</button>
                             </div>
@@ -687,7 +689,7 @@
                                 <div id="roomExamDraftLog" class="room-exam-draft-log"></div>
                             </div>
 
-                            <iframe id="frameV8" class="room-exam-frame" src="Tron_De_Trac_Nghiem_V8.html?v=20261028-choice-tabs-091" allowfullscreen></iframe>
+                            <iframe id="frameV8" class="room-exam-frame" src="Tron_De_Trac_Nghiem_V8.html?v=20261103-autoheight-094" scrolling="no" allowfullscreen></iframe>
                         </div>
                         
                         <div id="subTabBank" class="sub-tab-content" style="background: #e8f0fe; padding: 20px; border-radius: 8px; border-left: 5px solid #1a73e8;">
@@ -1131,7 +1133,7 @@
         }
     </script>
     <script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080"></script>
-    <script src="giaovien.js?v=20261028-multi-source-room-draft-092"></script>
+    <script src="giaovien.js?v=20261103-autoheight-multiroom-094"></script>
     <script src="admin_system_status_083a.js?v=20261018-admin-system-status-083a"></script>
     <script src="admin_system_maintenance_083b.js?v=20261018-admin-maintenance-083b"></script>
     <script src="teacher_canonical_export_079.js?v=20261013-canonical-room-print-080"></script>

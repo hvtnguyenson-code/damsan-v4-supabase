@@ -789,17 +789,17 @@ async function runAllTests() {
   // E. VERSION / VISUAL / INVARIANTS
   // =======================================================================
 
-  // 25. Teacher exact: 20261028-multi-source-room-draft-092
-  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20261028-multi-source-room-draft-092');
+  // 25. Teacher exact: 20261103-autoheight-multiroom-094
+  console.log('Test DASH-ACT-25: Teacher cache bust is exact 20261103-autoheight-multiroom-094');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261028-multi-source-room-draft-092'),
-      'giaovien.html must include giaovien.js?v=20261028-multi-source-room-draft-092');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261103-autoheight-multiroom-094'),
+      'giaovien.html must include giaovien.js?v=20261103-autoheight-multiroom-094');
     assert(!gvHtmlSource.includes('giaovien.js?v=20260904-flex-lite-009a'),
       'giaovien.html must not contain old 20260904-flex-lite-009a');
     console.log('  -> PASSED');
   }
 
-  // 26. Student HTML/JS exact: 20261028-multi-source-room-draft-092
+  // 26. Student HTML/JS exact: 20261103-autoheight-multiroom-094
   console.log('Test DASH-ACT-26: Student cache bust and VERSION constant are exact 20261028-targeted-reset-recovery-089');
   {
     assert(hsHtmlSource.includes('hoc_sinh.js?v=20261028-targeted-reset-recovery-089'),

@@ -265,7 +265,58 @@
   
   let danhSachDeThi = [];
   let lastMaDes = [];
-  let lastCounts = {p1:0, p2:0, p3:0, total:0};
+  let lastCounts = {p1:0, p2:0, p3:0, total:0};  // ==========================================
+  // 094: auto-height bridge — embedded mixer never owns a vertical scrollbar.
+  // ==========================================
+  let frameHeightRaf = 0;
+
+  function notifyParentFrameHeight() {
+    if (window.parent === window) return;
+    if (frameHeightRaf) {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frameHeightRaf);
+      else clearTimeout(frameHeightRaf);
+    }
+    const scheduleFrame = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (callback) => setTimeout(callback, 0);
+    frameHeightRaf = scheduleFrame(() => {
+      frameHeightRaf = 0;
+      const bodyHeight = document.body ? document.body.scrollHeight : 0;
+      const rootHeight = document.documentElement ? document.documentElement.scrollHeight : 0;
+      const height = Math.max(bodyHeight, rootHeight, 600);
+      try {
+        window.parent.postMessage(
+          { type: 'DAMSAN_FRAME_HEIGHT', height: Math.ceil(height) },
+          window.location.origin
+        );
+      } catch (e) {}
+    });
+  }
+
+  if (window.parent !== window) {
+    if (document.documentElement && document.documentElement.style) {
+      document.documentElement.style.overflowY = 'hidden';
+    }
+    if (document.body && document.body.style) document.body.style.overflowY = 'hidden';
+    window.addEventListener('load', notifyParentFrameHeight);
+    window.addEventListener('resize', notifyParentFrameHeight);
+
+    if (typeof ResizeObserver === 'function') {
+      const frameResizeObserver = new ResizeObserver(() => notifyParentFrameHeight());
+      if (document.documentElement) frameResizeObserver.observe(document.documentElement);
+      if (document.body) frameResizeObserver.observe(document.body);
+    }
+
+    if (typeof MutationObserver === 'function' && document.body) {
+      const frameMutationObserver = new MutationObserver(() => notifyParentFrameHeight());
+      frameMutationObserver.observe(document.body, { childList: true, subtree: true, attributes: true });
+    }
+
+    setTimeout(notifyParentFrameHeight, 0);
+    setTimeout(notifyParentFrameHeight, 250);
+  }
+
+
 
   // ==========================================
   // BRIDGE (P0): expose exams to parent via postMessage
@@ -277,6 +328,11 @@
 
     const requestId = data.requestId;
     const targetOrigin = (ev.origin && ev.origin !== "null") ? ev.origin : "*";
+
+    if (data.type === 'DAMSAN_REQUEST_FRAME_HEIGHT') {
+      notifyParentFrameHeight();
+      return;
+    }
 
     if (data.type === 'DAMSAN_GET_EXAMS') {
       try {

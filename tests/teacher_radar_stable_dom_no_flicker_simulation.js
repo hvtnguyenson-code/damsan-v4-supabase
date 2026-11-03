@@ -1261,9 +1261,9 @@ async function runAllTests() {
   // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
   // =======================================================================
 
-  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261028-multi-source-room-draft-092');
+  console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261103-autoheight-multiroom-094');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261028-multi-source-room-draft-092'), 'Must load 20261028-multi-source-room-draft-092');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261103-autoheight-multiroom-094'), 'Must load 20261103-autoheight-multiroom-094');
     console.log('  -> PASSED');
   }
 
@@ -1275,7 +1275,7 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test STABLE-41: Other test suites are updated to 20261028-multi-source-room-draft-092');
+  console.log('Test STABLE-41: Other test suites are updated to 20261103-autoheight-multiroom-094');
   {
     const suites = [
       'tests/account_import_exceljs_csp_simulation.js',
@@ -1287,7 +1287,7 @@ async function runAllTests() {
     ];
     for (const s of suites) {
       const content = fs.readFileSync(path.join(repoRoot, s), 'utf8');
-      assert(content.includes('20261028-multi-source-room-draft-092'), `${s} must require 20261028-multi-source-room-draft-092`);
+      assert(content.includes('20261103-autoheight-multiroom-094'), `${s} must require 20261103-autoheight-multiroom-094`);
     }
     console.log('  -> PASSED');
   }

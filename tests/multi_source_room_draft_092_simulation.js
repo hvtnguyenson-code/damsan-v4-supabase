@@ -31,12 +31,12 @@ assert(js.includes('const MULTI_SOURCE_ROOM_DRAFT_ENABLED = true;'), 'MS092-01 f
 assert(html.includes('id="legacyRoomExamDirectPushBtn"') && html.includes('onclick="layDeTuIframe(this)"'), 'MS092-02 legacy direct push must remain in DOM');
 assert(html.includes('id="roomExamDraftPanel"') && html.includes('id="btnAddMixerBatchToDraft"') && html.includes('id="btnPublishRoomExamDraft"'), 'MS092-03 draft UI missing');
 assert(html.indexOf('id="roomExamDraftPanel"') < html.indexOf('id="frameV8"'), 'MS092-04 draft UI must stay outside mixer iframe');
-assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261028-choice-tabs-091'), 'MS092-05 print/mixer 091 must remain unchanged');
+assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-autoheight-094'), 'MS092-05 print/mixer 091 must remain unchanged');
 
 // 06-09: local-only draft storage.
 assert(js.includes("ROOM_EXAM_DRAFT_DB_NAME = 'damsan_room_exam_drafts_v1'"), 'MS092-06 IndexedDB draft store missing');
 assert(js.includes("db.createObjectStore(ROOM_EXAM_DRAFT_STORE, { keyPath: 'key' })"), 'MS092-07 IndexedDB object store missing');
-assert(js.includes("[ROOM_EXAM_DRAFT_SCHEMA, teacherKey, schoolId, monId, roomCode.toUpperCase()].join('::')"), 'MS092-08 draft key must bind teacher/school/subject/room');
+assert(js.includes("[ROOM_EXAM_DRAFT_SCHEMA, teacherKey, schoolId, monId, roomSetKey].join('::')"), 'MS092-08 draft key must bind teacher/school/subject/room-set');
 assert(functionBody('initMultiSourceRoomDraftUi').includes("legacyBtn.style.display = supported ? 'none' : 'inline-block'"), 'MS092-09 unsupported/disabled feature must reveal legacy flow');
 
 // 10-14: add-to-draft must never write server and must validate aggregate safety.
@@ -83,6 +83,6 @@ assert.deepStrictEqual(dup, [], 'MS092-25 normal two-source case has no duplicat
 const badSource2 = source2.map(q => ({...q, MaDe: q.MaDe === '201' ? '101' : q.MaDe}));
 assert(codes(source1).some(code => codes(badSource2).includes(code)), 'MS092-26 duplicate-code model must be detectable');
 
-assert(html.includes('giaovien.js?v=20261028-multi-source-room-draft-092'), 'MS092-27 teacher cache bust missing');
+assert(html.includes('giaovien.js?v=20261103-autoheight-multiroom-094'), 'MS092-27 teacher cache bust missing');
 
 console.log('MULTI_SOURCE_ROOM_DRAFT_092_PASS');

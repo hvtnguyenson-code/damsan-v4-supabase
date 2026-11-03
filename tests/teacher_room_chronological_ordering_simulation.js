@@ -988,26 +988,26 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('Test ORDER-39: Version invariants: teacher exact 20261028-multi-source-room-draft-092; student/SW exact 20261028-targeted-reset-recovery-089');
+  console.log('Test ORDER-39: Version invariants: teacher exact 20261103-autoheight-multiroom-094; student/SW exact 20261028-targeted-reset-recovery-089');
   {
-    assert(gvHtmlSource.includes('giaovien.js?v=20261028-multi-source-room-draft-092'),
-      'giaovien.html must include giaovien.js?v=20261028-multi-source-room-draft-092');
+    assert(gvHtmlSource.includes('giaovien.js?v=20261103-autoheight-multiroom-094'),
+      'giaovien.html must include giaovien.js?v=20261103-autoheight-multiroom-094');
 
     // Verify teacher-side test suites keep the exact teacher release marker
     const cspTest = fs.readFileSync(path.join(repoRoot, 'tests/account_import_exceljs_csp_simulation.js'), 'utf8');
-    assert(cspTest.includes('20261028-multi-source-room-draft-092'), 'account_import_exceljs_csp must keep the exact teacher release marker');
+    assert(cspTest.includes('20261103-autoheight-multiroom-094'), 'account_import_exceljs_csp must keep the exact teacher release marker');
 
     const adminTest = fs.readFileSync(path.join(repoRoot, 'tests/admin_frontend_session_simulation.js'), 'utf8');
-    assert(adminTest.includes('20261028-multi-source-room-draft-092'), 'admin_frontend_session must keep the exact teacher release marker');
+    assert(adminTest.includes('20261103-autoheight-multiroom-094'), 'admin_frontend_session must keep the exact teacher release marker');
 
     const scoreTest = fs.readFileSync(path.join(repoRoot, 'tests/flex_lite_authoritative_score_presentation_simulation.js'), 'utf8');
-    assert(scoreTest.includes('20261028-multi-source-room-draft-092'), 'score_presentation must keep the exact teacher release marker');
+    assert(scoreTest.includes('20261103-autoheight-multiroom-094'), 'score_presentation must keep the exact teacher release marker');
 
     const dashTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_dashboard_action_reliability_simulation.js'), 'utf8');
-    assert(dashTest.includes('20261028-multi-source-room-draft-092'), 'teacher_dashboard must keep the exact teacher release marker');
+    assert(dashTest.includes('20261103-autoheight-multiroom-094'), 'teacher_dashboard must keep the exact teacher release marker');
 
     const roomActTest = fs.readFileSync(path.join(repoRoot, 'tests/teacher_room_control_action_reliability_simulation.js'), 'utf8');
-    assert(roomActTest.includes('20261028-multi-source-room-draft-092'), 'teacher_room_control must keep the exact teacher release marker');
+    assert(roomActTest.includes('20261103-autoheight-multiroom-094'), 'teacher_room_control must keep the exact teacher release marker');
 
     // Student / SW current exact version
     assert(hsHtmlSource.includes('hoc_sinh.js?v=20261028-targeted-reset-recovery-089'),
