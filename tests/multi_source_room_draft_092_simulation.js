@@ -36,7 +36,7 @@ assert(html.includes('Tron_De_Trac_Nghiem_V8.html?v=20261103-autoheight-094'), '
 // 06-09: local-only draft storage.
 assert(js.includes("ROOM_EXAM_DRAFT_DB_NAME = 'damsan_room_exam_drafts_v1'"), 'MS092-06 IndexedDB draft store missing');
 assert(js.includes("db.createObjectStore(ROOM_EXAM_DRAFT_STORE, { keyPath: 'key' })"), 'MS092-07 IndexedDB object store missing');
-assert(js.includes("[ROOM_EXAM_DRAFT_SCHEMA, teacherKey, schoolId, monId, roomCode.toUpperCase()].join('::')"), 'MS092-08 draft key must bind teacher/school/subject/room');
+assert(js.includes("[ROOM_EXAM_DRAFT_SCHEMA, teacherKey, schoolId, monId, roomSetKey].join('::')"), 'MS092-08 draft key must bind teacher/school/subject/room-set');
 assert(functionBody('initMultiSourceRoomDraftUi').includes("legacyBtn.style.display = supported ? 'none' : 'inline-block'"), 'MS092-09 unsupported/disabled feature must reveal legacy flow');
 
 // 10-14: add-to-draft must never write server and must validate aggregate safety.
