@@ -83,6 +83,6 @@ assert.deepStrictEqual(dup, [], 'MS092-25 normal two-source case has no duplicat
 const badSource2 = source2.map(q => ({...q, MaDe: q.MaDe === '201' ? '101' : q.MaDe}));
 assert(codes(source1).some(code => codes(badSource2).includes(code)), 'MS092-26 duplicate-code model must be detectable');
 
-assert(html.includes('giaovien.js?v=20261028-multi-source-room-draft-092'), 'MS092-27 teacher cache bust missing');
+assert(html.includes('giaovien.js?v=20261103-autoheight-multiroom-094'), 'MS092-27 teacher cache bust missing');
 
 console.log('MULTI_SOURCE_ROOM_DRAFT_092_PASS');
