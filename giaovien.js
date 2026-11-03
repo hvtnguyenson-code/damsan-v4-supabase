@@ -9,6 +9,10 @@ let activeWorkspaceMonId = null;
 let activeWorkspaceTruongId = null;
 
 const FLEX_LITE_TEACHER_CONFIG_ENABLED = true;
+const MULTI_SOURCE_ROOM_DRAFT_ENABLED = true;
+const ROOM_EXAM_DRAFT_DB_NAME = 'damsan_room_exam_drafts_v1';
+const ROOM_EXAM_DRAFT_STORE = 'drafts';
+const ROOM_EXAM_DRAFT_SCHEMA = 1;
 
 function readFlexLiteWeight(id) {
     const raw = document.getElementById(id)?.value;
