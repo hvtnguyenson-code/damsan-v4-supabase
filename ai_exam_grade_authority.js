@@ -4,7 +4,6 @@
   'use strict';
 
   const baseSpec = aieSpec;
-  const baseLoadDocuments = aieLoadDocuments;
   const baseProfileChange = window.aieProfileChange;
   const baseBuildPrompt = window.aieBuildPrompt;
   let authorityEpoch = 0;
