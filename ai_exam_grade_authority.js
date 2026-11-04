@@ -148,7 +148,9 @@
 
   function applyGradeFilter() {
     const grade = gradeOrZero();
-    const allDocs = Array.isArray(aieDocuments) ? [...aieDocuments] : [];
+    const allDocs = Array.isArray(window.aieKnowledgeCatalogDocuments)
+      ? [...window.aieKnowledgeCatalogDocuments]
+      : [];
     const eligible = allDocs.filter((doc) => grade && Number(doc.grade || 0) === grade && (!doc.source_role || doc.source_role === 'KNOWLEDGE_SOURCE'));
     const eligibleIds = new Set(eligible.map((doc) => doc.id));
     for (const group of document.querySelectorAll('[data-knowledge-scope-doc]')) {
@@ -162,7 +164,11 @@
     aieDocuments = eligible;
     const box = document.getElementById('knowledgeDocs');
     if (!grade && box) box.innerHTML = '<div class="doc">Hãy chọn khối trước. Hệ thống không hiển thị nguồn “tất cả khối” khi tạo đề.</div>';
-    else if (grade && !eligible.length && box) box.innerHTML = `<div class="doc">Chưa có nguồn kiến thức active revision cho khối ${grade}.</div>`;
+    else if (grade && !eligible.length && box) {
+      box.innerHTML = allDocs.length
+        ? `<div class="doc">Chưa có nguồn kiến thức đã kích hoạt cho khối ${grade} trong trường/môn đang chọn.</div>`
+        : '<div class="doc">Chưa có nguồn kiến thức đã kích hoạt cho trường/môn đang chọn.</div>';
+    }
     return eligible;
   }
 
@@ -172,14 +178,24 @@
       aieDocuments = [];
       const box = document.getElementById('knowledgeDocs');
       if (box) box.innerHTML = '<div class="doc">Hãy chọn khối 10, 11 hoặc 12 trước khi chọn bài.</div>';
-      return;
+      return [];
     }
-    await baseLoadDocuments();
+    if (typeof window.aieLoadScopeCatalog !== 'function') {
+      aieDocuments = [];
+      window.aieKnowledgeCatalogDocuments = [];
+      const box = document.getElementById('knowledgeDocs');
+      if (box) box.innerHTML = '<div class="doc">Bộ nạp phạm vi kiến thức chưa sẵn sàng. Hãy tải lại trang.</div>';
+      aieNotice('Không thể nạp Knowledge Pack vì lesson-scope loader chưa sẵn sàng.', 'error');
+      return [];
+    }
+    await window.aieLoadScopeCatalog();
+    if (grade !== gradeOrZero()) return [];
     const eligible = applyGradeFilter();
     if (eligible.length) {
       const multi = eligible.filter((doc) => Number(doc.lesson_count || 0) > 1).length;
       aieNotice(`Khối ${grade}: ${eligible.length} nguồn kiến thức phù hợp${multi ? ` · ${multi} tài liệu có nhiều bài, hãy chọn đúng bài cần kiểm tra` : ''}.`, 'info');
     }
+    return eligible;
   }
 
   aieSpec = function aieSpec039() {
