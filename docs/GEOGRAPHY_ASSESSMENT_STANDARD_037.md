@@ -1,5 +1,7 @@
 # 037 — Chuẩn sinh đề Địa lí TNTHPT 2025+
 
+> Kiến trúc phát triển kế tiếp cho authority corpus thật và Geography Competency Blueprint: [AI_EXAM_GEOGRAPHY_AUTHORITY_COMPETENCY_P0_P1.md](./AI_EXAM_GEOGRAPHY_AUTHORITY_COMPETENCY_P0_P1.md). Tài liệu P0–P1 là nguồn thiết kế chính cho các đợt nâng chất lượng AI Exam sau 096.
+
 ## Mục tiêu
 
 `DIA_LI_TNTHPT_2025_PLUS_V1` là profile khảo thí dành cho Địa lí. Profile tách **tri thức nội dung** (SGK/YCCĐ/tài liệu giáo viên đã duyệt) khỏi **tri thức khảo thí** (cấu trúc và kỹ thuật ra câu hỏi). AI chỉ được lấy nội dung từ Knowledge Pack đang được chọn; corpus đề thi chỉ dùng để học cách đặt câu hỏi, không phải nguồn kiến thức để sao chép.
