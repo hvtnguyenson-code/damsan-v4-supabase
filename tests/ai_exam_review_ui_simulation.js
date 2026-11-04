@@ -24,7 +24,7 @@ console.log('A031B2-01..08 UI contract: PASSED');
 
 must(html, /id="subjectSelect"/, 'A046-01 visible subject selector exists');
 must(html, /id="subjectScopeState"/, 'A046-02 visible subject scope status exists');
-must(html, /ai_exam_subject_scope\.js\?v=20260914-visible-subject-scope-046/, 'A046-03 subject-scope overlay is cache-busted');
+must(html, /ai_exam_subject_scope\.js\?v=20261104-active-knowledge-scope-096/, 'A046-03 subject-scope overlay is cache-busted');
 must(subjectScope, /aieTargetScope = function aieTargetScope046/, 'A046-04 Admin target scope override missing');
 must(subjectScope, /\.from\('mon_hoc'\)\.select\('id,ten_mon'\)/, 'A046-05 subject catalog must come from canonical subject table');
 must(subjectScope, /localStorage\.setItem\('damSan_Workspace'/, 'A046-06 explicit subject selection must synchronize Admin workspace');

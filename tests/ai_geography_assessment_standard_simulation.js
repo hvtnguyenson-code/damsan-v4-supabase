@@ -57,7 +57,7 @@ assert(docs.includes('vqa.moet.gov.vn/vi/news/thong-bao/cau-truc-dinh-dang-de-th
 assert(docs.includes('vqa.moet.gov.vn/vi/news/tin-tuc-su-kien/de-thi-tham-khao-ky-thi-tot-nghiep-thpt-tu-nam-2025-159.html'),'official reference exam source missing');
 assert(/Hà Tĩnh/.test(docs) && /Hà Nội/.test(docs) && /Hòa Bình/.test(docs) && /Bình Phước/.test(docs),'provincial benchmark corpus not documented');
 
-assert(html.includes('ai_exam_knowledge_scope.js?v=20260913-explicit-lesson-scope-045'),'045 explicit lesson-scope overlay missing from exam UI');
+assert(html.includes('ai_exam_knowledge_scope.js?v=20261104-active-knowledge-scope-096'),'045 explicit lesson-scope overlay missing from exam UI');
 assert(html.includes('Phạm vi kiến thức — chọn bài cần ra đề'),'045 lesson-scope heading must be explicit in main setup UI');
 assert(knowledgeHtml.includes('knowledge_ai_book_structure.js?v=20260910-lazy-book-semantic-036b'),'036B book-structure overlay missing from semantic-analysis UI');
 assert(knowledgeHtml.includes('r=036b2'),'036B2 cache-bust marker missing from semantic-analysis UI');

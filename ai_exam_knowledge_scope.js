@@ -5,6 +5,8 @@
 
   const SCOPE_SCHEMA = 'DAMSAN_KNOWLEDGE_SCOPE_V1';
   const baseSpec = aieSpec;
+  let catalogEpoch = 0;
+  window.aieKnowledgeCatalogDocuments = [];
 
   function esc(value) {
     return String(value ?? '')
@@ -157,16 +159,22 @@
   }
 
   async function loadScopeCatalog036() {
+    const epoch = ++catalogEpoch;
     const session = aieRequireSession();
-    if (!session) return;
+    if (!session) return [];
     const scope = aieTargetScope(session);
-    if (!scope) return;
+    if (!scope) {
+      window.aieKnowledgeCatalogDocuments = [];
+      aieDocuments = [];
+      return [];
+    }
     aieSetBusy(true);
     try {
       const { data, error } = await aieSb.rpc('rpc_knowledge_scope_catalog_read', {
         p_staff_token: session.token,
         p_ma_gv: session.profile.ma_gv
       });
+      if (epoch !== catalogEpoch) return [];
       if (error) throw error;
       if (!data || data.status !== 'success') throw new Error(data?.message || 'Không tải được phạm vi bài học trong Kho tri thức.');
       const docs = (Array.isArray(data.documents) ? data.documents : []).filter((doc) =>
@@ -174,20 +182,27 @@
         doc.truong_id === scope.truong_id &&
         (doc.mon_id === scope.mon_id || doc.mon_id == null)
       );
-      aieDocuments = docs;
+      window.aieKnowledgeCatalogDocuments = docs;
+      aieDocuments = [...docs];
       renderScopeCatalog(docs);
       const multi = docs.filter((doc) => Number(doc.lesson_count || 0) > 1).length;
       if (!docs.length) {
-        aieNotice('Cần ít nhất một tài liệu có active revision.', 'info');
+        aieNotice('Chưa có nguồn kiến thức đã kích hoạt cho trường/môn đang chọn.', 'info');
       } else if (multi) {
         aieNotice(`Đã nạp ${docs.length} nguồn. Hãy chọn trực tiếp các bài cần kiểm tra trong mục PHẠM VI KIẾN THỨC.`, 'info');
       } else {
         aieNotice(`Đã nạp ${docs.length} tài liệu nguồn có active revision.`, 'info');
       }
+      return docs;
     } catch (error) {
-      aieNotice(error.message || 'Không tải được phạm vi bài học trong Kho tri thức.', 'error');
+      if (epoch === catalogEpoch) {
+        window.aieKnowledgeCatalogDocuments = [];
+        aieDocuments = [];
+        aieNotice(error.message || 'Không tải được phạm vi bài học trong Kho tri thức.', 'error');
+      }
+      return [];
     } finally {
-      aieSetBusy(false);
+      if (epoch === catalogEpoch) aieSetBusy(false);
     }
   }
 
@@ -207,6 +222,7 @@
   `;
   document.head.appendChild(style);
 
+  window.aieLoadScopeCatalog = loadScopeCatalog036;
   aieSelectedDocumentIds = selectedDocumentIds036;
   aieSpec = spec036;
   aieLoadDocuments = loadScopeCatalog036;
@@ -215,15 +231,6 @@
   if (refresh) refresh.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
-    loadScopeCatalog036();
+    if (typeof aieLoadDocuments === 'function') aieLoadDocuments();
   }, true);
-
-  function loadAfterBaseInitialization() {
-    if (typeof aieBusy !== 'undefined' && aieBusy) {
-      setTimeout(loadAfterBaseInitialization, 100);
-      return;
-    }
-    loadScopeCatalog036();
-  }
-  setTimeout(loadAfterBaseInitialization, 0);
 })();
