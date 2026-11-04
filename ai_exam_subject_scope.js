@@ -22,7 +22,10 @@
     const profile = session?.profile || {};
     if (profile.quyen !== 'Admin') return baseTargetScope(session);
 
-    const school = localStorage.getItem('damSan_WorkspaceSchool') || profile.truong_id || 'ALL';
+    const storedSchool = localStorage.getItem('damSan_WorkspaceSchool') || '';
+    const school = storedSchool && storedSchool !== 'ALL'
+      ? storedSchool
+      : (profile.truong_id || '');
     const explicitSubject = subjectSelect()?.value || '';
     const storedSubject = localStorage.getItem('damSan_Workspace') || profile.mon_id || 'ALL';
     const subject = explicitSubject || storedSubject;
