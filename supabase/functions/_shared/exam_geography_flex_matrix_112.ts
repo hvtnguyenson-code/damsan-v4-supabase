@@ -302,6 +302,7 @@ export function compileFlexGeographyPlan112(specValue:unknown){
     planner_version:"112-FLEX",
     status:"PREVIEW_ONLY_NOT_GENERATOR_ACTIVE",
     assessment_mode:"FLEX_GEOGRAPHY",
+    assessment_type:str(spec.assessment_type,80)||"CUSTOM",
     matrix_snapshot_hash:stableHash(matrix),
     content_scope:{
       lesson_count:new Set(rows.map(r=>r.scope_key)).size,
