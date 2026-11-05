@@ -32,14 +32,14 @@
       return {chon:chosen};
     });
   }
-  function validateScanCoverage(scan,variant){
+  function validateScanCoverage(scan,variant,options={}){
     const s=scanAnswers(scan);
     const counts=(variant?.items||[]).reduce((a,q)=>{const p=partOf(q);if(a[p]!==undefined)a[p]++;return a;},{1:0,2:0,3:0});
     const errors=[];
     if(s.p1.length!==counts[1]) errors.push(`P1 nhận ${s.p1.length}/${counts[1]}`);
     if(s.p2.length!==counts[2]) errors.push(`P2 nhận ${s.p2.length}/${counts[2]}`);
     if(s.p3.length!==counts[3]) errors.push(`P3 nhận ${s.p3.length}/${counts[3]}`);
-    if((scan?.uncertain||[]).length) errors.push('Có ô chưa chắc chắn');
+    if((scan?.uncertain||[]).length && options.allowUncertain !== true) errors.push('Có ô chưa chắc chắn');
     return {ok:errors.length===0,errors,counts};
   }
   function previewGrade(rawAnswers,variant,assessmentType='LEGACY',scoringConfig={}){
@@ -78,9 +78,9 @@
     }else throw new Error('Unsupported assessment_type: '+assessmentType);
     return {score,rawScore:raw,parts:{p1:p1Earned,p2:p2Earned,p3:p3Earned},details};
   }
-  function previewScan(scan,binding){
+  function previewScan(scan,binding,options={}){
     if(!binding?.ok) throw new Error('binding_required');
-    const coverage=validateScanCoverage(scan,binding.variant);
+    const coverage=validateScanCoverage(scan,binding.variant,options);
     if(!coverage.ok) return {ok:false,reason:'scan_incomplete',coverage};
     const rawAnswers=buildRawAnswers(scan,binding.variant);
     const room=binding.room||{};
