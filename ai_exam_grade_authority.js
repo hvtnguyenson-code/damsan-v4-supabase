@@ -38,8 +38,9 @@
   }
 
   function sourceStateLabel(state) {
-    if (state === 'VERIFIED_SOURCES') return 'Đã gắn đủ nguồn căn cứ';
-    if (state === 'DECLARED_NOT_ATTACHED') return 'Profile máy đã có · nguồn căn cứ chưa gắn đủ';
+    if (state === 'VERIFIED_SOURCES') return 'Đã xác minh đủ nguồn căn cứ bắt buộc';
+    if (state === 'PARTIAL_SOURCES') return 'Đã có một phần nguồn căn cứ · chưa đủ chuẩn chính thức';
+    if (state === 'DECLARED_NOT_ATTACHED') return 'Đã khai báo nguồn căn cứ · chưa gắn file chuẩn hóa';
     if (state === 'MACHINE_PROFILE_ONLY') return 'Profile máy · chưa khai báo nguồn bắt buộc';
     return state || 'Chưa có profile';
   }
@@ -67,8 +68,15 @@
     const sourceState = authority.source_state || '';
     const sourceItems = declared.map((item) => {
       const code = item?.authority_code || item?.label || 'Nguồn căn cứ';
-      const match = linked.find((linkedItem) => linkedItem.authority_code === item?.authority_code || linkedItem.source_kind === item?.source_kind);
-      return `<li>${match ? '✓' : '○'} <strong>${esc(item?.label || code)}</strong>${match ? ` — ${esc(match.title || '')}` : ' — chưa gắn file chuẩn hóa'}</li>`;
+      const match = linked.find((linkedItem) => linkedItem.authority_code === item?.authority_code);
+      const verified = match?.verified === true;
+      const required = item?.required === true;
+      const marker = verified ? '✓' : (match ? '△' : '○');
+      const requirement = required ? 'bắt buộc' : 'tham khảo';
+      const status = verified
+        ? ` — ${esc(match.title || '')} · đã xác minh`
+        : (match ? ` — ${esc(match.title || '')} · chưa đạt điều kiện xác minh` : ' — chưa gắn file chuẩn hóa');
+      return `<li>${marker} <strong>${esc(item?.label || code)}</strong> <span class="sub">(${requirement})</span>${status}</li>`;
     }).join('');
     const blueprint = profile.official_full_blueprint || {};
     const blueprintText = Number.isFinite(Number(blueprint.p1))
@@ -76,10 +84,13 @@
       : '';
     const packTotal = Number(authorityPack?.total_units || 0);
     const packReturned = Number(authorityPack?.returned_units || 0);
+    const requiredCount = Number(authority.required_source_count || 0);
+    const verifiedRequired = Number(authority.verified_required_source_count || 0);
+    const readinessText = requiredCount ? ` · nguồn bắt buộc=${verifiedRequired}/${requiredCount}` : '';
     const packText = packTotal ? ` · authority corpus=${packReturned}/${packTotal} units` : '';
     panel.className = `authority-panel ${sourceState === 'VERIFIED_SOURCES' ? 'ok' : 'warn'}`;
     panel.innerHTML = `<div class="authority-head"><strong>CĂN CỨ RA ĐỀ</strong><span>${esc(authority.profile_id || '')} · v${esc(authority.profile_version || '')}</span></div>
-      <div>${esc(sourceStateLabel(sourceState))}${blueprintText ? ` · ${esc(blueprintText)}` : ''}${esc(packText)}</div>
+      <div>${esc(sourceStateLabel(sourceState))}${esc(readinessText)}${blueprintText ? ` · ${esc(blueprintText)}` : ''}${esc(packText)}</div>
       ${sourceItems ? `<ul>${sourceItems}</ul>` : ''}
       <div class="authority-hash">Snapshot: ${esc(authority.snapshot_hash || '-')}</div>`;
   }
