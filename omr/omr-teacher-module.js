@@ -25,7 +25,7 @@
     return rows.filter(s=>allow.includes(String(s.lop||'').trim())||allow.includes(String(s.ma_hs||'').trim()));
   }
   async function loadStudents(room){
-    const res=await root.sb.from('hoc_sinh').select('id,truong_id,ma_hs,ho_ten,lop,quyen').eq('truong_id',room.truong_id);
+    const res=await sb.from('hoc_sinh').select('id,truong_id,ma_hs,ho_ten,lop,quyen').eq('truong_id',room.truong_id);
     if(res.error) throw res.error;
     return allowedStudents(res.data||[],room);
   }
@@ -133,7 +133,7 @@
     q('omrTeacherOverlay').classList.add('show');
     q('omrRoomSelect').innerHTML='<option value="">Đang tải phòng...</option>';
     try{
-      const rooms=(await root.rpcLayDanhSachPhongThi()).map(normalizeRoom);
+      const rooms=(await rpcLayDanhSachPhongThi()).map(normalizeRoom);
       state.rooms=rooms;
       q('omrRoomSelect').innerHTML='<option value="">— Chọn phòng thi —</option>'+rooms.map(r=>`<option value="${esc(r.id)}">${esc(r.MaPhong)}${r.DoiTuong&&r.DoiTuong!=='TatCa'?' — '+esc(r.DoiTuong):''}</option>`).join('');
       if(rooms.length===1){q('omrRoomSelect').value=rooms[0].id;await loadRoom(rooms[0].id);}
@@ -147,7 +147,7 @@
     const room=state.rooms.find(r=>String(r.id)===String(id)); if(!room)return;
     q('omrRoomSummary').textContent='Đang tải đề và danh sách học sinh...';
     try{
-      state.roomModel=await B.loadReadOnlyContext({room,staffRpc:root.staffRpc,loadStudents});
+      state.roomModel=await B.loadReadOnlyContext({room,staffRpc:staffRpc,loadStudents});
       if(!state.roomModel.valid1846){
         q('omrRoomSummary').textContent='Phòng này không có cấu trúc 18–4–6 hợp lệ. Không thể chấm bằng phiếu chuẩn.';
         return;
@@ -257,7 +257,7 @@
     if(!confirm(`Lưu điểm ${state.lastPreview.grade.score} cho ${st.ho_ten} — mã đề ${state.lastPreview.variant.code}?`))return;
     const btn=q('omrSave'),old=btn.textContent;btn.disabled=true;btn.textContent='Đang lưu...';
     try{
-      const data=await W.submitConfirmed(state.lastPreview,root.staffRpc);
+      const data=await W.submitConfirmed(state.lastPreview,staffRpc);
       if(data.status==='conflict'){showWarning(data.message||'Học sinh đã có bài/điểm. Không ghi đè.');return;}
       if(data.status!=='success') throw new Error(data.message||'Không lưu được kết quả.');
       state.saved.add(String(st.id));updateProgress();
