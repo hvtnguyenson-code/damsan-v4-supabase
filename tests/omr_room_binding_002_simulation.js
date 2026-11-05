@@ -15,17 +15,24 @@ function items(){
 const room={id:'room-test',MaPhong:'TEST_OMR',DoiTuong:'12A3',assessment_type:'TOT_NGHIEP'};
 const exams=['444','445','446','447'].map(ma_de=>({ma_de,cau_so:items()}));
 const students=[
-  {id:'s1',ma_hs:'1234',ho_ten:'HS 1',lop:'12A3'},
-  {id:'s2',ma_hs:'5678',ho_ten:'HS 2',lop:'12A3'}
+  {id:'s1',ma_hs:'001234',ho_ten:'HS 1',lop:'12A3'},
+  {id:'s2',ma_hs:'005678',ho_ten:'HS 2',lop:'12A3'}
 ];
 const model=B.buildRoomModel(room,exams,students);
 assert.strictEqual(model.valid1846,true);
 assert.deepStrictEqual(model.codes,['444','445','446','447']);
+assert.deepStrictEqual(B.sheetSbdToStudentCode('00001234'),{ok:true,status:'ok',studentCode:'001234'});
+assert.strictEqual(B.sheetSbdToStudentCode('01001234').status,'invalid_prefix');
+assert.strictEqual(B.sheetSbdToStudentCode('0001234').status,'invalid_format');
+assert.strictEqual(B.normalizeStudentCode('001234'),'001234');
+assert.strictEqual(B.normalizeStudentCode('1234'),null);
 let r=B.bindScan({sbd:'00001234',maDe:'0444'},model);
 assert.strictEqual(r.ok,true);
 assert.strictEqual(r.student.id,'s1');
 assert.strictEqual(r.variant.code,'444');
 assert.strictEqual(B.bindScan({sbd:'00009999',maDe:'0444'},model).reason,'student_not_found');
+assert.strictEqual(B.bindScan({sbd:'01001234',maDe:'0444'},model).reason,'student_invalid_prefix');
+assert.strictEqual(B.bindScan({sbd:'001234',maDe:'0444'},model).reason,'student_invalid_format');
 assert.strictEqual(B.bindScan({sbd:'00001234',maDe:'0999'},model).reason,'exam_code_not_found');
 
 (async()=>{
