@@ -12,6 +12,7 @@ on:
       - 'supabase/functions/_shared/exam_geography_flex_matrix_112.ts'
       - 'supabase/functions/_shared/exam_geography_calibration_108.ts'
       - 'tests/ai_geography_curriculum_catalog_114_simulation.js'
+      - 'tests/ai_geography_matrix_ui_115_simulation.js'
       - 'tests/ai_geography_flex_matrix_111_113_simulation.js'
       - 'tests/ai_geography_flex_matrix_112_runtime.ts'
       - 'tests/ai_geography_activation_109_simulation.js'
@@ -40,8 +41,10 @@ jobs:
           node --check ai_exam_geography_matrix_111.js
           node --check ai_exam_planned_activation_109.js
           node --check tests/ai_geography_curriculum_catalog_114_simulation.js
+          node --check tests/ai_geography_matrix_ui_115_simulation.js
           node --check tests/ai_geography_flex_matrix_111_113_simulation.js
           node tests/ai_geography_curriculum_catalog_114_simulation.js
+          node tests/ai_geography_matrix_ui_115_simulation.js
           node tests/ai_geography_flex_matrix_111_113_simulation.js
           node tests/ai_geography_activation_109_simulation.js
       - name: Deno type checks

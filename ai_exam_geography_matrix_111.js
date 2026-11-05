@@ -112,6 +112,69 @@
     },{know:0,understand:0,apply:0,p2:0,p3:0});
   }
 
+  function commandTotals(){
+    const t=totals();
+    return {KNOW:t.know+t.p2,UNDERSTAND:t.understand+t.p2*2,APPLY:t.apply+t.p2+t.p3};
+  }
+
+  function competencySummary(){
+    const counts=new Map();
+    for(const r of state.rows){
+      const weight=r.allocations.p1.KNOW+r.allocations.p1.UNDERSTAND+r.allocations.p1.APPLY+r.allocations.p2+r.allocations.p3;
+      if(weight<=0)continue;
+      counts.set(r.competency_code,(counts.get(r.competency_code)||0)+weight);
+    }
+    return Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]);
+  }
+
+  function sourceStats(){
+    const exact=state.rows.filter(r=>r.requirement_basis==='CURRENT_AUTHORITY_EXACT').length;
+    const aligned=state.rows.filter(r=>r.requirement_basis==='CURRICULUM_ALIGNED_CATALOG').length;
+    const mapped=state.rows.filter(r=>r.mapping_source==='ACTIVE_NORMALIZED_TEXTBOOK').length;
+    const avg=state.rows.length?Math.round(state.rows.reduce((n,r)=>n+Number(r.mapping_confidence||0),0)/state.rows.length*100):0;
+    return {exact,aligned,mapped,avg};
+  }
+
+  function warnings(){
+    const list=[];
+    const requested={
+      p1:Number(document.getElementById('p1Count')?.value||0),
+      p2:Number(document.getElementById('p2Count')?.value||0),
+      p3:Number(document.getElementById('p3Count')?.value||0)
+    };
+    const t=totals(), p1=t.know+t.understand+t.apply;
+    if(!state.rows.length)list.push({level:'error',text:'Chưa có YCCĐ/indicator được map với phạm vi kiến thức đã chọn.'});
+    if(p1!==requested.p1||t.p2!==requested.p2||t.p3!==requested.p3)list.push({level:'error',text:'Tổng phân bổ chưa khớp cấu trúc: P1 '+p1+'/'+requested.p1+', P2 '+t.p2+'/'+requested.p2+', P3 '+t.p3+'/'+requested.p3+'.'});
+    if(state.rows.length&&new Set(state.rows.map(r=>r.scope_key)).size<Math.min(3,state.rows.length))list.push({level:'warn',text:'Phạm vi bài học hẹp; đề có nguy cơ tập trung quá nhiều vào ít nội dung.'});
+    const cmd=commandTotals(), total=cmd.KNOW+cmd.UNDERSTAND+cmd.APPLY;
+    if(total&&cmd.APPLY/total<0.15)list.push({level:'warn',text:'Tỉ trọng Vận dụng đang thấp dưới 15% tổng lệnh trả lời.'});
+    if(total&&cmd.KNOW/total>0.55)list.push({level:'warn',text:'Tỉ trọng Biết đang cao trên 55%; nên kiểm tra lại độ phân hoá.'});
+    if(state.rows.length&&competencySummary().length<2)list.push({level:'warn',text:'Ma trận mới phủ một nhóm năng lực; nên tăng độ đa dạng năng lực nếu phạm vi cho phép.'});
+    const weak=state.rows.filter(r=>Number(r.mapping_confidence||0)<0.85);
+    if(weak.length)list.push({level:'warn',text:'Có '+weak.length+' dòng mapping confidence dưới 85%.'});
+    if(!list.length)list.push({level:'ok',text:'Ma trận hiện không có cảnh báo cấu trúc hoặc coverage đáng kể.'});
+    return list;
+  }
+
+  function renderOverview(){
+    const source=document.getElementById('geoMatrixSource115');
+    const cognitive=document.getElementById('geoMatrixCognitive115');
+    const competency=document.getElementById('geoMatrixCompetency115');
+    const preview=document.getElementById('geoMatrixPreview115');
+    const warningBox=document.getElementById('geoMatrixWarnings115');
+    if(!source||!cognitive||!competency||!preview||!warningBox)return;
+    const stats=sourceStats();
+    source.innerHTML='<strong>Catalog 114</strong><div class="matrix-small">Mapped SGK normalized: '+stats.mapped+'/'+state.rows.length+' · exact authority: '+stats.exact+' · aligned catalog: '+stats.aligned+' · confidence TB: '+stats.avg+'%</div>';
+    const cmd=commandTotals(), total=cmd.KNOW+cmd.UNDERSTAND+cmd.APPLY;
+    const pct=(n)=>total?Math.round(n*100/total):0;
+    cognitive.innerHTML='<strong>Biết '+cmd.KNOW+' ('+pct(cmd.KNOW)+'%) · Hiểu '+cmd.UNDERSTAND+' ('+pct(cmd.UNDERSTAND)+'%) · Vận dụng '+cmd.APPLY+' ('+pct(cmd.APPLY)+'%)</strong><div class="matrix-small">Tính theo tổng lệnh trả lời, gồm 4 mệnh đề mỗi cluster P2.</div>';
+    const comps=competencySummary();
+    competency.innerHTML=comps.length?comps.map(([code,n])=>'<span class="matrix-chip">'+esc(COMP_LABEL[code]||code)+': '+n+'</span>').join(' '):'<span class="matrix-small">Chưa có phân bổ năng lực.</span>';
+    const t=totals(), p1=t.know+t.understand+t.apply, commands=p1+t.p2*4+t.p3;
+    preview.innerHTML='<strong>Preview đề:</strong> P1 '+p1+' câu · P2 '+t.p2+' cluster / '+(t.p2*4)+' mệnh đề · P3 '+t.p3+' câu · <strong>'+commands+' lệnh trả lời</strong> · '+new Set(state.rows.map(r=>r.scope_key)).size+' bài · '+state.rows.length+' indicator.';
+    warningBox.innerHTML=warnings().map(w=>'<div class="matrix-alert matrix-alert-'+w.level+'">'+esc(w.text)+'</div>').join('');
+  }
+
   function matrixObject(){
     const t=totals();
     const requested={
@@ -170,7 +233,7 @@
     }
     body.innerHTML=state.rows.map((r,i)=>`<tr data-matrix-row="${i}">
       <td><strong>${esc(r.lesson_code||'')}</strong><div class="matrix-small">${esc(r.lesson_title)}</div></td>
-      <td><div>${esc(r.requirement_text)}</div><div class="matrix-small">${esc(r.requirement_basis)} · confidence ${Math.round(r.mapping_confidence*100)}%</div></td>
+      <td><div>${esc(r.requirement_text)}</div><div class="matrix-small"><span class="matrix-badge ${r.requirement_basis==='CURRENT_AUTHORITY_EXACT'?'matrix-badge-exact':'matrix-badge-aligned'}">${esc(r.requirement_basis==='CURRENT_AUTHORITY_EXACT'?'Authority exact':'Catalog aligned')}</span> ${esc(r.requirement_id)} · ${esc(r.authority_revision||'')} · ${esc(r.mapping_source||'')} · confidence ${Math.round(r.mapping_confidence*100)}%</div></td>
       <td><div>${esc(r.indicator_text)}</div><div class="matrix-small">${esc(COMP_LABEL[r.competency_code]||r.competency_code)} · ${esc(r.operation_code)}</div></td>
       <td><input class="matrix-num" data-field="KNOW" type="number" min="0" max="99" value="${r.allocations.p1.KNOW}" ${strict()?'disabled':''}></td>
       <td><input class="matrix-num" data-field="UNDERSTAND" type="number" min="0" max="99" value="${r.allocations.p1.UNDERSTAND}" ${strict()?'disabled':''}></td>
@@ -182,6 +245,7 @@
     </tr>`).join('');
     const t=totals(), p1=t.know+t.understand+t.apply;
     if(summary)summary.textContent=`P1 ${p1} (Biết ${t.know} · Hiểu ${t.understand} · Vận dụng ${t.apply}) · P2 ${t.p2} cluster · P3 ${t.p3} · ${state.rows.length} indicator.`;
+    renderOverview();
   }
 
   function syncInputsFromMatrix(){
@@ -205,6 +269,13 @@
         <div class="actions matrix-actions"><button type="button" id="matrixAuto111" class="secondary">Tự phân bổ theo chuẩn TN</button><button type="button" id="matrixSync111" class="secondary">Đồng bộ số câu từ ma trận</button></div>
       </div>
       <div class="grid4 matrix-meta"><div class="field"><label>Thời gian FLEX (phút)</label><input id="matrixTime111" type="number" min="10" max="240" value="45"></div><div class="field"><label>Chuẩn mức độ</label><input readonly value="Biết · Hiểu · Vận dụng"></div><div class="field"><label>Chuẩn chất lượng</label><input readonly value="TNTHPT 2025/2026"></div><div class="field"><label>Đơn vị gốc</label><input readonly value="YCCĐ → Indicator → Slot"></div></div>
+      <div class="matrix-dashboard115">
+        <div class="matrix-card115"><div class="matrix-card-title">NGUỒN YCCĐ / MAPPING</div><div id="geoMatrixSource115"></div></div>
+        <div class="matrix-card115"><div class="matrix-card-title">PHÂN BỐ MỨC ĐỘ</div><div id="geoMatrixCognitive115"></div></div>
+        <div class="matrix-card115"><div class="matrix-card-title">PHÂN BỐ NĂNG LỰC</div><div id="geoMatrixCompetency115"></div></div>
+      </div>
+      <div id="geoMatrixPreview115" class="matrix-preview115"></div>
+      <div id="geoMatrixWarnings115" class="matrix-warnings115"></div>
       <div class="matrix-scroll"><table class="matrix-table"><thead><tr><th>Bài</th><th>YCCĐ chuẩn hóa</th><th>Indicator / năng lực</th><th>P1 Biết</th><th>P1 Hiểu</th><th>P1 VD</th><th>P2</th><th>P3</th><th>Stimulus</th><th>Mức cho phép</th></tr></thead><tbody id="geoMatrixBody111"></tbody></table></div>
       <div id="geoMatrixSummary111" class="statusline"></div>`;
     field.insertAdjacentElement('afterend',panel);
@@ -242,7 +313,11 @@
     .matrix-actions{margin:0}.matrix-meta{margin-top:10px}.matrix-scroll{overflow:auto;max-height:520px;border:1px solid #e2e8f0;border-radius:8px;background:#fff}
     .matrix-table{border-collapse:collapse;width:100%;min-width:1250px;font-size:12px}.matrix-table th,.matrix-table td{border-bottom:1px solid #e2e8f0;border-right:1px solid #f1f5f9;padding:7px;vertical-align:top}
     .matrix-table th{position:sticky;top:0;background:#eef2ff;z-index:1;text-align:left}.matrix-num{width:62px;padding:6px}
-    @media(max-width:760px){.matrix-head{flex-direction:column}.matrix-meta{grid-template-columns:1fr}}`;
+    .matrix-dashboard115{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:10px 0}.matrix-card115{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px}.matrix-card-title{font-size:10px;font-weight:700;letter-spacing:.04em;color:#475569;margin-bottom:5px}
+    .matrix-chip{display:inline-block;border:1px solid #cbd5e1;border-radius:999px;padding:3px 7px;margin:2px 3px 2px 0;background:#fff;font-size:11px}.matrix-preview115{border:1px solid #c7d2fe;background:#eef2ff;border-radius:9px;padding:9px 10px;margin-bottom:8px;font-size:12px}
+    .matrix-warnings115{display:grid;gap:5px;margin-bottom:8px}.matrix-alert{border-radius:8px;padding:7px 9px;font-size:12px;border:1px solid}.matrix-alert-ok{background:#f0fdf4;border-color:#bbf7d0}.matrix-alert-warn{background:#fffbeb;border-color:#fde68a}.matrix-alert-error{background:#fef2f2;border-color:#fecaca}
+    .matrix-badge{display:inline-block;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:700}.matrix-badge-exact{background:#dcfce7}.matrix-badge-aligned{background:#e0e7ff}
+    @media(max-width:900px){.matrix-dashboard115{grid-template-columns:1fr}}@media(max-width:760px){.matrix-head{flex-direction:column}.matrix-meta{grid-template-columns:1fr}}`;
   document.head.appendChild(style);
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount);else mount();
