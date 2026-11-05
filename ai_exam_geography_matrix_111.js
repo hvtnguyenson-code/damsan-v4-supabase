@@ -25,6 +25,12 @@
     return text.includes('địa')||text.includes('dia li')||text.includes('geography');
   }
   function strict(){return profile()==='TOT_NGHIEP';}
+  function strictTeacherMatrixEnabled(){
+    return !!document.getElementById('matrixStrictTeacher116')?.checked;
+  }
+  function matrixEditable(){
+    return !strict()||strictTeacherMatrixEnabled();
+  }
 
   function selectedLessons(){
     const g=grade();
@@ -210,8 +216,14 @@
 
   function spec111(){
     const spec=baseSpec();
-    if(!isGeography()||strict()) return spec;
-    return {...spec,assessment_mode:'FLEX_GEOGRAPHY',assessment_matrix:matrixObject()};
+    if(!isGeography()) return spec;
+    if(strict()&&!strictTeacherMatrixEnabled()) return spec;
+    return {
+      ...spec,
+      assessment_mode:'FLEX_GEOGRAPHY',
+      matrix_structure_policy:strict()?'TNTHPT_18_4_6_TEACHER_LOCKED':'TEACHER_LOCKED_FLEX',
+      assessment_matrix:matrixObject()
+    };
   }
   window.aieSpec=spec111;
 
@@ -225,7 +237,11 @@
     const body=document.getElementById('geoMatrixBody111');
     const summary=document.getElementById('geoMatrixSummary111');
     const mode=document.getElementById('geoMatrixMode111');
-    if(mode)mode.textContent=strict()?'STRICT_TNTHPT — ma trận chỉ hiển thị YCCĐ/phạm vi; cấu trúc 18–4–6 không đổi.':'FLEX_GEOGRAPHY — ma trận này khóa cấu trúc và được server biên dịch thành slot.';
+    if(mode){
+      if(strict()&&strictTeacherMatrixEnabled()) mode.textContent='TNTHPT 18–4–6 + TEACHER MATRIX — tổng cấu trúc chính thức giữ nguyên; giáo viên khóa phân bố bài/năng lực.';
+      else if(strict()) mode.textContent='STRICT_TNTHPT — cấu trúc và phân bố do blueprint chuẩn điều khiển. Bật “Giáo viên khóa ma trận” nếu muốn can thiệp phân bố nhưng vẫn giữ 18–4–6.';
+      else mode.textContent='FLEX_GEOGRAPHY — ma trận giáo viên khóa cấu trúc và server biên dịch thành slot.';
+    }
     if(!state.rows.length){
       body.innerHTML=`<tr><td colspan="10">${g===11?'Khối 11 chưa có SGK normalized trong Kho tri thức. Catalog 114 khóa lesson mapping lớp 11; hệ thống không tự bịa ánh xạ theo bài.':'Không có mapping catalog 114 phù hợp với phạm vi đã chọn. Hãy kiểm tra bài/khối hoặc nguồn normalized.'}</td></tr>`;
       if(summary)summary.textContent='Chưa có dòng ma trận.';
@@ -235,11 +251,11 @@
       <td><strong>${esc(r.lesson_code||'')}</strong><div class="matrix-small">${esc(r.lesson_title)}</div></td>
       <td><div>${esc(r.requirement_text)}</div><div class="matrix-small"><span class="matrix-badge ${r.requirement_basis==='CURRENT_AUTHORITY_EXACT'?'matrix-badge-exact':'matrix-badge-aligned'}">${esc(r.requirement_basis==='CURRENT_AUTHORITY_EXACT'?'Authority exact':'Catalog aligned')}</span> ${esc(r.requirement_id)} · ${esc(r.authority_revision||'')} · ${esc(r.mapping_source||'')} · confidence ${Math.round(r.mapping_confidence*100)}%</div></td>
       <td><div>${esc(r.indicator_text)}</div><div class="matrix-small">${esc(COMP_LABEL[r.competency_code]||r.competency_code)} · ${esc(r.operation_code)}</div></td>
-      <td><input class="matrix-num" data-field="KNOW" type="number" min="0" max="99" value="${r.allocations.p1.KNOW}" ${strict()?'disabled':''}></td>
-      <td><input class="matrix-num" data-field="UNDERSTAND" type="number" min="0" max="99" value="${r.allocations.p1.UNDERSTAND}" ${strict()?'disabled':''}></td>
-      <td><input class="matrix-num" data-field="APPLY" type="number" min="0" max="99" value="${r.allocations.p1.APPLY}" ${strict()?'disabled':''}></td>
-      <td><input class="matrix-num" data-field="P2" type="number" min="0" max="99" value="${r.allocations.p2}" ${strict()?'disabled':''}></td>
-      <td><input class="matrix-num" data-field="P3" type="number" min="0" max="99" value="${r.allocations.p3}" ${strict()?'disabled':''}></td>
+      <td><input class="matrix-num" data-field="KNOW" type="number" min="0" max="99" value="${r.allocations.p1.KNOW}" ${matrixEditable()?'':'disabled'}></td>
+      <td><input class="matrix-num" data-field="UNDERSTAND" type="number" min="0" max="99" value="${r.allocations.p1.UNDERSTAND}" ${matrixEditable()?'':'disabled'}></td>
+      <td><input class="matrix-num" data-field="APPLY" type="number" min="0" max="99" value="${r.allocations.p1.APPLY}" ${matrixEditable()?'':'disabled'}></td>
+      <td><input class="matrix-num" data-field="P2" type="number" min="0" max="99" value="${r.allocations.p2}" ${matrixEditable()?'':'disabled'}></td>
+      <td><input class="matrix-num" data-field="P3" type="number" min="0" max="99" value="${r.allocations.p3}" ${matrixEditable()?'':'disabled'}></td>
       <td>${esc(r.preferred_stimuli.join(' / '))}</td>
       <td>${r.allowed_cognitive_levels.map(x=>esc(x)).join('<br>')}</td>
     </tr>`).join('');
@@ -268,6 +284,9 @@
         <div><strong>THIẾT LẬP MA TRẬN ĐÁNH GIÁ ĐỊA LÍ</strong><div id="geoMatrixMode111" class="matrix-small"></div></div>
         <div class="actions matrix-actions"><button type="button" id="matrixAuto111" class="secondary">Tự phân bổ theo chuẩn TN</button><button type="button" id="matrixSync111" class="secondary">Đồng bộ số câu từ ma trận</button></div>
       </div>
+      <label id="matrixStrictTeacherWrap116" class="matrix-teacher-toggle116 hidden"><input id="matrixStrictTeacher116" type="checkbox"> <strong>Giáo viên khóa ma trận</strong> — giữ nguyên cấu trúc TNTHPT 18–4–6 nhưng cho phép chỉnh phân bố bài, mức độ và năng lực.</label>
+      <div class="matrix-head-spacer116">
+      </div>
       <div class="grid4 matrix-meta"><div class="field"><label>Thời gian FLEX (phút)</label><input id="matrixTime111" type="number" min="10" max="240" value="45"></div><div class="field"><label>Chuẩn mức độ</label><input readonly value="Biết · Hiểu · Vận dụng"></div><div class="field"><label>Chuẩn chất lượng</label><input readonly value="TNTHPT 2025/2026"></div><div class="field"><label>Đơn vị gốc</label><input readonly value="YCCĐ → Indicator → Slot"></div></div>
       <div class="matrix-dashboard115">
         <div class="matrix-card115"><div class="matrix-card-title">NGUỒN YCCĐ / MAPPING</div><div id="geoMatrixSource115"></div></div>
@@ -293,17 +312,26 @@
       else row.allocations.p1[f]=value;
       state.dirty=true;render();
     });
-    document.getElementById('matrixAuto111').addEventListener('click',autoAllocate);
-    document.getElementById('matrixSync111').addEventListener('click',syncInputsFromMatrix);
+    document.getElementById('matrixAuto111').addEventListener('click',()=>{if(matrixEditable())autoAllocate();});
+    document.getElementById('matrixSync111').addEventListener('click',()=>{if(!strict())syncInputsFromMatrix();});
+    document.getElementById('matrixStrictTeacher116').addEventListener('change',()=>{
+      state.dirty=false;
+      if(strictTeacherMatrixEnabled()&&state.rows.length) autoAllocate();
+      else render();
+    });
 
     document.addEventListener('change',(event)=>{
       if(event.target.matches('.knowledge-lesson-check,.knowledge-doc-all,#gradeSelect,#profile,#subjectSelect')){
         state.dirty=false;
-        setTimeout(()=>{buildRows();if(!strict()&&state.rows.length)autoAllocate();else render();},0);
+        setTimeout(()=>{buildRows();if(matrixEditable()&&state.rows.length)autoAllocate();else render();},0);
       }
     });
-    for(const id of ['p1Count','p2Count','p3Count']) document.getElementById(id)?.addEventListener('change',()=>{if(!strict())autoAllocate();else render();});
-    setTimeout(render,0);
+    for(const id of ['p1Count','p2Count','p3Count']) document.getElementById(id)?.addEventListener('change',()=>{if(matrixEditable())autoAllocate();else render();});
+    setTimeout(()=>{
+      const wrap=document.getElementById('matrixStrictTeacherWrap116');
+      if(wrap)wrap.classList.toggle('hidden',!strict());
+      render();
+    },0);
   }
 
   const style=document.createElement('style');
@@ -317,6 +345,7 @@
     .matrix-chip{display:inline-block;border:1px solid #cbd5e1;border-radius:999px;padding:3px 7px;margin:2px 3px 2px 0;background:#fff;font-size:11px}.matrix-preview115{border:1px solid #c7d2fe;background:#eef2ff;border-radius:9px;padding:9px 10px;margin-bottom:8px;font-size:12px}
     .matrix-warnings115{display:grid;gap:5px;margin-bottom:8px}.matrix-alert{border-radius:8px;padding:7px 9px;font-size:12px;border:1px solid}.matrix-alert-ok{background:#f0fdf4;border-color:#bbf7d0}.matrix-alert-warn{background:#fffbeb;border-color:#fde68a}.matrix-alert-error{background:#fef2f2;border-color:#fecaca}
     .matrix-badge{display:inline-block;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:700}.matrix-badge-exact{background:#dcfce7}.matrix-badge-aligned{background:#e0e7ff}
+    .matrix-teacher-toggle116{display:block;margin:10px 0;padding:9px 10px;border:1px solid #c7d2fe;background:#eef2ff;border-radius:9px;font-size:12px}.matrix-teacher-toggle116.hidden{display:none}.matrix-head-spacer116{display:none}
     @media(max-width:900px){.matrix-dashboard115{grid-template-columns:1fr}}@media(max-width:760px){.matrix-head{flex-direction:column}.matrix-meta{grid-template-columns:1fr}}`;
   document.head.appendChild(style);
 
