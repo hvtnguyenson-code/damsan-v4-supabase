@@ -2,6 +2,14 @@ import { maxItemSimilarity106, type CriticValidation106 } from "./exam_independe
 
 export type CalibrationJson108 = Record<string, unknown>;
 
+export function isCalibrationEnabled108(value?: string|null) {
+  const raw=(value ?? (typeof Deno!=="undefined" ? Deno.env.get("DAMSAN_AI_CALIBRATION_108") : "") ?? "").trim().toLowerCase();
+  return ["1","true","enabled","on"].includes(raw);
+}
+export function requireCalibrationEnabled108(value?: string|null) {
+  if(!isCalibrationEnabled108(value)) throw new Error("calibration_disabled");
+}
+
 export type CalibrationResult108 = {
   schema_version: "DAMSAN_GEOGRAPHY_CALIBRATION_RESULT_V1";
   calibration_version: "108";
