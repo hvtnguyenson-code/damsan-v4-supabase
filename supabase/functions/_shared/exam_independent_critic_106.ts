@@ -68,7 +68,8 @@ function jaccard(a:Set<string>,b:Set<string>) {
 }
 export function maxItemSimilarity106(examValue: unknown) {
   const qs=questions(examValue), sets=qs.map(tokens);
-  let max=0, pair:["",""]=["",""];
+  let max=0;
+  let pair:[string,string]=["",""];
   for(let i=0;i<sets.length;i++) for(let j=i+1;j<sets.length;j++) {
     const s=jaccard(sets[i],sets[j]);
     if(s>max){max=s;pair=[slotId(qs[i]),slotId(qs[j])];}
