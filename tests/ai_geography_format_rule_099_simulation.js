@@ -2,6 +2,7 @@ const fs=require('fs');
 const assert=require('assert');
 
 const migration=fs.readFileSync('supabase/migrations/20261105094500_authority_html_source_capture_099.sql','utf8');
+const bucketMigration=fs.readFileSync('supabase/migrations/20261105100500_authority_html_bucket_099a.sql','utf8');
 const source=fs.readFileSync('supabase/functions/authority-p0-format-2025/index.ts','utf8');
 const upload=fs.readFileSync('supabase/functions/knowledge-upload/index.ts','utf8');
 
@@ -22,5 +23,8 @@ assert(source.includes('later_official_rule_overrides:true'),'099 authority cave
 assert(!/req\.json\s*\(/.test(source),'099 must not accept arbitrary request JSON');
 assert(!source.includes('searchParams'),'099 must not accept arbitrary source URL/query');
 assert(upload.includes('"application/pdf"')&&!upload.includes('"text/html"'),'099 must NOT open teacher uploads to HTML');
+assert(bucketMigration.includes("where id='knowledge-source'"),'099a must scope MIME change to knowledge-source bucket');
+assert(bucketMigration.includes("'text/html'"),'099a private source bucket HTML MIME support missing');
+assert(!bucketMigration.includes("knowledge-normalized"),'099a must not modify unrelated normalized bucket');
 
 console.log('AI_GEOGRAPHY_FORMAT_RULE_099_PASS');
