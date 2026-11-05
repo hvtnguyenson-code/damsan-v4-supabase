@@ -48,12 +48,22 @@
     if(s.p3!==6) errors.push(`P3=${s.p3}, cần 6`);
     return {ok:errors.length===0,structure:s,errors};
   }
+  function normalizeStudentCode(v){
+    const s=text(v);
+    return /^\d{6}$/.test(s)?s:null;
+  }
+  function sheetSbdToStudentCode(scanSbd){
+    const s=text(scanSbd);
+    if(!/^\d{8}$/.test(s)) return {ok:false,status:'invalid_format',studentCode:null};
+    if(!s.startsWith('00')) return {ok:false,status:'invalid_prefix',studentCode:null};
+    return {ok:true,status:'ok',studentCode:s.slice(2)};
+  }
   function studentKeys(student){
-    const vals=[student.ma_hs,student.MaHS,student.sbd,student.SBD,student.id_hoc_sinh].filter(v=>v!==undefined&&v!==null);
+    const vals=[student.ma_hs,student.MaHS].filter(v=>v!==undefined&&v!==null);
     const out=new Set();
     for(const v of vals){
-      const raw=text(v); if(raw) out.add(raw);
-      const d=digits(v); if(d){out.add(d);out.add(d.replace(/^0+/,'')||'0');}
+      const code=normalizeStudentCode(v);
+      if(code) out.add(code);
     }
     return [...out];
   }
@@ -66,16 +76,13 @@
     return idx;
   }
   function resolveStudent(scanSbd,students){
+    const mapped=sheetSbdToStudentCode(scanSbd);
+    if(!mapped.ok) return {status:mapped.status,students:[],studentCode:null};
     const idx=students instanceof Map?students:buildStudentIndex(students);
-    const raw=text(scanSbd), d=digits(scanSbd), keys=[raw,d,d.replace(/^0+/,'')||'0'].filter(Boolean);
-    const matches=[]; const seen=new Set();
-    for(const k of keys) for(const st of idx.get(k)||[]){
-      const id=text(st.id??st.ma_hs??st.MaHS);
-      if(!seen.has(id)){seen.add(id);matches.push(st);}
-    }
-    if(matches.length===1) return {status:'matched',student:matches[0]};
-    if(matches.length>1) return {status:'ambiguous',students:matches};
-    return {status:'not_found',students:[]};
+    const matches=idx.get(mapped.studentCode)||[];
+    if(matches.length===1) return {status:'matched',student:matches[0],studentCode:mapped.studentCode};
+    if(matches.length>1) return {status:'ambiguous',students:matches,studentCode:mapped.studentCode};
+    return {status:'not_found',students:[],studentCode:mapped.studentCode};
   }
   function resolveVariant(scanCode,variants){
     const matches=(variants||[]).filter(v=>sameExamCode(scanCode,v.code));
@@ -115,5 +122,5 @@
     const students=await loadStudents(room);
     return buildRoomModel(room,preview.exams||[],students||[]);
   }
-  return {canonicalNumericCode,sameExamCode,normalizeExamRows,structureOf,validate1846,studentKeys,buildStudentIndex,resolveStudent,resolveVariant,buildRoomModel,bindScan,loadReadOnlyContext};
+  return {canonicalNumericCode,sameExamCode,normalizeStudentCode,sheetSbdToStudentCode,normalizeExamRows,structureOf,validate1846,studentKeys,buildStudentIndex,resolveStudent,resolveVariant,buildRoomModel,bindScan,loadReadOnlyContext};
 });
