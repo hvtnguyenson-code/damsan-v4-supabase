@@ -10,7 +10,7 @@ const calibration=fs.readFileSync('supabase/functions/_shared/exam_geography_cal
 const bridge=fs.readFileSync('supabase/functions/exam-ai-bridge/index.ts','utf8');
 
 assert(html.includes('ai_exam_geography_curriculum_catalog_114.js?v=20261105-curriculum-catalog-114'),'114 curriculum catalog overlay missing');
-assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-curriculum-catalog-114'),'111/114 matrix overlay missing');
+assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-matrix-ui-115'),'111/115 matrix overlay missing');
 assert(html.indexOf('ai_exam_geography_curriculum_catalog_114.js') < html.indexOf('ai_exam_geography_matrix_111.js'),'114 catalog must load before matrix 111');
 assert(html.indexOf('ai_exam_geography_matrix_111.js') < html.indexOf('ai_exam_planned_activation_109.js'),'111 must load before planned activation 109');
 
