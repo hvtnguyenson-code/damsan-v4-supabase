@@ -22,6 +22,7 @@ import {
   isCalibrationEnabled108,
   requireCalibrationEnabled108,
 } from "../_shared/exam_geography_calibration_108.ts";
+import { effectiveGeographySpec112 } from "../_shared/exam_geography_flex_matrix_112.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -282,7 +283,7 @@ async function getPlannedGenerationInput105(req: Request, body: JsonObject) {
   requirePlannedGenerationEnabled105();
   const { claim } = await claimCapability(body);
   const requestId = cleanString(claim.request_id, 80);
-  const spec = asObject(claim.exam_spec);
+  const spec = effectiveGeographySpec112(asObject(claim.exam_spec));
   const batches = plannedGenerationBatches105(spec);
   const batchIndex = asInt(body.batch_index, 0, 0, batches.length - 1);
   const { batch } = plannedBatchByIndex105(spec, batchIndex);
@@ -566,7 +567,7 @@ function validateAndBuildExam(payloadValue: unknown, spec: JsonObject, knownUnit
 
 async function submitExamDraft(req: Request, body: JsonObject) {
   const { capabilityHash, claim } = await claimCapability(body);
-  const spec = asObject(claim.exam_spec);
+  const spec = effectiveGeographySpec112(asObject(claim.exam_spec));
   const documentIds = Array.isArray(claim.knowledge_document_ids)
     ? claim.knowledge_document_ids.map((v) => cleanString(v, 80)).filter(isUuid)
     : [];
@@ -598,7 +599,7 @@ async function submitExamDraft(req: Request, body: JsonObject) {
 async function validatePlannedBatchBridge105(req: Request, body: JsonObject) {
   requirePlannedGenerationEnabled105();
   const { claim } = await claimCapability(body);
-  const spec = asObject(claim.exam_spec);
+  const spec = effectiveGeographySpec112(asObject(claim.exam_spec));
   const requestId = cleanString(claim.request_id, 80);
   const batches = plannedGenerationBatches105(spec);
   const batchIndex = asInt(body.batch_index, 0, 0, batches.length - 1);
@@ -621,7 +622,7 @@ async function getIndependentCriticInput106(req: Request, body: JsonObject) {
   requirePlannedGenerationEnabled105();
   requireIndependentCriticEnabled106();
   const { claim } = await claimCapability(body);
-  const spec = asObject(claim.exam_spec);
+  const spec = effectiveGeographySpec112(asObject(claim.exam_spec));
   const allUnits = await allKnowledgeUnits105(cleanString(claim.request_id, 80));
   const planned = validatePlannedExam105(body.exam, spec, allUnits);
   const plan = asObject(spec.exam_design_plan ?? {});
@@ -673,7 +674,7 @@ async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
     throw new Error("critic_reviewer_must_differ_from_generator");
   }
 
-  const calibration = calibrateGeographyExam108(planned.exam, critic.validation);
+  const calibration = calibrateGeographyExam108(planned.exam, critic.validation, spec);
   if (calibration.decision !== "ACCEPT") throw new Error("calibration_not_accepted");
 
   const knownKeys = new Set(
