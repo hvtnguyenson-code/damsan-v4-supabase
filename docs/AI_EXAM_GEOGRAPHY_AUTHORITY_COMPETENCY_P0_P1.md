@@ -762,11 +762,11 @@ Server sở hữu:
 
 - [x] P0 — authority source registry/slot expansion (097)
 - [x] P0 — PARTIAL_SOURCES / VERIFIED_SOURCES readiness semantics (097)
-- [ ] P0 — authority corpus thật (098: đề tham khảo 2025 VERIFIED; 099: cấu trúc 2025 VERIFIED; 100: chương trình Địa lí hiện hành VERIFIED; 101: đề chính thức 2026 đang triển khai)
+- [x] P0 — authority corpus thật — 4/4 nguồn bắt buộc VERIFIED_SOURCES (097–101)
 - [ ] P0 — authority normalization
 - [ ] P0 — VERIFIED_SOURCES acceptance
-- [ ] P1 — competency ontology
-- [ ] P1 — blueprint compiler
+- [x] P1 — competency ontology — authority-grounded (100)
+- [ ] P1 — blueprint compiler — 102 đang triển khai
 - [ ] P1 — exam design planner
 - [ ] P1 — 28-slot acceptance
 - [ ] P2 — stimulus engine
