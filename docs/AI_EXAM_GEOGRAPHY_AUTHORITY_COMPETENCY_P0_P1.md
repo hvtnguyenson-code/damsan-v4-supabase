@@ -760,7 +760,9 @@ Server sở hữu:
 
 ## Trạng thái triển khai
 
-- [ ] P0 — authority corpus thật
+- [x] P0 — authority source registry/slot expansion (097)
+- [x] P0 — PARTIAL_SOURCES / VERIFIED_SOURCES readiness semantics (097)
+- [ ] P0 — authority corpus thật (gắn các file nguồn vào slot)
 - [ ] P0 — authority normalization
 - [ ] P0 — VERIFIED_SOURCES acceptance
 - [ ] P1 — competency ontology
