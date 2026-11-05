@@ -766,8 +766,11 @@ Server sở hữu:
 - Trigger request production đã probe trong subtransaction tự rollback: blueprint + plan attach đúng, không để dữ liệu test.
 - Plan hiện giữ `status=PREVIEW_ONLY_NOT_GENERATOR_ACTIVE`; chưa thay đổi prompt/generator.
 - P2-104 production PASS: canonical stimulus contract/renderer đã nghiệm thu runtime 9/9 loại; bridge v4 + Pages/PWA deploy xanh; generator vẫn chưa nhận stimulus contract.
-- P3-105: planned-generation side-by-side đang triển khai; action cũ giữ nguyên, UI hiện tại không gọi action mới, feature gate server mặc định OFF.
-- Chỉ sau khi 105 runtime probe và regression PASS mới xem xét nghiệm thu; chưa kích hoạt cho vận hành thật.
+- P3-105 implementation PASS: 8 deterministic batches / 28 slots / 40 commands; per-slot lesson/competency/cognitive/operation/stimulus/source_ref validation.
+- Deno runtime CI PASS: shared module, probe and bridge type-check; 28-slot fixture PASS; wrong-scope source_ref rejection PASS.
+- Operational invariant verified after merge: production `exam-ai-bridge` remains version 4 (P2); P3 bridge actions are not deployed and feature gate remains OFF.
+- `planned-generation-probe-105` is a separate JWT-protected, in-memory diagnostic function; it does not read/write exam data.
+- P3 is therefore complete as an inactive side-by-side implementation. Activation is a separate future decision and must not occur during active student testing.
 
 ## Trạng thái triển khai
 
@@ -781,7 +784,7 @@ Server sở hữu:
 - [x] P1 — exam design planner — 103 production PASS
 - [x] P1 — 28-slot acceptance — 18 P1 + 4 P2 clusters + 6 P3; 40 answer commands; rollback probe PASS
 - [x] P2 — stimulus engine — 104 production PASS
-- [ ] P3 — planned generation — 105 side-by-side đang triển khai, feature gate OFF
+- [x] P3 — planned generation — 105 side-by-side implementation/runtime PASS; feature gate OFF; production bridge chưa deploy P3
 - [ ] P4 — independent critic
 - [ ] P5 — prompt consolidation
 - [ ] P6 — calibration
