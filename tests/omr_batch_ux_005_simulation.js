@@ -25,6 +25,9 @@ assert(!studentHtml.includes('omr-teacher-module.js'),'student runtime must rema
 assert(teacherModule.includes('Camera chỉ đọc phiếu trên máy. Điểm chỉ được ghi sau khi giáo viên bấm Xác nhận & Lưu.'));
 assert(teacherModule.includes('id="omrReviewUncertain"'));
 assert(teacherModule.includes('preview.reviewedUncertain=reviewed'));
+assert(teacherModule.includes("q('omrSbd').value=scan.sbd;"),'teacher UI must preserve all 8 SBD digits');
+assert(!teacherModule.includes("replace(/^0+(?=\\d)/,''"),'teacher UI must never strip leading zeros from SBD');
+assert(teacherModule.includes("SBD phiếu phải theo quy ước 00 + mã học sinh 6 số"));
 assert(teacherModule.includes("q('omrSave').disabled=hasUncertain && !reviewed"));
 assert(teacherModule.includes('confirm(') && teacherModule.includes('Lưu điểm'));
 assert(teacherModule.includes("if(data.status==='conflict')"));
