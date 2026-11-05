@@ -191,7 +191,7 @@
       if(!scan.ok){showWarning(scan.error||'Không đọc được phiếu');return;}
       scan.templateId=T.template.id;state.lastScan=scan;
       q('omrScanArea').style.display='block';
-      q('omrSbd').value=scan.sbd.replace(/^0+(?=\d)/,'');
+      q('omrSbd').value=scan.sbd;
       q('omrMaDe').value=scan.maDe;
       q('omrP1').value=scan.p1;
       scan.p2.forEach((v,i)=>q('omrP2_'+(i+1)).value=v);
@@ -222,12 +222,18 @@
     if(!state.roomModel||!state.lastScan)return;
     const scan=scanFromForm(),vr=B.resolveVariant(scan.maDe,state.roomModel.variants);
     if(vr.status!=='matched'){showWarning('Mã đề không tồn tại trong phòng.');return;}
-    let st=selectedStudent();
-    if(!st){
-      const sr=B.resolveStudent(scan.sbd,state.roomModel.studentIndex);
-      if(sr.status==='matched'){st=sr.student;fillStudentSelect(st.id);}
+    const sr=B.resolveStudent(scan.sbd,state.roomModel.studentIndex);
+    if(sr.status==='invalid_format'){showWarning('SBD trên phiếu phải đủ đúng 8 chữ số.');return;}
+    if(sr.status==='invalid_prefix'){showWarning('SBD phiếu phải theo quy ước 00 + mã học sinh 6 số. Hai số đầu phải là 00.');return;}
+    if(sr.status==='not_found'){showWarning('Không tìm thấy mã học sinh '+(sr.studentCode||'')+' trong phòng đã chọn.');return;}
+    if(sr.status==='ambiguous'){showWarning('Mã học sinh bị trùng trong danh sách phòng. Không thể tự chấm.');return;}
+    const st=sr.student;
+    fillStudentSelect(st.id);
+    const manualSelected=selectedStudent();
+    if(!manualSelected || String(manualSelected.id)!==String(st.id)){
+      showWarning('SBD không khớp học sinh đang chọn. Hệ thống đã trả về đúng học sinh theo SBD.');
+      fillStudentSelect(st.id);
     }
-    if(!st){showWarning('Không xác định được học sinh. Chọn học sinh thủ công trước khi lưu.');return;}
     const binding={ok:true,room:state.roomModel.room,student:st,variant:vr.variant,scan};
     let preview;
     try{preview=S.previewScan(scan,binding,{allowUncertain:true});}catch(e){showWarning('Không thể chấm thử: '+e.message);return;}
