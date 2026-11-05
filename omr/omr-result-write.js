@@ -6,7 +6,7 @@
   'use strict';
   function assertConfirmed(preview){
     if(!preview?.ok) throw new Error('preview_required');
-    if((preview.scan?.uncertain||[]).length) throw new Error('uncertain_scan_cannot_submit');
+    if((preview.scan?.uncertain||[]).length && preview.reviewedUncertain !== true) throw new Error('uncertain_scan_requires_review');
     if(!preview.student?.id) throw new Error('student_id_required');
     if(!preview.room?.id) throw new Error('room_id_required');
     if(!preview.variant?.code) throw new Error('exam_code_required');
@@ -16,6 +16,7 @@
     return {
       template_id:preview.scan?.templateId||'MOET_TLTN_2025_18_4_6_V1',
       reviewed:true,
+      uncertain_reviewed: preview.reviewedUncertain === true,
       uncertain_count:(preview.scan?.uncertain||[]).length,
       client_preview_score:preview.grade?.score??null
     };
