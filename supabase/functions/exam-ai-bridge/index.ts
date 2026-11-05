@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { composeStimulusStem104, normalizeAndRenderStimulus104 } from "../_shared/exam_stimulus_104.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -253,15 +254,19 @@ function sourceRefs(value: unknown) {
   return Array.from(new Set(refs));
 }
 
-function cleanQuestion(rawValue: unknown, knownUnitKeys: Set<string>) {
+function cleanQuestion(rawValue: unknown, knownUnitKeys: Set<string>, stimulusEnabled: boolean) {
   const raw = asObject(rawValue);
   const phan = normalizePart(raw.phan ?? raw.Phan);
   if (!["1", "2", "3"].includes(phan)) throw new Error("question_part_invalid");
-  const noiDung = cleanString(raw.noi_dung ?? raw.NoiDung, 16000);
-  if (!noiDung) throw new Error("question_text_required");
+  const rawNoiDung = cleanString(raw.noi_dung ?? raw.NoiDung, 16000);
+  if (!rawNoiDung) throw new Error("question_text_required");
 
   const refs = sourceRefs(raw.source_refs);
   if (refs.some((ref) => !knownUnitKeys.has(ref))) throw new Error("source_ref_unknown");
+
+  if (raw.stimulus != null && !stimulusEnabled) throw new Error("stimulus_not_enabled");
+  const stimulus = stimulusEnabled ? normalizeAndRenderStimulus104(raw.stimulus, phan) : null;
+  const noiDung = composeStimulusStem104(rawNoiDung, stimulus);
 
   let A = cleanString(raw.A ?? raw.a, 8000);
   let B = cleanString(raw.B ?? raw.b, 8000);
@@ -280,17 +285,45 @@ function cleanQuestion(rawValue: unknown, knownUnitKeys: Set<string>) {
     A = ""; B = ""; C = ""; D = "";
   }
 
+  const loiGiai = cleanString(raw.loi_giai, 16000);
+  const mucDo = cleanString(raw.muc_do, 120);
+  const baiHoc = cleanString(raw.bai_hoc, 500);
+  const normalized: JsonObject = {
+    ...raw,
+    phan,
+    noi_dung: noiDung,
+    A, B, C, D,
+    dap_an_dung: answer,
+    loi_giai: loiGiai,
+    source_refs: refs,
+    muc_do: mucDo,
+    bai_hoc: baiHoc,
+  };
+  delete normalized.Phan;
+  delete normalized.NoiDung;
+  delete normalized.DapAnDung;
+  delete normalized.a;
+  delete normalized.b;
+  delete normalized.c;
+  delete normalized.d;
+  if (stimulus) normalized.stimulus = stimulus.normalized;
+  else delete normalized.stimulus;
+
   return {
     canonical: {
       phan,
       noi_dung: noiDung,
       A, B, C, D,
       dap_an_dung: answer,
-      loi_giai: cleanString(raw.loi_giai, 16000),
+      loi_giai: loiGiai,
     } as CleanQuestion,
+    normalized,
     source_refs: refs,
-    muc_do: cleanString(raw.muc_do, 120),
-    bai_hoc: cleanString(raw.bai_hoc, 500),
+    muc_do: mucDo,
+    bai_hoc: baiHoc,
+    stimulus_types: stimulus ? stimulus.types : [],
+    stimulus_table_count: stimulus ? stimulus.table_count : 0,
+    stimulus_image_count: stimulus ? stimulus.image_count : 0,
   };
 }
 
@@ -362,13 +395,34 @@ function validateAndBuildExam(payloadValue: unknown, spec: JsonObject, knownUnit
   if (!Array.isArray(payload.questions) || payload.questions.length < 1 || payload.questions.length > MAX_QUESTIONS) throw new Error("questions_invalid");
 
   const canonical: CleanQuestion[] = [];
+  const normalizedQuestions: JsonObject[] = [];
   const provenance: JsonObject[] = [];
+  const stimulusTypes = new Set<string>();
+  let stimulusQuestionCount = 0;
+  let stimulusTableCount = 0;
+  let stimulusImageCount = 0;
+  const stimulusEnabled =
+    asObject(spec.competency_blueprint ?? {}).schema_version === "DAMSAN_GEO_BLUEPRINT_V1" &&
+    asObject(spec.exam_design_plan ?? {}).schema_version === "DAMSAN_GEO_DESIGN_PLAN_V1";
   const counts = { p1: 0, p2: 0, p3: 0 };
   for (let index = 0; index < payload.questions.length; index += 1) {
-    const cleaned = cleanQuestion(payload.questions[index], knownUnitKeys);
+    const cleaned = cleanQuestion(payload.questions[index], knownUnitKeys, stimulusEnabled);
     canonical.push(cleaned.canonical);
+    normalizedQuestions.push(cleaned.normalized);
     counts[`p${cleaned.canonical.phan}` as keyof typeof counts] += 1;
-    provenance.push({ question_no: index + 1, source_refs: cleaned.source_refs, muc_do: cleaned.muc_do, bai_hoc: cleaned.bai_hoc });
+    if (cleaned.stimulus_types.length) {
+      stimulusQuestionCount += 1;
+      cleaned.stimulus_types.forEach((type) => stimulusTypes.add(type));
+      stimulusTableCount += cleaned.stimulus_table_count;
+      stimulusImageCount += cleaned.stimulus_image_count;
+    }
+    provenance.push({
+      question_no: index + 1,
+      source_refs: cleaned.source_refs,
+      muc_do: cleaned.muc_do,
+      bai_hoc: cleaned.bai_hoc,
+      stimulus_types: cleaned.stimulus_types,
+    });
   }
 
   for (const part of ["1", "2", "3"]) {
@@ -400,12 +454,18 @@ function validateAndBuildExam(payloadValue: unknown, spec: JsonObject, knownUnit
     title,
     assessment_type: profile,
     scoring_config: scoringConfig,
-    questions: payload.questions,
+    questions: normalizedQuestions,
     _validated_provenance: provenance,
   };
   const validationReport = {
     valid: true,
     validator_version: "031A1",
+    stimulus_engine_version: "104",
+    stimulus_enabled: stimulusEnabled,
+    stimulus_question_count: stimulusQuestionCount,
+    stimulus_types: Array.from(stimulusTypes).sort(),
+    stimulus_table_count: stimulusTableCount,
+    stimulus_image_count: stimulusImageCount,
     question_count: canonical.length,
     counts,
     grounded_question_count: provenance.length,
