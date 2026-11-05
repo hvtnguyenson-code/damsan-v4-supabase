@@ -112,6 +112,69 @@
     },{know:0,understand:0,apply:0,p2:0,p3:0});
   }
 
+  function commandTotals(){
+    const t=totals();
+    return {KNOW:t.know+t.p2,UNDERSTAND:t.understand+t.p2*2,APPLY:t.apply+t.p2+t.p3};
+  }
+
+  function competencySummary(){
+    const counts=new Map();
+    for(const r of state.rows){
+      const weight=r.allocations.p1.KNOW+r.allocations.p1.UNDERSTAND+r.allocations.p1.APPLY+r.allocations.p2+r.allocations.p3;
+      if(weight<=0)continue;
+      counts.set(r.competency_code,(counts.get(r.competency_code)||0)+weight);
+    }
+    return Array.from(counts.entries()).sort((a,b)=>b[1]-a[1]);
+  }
+
+  function sourceStats(){
+    const exact=state.rows.filter(r=>r.requirement_basis==='CURRENT_AUTHORITY_EXACT').length;
+    const aligned=state.rows.filter(r=>r.requirement_basis==='CURRICULUM_ALIGNED_CATALOG').length;
+    const mapped=state.rows.filter(r=>r.mapping_source==='ACTIVE_NORMALIZED_TEXTBOOK').length;
+    const avg=state.rows.length?Math.round(state.rows.reduce((n,r)=>n+Number(r.mapping_confidence||0),0)/state.rows.length*100):0;
+    return {exact,aligned,mapped,avg};
+  }
+
+  function warnings(){
+    const list=[];
+    const requested={
+      p1:Number(document.getElementById('p1Count')?.value||0),
+      p2:Number(document.getElementById('p2Count')?.value||0),
+      p3:Number(document.getElementById('p3Count')?.value||0)
+    };
+    const t=totals(), p1=t.know+t.understand+t.apply;
+    if(!state.rows.length)list.push({level:'error',text:'Chưa có YCCĐ/indicator được map với phạm vi kiến thức đã chọn.'});
+    if(p1!==requested.p1||t.p2!==requested.p2||t.p3!==requested.p3)list.push({level:'error',text:'Tổng phân bổ chưa khớp cấu trúc: P1 '+p1+'/'+requested.p1+', P2 '+t.p2+'/'+requested.p2+', P3 '+t.p3+'/'+requested.p3+'.'});
+    if(state.rows.length&&new Set(state.rows.map(r=>r.scope_key)).size<Math.min(3,state.rows.length))list.push({level:'warn',text:'Phạm vi bài học hẹp; đề có nguy cơ tập trung quá nhiều vào ít nội dung.'});
+    const cmd=commandTotals(), total=cmd.KNOW+cmd.UNDERSTAND+cmd.APPLY;
+    if(total&&cmd.APPLY/total<0.15)list.push({level:'warn',text:'Tỉ trọng Vận dụng đang thấp dưới 15% tổng lệnh trả lời.'});
+    if(total&&cmd.KNOW/total>0.55)list.push({level:'warn',text:'Tỉ trọng Biết đang cao trên 55%; nên kiểm tra lại độ phân hoá.'});
+    if(state.rows.length&&competencySummary().length<2)list.push({level:'warn',text:'Ma trận mới phủ một nhóm năng lực; nên tăng độ đa dạng năng lực nếu phạm vi cho phép.'});
+    const weak=state.rows.filter(r=>Number(r.mapping_confidence||0)<0.85);
+    if(weak.length)list.push({level:'warn',text:'Có '+weak.length+' dòng mapping confidence dưới 85%.'});
+    if(!list.length)list.push({level:'ok',text:'Ma trận hiện không có cảnh báo cấu trúc hoặc coverage đáng kể.'});
+    return list;
+  }
+
+  function renderOverview(){
+    const source=document.getElementById('geoMatrixSource115');
+    const cognitive=document.getElementById('geoMatrixCognitive115');
+    const competency=document.getElementById('geoMatrixCompetency115');
+    const preview=document.getElementById('geoMatrixPreview115');
+    const warningBox=document.getElementById('geoMatrixWarnings115');
+    if(!source||!cognitive||!competency||!preview||!warningBox)return;
+    const stats=sourceStats();
+    source.innerHTML='<strong>Catalog 114</strong><div class="matrix-small">Mapped SGK normalized: '+stats.mapped+'/'+state.rows.length+' · exact authority: '+stats.exact+' · aligned catalog: '+stats.aligned+' · confidence TB: '+stats.avg+'%</div>';
+    const cmd=commandTotals(), total=cmd.KNOW+cmd.UNDERSTAND+cmd.APPLY;
+    const pct=(n)=>total?Math.round(n*100/total):0;
+    cognitive.innerHTML='<strong>Biết '+cmd.KNOW+' ('+pct(cmd.KNOW)+'%) · Hiểu '+cmd.UNDERSTAND+' ('+pct(cmd.UNDERSTAND)+'%) · Vận dụng '+cmd.APPLY+' ('+pct(cmd.APPLY)+'%)</strong><div class="matrix-small">Tính theo tổng lệnh trả lời, gồm 4 mệnh đề mỗi cluster P2.</div>';
+    const comps=competencySummary();
+    competency.innerHTML=comps.length?comps.map(([code,n])=>'<span class="matrix-chip">'+esc(COMP_LABEL[code]||code)+': '+n+'</span>').join(' '):'<span class="matrix-small">Chưa có phân bổ năng lực.</span>';
+    const t=totals(), p1=t.know+t.understand+t.apply, commands=p1+t.p2*4+t.p3;
+    preview.innerHTML='<strong>Preview đề:</strong> P1 '+p1+' câu · P2 '+t.p2+' cluster / '+(t.p2*4)+' mệnh đề · P3 '+t.p3+' câu · <strong>'+commands+' lệnh trả lời</strong> · '+new Set(state.rows.map(r=>r.scope_key)).size+' bài · '+state.rows.length+' indicator.';
+    warningBox.innerHTML=warnings().map(w=>'<div class="matrix-alert matrix-alert-'+w.level+'">'+esc(w.text)+'</div>').join('');
+  }
+
   function matrixObject(){
     const t=totals();
     const requested={
