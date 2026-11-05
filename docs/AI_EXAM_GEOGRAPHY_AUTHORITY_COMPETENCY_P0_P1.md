@@ -771,20 +771,27 @@ Server sở hữu:
 - Operational invariant verified after merge: production `exam-ai-bridge` remains version 4 (P2); P3 bridge actions are not deployed and feature gate remains OFF.
 - `planned-generation-probe-105` is a separate JWT-protected, in-memory diagnostic function; it does not read/write exam data.
 - P3 is therefore complete as an inactive side-by-side implementation. Activation is a separate future decision and must not occur during active student testing.
+- P4-106 PASS: independent reviewer contract, six-dimension rubric, similarity gate, reviewer must be an independent run and final planned submit rejects same provider+model as generator.
+- P5-107 PASS: one `DAMSAN_GEOGRAPHY_AUTHORING_CONTRACT_V1` now governs the planned-generation path; current browser overlay stack remains untouched for production compatibility.
+- P6-108 PASS: official 2025 reference + official 2026 design fingerprints, internal calibration gate, 12-candidate runtime suite.
+- Final P4-P6 runtime acceptance: gold score 97.91; weak critic candidate REJECT; high-similarity candidate REVIEW; suite = 6 ACCEPT / 3 REVIEW / 3 REJECT, mean 90.
+- Submission Safety CI PASS on the final P4-P6 head.
+- Production safety checkpoint after merge: Supabase `exam-ai-bridge` remains ACTIVE version 4 (P2 source); P3-P6 bridge source has NOT been deployed. Feature gates remain OFF.
+- P0-P6 source architecture is complete. Production activation remains a separate future acceptance/deployment decision.
 
 ## Trạng thái triển khai
 
 - [x] P0 — authority source registry/slot expansion (097)
 - [x] P0 — PARTIAL_SOURCES / VERIFIED_SOURCES readiness semantics (097)
 - [x] P0 — authority corpus thật — 4/4 nguồn bắt buộc VERIFIED_SOURCES (097–101)
-- [ ] P0 — authority normalization
-- [ ] P0 — VERIFIED_SOURCES acceptance
+- [x] P0 — authority normalization — required sources READY / AUTO_ACCEPTED / DAMSAN_SOURCE_V2
+- [x] P0 — VERIFIED_SOURCES acceptance — 4/4 required authority sources active
 - [x] P1 — competency ontology — authority-grounded (100)
 - [x] P1 — blueprint compiler — 102 production PASS
 - [x] P1 — exam design planner — 103 production PASS
 - [x] P1 — 28-slot acceptance — 18 P1 + 4 P2 clusters + 6 P3; 40 answer commands; rollback probe PASS
 - [x] P2 — stimulus engine — 104 production PASS
 - [x] P3 — planned generation — 105 side-by-side implementation/runtime PASS; feature gate OFF; production bridge chưa deploy P3
-- [ ] P4 — independent critic
-- [ ] P5 — prompt consolidation
-- [ ] P6 — calibration
+- [x] P4 — independent critic — 106 implementation/runtime PASS; inactive
+- [x] P5 — prompt consolidation — 107 Geography Authoring Contract wired to planned path; legacy production overlays retained
+- [x] P6 — calibration — 108 benchmark/runtime PASS; inactive
