@@ -1,0 +1,33 @@
+name: AI Geography Planned Generation 105 CI
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/_shared/exam_planned_generation_105.ts'
+      - 'supabase/functions/exam-ai-bridge/index.ts'
+      - 'supabase/functions/planned-generation-probe-105/index.ts'
+      - 'tests/ai_geography_planned_generation_105_runtime.ts'
+      - '.github/workflows/ai_geography_planned_generation_105_ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Deno type and module checks
+        run: |
+          deno check supabase/functions/_shared/exam_planned_generation_105.ts
+          deno check supabase/functions/planned-generation-probe-105/index.ts
+          deno check supabase/functions/exam-ai-bridge/index.ts
+      - name: Planned generation runtime acceptance
+        run: deno run tests/ai_geography_planned_generation_105_runtime.ts
+      - name: Whitespace errors
+        run: git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
