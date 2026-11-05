@@ -259,7 +259,30 @@ Khi chat hiện tại bị đầy hoặc chuyển phiên, trước khi làm OMR 
 5. Không merge vào main trước OMR-05.
 6. Không thay đổi phạm vi/UX nếu chưa có quyết định mới của chủ dự án.
 
-Status ban đầu khi tạo tài liệu:
+## 12. Trạng thái triển khai cập nhật 2026-11-05
+
 - Quy trình: CHỐT.
-- Code OMR: CHƯA BẮT ĐẦU.
-- Production main: CHƯA CÓ OMR.
+- OMR-01: ĐÃ CODE — template BGD 2025 18–4–6, OMR core, camera/file lab, synthetic geometry test.
+- OMR-02: ĐÃ CODE — room/student/exam binding read-only, hỗ trợ mã phiếu 4 số như 0444 ghép mã DB 444.
+- OMR-03: ĐÃ CODE — preview grading mirror đúng canonical grader V4.
+- OMR-04: ĐÃ CODE TRÊN NHÁNH — staff-confirmed canonical write RPC; migration CHƯA APPLY vào production DB; không ghi thẳng ket_qua; khóa trường + môn; không tự ghi đè kết quả.
+- OMR-05: ĐÃ CODE — một nút Chấm Phiếu riêng, camera/chọn ảnh, chỉnh đáp án, review ô nghi ngờ, xác nhận thủ công, batch scan.
+- Final branch: `feat/omr-05-batch-ux`.
+- Final PR: **#153**, trạng thái **DRAFT / CHƯA MERGE**.
+- OMR Camera Grading CI: GREEN tại code commit `23734374d78a9dbe912dbbecdcee72ed4e30d1e3`.
+- Submission Safety CI: GREEN tại cùng code commit.
+- Production `main`: CHƯA CÓ OMR.
+- Supabase production: CHƯA APPLY migration OMR.
+- Deploy production: CHƯA THỰC HIỆN.
+
+### Gate còn lại trước merge main
+
+BẮT BUỘC nghiệm thu bằng phiếu 18–4–6 in thật và camera điện thoại thật:
+1. ảnh thẳng, nghiêng và ánh sáng thông thường;
+2. SBD và mã đề (đặc biệt 0444 ↔ 444);
+3. P1/P2/P3 với mức tô thực tế;
+4. ô bỏ trống, tô đôi, tô nhạt;
+5. sửa thủ công + xác nhận ô cảnh báo;
+6. một lượt test ghi điểm có kiểm soát sau khi migration được áp dụng trong môi trường nghiệm thu phù hợp.
+
+Không được mark PR ready hoặc merge main trước khi gate này đạt.
