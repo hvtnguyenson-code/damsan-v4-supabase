@@ -13,6 +13,12 @@ assert(source.includes('BENCH_2025_P2_CHART_006'), '098 P2 chart fingerprint mis
 assert(source.includes('BENCH_2025_P3_SERIES_AVG_007'), '098 P3 table fingerprint missing');
 assert(source.includes('BENCH_2025_SCORING_013'), '098 scoring fingerprint missing');
 assert(source.includes('FULL_VISUAL_5_PAGES'), '098 full PDF review provenance missing');
+assert(source.includes('DAMSAN_EXTRACT_V1'), '098a scanned benchmark extraction manifest schema missing');
+assert(source.includes('FULL_PAGE_VISUAL_REVIEW'), '098a scanned benchmark must declare visual review boundary mode');
+assert(source.includes('source_text_available: false'), '098a must not pretend OCR/source text exists');
+assert(source.includes('visual_review_complete: true'), '098a full visual review evidence missing');
+assert(source.includes('reviewed_pages: [1, 2, 3, 4, 5]'), '098a reviewed-page evidence missing');
+assert(source.includes('extracted_chars: normalizedEvidenceChars'), '098a usable extraction evidence must derive from normalized visual fingerprint');
 assert(source.includes('STYLE_ONLY_NO_COPY'), '098 no-copy policy missing');
 assert(source.includes('authority_profile_id: PROFILE_ID'), '098 document binding missing');
 assert(source.includes('authority_code: AUTHORITY_CODE'), '098 explicit authority slot binding missing');

@@ -404,6 +404,7 @@ async function seed() {
     content: unit.content,
     confidence: unit.confidence,
   }))].map((item) => JSON.stringify(item)).join("\n");
+  const normalizedEvidenceChars = jsonl.length;
   const payloadSha = await sha256Text(jsonl);
   const normalizedPath = `${scope.schoolId}/authority/${PROFILE_ID}/${AUTHORITY_CODE}/${payloadSha}.jsonl`;
 
@@ -448,10 +449,17 @@ async function seed() {
       quality_status: "UNASSESSED",
       analysis_revision: 0,
       extraction_manifest: {
+        schema_version: "DAMSAN_EXTRACT_V1",
         source: "OFFICIAL_PUBLIC_ARTIFACT",
         source_page_url: SOURCE_PAGE_URL,
         artifact_url: DRIVE_ARTIFACT_URL,
         page_count: PAGE_COUNT,
+        extracted_chars: normalizedEvidenceChars,
+        boundary_mode: "FULL_PAGE_VISUAL_REVIEW",
+        source_text_available: false,
+        visual_review_complete: true,
+        reviewed_pages: [1, 2, 3, 4, 5],
+        ocr_unresolved_pages: [],
         sha256: pdfSha,
       },
       book_index: {},
