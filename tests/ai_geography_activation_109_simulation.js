@@ -23,7 +23,8 @@ for(const action of [
   'submit_planned_exam_draft'
 ]) must(ui.includes(action),'109 action missing '+action);
 
-must(ui.includes("questions.length !== 28"),'109 must require 28 planned slots client-side');
+must(ui.includes("state.manifest?.item_slot_count"),'109 must require the server manifest slot count client-side');
+must(!ui.includes("questions.length !== 28"),'109 must not hard-code 28 slots after FLEX activation');
 must(ui.includes("state.criticProvider === state.generatorProvider"),'109 must forbid same Web provider for critic');
 must(ui.includes("independent_run:true"),'109 must bind critic independence metadata');
 must(ui.includes("criticCheck.validation?.decision !== 'PASS'"),'109 must fail closed on critic REVISE/FAIL');

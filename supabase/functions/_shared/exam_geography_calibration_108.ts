@@ -93,14 +93,57 @@ export function officialGeographyBenchmarkProfile108(){
   };
 }
 
-function structureScore(questions:CalibrationJson108[]){
-  const counts={p1:questions.filter(q=>part(q)==="1").length,p2:questions.filter(q=>part(q)==="2").length,p3:questions.filter(q=>part(q)==="3").length};
-  const delta=Math.abs(counts.p1-18)+Math.abs(counts.p2-4)+Math.abs(counts.p3-6);
-  return {score:clamp(100-delta*18),counts};
+function calibrationContext(specValue:unknown){
+  const spec=specValue&&typeof specValue==="object"&&!Array.isArray(specValue)?specValue as CalibrationJson108:{};
+  const plan=spec.exam_design_plan&&typeof spec.exam_design_plan==="object"&&!Array.isArray(spec.exam_design_plan)
+    ? spec.exam_design_plan as CalibrationJson108:{};
+  const matrix=spec.assessment_matrix&&typeof spec.assessment_matrix==="object"&&!Array.isArray(spec.assessment_matrix)
+    ? spec.assessment_matrix as CalibrationJson108:{};
+  const mode=String(plan.assessment_mode||matrix.mode||"STRICT_TNTHPT").toUpperCase();
+  const requested=spec.counts&&typeof spec.counts==="object"&&!Array.isArray(spec.counts)?spec.counts as CalibrationJson108:{};
+  const counts={
+    p1:Number(requested.p1),
+    p2:Number(requested.p2),
+    p3:Number(requested.p3),
+  };
+  const validCounts=[counts.p1,counts.p2,counts.p3].every(n=>Number.isSafeInteger(n)&&n>=0);
+  return {
+    mode:mode==="FLEX_GEOGRAPHY"?"FLEX_GEOGRAPHY":"STRICT_TNTHPT",
+    expected:validCounts?counts:{p1:18,p2:4,p3:6}
+  };
 }
-function stimulusScore(questions:CalibrationJson108[]){
+function structureScore(questions:CalibrationJson108[],specValue?:unknown){
+  const counts={p1:questions.filter(q=>part(q)==="1").length,p2:questions.filter(q=>part(q)==="2").length,p3:questions.filter(q=>part(q)==="3").length};
+  const context=calibrationContext(specValue);
+  const expected=context.mode==="FLEX_GEOGRAPHY"?context.expected:{p1:18,p2:4,p3:6};
+  const delta=Math.abs(counts.p1-expected.p1)+Math.abs(counts.p2-expected.p2)+Math.abs(counts.p3-expected.p3);
+  return {score:clamp(100-delta*25),counts,expected,mode:context.mode};
+}
+function stimulusScore(questions:CalibrationJson108[],specValue?:unknown){
   const byPart=(p:string)=>questions.filter(q=>part(q)===p).map(stimulus);
   const p1=byPart("1"),p2=byPart("2"),p3=byPart("3");
+  const context=calibrationContext(specValue);
+  if(context.mode==="FLEX_GEOGRAPHY"){
+    let points=0,total=0;
+    if(p1.length){
+      total+=3;
+      const diversityTarget=Math.min(3,Math.max(1,Math.ceil(p1.length/5)));
+      if(new Set(p1).size>=diversityTarget)points++;
+      if(p1.length<4||p1.some(x=>["TABLE","CHART","MAP","SCHEMATIC_MAP","DIAGRAM"].includes(x)))points++;
+      if(p1.some(x=>x==="NONE"||x==="TEXT")||p1.length===1)points++;
+    }
+    if(p2.length){
+      total+=2;
+      if(p2.every(x=>x!=="NONE"))points++;
+      if(new Set(p2).size>=Math.min(2,p2.length))points++;
+    }
+    if(p3.length){
+      total+=2;
+      if(p3.length===1||p3.some(x=>x==="TABLE"||x==="CHART"||x==="TEXT"))points++;
+      if(new Set(p3).size>=Math.min(2,p3.length))points++;
+    }
+    return {score:total?clamp(points/total*100):100,stimulus_counts:Object.fromEntries([...new Set(questions.map(stimulus))].map(t=>[t,questions.filter(q=>stimulus(q)===t).length]))};
+  }
   let points=0,total=7;
   if(p1.includes("CHART"))points++;
   if(p1.includes("TABLE"))points++;
@@ -111,25 +154,39 @@ function stimulusScore(questions:CalibrationJson108[]){
   if(new Set(p3).size>=2)points++;
   return {score:clamp(points/total*100),stimulus_counts:Object.fromEntries([...new Set(questions.map(stimulus))].map(t=>[t,questions.filter(q=>stimulus(q)===t).length]))};
 }
-function p3DiversityScore(questions:CalibrationJson108[]){
+function p3DiversityScore(questions:CalibrationJson108[],specValue?:unknown){
   const p3=questions.filter(q=>part(q)==="3");
   const fam=p3.map(operationFamily).filter(Boolean);
   const distinct=new Set(fam);
   const freq:Record<string,number>={}; for(const x of fam)freq[x]=(freq[x]||0)+1;
   const maxRepeat=Math.max(0,...Object.values(freq));
+  const context=calibrationContext(specValue);
+  if(context.mode==="FLEX_GEOGRAPHY"){
+    if(!p3.length)return {score:100,distinct_families:0,max_repeat:0,families:freq,target_distinct:0};
+    const target=Math.min(4,p3.length);
+    const allowedRepeat=Math.max(1,Math.ceil(p3.length/target));
+    let score=100;
+    if(distinct.size<target)score-=25*(target-distinct.size);
+    if(maxRepeat>allowedRepeat+1)score-=15*(maxRepeat-allowedRepeat-1);
+    return {score:clamp(score),distinct_families:distinct.size,max_repeat:maxRepeat,families:freq,target_distinct:target};
+  }
   let score=100;
   if(distinct.size<4)score-=20*(4-distinct.size);
   if(maxRepeat>2)score-=15*(maxRepeat-2);
   if(fam.length!==6)score-=20*Math.abs(6-fam.length);
-  return {score:clamp(score),distinct_families:distinct.size,max_repeat:maxRepeat,families:freq};
+  return {score:clamp(score),distinct_families:distinct.size,max_repeat:maxRepeat,families:freq,target_distinct:4};
 }
-function presentationScore(questions:CalibrationJson108[]){
+function presentationScore(questions:CalibrationJson108[],specValue?:unknown){
   const totalChars=questions.reduce((n,q)=>n+visibleChars(q),0);
   const p1Long=questions.filter(q=>part(q)==="1"&&visibleChars(q)>900).length;
+  const context=calibrationContext(specValue);
+  const scale=context.mode==="FLEX_GEOGRAPHY"?Math.max(0.25,Math.min(2,questions.length/28)):1;
+  const charBudget=24000*scale;
+  const longBudget=context.mode==="FLEX_GEOGRAPHY"?Math.max(1,Math.ceil(questions.filter(q=>part(q)==="1").length/6)):3;
   let score=100;
-  if(totalChars>24000)score-=Math.min(45,(totalChars-24000)/300);
-  if(p1Long>3)score-=Math.min(25,(p1Long-3)*5);
-  return {score:clamp(score),visible_chars:totalChars,p1_overlong_count:p1Long};
+  if(totalChars>charBudget)score-=Math.min(45,(totalChars-charBudget)/Math.max(100,300*scale));
+  if(p1Long>longBudget)score-=Math.min(25,(p1Long-longBudget)*5);
+  return {score:clamp(score),visible_chars:totalChars,p1_overlong_count:p1Long,char_budget:Math.round(charBudget)};
 }
 function criticScore(critic:CriticValidation106){
   const mean=clamp(critic.mean_score/4*100);
@@ -151,12 +208,13 @@ function similarityScore(examValue:unknown){
 export function calibrateGeographyExam108(
   examValue:unknown,
   criticValidation:CriticValidation106,
+  specValue?:unknown,
 ):CalibrationResult108{
   const questions=qs(examValue);
-  const structure=structureScore(questions);
-  const stimulus=stimulusScore(questions);
-  const p3=p3DiversityScore(questions);
-  const presentation=presentationScore(questions);
+  const structure=structureScore(questions,specValue);
+  const stimulus=stimulusScore(questions,specValue);
+  const p3=p3DiversityScore(questions,specValue);
+  const presentation=presentationScore(questions,specValue);
   const critic=criticScore(criticValidation);
   const similarity=similarityScore(examValue);
 
@@ -172,9 +230,12 @@ export function calibrateGeographyExam108(
   const overall=clamp(Object.entries(scores).reduce((sum,[k,v])=>sum+v*(weights as Record<string,number>)[k],0));
 
   const reasons:string[]=[];
-  if(structure.score<100)reasons.push("official_structure_mismatch");
+  const context=calibrationContext(specValue);
+  const structureReason=context.mode==="FLEX_GEOGRAPHY"?"matrix_structure_mismatch":"official_structure_mismatch";
+  if(structure.score<100)reasons.push(structureReason);
   if(stimulus.score<70)reasons.push("benchmark_stimulus_mix_weak");
-  if(p3.distinct_families<4)reasons.push("p3_geography_skill_diversity_weak");
+  const p3Target=Number((p3 as CalibrationJson108).target_distinct ?? 4);
+  if(p3.distinct_families<p3Target)reasons.push("p3_geography_skill_diversity_weak");
   if(presentation.score<75)reasons.push("presentation_budget_proxy_exceeded");
   if(criticValidation.decision!=="PASS")reasons.push("independent_critic_not_passed");
   if(criticValidation.mean_score<3)reasons.push("critic_mean_below_internal_threshold");
@@ -184,7 +245,7 @@ export function calibrateGeographyExam108(
   const critical=[structure.score,critic.score,similarity.score];
   const decision:"ACCEPT"|"REVIEW"|"REJECT" =
     overall>=85 && critical.every(x=>x>=75) && reasons.length===0 ? "ACCEPT"
-    : overall>=75 && !reasons.includes("official_structure_mismatch") ? "REVIEW":"REJECT";
+    : overall>=75 && !reasons.includes(structureReason) ? "REVIEW":"REJECT";
 
   return {
     schema_version:"DAMSAN_GEOGRAPHY_CALIBRATION_RESULT_V1",
@@ -195,7 +256,7 @@ export function calibrateGeographyExam108(
     decision,
     reasons,
     metrics:{
-      structure:structure.counts,
+      structure:{counts:structure.counts,expected:(structure as CalibrationJson108).expected,mode:(structure as CalibrationJson108).mode},
       stimulus:stimulus.stimulus_counts,
       p3,
       presentation,
