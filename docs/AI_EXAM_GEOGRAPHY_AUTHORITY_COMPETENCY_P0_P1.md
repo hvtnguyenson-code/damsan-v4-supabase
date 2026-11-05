@@ -766,7 +766,8 @@ Server sở hữu:
 - Trigger request production đã probe trong subtransaction tự rollback: blueprint + plan attach đúng, không để dữ liệu test.
 - Plan hiện giữ `status=PREVIEW_ONLY_NOT_GENERATOR_ACTIVE`; chưa thay đổi prompt/generator.
 - P2-104 production PASS: canonical stimulus contract/renderer đã nghiệm thu runtime 9/9 loại; bridge v4 + Pages/PWA deploy xanh; generator vẫn chưa nhận stimulus contract.
-- Bước phát triển tiếp theo sau 104 acceptance: kích hoạt Planned Generation theo slot ở P3.
+- P3-105: planned-generation side-by-side đang triển khai; action cũ giữ nguyên, UI hiện tại không gọi action mới, feature gate server mặc định OFF.
+- Chỉ sau khi 105 runtime probe và regression PASS mới xem xét nghiệm thu; chưa kích hoạt cho vận hành thật.
 
 ## Trạng thái triển khai
 
@@ -780,7 +781,7 @@ Server sở hữu:
 - [x] P1 — exam design planner — 103 production PASS
 - [x] P1 — 28-slot acceptance — 18 P1 + 4 P2 clusters + 6 P3; 40 answer commands; rollback probe PASS
 - [x] P2 — stimulus engine — 104 production PASS
-- [ ] P3 — planned generation
+- [ ] P3 — planned generation — 105 side-by-side đang triển khai, feature gate OFF
 - [ ] P4 — independent critic
 - [ ] P5 — prompt consolidation
 - [ ] P6 — calibration
