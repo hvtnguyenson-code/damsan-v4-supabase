@@ -37,3 +37,24 @@ Test bao phủ:
 ## Gate trước OMR-02
 
 OMR-01 chỉ được nghiệm thu sau khi thử với phiếu in thật/ảnh camera thật và hiệu chỉnh threshold nếu cần. OMR-02 phải branch từ HEAD cuối đã nghiệm thu của OMR-01.
+
+
+## Quy ước SBD V4
+
+Phiếu Bộ có 8 cột SBD, trong khi `hoc_sinh.ma_hs` của V4 là chuỗi số cố định 6 ký tự.
+
+Quy tắc bắt buộc:
+
+```
+SBD trên phiếu = "00" + ma_hs 6 số
+```
+
+Ví dụ `ma_hs = 001234` thì học sinh tô `00001234`.
+
+Engine phải:
+- giữ nguyên đủ 8 chữ số đọc từ phiếu;
+- yêu cầu đúng định dạng `^00\\d{6}$`;
+- lấy đúng 6 ký tự cuối;
+- match EXACT với `ma_hs`;
+- không xóa leading zero và không thử các biến thể rút gọn;
+- không cho lưu nếu prefix/độ dài sai, không tìm thấy hoặc bị trùng.
