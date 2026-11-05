@@ -60,7 +60,7 @@ begin
     return jsonb_build_object('status','error','code','staff_session_invalid','message','Phiên làm việc đã hết hạn.');
   end if;
 
-  select id, truong_id, quyen into v_gv
+  select id, truong_id, quyen, mon_id into v_gv
   from public.giao_vien
   where id = v_gv_id;
 
@@ -75,6 +75,15 @@ begin
 
   if coalesce(v_gv.quyen,'') <> 'Admin' and v_room.truong_id <> v_gv.truong_id then
     return jsonb_build_object('status','error','code','room_forbidden','message','Không có quyền truy cập phòng thi này.');
+  end if;
+
+  if coalesce(v_gv.quyen,'') <> 'Admin'
+     and (v_gv.mon_id is null or v_room.mon_id is distinct from v_gv.mon_id) then
+    return jsonb_build_object('status','error','code','subject_forbidden','message','Phòng thi không thuộc bộ môn được phân công.');
+  end if;
+
+  if p_source_metadata is not null and jsonb_typeof(p_source_metadata) <> 'object' then
+    return jsonb_build_object('status','error','code','invalid_metadata','message','Metadata OMR không hợp lệ.');
   end if;
 
   select hs.id, hs.truong_id, hs.ma_hs, hs.lop into v_student
