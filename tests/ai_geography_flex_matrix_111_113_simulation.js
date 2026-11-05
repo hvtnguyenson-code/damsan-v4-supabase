@@ -15,7 +15,7 @@ assert(html.indexOf('ai_exam_geography_curriculum_catalog_114.js') < html.indexO
 assert(html.indexOf('ai_exam_geography_matrix_111.js') < html.indexOf('ai_exam_planned_activation_109.js'),'111 must load before planned activation 109');
 
 assert(ui.includes("const SCHEMA='DAMSAN_GEO_ASSESSMENT_MATRIX_V1'"),'111 matrix schema missing');
-assert(ui.includes("if(!isGeography()||strict()) return spec"),'111 STRICT_TNTHPT isolation missing');
+assert(ui.includes("if(strict()&&!strictTeacherMatrixEnabled()) return spec"),'111/116 STRICT default isolation missing');
 assert(ui.includes("mode:'FLEX_GEOGRAPHY'"),'111 FLEX mode missing');
 assert(ui.includes('THIẾT LẬP MA TRẬN ĐÁNH GIÁ ĐỊA LÍ'),'111 matrix panel missing');
 for(const label of ['P1 Biết','P1 Hiểu','P1 VD','P2','P3','Stimulus','Mức cho phép']){
