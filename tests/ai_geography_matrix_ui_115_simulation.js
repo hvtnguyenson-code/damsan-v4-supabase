@@ -4,7 +4,7 @@ const assert=require('assert');
 const html=fs.readFileSync('ai_exam.html','utf8');
 const ui=fs.readFileSync('ai_exam_geography_matrix_111.js','utf8');
 
-assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-matrix-ui-115'),'115 cache marker missing');
+assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-matrix-resume-116'),'115 cache marker missing');
 for(const id of ['geoMatrixSource115','geoMatrixCognitive115','geoMatrixCompetency115','geoMatrixPreview115','geoMatrixWarnings115']){
   assert(ui.includes(id),'115 UI target missing '+id);
 }
