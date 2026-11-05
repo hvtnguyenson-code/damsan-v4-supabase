@@ -63,6 +63,7 @@ jobs:
           node --check tests/ai_geography_reference_corpus_098_simulation.js
           node --check tests/ai_geography_format_rule_099_simulation.js
           node --check tests/ai_geography_curriculum_authority_100_simulation.js
+          node --check tests/ai_geography_official_2026_benchmark_101_simulation.js
           node --check tests/ai_geography_assessment_standard_simulation.js
           node --check tests/ai_geography_part3_quality_048_simulation.js
           node --check tests/ai_geography_part2_quality_054_simulation.js
@@ -380,6 +381,7 @@ jobs:
           node tests/ai_geography_reference_corpus_098_simulation.js
           node tests/ai_geography_format_rule_099_simulation.js
           node tests/ai_geography_curriculum_authority_100_simulation.js
+          node tests/ai_geography_official_2026_benchmark_101_simulation.js
           node tests/ai_geography_assessment_standard_simulation.js
           node tests/ai_geography_part3_quality_048_simulation.js
           node tests/ai_geography_part2_quality_054_simulation.js
