@@ -237,6 +237,10 @@
     const body=document.getElementById('geoMatrixBody111');
     const summary=document.getElementById('geoMatrixSummary111');
     const mode=document.getElementById('geoMatrixMode111');
+    const strictWrap=document.getElementById('matrixStrictTeacherWrap116');
+    if(strictWrap)strictWrap.classList.toggle('hidden',!strict());
+    const syncButton=document.getElementById('matrixSync111');
+    if(syncButton)syncButton.disabled=strict();
     if(mode){
       if(strict()&&strictTeacherMatrixEnabled()) mode.textContent='TNTHPT 18–4–6 + TEACHER MATRIX — tổng cấu trúc chính thức giữ nguyên; giáo viên khóa phân bố bài/năng lực.';
       else if(strict()) mode.textContent='STRICT_TNTHPT — cấu trúc và phân bố do blueprint chuẩn điều khiển. Bật “Giáo viên khóa ma trận” nếu muốn can thiệp phân bố nhưng vẫn giữ 18–4–6.';
