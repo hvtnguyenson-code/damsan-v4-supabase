@@ -85,7 +85,7 @@
     const rawAnswers=buildRawAnswers(scan,binding.variant);
     const room=binding.room||{};
     const grade=previewGrade(rawAnswers,binding.variant,room.assessment_type||room.AssessmentType||'LEGACY',room.scoring_config||room.ScoringConfig||{});
-    return {ok:true,student:binding.student,variant:binding.variant,rawAnswers,grade};
+    return {ok:true,room:binding.room,student:binding.student,variant:binding.variant,scan,rawAnswers,grade,reviewedUncertain:false};
   }
   return {normalizeShort,normalizeDs,scoreP2,scanAnswers,buildRawAnswers,validateScanCoverage,previewGrade,previewScan};
 });
