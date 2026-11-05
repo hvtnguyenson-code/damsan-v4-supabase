@@ -147,6 +147,7 @@ export function validateIndependentCritic106(
   const reviewer=obj(report.reviewer,"critic_reviewer_missing");
   str(reviewer.provider,120,true,"critic_reviewer_provider_missing");
   str(reviewer.model,180,true,"critic_reviewer_model_missing");
+  if (reviewer.independent_run !== true) fail("critic_reviewer_not_independent");
 
   const qs=questions(examValue);
   const expected=new Set(qs.map(slotId));
