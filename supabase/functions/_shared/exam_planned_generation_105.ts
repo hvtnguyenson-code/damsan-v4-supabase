@@ -1,3 +1,5 @@
+import { geographyAuthoringContract107 } from "./exam_geography_authoring_contract_107.ts";
+
 export type PlannedJson = Record<string, unknown>;
 
 export type PlannedBatch105 = {
@@ -186,6 +188,7 @@ export function plannedBatchInstructions105(
       "MAP means source-grounded geometry with geometry_provenance; if grounded geometry is unavailable, return a blocked item instead of inventing a map.",
       "Return only JSON. No Markdown fence and no commentary outside JSON.",
     ],
+    authoring_contract: geographyAuthoringContract107(),
     output_schema: {
       schema_version: "DAMSAN_ITEM_BATCH_V1",
       required_root_fields: ["schema_version","batch_id","items"],
