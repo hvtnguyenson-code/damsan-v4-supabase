@@ -186,6 +186,14 @@ Expected behavior:
 
 This is a deterministic engineering calibration suite, not a claim that 12 synthetic candidates replace empirical student psychometrics.
 
+Runtime acceptance on 2026-11-05:
+
+- strong/gold candidate score: **97.91** → ACCEPT;
+- weak-critic candidate → REJECT;
+- deliberately high-similarity candidate → REVIEW;
+- 12-candidate suite: **6 ACCEPT / 3 REVIEW / 3 REJECT**;
+- suite mean score: **90**.
+
 ---
 
 # Legacy empirical baseline
@@ -240,6 +248,8 @@ The AI still never publishes directly.
 # Activation rule
 
 Completing P0–P6 in source does **not** authorize production activation.
+
+Production verification after merging the implementation: Supabase `exam-ai-bridge` is still **ACTIVE version 4**, the P2 deployment. The P3–P6 bridge source has not been deployed, so the current operational path is unchanged.
 
 A future activation must be a separate operational change with:
 
