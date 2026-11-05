@@ -765,7 +765,8 @@ Server sở hữu:
 - P1-103 production: `DAMSAN_GEO_DESIGN_PLAN_V1`, 28 item slots / 40 answer commands.
 - Trigger request production đã probe trong subtransaction tự rollback: blueprint + plan attach đúng, không để dữ liệu test.
 - Plan hiện giữ `status=PREVIEW_ONLY_NOT_GENERATOR_ACTIVE`; chưa thay đổi prompt/generator.
-- Bước phát triển tiếp theo: P2 Stimulus Engine, sau đó mới kích hoạt planned generation.
+- P2-104: canonical stimulus contract/renderer đang triển khai; generator vẫn chưa nhận stimulus contract.
+- Bước phát triển tiếp theo sau 104 acceptance: kích hoạt Planned Generation theo slot ở P3.
 
 ## Trạng thái triển khai
 
@@ -778,7 +779,7 @@ Server sở hữu:
 - [x] P1 — blueprint compiler — 102 production PASS
 - [x] P1 — exam design planner — 103 production PASS
 - [x] P1 — 28-slot acceptance — 18 P1 + 4 P2 clusters + 6 P3; 40 answer commands; rollback probe PASS
-- [ ] P2 — stimulus engine
+- [ ] P2 — stimulus engine — 104 đang triển khai
 - [ ] P3 — planned generation
 - [ ] P4 — independent critic
 - [ ] P5 — prompt consolidation
