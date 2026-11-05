@@ -9,6 +9,16 @@ import {
   validatePlannedBatch105,
   validatePlannedExam105,
 } from "../_shared/exam_planned_generation_105.ts";
+import {
+  assertCriticPass106,
+  criticInstructions106,
+  requireIndependentCriticEnabled106,
+  validateIndependentCritic106,
+} from "../_shared/exam_independent_critic_106.ts";
+import {
+  calibrateGeographyExam108,
+  requireCalibrationEnabled108,
+} from "../_shared/exam_geography_calibration_108.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -604,8 +614,39 @@ async function validatePlannedBatchBridge105(req: Request, body: JsonObject) {
   });
 }
 
+async function getIndependentCriticInput106(req: Request, body: JsonObject) {
+  requirePlannedGenerationEnabled105();
+  requireIndependentCriticEnabled106();
+  const { claim } = await claimCapability(body);
+  const spec = asObject(claim.exam_spec);
+  const allUnits = await allKnowledgeUnits105(cleanString(claim.request_id, 80));
+  const planned = validatePlannedExam105(body.exam, spec, allUnits);
+  const plan = asObject(spec.exam_design_plan ?? {});
+  return json(req, 200, {
+    status: "success",
+    action: "get_independent_critic_input",
+    schema_version: "DAMSAN_INDEPENDENT_CRITIC_INPUT_V1",
+    critic_version: "106",
+    critic_input: criticInstructions106(planned.exam, plan),
+  });
+}
+
+async function validateIndependentCriticBridge106(req: Request, body: JsonObject) {
+  requirePlannedGenerationEnabled105();
+  requireIndependentCriticEnabled106();
+  const checked = validateIndependentCritic106(body.critic_report, body.exam);
+  return json(req, 200, {
+    status: "success",
+    action: "validate_independent_critic_report",
+    validation: checked.validation,
+  });
+}
+
 async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
   requirePlannedGenerationEnabled105();
+  requireIndependentCriticEnabled106();
+  requireCalibrationEnabled108();
+
   const { capabilityHash, claim } = await claimCapability(body);
   const spec = asObject(claim.exam_spec);
   const documentIds = Array.isArray(claim.knowledge_document_ids)
@@ -617,6 +658,21 @@ async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
   if (!allUnits.length) throw new Error("planned_knowledge_pack_empty");
 
   const planned = validatePlannedExam105(body.exam, spec, allUnits);
+
+  const critic = assertCriticPass106(body.critic_report, planned.exam);
+  const reviewer = asObject(critic.report.reviewer ?? {});
+  const generatorProvider = cleanString(body.ai_provider, 120) || "WEB_AI_PLANNED_105";
+  const generatorModel = cleanString(body.ai_model, 160) || "unspecified";
+  if (
+    cleanString(reviewer.provider, 120).toLowerCase() === generatorProvider.toLowerCase() &&
+    cleanString(reviewer.model, 160).toLowerCase() === generatorModel.toLowerCase()
+  ) {
+    throw new Error("critic_reviewer_must_differ_from_generator");
+  }
+
+  const calibration = calibrateGeographyExam108(planned.exam, critic.validation);
+  if (calibration.decision !== "ACCEPT") throw new Error("calibration_not_accepted");
+
   const knownKeys = new Set(
     allUnits.map((unit) => cleanString(unit.unit_key, 400)).filter(Boolean)
   );
@@ -627,12 +683,17 @@ async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
     ...built.validationReport,
     planned_generation_engine_version: "105",
     planned_generation: planned.validation,
+    independent_critic_version: "106",
+    independent_critic: critic.validation,
+    authoring_contract_version: "107",
+    calibration_version: "108",
+    calibration,
   };
 
   const { data, error } = await admin.rpc("rpc_ai_exam_store_draft_service", {
     p_capability_hash: capabilityHash,
-    p_ai_provider: cleanString(body.ai_provider, 120) || "WEB_AI_PLANNED_105",
-    p_ai_model: cleanString(body.ai_model, 160) || "unspecified",
+    p_ai_provider: generatorProvider,
+    p_ai_model: generatorModel,
     p_exam_payload: built.normalizedPayload,
     p_variants_payload: built.variants,
     p_validation_report: plannedReport,
@@ -651,7 +712,8 @@ async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
 
 function clientStatus(code: string) {
   if (["staff_session_invalid", "staff_identity_mismatch"].includes(code)) return 401;
-  if (code === "planned_generation_disabled") return 409;
+  if (["planned_generation_disabled","independent_critic_disabled","calibration_disabled"].includes(code)) return 409;
+  if (["independent_critic_not_passed","calibration_not_accepted","critic_reviewer_must_differ_from_generator"].includes(code)) return 422;
   if (code.startsWith("capability_") || code.includes("unavailable")) return 409;
   if (code.includes("invalid") || code.includes("required") || code.includes("mismatch") || code.includes("empty") || code.includes("outside_slot")) return 400;
   return 500;
@@ -678,6 +740,8 @@ Deno.serve(async (req: Request) => {
     if (action === "submit_exam_draft") return await submitExamDraft(req, body);
     if (action === "get_planned_generation_input") return await getPlannedGenerationInput105(req, body);
     if (action === "validate_planned_batch") return await validatePlannedBatchBridge105(req, body);
+    if (action === "get_independent_critic_input") return await getIndependentCriticInput106(req, body);
+    if (action === "validate_independent_critic_report") return await validateIndependentCriticBridge106(req, body);
     if (action === "submit_planned_exam_draft") return await submitPlannedExamDraft105(req, body);
     return json(req, 400, { status: "error", code: "action_invalid", message: "Thao tác không hợp lệ." });
   } catch (error) {
