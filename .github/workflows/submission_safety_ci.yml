@@ -59,6 +59,7 @@ jobs:
           node --check tests/run_canonical_print_metadata_browser_probe.mjs
           node --check tests/ai_exam_copy_feedback_simulation.js
           node --check tests/ai_exam_active_knowledge_scope_096_simulation.js
+          node --check tests/ai_geography_authority_corpus_p0_097_simulation.js
           node --check tests/ai_geography_assessment_standard_simulation.js
           node --check tests/ai_geography_part3_quality_048_simulation.js
           node --check tests/ai_geography_part2_quality_054_simulation.js
@@ -372,6 +373,7 @@ jobs:
           node tests/ai_exam_review_ui_simulation.js
           node tests/ai_exam_copy_feedback_simulation.js
           node tests/ai_exam_active_knowledge_scope_096_simulation.js
+          node tests/ai_geography_authority_corpus_p0_097_simulation.js
           node tests/ai_geography_assessment_standard_simulation.js
           node tests/ai_geography_part3_quality_048_simulation.js
           node tests/ai_geography_part2_quality_054_simulation.js

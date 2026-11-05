@@ -88,7 +88,7 @@ assert(knowledgeUi.includes('AI không có quyền tự chọn profile khác'), 
 
 assert(examHtml.includes('id="gradeSelect"'), '039 mandatory grade selector missing from exam UI');
 assert(examHtml.includes('id="assessmentAuthorityPanel"'), '039 authority evidence panel missing');
-assert(examHtml.includes('ai_exam_grade_authority.js?v=20261104-active-knowledge-scope-096'), '039 grade/authority overlay missing');
+assert(examHtml.includes('ai_exam_grade_authority.js?v=20261105-authority-p0-097'), '039 grade/authority overlay missing');
 assert(examUi.includes('rpc_assessment_authority_resolve'), '039 browser must resolve authority from server');
 assert(examUi.includes('DAMSAN_ASSESSMENT_AUTHORITY_PACKAGE_V1'), '039 authority prompt package missing');
 assert(/ASSESSMENT_RULE có quyền ưu tiên cao hơn ASSESSMENT_BENCHMARK/.test(examUi), '039 rule-over-benchmark precedence missing');
