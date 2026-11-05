@@ -151,6 +151,91 @@
     throw new Error('Knowledge Pack fallback vượt giới hạn an toàn.');
   }
 
+  async function renewPlannedCapability116(requestId) {
+    const session = aieRequireSession();
+    if (!session) throw new Error('Phiên giáo viên không hợp lệ.');
+    const { data, error } = await aieSb.rpc('rpc_ai_exam_reissue_handoff', {
+      p_staff_token: session.token,
+      p_ma_gv: session.profile.ma_gv,
+      p_request_id: requestId
+    });
+    if (error || !data || data.status !== 'success' || !data.capability_token) {
+      const e = new Error(data?.code || error?.message || 'Không thể cấp lại capability cho request.');
+      e.code = data?.code || 'capability_reissue_failed';
+      throw e;
+    }
+    return data.capability_token;
+  }
+
+  async function resumePlannedRequest116(request) {
+    if (!request || !request.request_id) throw new Error('Request không hợp lệ.');
+    const plan = request.exam_spec?.exam_design_plan;
+    if (!plan || plan.schema_version !== 'DAMSAN_GEO_DESIGN_PLAN_V1') {
+      throw new Error('Request này không có Planned Generation design plan để tiếp tục.');
+    }
+    aieSetBusy(true);
+    try {
+      const capability = await renewPlannedCapability116(request.request_id);
+      reset();
+      aieCapability = capability;
+      aieCurrentRequestId = request.request_id;
+      state.capability = capability;
+      state.requestId = request.request_id;
+      state.room = request.ma_phong || '';
+      state.localSpec = request.exam_spec || null;
+      state.mode = 'planned';
+      state.stage = 'batch';
+      await fetchBatch(0);
+      renderProgress();
+      renderCriticActions(false);
+      aieNotice('Đã khôi phục Planned Generation trên chính request cũ. Bắt đầu lại từ batch 1 để tránh dùng state trình duyệt đã mất.', 'ok');
+    } finally {
+      aieSetBusy(false);
+    }
+  }
+
+  function ensureResumeButton116() {
+    let button = document.getElementById('btnResumePlanned116');
+    if (button) return button;
+    const reject = document.getElementById('btnReject');
+    const actions = reject?.parentElement;
+    if (!actions) return null;
+    button = document.createElement('button');
+    button.id = 'btnResumePlanned116';
+    button.type = 'button';
+    button.className = 'secondary hidden';
+    button.textContent = 'TIẾP TỤC SINH ĐỀ';
+    actions.insertBefore(button, reject);
+    button.addEventListener('click', async () => {
+      const request = Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === aieCurrentRequestId) : null;
+      if (!request) return aieNotice('Không xác định được request cần tiếp tục.', 'error');
+      try {
+        await resumePlannedRequest116(request);
+        button.classList.add('hidden');
+      } catch (error) {
+        aieNotice(error?.message || 'Không thể tiếp tục Planned Generation.', 'error');
+      }
+    });
+    return button;
+  }
+
+  const previousOpenRequest116 = window.aieOpenRequest;
+  window.aieOpenRequest = function aieOpenRequest116(requestId) {
+    if (typeof previousOpenRequest116 === 'function') previousOpenRequest116(requestId);
+    const request = Array.isArray(aieRequests) ? aieRequests.find((r) => r.request_id === requestId) : null;
+    const button = ensureResumeButton116();
+    if (!button) return;
+    const plan = request?.exam_spec?.exam_design_plan;
+    const resumable = !!request && !request.draft &&
+      ['AWAITING_AI','AI_WORKING'].includes(String(request.status || '')) &&
+      plan?.schema_version === 'DAMSAN_GEO_DESIGN_PLAN_V1';
+    button.classList.toggle('hidden', !resumable);
+    if (resumable) {
+      const meta = document.getElementById('reviewMeta');
+      if (meta) meta.textContent = (meta.textContent || '') + ' · Có thể tiếp tục Planned Generation trên request này';
+    }
+  };
+
   async function fetchBatch(index) {
     const data = await aieGateway({
       action:'get_planned_generation_input',

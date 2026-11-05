@@ -10,12 +10,12 @@ const calibration=fs.readFileSync('supabase/functions/_shared/exam_geography_cal
 const bridge=fs.readFileSync('supabase/functions/exam-ai-bridge/index.ts','utf8');
 
 assert(html.includes('ai_exam_geography_curriculum_catalog_114.js?v=20261105-curriculum-catalog-114'),'114 curriculum catalog overlay missing');
-assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-matrix-ui-115'),'111/115 matrix overlay missing');
+assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-matrix-resume-116'),'111/116 matrix overlay missing');
 assert(html.indexOf('ai_exam_geography_curriculum_catalog_114.js') < html.indexOf('ai_exam_geography_matrix_111.js'),'114 catalog must load before matrix 111');
 assert(html.indexOf('ai_exam_geography_matrix_111.js') < html.indexOf('ai_exam_planned_activation_109.js'),'111 must load before planned activation 109');
 
 assert(ui.includes("const SCHEMA='DAMSAN_GEO_ASSESSMENT_MATRIX_V1'"),'111 matrix schema missing');
-assert(ui.includes("if(!isGeography()||strict()) return spec"),'111 STRICT_TNTHPT isolation missing');
+assert(ui.includes("if(strict()&&!strictTeacherMatrixEnabled()) return spec"),'111/116 STRICT default isolation missing');
 assert(ui.includes("mode:'FLEX_GEOGRAPHY'"),'111 FLEX mode missing');
 assert(ui.includes('THIẾT LẬP MA TRẬN ĐÁNH GIÁ ĐỊA LÍ'),'111 matrix panel missing');
 for(const label of ['P1 Biết','P1 Hiểu','P1 VD','P2','P3','Stimulus','Mức cho phép']){
