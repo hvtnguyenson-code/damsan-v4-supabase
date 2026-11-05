@@ -37,23 +37,23 @@ begin
   v_snapshot_hash:=nullif(btrim(coalesce(p_authority_snapshot->>'snapshot_hash','')),'');
   v_source_state:=upper(btrim(coalesce(p_authority_snapshot->>'source_state','')));
 
-  if v_profile_id<>'DIA_LI_TNTHPT_2025_PLUS_V1'
-     or v_source_state<>'VERIFIED_SOURCES'
+  if v_profile_id is distinct from 'DIA_LI_TNTHPT_2025_PLUS_V1'
+     or v_source_state is distinct from 'VERIFIED_SOURCES'
      or v_snapshot_hash is null then
     return null;
   end if;
 
   select
-    max(u.content) filter (where u.unit_key='RULE_GEO_COMP_001'),
-    max(u.content) filter (where u.unit_key='RULE_GEO_SPATIAL_002'),
-    max(u.content) filter (where u.unit_key='RULE_GEO_CAUSAL_003'),
-    max(u.content) filter (where u.unit_key='RULE_GEO_TOOL_004'),
-    max(u.content) filter (where u.unit_key='RULE_GEO_REALITY_005'),
-    max(u.content) filter (where u.unit_key='RULE_GEO_2025_MAP_TABLE_008'),
-    max(u.content) filter (where u.unit_key='RULE_FORMAT_2025_001'),
-    max(u.content) filter (where u.unit_key='RULE_FORMAT_2025_002'),
-    max(u.content) filter (where u.unit_key='RULE_FORMAT_2025_003'),
-    max(u.content) filter (where u.unit_key='RULE_FORMAT_2025_006')
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_GEO_COMP_001'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_GEO_SPATIAL_002'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_GEO_CAUSAL_003'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_GEO_TOOL_004'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_GEO_REALITY_005'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_GEO_2025_MAP_TABLE_008'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_FORMAT_2025_001'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_FORMAT_2025_002'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_FORMAT_2025_003'))->0,
+    (jsonb_agg(u.content) filter (where u.unit_key='RULE_FORMAT_2025_006'))->0
   into
     v_competency_framework,v_spatial,v_causal,v_tool,v_reality,v_map_table,
     v_format_principle,v_context_policy,v_item_format,v_time_rule
