@@ -1,0 +1,46 @@
+name: AI Geography P4-P6 Final CI
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/_shared/exam_planned_generation_105.ts'
+      - 'supabase/functions/_shared/exam_independent_critic_106.ts'
+      - 'supabase/functions/_shared/exam_geography_authoring_contract_107.ts'
+      - 'supabase/functions/_shared/exam_geography_calibration_108.ts'
+      - 'supabase/functions/exam-ai-bridge/index.ts'
+      - 'tests/ai_geography_p4_p6_runtime.ts'
+      - 'tests/ai_geography_p4_p6_static_simulation.js'
+      - '.github/workflows/ai_geography_p4_p6_ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Static safety contract
+        run: |
+          node --check tests/ai_geography_p4_p6_static_simulation.js
+          node tests/ai_geography_p4_p6_static_simulation.js
+      - name: Deno type and module checks
+        run: |
+          deno check supabase/functions/_shared/exam_independent_critic_106.ts
+          deno check supabase/functions/_shared/exam_geography_authoring_contract_107.ts
+          deno check supabase/functions/_shared/exam_geography_calibration_108.ts
+          deno check supabase/functions/_shared/exam_planned_generation_105.ts
+          deno check supabase/functions/exam-ai-bridge/index.ts
+          deno check tests/ai_geography_p4_p6_runtime.ts
+      - name: P4-P6 runtime calibration acceptance
+        run: deno run tests/ai_geography_p4_p6_runtime.ts
+      - name: Whitespace errors
+        run: git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
