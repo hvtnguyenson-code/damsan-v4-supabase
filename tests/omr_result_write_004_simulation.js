@@ -7,6 +7,9 @@ assert(migration.includes("add column if not exists source text not null default
 assert(migration.includes("source in ('ONLINE','OMR')"));
 assert(migration.includes('public._staff_session_gv_id(p_staff_token)'));
 assert(migration.includes("v_room.doi_tuong <> 'TatCa'"));
+assert(migration.includes("v_room.mon_id is distinct from v_gv.mon_id"));
+assert(migration.includes("code','subject_forbidden"));
+assert(migration.includes("jsonb_typeof(p_source_metadata) <> 'object'"));
 assert(migration.includes("dt.ma_de::numeric = trim(p_ma_de)::numeric"));
 assert(migration.includes("jsonb_array_length(p_raw_answers) <> jsonb_array_length(v_exam)"));
 assert(migration.includes("code','existing_result"));
