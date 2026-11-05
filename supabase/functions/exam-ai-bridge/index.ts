@@ -1,5 +1,13 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { composeStimulusStem104, normalizeAndRenderStimulus104 } from "../_shared/exam_stimulus_104.ts";
+import { composeStimulusStem104, normalizeAndRenderStimulus104, stimulusContract104 } from "../_shared/exam_stimulus_104.ts";
+import {
+  filterKnowledgeUnitsForBatch105,
+  plannedBatchByIndex105,
+  plannedBatchInstructions105,
+  plannedGenerationBatches105,
+  requirePlannedGenerationEnabled105,
+  validatePlannedExam105,
+} from "../_shared/exam_planned_generation_105.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -232,6 +240,70 @@ async function getGenerationInput(req: Request, body: JsonObject) {
       units: pack.units,
       has_more: pack.has_more,
       next_offset: pack.next_offset,
+    },
+  });
+}
+
+async function allKnowledgeUnits105(requestId: string) {
+  const units: JsonObject[] = [];
+  let offset = 0;
+  for (let page = 0; page < 25; page += 1) {
+    const { data: pack, error } = await admin.rpc("rpc_ai_exam_knowledge_pack_service", {
+      p_request_id: requestId,
+      p_offset: offset,
+      p_limit: 120,
+    });
+    if (error || !pack || pack.status !== "success") throw new Error("planned_knowledge_pack_failed");
+    const batch = Array.isArray(pack.units) ? pack.units.map((item: unknown) => asObject(item)) : [];
+    units.push(...batch);
+    if (!pack.has_more) return units;
+    const next = Number(pack.next_offset);
+    if (!Number.isSafeInteger(next) || next <= offset) throw new Error("planned_knowledge_pack_paging_invalid");
+    offset = next;
+  }
+  throw new Error("planned_knowledge_pack_too_large");
+}
+
+async function getPlannedGenerationInput105(req: Request, body: JsonObject) {
+  requirePlannedGenerationEnabled105();
+  const { claim } = await claimCapability(body);
+  const requestId = cleanString(claim.request_id, 80);
+  const spec = asObject(claim.exam_spec);
+  const batches = plannedGenerationBatches105(spec);
+  const batchIndex = asInt(body.batch_index, 0, 0, batches.length - 1);
+  const { batch } = plannedBatchByIndex105(spec, batchIndex);
+  const allUnits = await allKnowledgeUnits105(requestId);
+  const batchUnits = filterKnowledgeUnitsForBatch105(allUnits, batch);
+
+  return json(req, 200, {
+    status: "success",
+    action: "get_planned_generation_input",
+    schema_version: "DAMSAN_PLANNED_GENERATION_INPUT_V1",
+    planner_version: "105",
+    request: {
+      request_id: requestId,
+      ma_phong: claim.ma_phong,
+      plan_hash: asObject(spec.exam_design_plan ?? {}).plan_hash ?? null,
+    },
+    manifest: {
+      batch_count: batches.length,
+      item_slot_count: batches.reduce((sum, item) => sum + item.slot_ids.length, 0),
+      batches: batches.map((item) => ({
+        batch_id: item.batch_id,
+        batch_index: item.batch_index,
+        part: item.part,
+        slot_ids: item.slot_ids,
+        scope_keys: item.scope_keys,
+        structured_stimulus_types: item.structured_stimulus_types,
+      })),
+    },
+    batch,
+    instructions: plannedBatchInstructions105(spec, batch, stimulusContract104()),
+    knowledge_pack: {
+      total_request_units: allUnits.length,
+      batch_unit_count: batchUnits.length,
+      scope_keys: batch.scope_keys,
+      units: batchUnits,
     },
   });
 }
@@ -509,10 +581,56 @@ async function submitExamDraft(req: Request, body: JsonObject) {
   });
 }
 
+async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
+  requirePlannedGenerationEnabled105();
+  const { capabilityHash, claim } = await claimCapability(body);
+  const spec = asObject(claim.exam_spec);
+  const documentIds = Array.isArray(claim.knowledge_document_ids)
+    ? claim.knowledge_document_ids.map((v) => cleanString(v, 80)).filter(isUuid)
+    : [];
+  if (!documentIds.length) throw new Error("knowledge_documents_invalid");
+
+  const allUnits = await allKnowledgeUnits105(cleanString(claim.request_id, 80));
+  if (!allUnits.length) throw new Error("planned_knowledge_pack_empty");
+
+  const planned = validatePlannedExam105(body.exam, spec, allUnits);
+  const knownKeys = new Set(
+    allUnits.map((unit) => cleanString(unit.unit_key, 400)).filter(Boolean)
+  );
+  if (!knownKeys.size) throw new Error("knowledge_pack_empty");
+
+  const built = validateAndBuildExam(planned.exam, spec, knownKeys);
+  const plannedReport = {
+    ...built.validationReport,
+    planned_generation_engine_version: "105",
+    planned_generation: planned.validation,
+  };
+
+  const { data, error } = await admin.rpc("rpc_ai_exam_store_draft_service", {
+    p_capability_hash: capabilityHash,
+    p_ai_provider: cleanString(body.ai_provider, 120) || "WEB_AI_PLANNED_105",
+    p_ai_model: cleanString(body.ai_model, 160) || "unspecified",
+    p_exam_payload: built.normalizedPayload,
+    p_variants_payload: built.variants,
+    p_validation_report: plannedReport,
+  });
+  if (error || !data || data.status !== "success") throw new Error(data?.code || "draft_store_failed");
+
+  return json(req, 200, {
+    status: "success",
+    action: "submit_planned_exam_draft",
+    request_id: data.request_id,
+    revision: data.revision,
+    request_status: data.request_status,
+    validation: plannedReport,
+  });
+}
+
 function clientStatus(code: string) {
   if (["staff_session_invalid", "staff_identity_mismatch"].includes(code)) return 401;
+  if (code === "planned_generation_disabled") return 409;
   if (code.startsWith("capability_") || code.includes("unavailable")) return 409;
-  if (code.includes("invalid") || code.includes("required") || code.includes("mismatch") || code.includes("empty")) return 400;
+  if (code.includes("invalid") || code.includes("required") || code.includes("mismatch") || code.includes("empty") || code.includes("outside_slot")) return 400;
   return 500;
 }
 
@@ -535,6 +653,8 @@ Deno.serve(async (req: Request) => {
     if (action === "create_generation_request") return await createGenerationRequest(req, body);
     if (action === "get_generation_input") return await getGenerationInput(req, body);
     if (action === "submit_exam_draft") return await submitExamDraft(req, body);
+    if (action === "get_planned_generation_input") return await getPlannedGenerationInput105(req, body);
+    if (action === "submit_planned_exam_draft") return await submitPlannedExamDraft105(req, body);
     return json(req, 400, { status: "error", code: "action_invalid", message: "Thao tác không hợp lệ." });
   } catch (error) {
     const code = error instanceof Error ? error.message : "unexpected_error";
