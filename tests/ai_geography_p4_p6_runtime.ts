@@ -23,15 +23,26 @@ const p2Stim=["TEXT","CHART","TABLE","TEXT"];
 const p3Stim=["TABLE","TEXT","TABLE","TEXT","TABLE","TEXT"];
 const p3Fam=["GROWTH_RATE","SHARE_PERCENT","COMPONENT_FROM_RATE","BALANCE","RANGE_DIFFERENCE","PER_CAPITA"];
 
+const themes=[
+  "miennui_diahinhtaybac","dongbang_phusa_songhong","venbien_giomua_mientrung","caonguyen_bazan_taynguyen",
+  "do_thi_hoa_dongnambo","nongnghiep_luaga_mecong","lamnghiep_rungphongho","thuy_san_vungbien",
+  "congnghiep_nangluong","giaothong_cangbien","dichvu_dulich","dansoc_lao_dong",
+  "khihau_nhietdoi","songngoi_thuyche","datferalit_sinhvat","khoangsan_nhietdien",
+  "kinhtebien_logistics","chuyendich_cocau","vungkinhte_trongdiem","hoinhap_xuatkhau",
+  "muabao_thien tai","bien doi_khihau","bangso_lieu_danso","bieudo_cocau",
+  "matdo_danso_dientich","cancan_thuongmai","tisuat_tangtruong","binhquan_dau_nguoi"
+];
+
 function question(slot:string,part:string,stim:string,index:number,family=""){
+  const theme=themes[index%themes.length];
   const q:any={
     slot_id:slot,
     phan:part,
-    noi_dung:`Câu ${slot}: dữ kiện địa lí riêng ${index}; yêu cầu xử lí quan hệ ${index*7+3}.`,
-    A:part==="3"?"":`Phương án A ${index}`,
-    B:part==="3"?"":`Phương án B ${index+11}`,
-    C:part==="3"?"":`Phương án C ${index+23}`,
-    D:part==="3"?"":`Phương án D ${index+37}`,
+    noi_dung:`${theme} yeuto_${index} quanhe_${index*7+3} bangchung_${index*13+5}`,
+    A:part==="3"?"":`${theme}_lua_chon_alpha_${index}`,
+    B:part==="3"?"":`${theme}_lua_chon_beta_${index+11}`,
+    C:part==="3"?"":`${theme}_lua_chon_gamma_${index+23}`,
+    D:part==="3"?"":`${theme}_lua_chon_delta_${index+37}`,
     dap_an_dung:part==="1"?"A":part==="2"?"Đ-S-Đ-S":String((index%80)+10),
     source_refs:[`U${index+1}`],
     assessment_design:{
