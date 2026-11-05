@@ -6,6 +6,7 @@ import {
   plannedBatchInstructions105,
   plannedGenerationBatches105,
   requirePlannedGenerationEnabled105,
+  validatePlannedBatch105,
   validatePlannedExam105,
 } from "../_shared/exam_planned_generation_105.ts";
 
@@ -581,6 +582,28 @@ async function submitExamDraft(req: Request, body: JsonObject) {
   });
 }
 
+async function validatePlannedBatchBridge105(req: Request, body: JsonObject) {
+  requirePlannedGenerationEnabled105();
+  const { claim } = await claimCapability(body);
+  const spec = asObject(claim.exam_spec);
+  const requestId = cleanString(claim.request_id, 80);
+  const batches = plannedGenerationBatches105(spec);
+  const batchIndex = asInt(body.batch_index, 0, 0, batches.length - 1);
+  const allUnits = await allKnowledgeUnits105(requestId);
+  const normalized = validatePlannedBatch105(body.batch, spec, batchIndex, allUnits);
+
+  return json(req, 200, {
+    status: "success",
+    action: "validate_planned_batch",
+    schema_version: "DAMSAN_PLANNED_BATCH_VALIDATION_V1",
+    planner_version: "105",
+    batch_index: batchIndex,
+    batch_id: normalized.batch_id,
+    item_count: normalized.items.length,
+    normalized_batch: normalized,
+  });
+}
+
 async function submitPlannedExamDraft105(req: Request, body: JsonObject) {
   requirePlannedGenerationEnabled105();
   const { capabilityHash, claim } = await claimCapability(body);
@@ -654,6 +677,7 @@ Deno.serve(async (req: Request) => {
     if (action === "get_generation_input") return await getGenerationInput(req, body);
     if (action === "submit_exam_draft") return await submitExamDraft(req, body);
     if (action === "get_planned_generation_input") return await getPlannedGenerationInput105(req, body);
+    if (action === "validate_planned_batch") return await validatePlannedBatchBridge105(req, body);
     if (action === "submit_planned_exam_draft") return await submitPlannedExamDraft105(req, body);
     return json(req, 400, { status: "error", code: "action_invalid", message: "Thao tác không hợp lệ." });
   } catch (error) {
