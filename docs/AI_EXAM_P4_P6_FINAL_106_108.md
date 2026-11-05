@@ -249,7 +249,17 @@ The AI still never publishes directly.
 
 Completing P0–P6 in source does **not** authorize production activation.
 
-Production verification after merging the implementation: Supabase `exam-ai-bridge` is still **ACTIVE version 4**, the P2 deployment. The P3–P6 bridge source has not been deployed, so the current operational path is unchanged.
+Production activation checkpoint — 2026-11-05:
+
+- PR #146 merged at `d05792365036681c92093835d67c6e0324883cbc`.
+- GitHub Pages deployment #256: SUCCESS.
+- PWA Version Sync #197: SUCCESS.
+- Supabase `exam-ai-bridge` upgraded from version 4 to **ACTIVE version 5**.
+- Read-only `activation_status` smoke test returned HTTP 200 with planned generation 105, independent critic 106, authoring contract 107, calibration 108 and planned Web UI 109 all active.
+- Live GitHub Pages `ai_exam.html` returned HTTP 200 and contains the 109 activation cache marker plus the retained Web-first 070 layer.
+- Edge logs after cutover show no 5xx. The only 400 was the intentionally malformed first smoke-probe request; the corrected probe returned 200.
+- Exact pre-cutover bridge v4 source is preserved at `ops/rollback/exam-ai-bridge-v4-20261105.ts`.
+- Teacher explicit approval remains the only publish boundary. Student room/submission/grading code was not modified by activation 109.
 
 A future activation must be a separate operational change with:
 
