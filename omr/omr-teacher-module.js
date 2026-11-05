@@ -73,6 +73,9 @@
         <div id="omrScanArea" style="display:none">
           <div class="omr-card"><canvas id="omrTeacherCanvas"></canvas></div>
           <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
+          <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
+            <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra các ô bị cảnh báo và xác nhận dữ liệu đang hiển thị là đúng.
+          </label>
           <div class="omr-card">
             <div class="omr-row">
               <div class="omr-field"><label>SBD / mã học sinh</label><input id="omrSbd" type="text"></div>
@@ -121,6 +124,7 @@
     q('omrRecheck').onclick=reviewCurrent;
     q('omrNext').onclick=()=>{resetScan();openCamera();};
     q('omrSave').onclick=saveCurrent;
+    q('omrReviewUncertain').onchange=reviewCurrent;
     ['omrSbd','omrMaDe','omrStudent','omrP1','omrP2_1','omrP2_2','omrP2_3','omrP2_4','omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'].forEach(id=>q(id).addEventListener('change',reviewCurrent));
   }
 
@@ -226,21 +230,24 @@
     if(!st){showWarning('Không xác định được học sinh. Chọn học sinh thủ công trước khi lưu.');return;}
     const binding={ok:true,room:state.roomModel.room,student:st,variant:vr.variant,scan};
     let preview;
-    try{preview=S.previewScan(scan,binding);}catch(e){showWarning('Không thể chấm thử: '+e.message);return;}
+    try{preview=S.previewScan(scan,binding,{allowUncertain:true});}catch(e){showWarning('Không thể chấm thử: '+e.message);return;}
     if(!preview.ok){
       showWarning('Chưa thể chấm: '+preview.coverage.errors.join('; '));
       return;
     }
-    preview.reviewedUncertain=(scan.uncertain||[]).length>0;
+    const hasUncertain=(scan.uncertain||[]).length>0;
+    const reviewed=hasUncertain && q('omrReviewUncertain').checked;
+    preview.reviewedUncertain=reviewed;
+    q('omrReviewUncertainWrap').style.display=hasUncertain?'block':'none';
     state.lastPreview=preview;
     q('omrStudentName').textContent=`${st.ma_hs} — ${st.ho_ten} (${st.lop})`;
     q('omrGradeCode').textContent=vr.variant.code;
     q('omrScore').textContent=String(preview.grade.score);
     q('omrPartScores').textContent=`P1: ${preview.grade.parts.p1} • P2: ${preview.grade.parts.p2} • P3: ${preview.grade.parts.p3}`;
     q('omrGradeCard').style.display='block';
-    if(scan.uncertain.length) showWarning('Phiếu có ô từng bị cảnh báo. Giáo viên đã mở phần đáp án để kiểm tra; bấm Xác nhận & Lưu nghĩa là chấp nhận dữ liệu hiện tại.');
+    if(scan.uncertain.length) showWarning('Phiếu có ô bị cảnh báo. Kiểm tra/sửa đáp án rồi tích xác nhận bên dưới trước khi lưu.');
     else hideWarning();
-    q('omrSave').disabled=false;
+    q('omrSave').disabled=hasUncertain && !reviewed;
   }
 
   async function saveCurrent(){
@@ -270,6 +277,8 @@
     if(q('omrScanArea'))q('omrScanArea').style.display='none';
     if(q('omrGradeCard'))q('omrGradeCard').style.display='none';
     if(q('omrSave'))q('omrSave').disabled=true;
+    if(q('omrReviewUncertain'))q('omrReviewUncertain').checked=false;
+    if(q('omrReviewUncertainWrap'))q('omrReviewUncertainWrap').style.display='none';
     hideWarning();
   }
   function showWarning(msg){const el=q('omrWarning');if(!el)return;el.style.display='block';el.textContent=msg;}
