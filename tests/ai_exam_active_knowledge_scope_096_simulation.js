@@ -91,6 +91,6 @@ assert(grade.includes("Chưa có nguồn kiến thức đã kích hoạt cho tr�
 const marker = '20261104-active-knowledge-scope-096';
 assert(html.includes('ai_exam_subject_scope.js?v=' + marker), 'A096-16 subject-scope cache marker missing');
 assert(html.includes('ai_exam_knowledge_scope.js?v=' + marker), 'A096-17 knowledge-scope cache marker missing');
-assert(html.includes('ai_exam_grade_authority.js?v=' + marker), 'A096-18 grade-authority cache marker missing');
+assert(html.includes('ai_exam_grade_authority.js?v=20261105-authority-p0-097'), 'A096-18 grade-authority cache marker missing');
 
 console.log('AI_ACTIVE_KNOWLEDGE_SCOPE_096_PASS');
