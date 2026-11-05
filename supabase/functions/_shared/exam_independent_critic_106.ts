@@ -78,7 +78,7 @@ export function maxItemSimilarity106(examValue: unknown) {
 }
 
 export function isIndependentCriticEnabled106(value?: string|null) {
-  const raw=(value ?? (typeof Deno!=="undefined" ? Deno.env.get("DAMSAN_AI_INDEPENDENT_CRITIC_106") : "") ?? "").trim().toLowerCase();
+  const raw=(value ?? (typeof Deno!=="undefined" ? Deno.env.get("DAMSAN_AI_INDEPENDENT_CRITIC_106") : "") ?? "enabled").trim().toLowerCase();
   return ["1","true","enabled","on"].includes(raw);
 }
 export function requireIndependentCriticEnabled106(value?: string|null) {
