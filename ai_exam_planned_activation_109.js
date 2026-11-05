@@ -233,7 +233,8 @@
 
   function assembleExam() {
     const questions = state.batchOutputs.flatMap((batch) => Array.isArray(batch.items) ? batch.items : []);
-    if (questions.length !== 28) throw new Error(`Planned exam phải có đúng 28 slot, hiện có ${questions.length}.`);
+    const expected = Number(state.manifest?.item_slot_count || 0);
+    if (!expected || questions.length !== expected) throw new Error(`Planned exam phải có đúng ${expected || '?'} slot, hiện có ${questions.length}.`);
     return {
       schema_version:'DAMSAN_EXAM_V1',
       title:`Đề AI Địa lí - ${state.room}`,
@@ -257,7 +258,7 @@
     document.getElementById('btnValidate').textContent = 'Kiểm định phản biện & hoàn tất';
     renderProgress();
     renderCriticActions(true);
-    aieNotice('28 slot đã qua planned validation. Hãy dùng một AI web KHÁC generator để phản biện độc lập.', 'ok');
+    aieNotice(`${state.manifest?.item_slot_count || state.exam?.questions?.length || 0} slot đã qua planned validation. Hãy dùng một AI web KHÁC generator để phản biện độc lập.`, 'ok');
   }
 
   async function validateBatch() {
@@ -331,7 +332,7 @@
     renderProgress();
     renderCriticActions(false);
     setStatus(
-      `P0–P6 VALIDATED · revision ${result.revision} · calibration ${result.validation?.calibration?.overall_score ?? '-'} · ${result.validation?.question_count || 28} câu.`,
+      `P0–P6 VALIDATED · revision ${result.revision} · calibration ${result.validation?.calibration?.overall_score ?? '-'} · ${result.validation?.question_count || state.exam?.questions?.length || 0} câu.`,
       'ok'
     );
     aieNotice('Đề đã vượt Planned Generation, Independent Critic, Calibration và canonical validator. Hãy kiểm tra preview trước khi phê duyệt.', 'ok');
