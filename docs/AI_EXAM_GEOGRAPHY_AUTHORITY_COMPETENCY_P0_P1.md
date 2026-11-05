@@ -758,6 +758,15 @@ Server sở hữu:
 - `docs/AI_EXAM_RELIABILITY_049.md`
 - `docs/AI_EXAM_055_PART3_TABLE_COMPACT_ANSWER.md`
 
+## Checkpoint nghiệm thu 2026-11-05
+
+- P0 production: `VERIFIED_SOURCES`, 4/4 nguồn bắt buộc.
+- P1-102 production: `DAMSAN_GEO_BLUEPRINT_V1`, authority-grounded, chưa điều khiển generator.
+- P1-103 production: `DAMSAN_GEO_DESIGN_PLAN_V1`, 28 item slots / 40 answer commands.
+- Trigger request production đã probe trong subtransaction tự rollback: blueprint + plan attach đúng, không để dữ liệu test.
+- Plan hiện giữ `status=PREVIEW_ONLY_NOT_GENERATOR_ACTIVE`; chưa thay đổi prompt/generator.
+- Bước phát triển tiếp theo: P2 Stimulus Engine, sau đó mới kích hoạt planned generation.
+
 ## Trạng thái triển khai
 
 - [x] P0 — authority source registry/slot expansion (097)
@@ -767,8 +776,8 @@ Server sở hữu:
 - [ ] P0 — VERIFIED_SOURCES acceptance
 - [x] P1 — competency ontology — authority-grounded (100)
 - [x] P1 — blueprint compiler — 102 production PASS
-- [ ] P1 — exam design planner — 103 đang triển khai
-- [ ] P1 — 28-slot acceptance
+- [x] P1 — exam design planner — 103 production PASS
+- [x] P1 — 28-slot acceptance — 18 P1 + 4 P2 clusters + 6 P3; 40 answer commands; rollback probe PASS
 - [ ] P2 — stimulus engine
 - [ ] P3 — planned generation
 - [ ] P4 — independent critic
