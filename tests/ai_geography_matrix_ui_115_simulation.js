@@ -20,7 +20,7 @@ assert(ui.includes("ACTIVE_NORMALIZED_TEXTBOOK"),'115 normalized textbook mappin
 assert(ui.includes("mapping_confidence"),'115 mapping confidence missing');
 assert(ui.includes("requirement_id"),'115 requirement id visibility missing');
 assert(ui.includes("authority_revision"),'115 authority revision visibility missing');
-assert(ui.includes("if(!isGeography()||strict()) return spec"),'115 must preserve STRICT isolation');
+assert(ui.includes("if(strict()&&!strictTeacherMatrixEnabled()) return spec"),'116 must preserve STRICT default isolation');
 assert(!/rpc_luu_de_thi_len_phong|rpc_ai_exam_approve_and_publish|service_role|SERVICE_ROLE/.test(ui),'115 must not publish or expose privileged credentials');
 assert(!ui.includes('hoc_sinh'),'115 must not couple to student runtime');
 assert(ui.includes("Tỉ trọng Vận dụng đang thấp dưới 15%"),'115 apply warning missing');
