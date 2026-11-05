@@ -769,7 +769,7 @@ Deno.serve(async (req: Request) => {
         planner_version: plan.planner_version ?? "112-FLEX",
         assessment_mode: plan.assessment_mode,
         plan_hash: plan.plan_hash ?? null,
-        requested_counts: spec.counts ?? null,
+        requested_counts: (spec as JsonObject).counts ?? null,
         item_slot_count: coverage.item_slot_count ?? null,
         answer_command_count: coverage.answer_command_count ?? null,
         batch_count: batches.length,
