@@ -11,7 +11,7 @@ const rollback=fs.readFileSync('ops/rollback/exam-ai-bridge-v4-20261105.ts','utf
 
 function must(v,msg){assert.ok(v,msg);}
 
-must(html.includes('ai_exam_planned_activation_109.js?v=20261105-p0-p6-activation-109'),'109 overlay cache marker missing');
+must(html.includes('ai_exam_planned_activation_109.js?v=20261105-matrix-resume-116'),'109/116 overlay cache marker missing');
 must(html.indexOf('ai_exam_api_mode_065c.js') < html.indexOf('ai_exam_planned_activation_109.js'),'109 must load after Web AI 070');
 must(html.indexOf('ai_exam_planned_activation_109.js') < html.indexOf('ai_action_feedback.js'),'109 must load before generic action feedback');
 
