@@ -754,6 +754,30 @@ Deno.serve(async (req: Request) => {
         publish_boundary: "TEACHER_EXPLICIT_APPROVAL"
       });
     }
+    if (action === "validate_flex_matrix_preview") {
+      const spec = effectiveGeographySpec112(asObject(body.exam_spec ?? {}));
+      const plan = asObject(spec.exam_design_plan ?? {});
+      if (String(plan.assessment_mode || "").toUpperCase() !== "FLEX_GEOGRAPHY") {
+        throw new Error("flex_matrix_preview_requires_flex");
+      }
+      const batches = plannedGenerationBatches105(spec);
+      const coverage = asObject(plan.coverage_targets ?? {});
+      return json(req, 200, {
+        status: "success",
+        action: "validate_flex_matrix_preview",
+        schema_version: "DAMSAN_FLEX_MATRIX_PREVIEW_V1",
+        planner_version: plan.planner_version ?? "112-FLEX",
+        assessment_mode: plan.assessment_mode,
+        plan_hash: plan.plan_hash ?? null,
+        requested_counts: spec.counts ?? null,
+        item_slot_count: coverage.item_slot_count ?? null,
+        answer_command_count: coverage.answer_command_count ?? null,
+        batch_count: batches.length,
+        batch_sizes: batches.map((batch) => batch.slot_ids.length),
+        competency_count: Array.isArray(coverage.required_competencies) ? coverage.required_competencies.length : 0,
+        stimulus_types: coverage.required_stimuli ?? []
+      });
+    }
     if (action === "create_generation_request") return await createGenerationRequest(req, body);
     if (action === "get_generation_input") return await getGenerationInput(req, body);
     if (action === "submit_exam_draft") return await submitExamDraft(req, body);
