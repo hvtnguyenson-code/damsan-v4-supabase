@@ -5,6 +5,7 @@ import {
   plannedBatchByIndex105,
   plannedBatchInstructions105,
   plannedGenerationBatches105,
+  isPlannedGenerationEnabled105,
   requirePlannedGenerationEnabled105,
   validatePlannedBatch105,
   validatePlannedExam105,
@@ -12,11 +13,13 @@ import {
 import {
   assertCriticPass106,
   criticInstructions106,
+  isIndependentCriticEnabled106,
   requireIndependentCriticEnabled106,
   validateIndependentCritic106,
 } from "../_shared/exam_independent_critic_106.ts";
 import {
   calibrateGeographyExam108,
+  isCalibrationEnabled108,
   requireCalibrationEnabled108,
 } from "../_shared/exam_geography_calibration_108.ts";
 
@@ -735,6 +738,21 @@ Deno.serve(async (req: Request) => {
 
   const action = cleanString(body.action, 80).toLowerCase();
   try {
+    if (action === "activation_status") {
+      return json(req, 200, {
+        status: "success",
+        action: "activation_status",
+        activation_version: "109",
+        pipeline: {
+          planned_generation_105: isPlannedGenerationEnabled105(),
+          independent_critic_106: isIndependentCriticEnabled106(),
+          authoring_contract_107: true,
+          calibration_108: isCalibrationEnabled108(),
+          planned_web_ui_109: true
+        },
+        publish_boundary: "TEACHER_EXPLICIT_APPROVAL"
+      });
+    }
     if (action === "create_generation_request") return await createGenerationRequest(req, body);
     if (action === "get_generation_input") return await getGenerationInput(req, body);
     if (action === "submit_exam_draft") return await submitExamDraft(req, body);

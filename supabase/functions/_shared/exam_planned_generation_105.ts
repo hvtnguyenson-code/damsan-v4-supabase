@@ -103,7 +103,7 @@ function batchOf(part: number, batchIndex: number, label: string, slots: Planned
 }
 
 export function isPlannedGenerationEnabled105(value?: string | null) {
-  const raw = (value ?? (typeof Deno !== "undefined" ? Deno.env.get("DAMSAN_AI_PLANNED_GENERATION_105") : "") ?? "")
+  const raw = (value ?? (typeof Deno !== "undefined" ? Deno.env.get("DAMSAN_AI_PLANNED_GENERATION_105") : "") ?? "enabled")
     .trim()
     .toLowerCase();
   return ["1","true","enabled","on"].includes(raw);
