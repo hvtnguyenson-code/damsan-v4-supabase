@@ -140,7 +140,11 @@ function criticScore(critic:CriticValidation106){
 }
 function similarityScore(examValue:unknown){
   const sim=maxItemSimilarity106(examValue).max_similarity;
-  const score=sim<=0.55?100:sim>=0.85?0:clamp((0.85-sim)/0.30*100);
+  let score:number;
+  if(sim<=0.55) score=100;
+  else if(sim<0.72) score=clamp(100-((sim-0.55)/(0.72-0.55))*25);
+  else if(sim>=0.85) score=0;
+  else score=clamp(75-((sim-0.72)/(0.85-0.72))*75);
   return {score,maximum:sim};
 }
 
