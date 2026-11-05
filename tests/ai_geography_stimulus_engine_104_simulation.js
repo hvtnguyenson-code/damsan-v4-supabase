@@ -29,7 +29,7 @@ assert(shared.includes('SOURCE_GROUNDED'),'104 grounded MAP policy missing');
 assert(shared.includes('stimulus_map_provenance_required'),'104 real MAP provenance guard missing');
 assert(shared.includes('external_http_images:false'),'104 external image prohibition missing');
 assert(shared.includes('inline_svg_input:false'),'104 arbitrary SVG input must be forbidden');
-assert(/data:image\\\/(?:png\|jpe\?g\|webp)/.test(shared),'104 IMAGE input whitelist missing');
+assert(shared.includes('^data:image\\/(?:png|jpe?g|webp);base64,'),'104 IMAGE input whitelist missing');
 
 assert(bridge.includes('../_shared/exam_stimulus_104.ts'),'104 bridge shared-module import missing');
 assert(bridge.includes('stimulus_not_enabled'),'104 non-Geography/unplanned stimulus guard missing');
