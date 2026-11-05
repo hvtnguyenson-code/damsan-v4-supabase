@@ -63,7 +63,18 @@ function planFromSpec(specValue: unknown) {
   const part2 = arrayValue(slotsObj.part2, "planned_part2_slots_invalid").map((slot) => objectValue(slot, "planned_slot_invalid"));
   const part3 = arrayValue(slotsObj.part3, "planned_part3_slots_invalid").map((slot) => objectValue(slot, "planned_slot_invalid"));
 
-  if (part1.length !== 18 || part2.length !== 4 || part3.length !== 6) fail("planned_slot_count_invalid");
+  const assessmentMode = stringValue(plan.assessment_mode, 60).toUpperCase() || "STRICT_TNTHPT";
+  if (assessmentMode === "STRICT_TNTHPT" || plan.planner_version === "103") {
+    if (part1.length !== 18 || part2.length !== 4 || part3.length !== 6) fail("planned_slot_count_invalid");
+  } else if (assessmentMode === "FLEX_GEOGRAPHY") {
+    const requested = objectValue(spec.counts, "planned_flex_counts_missing");
+    const p1 = Number(requested.p1), p2 = Number(requested.p2), p3 = Number(requested.p3);
+    if (![p1,p2,p3].every((n) => Number.isSafeInteger(n) && n >= 0)) fail("planned_flex_counts_invalid");
+    if (part1.length !== p1 || part2.length !== p2 || part3.length !== p3) fail("planned_flex_slot_count_invalid");
+    if (part1.length + part2.length + part3.length < 1 || part1.length + part2.length + part3.length > 120) fail("planned_flex_slot_count_invalid");
+  } else {
+    fail("planned_assessment_mode_invalid");
+  }
 
   const all = [...part1, ...part2, ...part3];
   const ids = all.map((slot) => stringValue(slot.slot_id, 40, true, "planned_slot_id_invalid"));
@@ -114,9 +125,18 @@ export function requirePlannedGenerationEnabled105(value?: string | null) {
 }
 
 export function plannedGenerationBatches105(specValue: unknown): PlannedBatch105[] {
-  const { part1, part2, part3 } = planFromSpec(specValue);
+  const { plan, part1, part2, part3, all } = planFromSpec(specValue);
   const batches: PlannedBatch105[] = [];
   let index = 0;
+  const assessmentMode = stringValue(plan.assessment_mode, 60).toUpperCase() || "STRICT_TNTHPT";
+
+  if (assessmentMode === "FLEX_GEOGRAPHY") {
+    chunk(part1, 6).forEach((slots, i) => batches.push(batchOf(1, index++, String(i + 1).padStart(2, "0"), slots)));
+    chunk(part2, 2).forEach((slots, i) => batches.push(batchOf(2, index++, String(i + 1).padStart(2, "0"), slots)));
+    chunk(part3, 2).forEach((slots, i) => batches.push(batchOf(3, index++, String(i + 1).padStart(2, "0"), slots)));
+    if (!batches.length || batches.flatMap((batch) => batch.slot_ids).length !== all.length) fail("planned_batch_slot_count_invalid");
+    return batches;
+  }
 
   chunk(part1, 6).forEach((slots, i) => batches.push(batchOf(1, index++, String.fromCharCode(65 + i), slots)));
   chunk(part2, 2).forEach((slots, i) => batches.push(batchOf(2, index++, String.fromCharCode(65 + i), slots)));
