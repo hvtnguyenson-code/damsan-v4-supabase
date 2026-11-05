@@ -1,0 +1,54 @@
+name: AI Geography Activation 109 CI
+
+on:
+  pull_request:
+    paths:
+      - 'ai_exam.html'
+      - 'ai_exam_planned_activation_109.js'
+      - 'supabase/functions/exam-ai-bridge/index.ts'
+      - 'supabase/functions/_shared/exam_planned_generation_105.ts'
+      - 'supabase/functions/_shared/exam_independent_critic_106.ts'
+      - 'supabase/functions/_shared/exam_geography_authoring_contract_107.ts'
+      - 'supabase/functions/_shared/exam_geography_calibration_108.ts'
+      - 'ops/rollback/exam-ai-bridge-v4-20261105.ts'
+      - 'tests/ai_geography_activation_109_simulation.js'
+      - 'tests/ai_geography_planned_generation_105_runtime.ts'
+      - 'tests/ai_geography_p4_p6_runtime.ts'
+      - '.github/workflows/ai_geography_activation_109_ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  activate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Browser overlay syntax and activation invariants
+        run: |
+          node --check ai_exam_planned_activation_109.js
+          node --check tests/ai_geography_activation_109_simulation.js
+          node tests/ai_geography_activation_109_simulation.js
+      - name: Deno bridge and P0-P6 type checks
+        run: |
+          deno check supabase/functions/_shared/exam_geography_authoring_contract_107.ts
+          deno check supabase/functions/_shared/exam_planned_generation_105.ts
+          deno check supabase/functions/_shared/exam_independent_critic_106.ts
+          deno check supabase/functions/_shared/exam_geography_calibration_108.ts
+          deno check supabase/functions/exam-ai-bridge/index.ts
+          deno check tests/ai_geography_planned_generation_105_runtime.ts
+          deno check tests/ai_geography_p4_p6_runtime.ts
+      - name: P3 planned runtime
+        run: deno run tests/ai_geography_planned_generation_105_runtime.ts
+      - name: P4-P6 critic and calibration runtime
+        run: deno run tests/ai_geography_p4_p6_runtime.ts
+      - name: Whitespace errors
+        run: git -c core.whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol diff --check "origin/${{ github.base_ref }}...HEAD"
