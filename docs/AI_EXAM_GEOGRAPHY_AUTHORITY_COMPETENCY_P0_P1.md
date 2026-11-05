@@ -766,8 +766,8 @@ Server sở hữu:
 - [ ] P0 — authority normalization
 - [ ] P0 — VERIFIED_SOURCES acceptance
 - [x] P1 — competency ontology — authority-grounded (100)
-- [ ] P1 — blueprint compiler — 102 đang triển khai
-- [ ] P1 — exam design planner
+- [x] P1 — blueprint compiler — 102 production PASS
+- [ ] P1 — exam design planner — 103 đang triển khai
 - [ ] P1 — 28-slot acceptance
 - [ ] P2 — stimulus engine
 - [ ] P3 — planned generation
