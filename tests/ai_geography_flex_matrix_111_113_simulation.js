@@ -9,7 +9,9 @@ const planned=fs.readFileSync('supabase/functions/_shared/exam_planned_generatio
 const calibration=fs.readFileSync('supabase/functions/_shared/exam_geography_calibration_108.ts','utf8');
 const bridge=fs.readFileSync('supabase/functions/exam-ai-bridge/index.ts','utf8');
 
-assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-flex-matrix-111'),'111 matrix overlay missing');
+assert(html.includes('ai_exam_geography_curriculum_catalog_114.js?v=20261105-curriculum-catalog-114'),'114 curriculum catalog overlay missing');
+assert(html.includes('ai_exam_geography_matrix_111.js?v=20261105-curriculum-catalog-114'),'111/114 matrix overlay missing');
+assert(html.indexOf('ai_exam_geography_curriculum_catalog_114.js') < html.indexOf('ai_exam_geography_matrix_111.js'),'114 catalog must load before matrix 111');
 assert(html.indexOf('ai_exam_geography_matrix_111.js') < html.indexOf('ai_exam_planned_activation_109.js'),'111 must load before planned activation 109');
 
 assert(ui.includes("const SCHEMA='DAMSAN_GEO_ASSESSMENT_MATRIX_V1'"),'111 matrix schema missing');
@@ -19,8 +21,9 @@ assert(ui.includes('THIẾT LẬP MA TRẬN ĐÁNH GIÁ ĐỊA LÍ'),'111 matrix
 for(const label of ['P1 Biết','P1 Hiểu','P1 VD','P2','P3','Stimulus','Mức cho phép']){
   assert(ui.includes(label),'111 matrix column missing '+label);
 }
-assert(ui.includes("requirement_basis:'CURRICULUM_NORMALIZED'"),'111 normalized YCCD basis missing');
-assert(ui.includes("requirement_basis:'CURRICULUM_DERIVED_INDICATOR'"),'111 derived indicator label missing');
+assert(ui.includes('aieGeoCurriculumCatalog114'),'111 must bind to catalog 114');
+assert(!ui.includes('function inferTopic'),'111 must not infer curriculum topic from title regex');
+assert(!ui.includes("requirement_basis:'CURRICULUM_NORMALIZED'"),'111 must not falsely label heuristic rows as normalized curriculum');
 assert(ui.includes("Khối 11 chưa có SGK normalized"),'111 must not invent grade-11 lesson mapping');
 assert(!/rpc_luu_de_thi_len_phong|rpc_ai_exam_approve_and_publish|service_role|SERVICE_ROLE/.test(ui),'111 UI must not publish or expose privileged credentials');
 

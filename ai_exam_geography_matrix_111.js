@@ -46,93 +46,14 @@
     return out;
   }
 
-  function inferTopic(title){
-    const t=title.toLowerCase();
-    if(/bản đồ|gps|lược đồ/.test(t))return 'Công cụ địa lí';
-    if(/khí|mưa|gió|nhiệt|thời tiết/.test(t))return 'Khí hậu';
-    if(/sông|nước|biển|đại dương|thuỷ/.test(t))return 'Thuỷ quyển và biển';
-    if(/đất|sinh vật|rừng|môi trường|tài nguyên/.test(t))return 'Tài nguyên và môi trường';
-    if(/dân số|dân cư|lao động|việc làm|đô thị/.test(t))return 'Dân cư – xã hội';
-    if(/nông|lâm|thủy sản|công nghiệp|dịch vụ|thương mại|du lịch|giao thông|kinh tế/.test(t))return 'Kinh tế';
-    if(/vùng|đồng bằng|trung du|tây nguyên|đông nam|bắc trung|nam trung/.test(t))return 'Địa lí vùng';
-    if(/vị trí|lãnh thổ|trái đất|thạch quyển|địa hình/.test(t))return 'Không gian và tự nhiên';
-    return 'Nội dung địa lí';
+  function curriculumCatalog(){
+    return window.aieGeoCurriculumCatalog114||null;
   }
 
   function candidatesForLesson(g,lesson){
-    const title=String(lesson.lesson_title||lesson.scope_key||'').trim();
-    const t=title.toLowerCase();
-    const code=String(lesson.lesson_code||'').trim()||'LESSON';
-    const baseId=`G${g}_${code.replace(/[^A-Za-z0-9]+/g,'_').toUpperCase()}`;
-    const practice=/^thực hành|thực hành:|báo cáo|vẽ|phân tích biểu đồ|tìm hiểu/.test(t);
-    const map=/bản đồ|vị trí|lãnh thổ|phân bố|vùng|địa phương/.test(t);
-    const quantitative=/dân số|cơ cấu|tăng trưởng|sản lượng|công nghiệp|nông nghiệp|thương mại|lao động|kinh tế|biểu đồ/.test(t);
-
-    const rows=[];
-    if(practice){
-      rows.push({
-        requirement_id:baseId+'_YCCD_TOOL',
-        requirement_text:`Sử dụng được công cụ, số liệu hoặc nguồn thông tin địa lí để thực hiện yêu cầu của “${title}”.`,
-        indicator_id:baseId+'_I_TOOL',
-        indicator_text:`Khai thác và xử lí bằng chứng địa lí phù hợp với nội dung ${title}.`,
-        requirement_basis:'CURRICULUM_DERIVED_INDICATOR',
-        mapping_confidence:0.9,
-        competency_code:'GEO_TH_TOOL',operation_code:quantitative?'SPATIAL_DATA_ANALYSIS':'READ_MAP',
-        allowed_cognitive_levels:['UNDERSTAND','APPLY'],
-        preferred_stimuli:quantitative?['TABLE','CHART','TEXT']:(map?['MAP','SCHEMATIC_MAP','TEXT']:['TEXT','TABLE'])
-      });
-      rows.push({
-        requirement_id:baseId+'_YCCD_APPLY',
-        requirement_text:`Vận dụng kiến thức, kĩ năng địa lí để nhận xét, giải thích hoặc trình bày kết quả thực hành về “${title}”.`,
-        indicator_id:baseId+'_I_APPLY',
-        indicator_text:'Thực hiện nhiệm vụ mới từ dữ kiện/nguồn được cung cấp và rút ra kết luận địa lí.',
-        requirement_basis:'CURRICULUM_DERIVED_INDICATOR',
-        mapping_confidence:0.85,
-        competency_code:'GEO_VD_PROBLEM',operation_code:'SCENARIO_APPLICATION',
-        allowed_cognitive_levels:['APPLY'],
-        preferred_stimuli:quantitative?['TABLE','CHART','MULTI_SOURCE']:['TEXT','MAP','MULTI_SOURCE']
-      });
-      return rows;
-    }
-
-    rows.push({
-      requirement_id:baseId+'_YCCD_CORE',
-      requirement_text:`Trình bày hoặc xác định được các đặc điểm cốt lõi thuộc nội dung “${title}”.`,
-      indicator_id:baseId+'_I_CORE',
-      indicator_text:`Nhận biết đúng khái niệm, đặc điểm, phân bố hoặc biểu hiện chính của ${title}.`,
-      requirement_basis:'CURRICULUM_NORMALIZED',
-      mapping_confidence:0.82,
-      competency_code:map?'GEO_NK_SPATIAL':'GEO_NK_CAUSAL',
-      operation_code:map?'SPATIAL_DISTRIBUTION':'CAUSE_EFFECT',
-      allowed_cognitive_levels:['KNOW','UNDERSTAND'],
-      preferred_stimuli:map?['NONE','MAP','TEXT']:['NONE','TEXT','TABLE']
-    });
-    rows.push({
-      requirement_id:baseId+'_YCCD_REASON',
-      requirement_text:`Phân tích, giải thích hoặc so sánh được các mối quan hệ địa lí trong nội dung “${title}”.`,
-      indicator_id:baseId+'_I_REASON',
-      indicator_text:`Sử dụng quan hệ nhân quả, không gian hoặc dữ liệu để giải thích ${title}.`,
-      requirement_basis:'CURRICULUM_DERIVED_INDICATOR',
-      mapping_confidence:0.82,
-      competency_code:quantitative?'GEO_TH_TOOL':'GEO_NK_CAUSAL',
-      operation_code:quantitative?'COMPARE_DATA':'MULTI_FACTOR_EXPLANATION',
-      allowed_cognitive_levels:['UNDERSTAND','APPLY'],
-      preferred_stimuli:quantitative?['TABLE','CHART','TEXT']:(map?['MAP','TEXT','TABLE']:['TEXT','TABLE','CHART'])
-    });
-    if(g===12||/môi trường|phát triển|vùng|biển|đô thị|tài nguyên/.test(t)){
-      rows.push({
-        requirement_id:baseId+'_YCCD_REALITY',
-        requirement_text:`Vận dụng được kiến thức về “${title}” để giải thích, đánh giá hoặc lựa chọn giải pháp trong bối cảnh thực tiễn.`,
-        indicator_id:baseId+'_I_REALITY',
-        indicator_text:`Giải quyết một tình huống mới có điều kiện địa lí cụ thể liên quan đến ${title}.`,
-        requirement_basis:'CURRICULUM_DERIVED_INDICATOR',
-        mapping_confidence:0.8,
-        competency_code:'GEO_VD_PROBLEM',operation_code:'SCENARIO_APPLICATION',
-        allowed_cognitive_levels:['APPLY'],
-        preferred_stimuli:['TEXT','MULTI_SOURCE','TABLE']
-      });
-    }
-    return rows;
+    const catalog=curriculumCatalog();
+    if(!catalog||typeof catalog.candidatesForLesson!=='function') return [];
+    return catalog.candidatesForLesson(g,lesson);
   }
 
   function rowKey(scopeKey,indicatorId){return scopeKey+'::'+indicatorId;}
@@ -150,7 +71,7 @@
           scope_key:lesson.scope_key,
           lesson_code:lesson.lesson_code||'',
           lesson_title:lesson.lesson_title||lesson.scope_key,
-          curriculum_topic:inferTopic(lesson.lesson_title||''),
+          curriculum_topic:candidate.curriculum_topic||'Nội dung địa lí',
           ...candidate,
           allocations:old?.allocations||{p1:{KNOW:0,UNDERSTAND:0,APPLY:0},p2:0,p3:0}
         });
@@ -204,13 +125,14 @@
     if(!state.rows.length)throw new Error('Hãy chọn bài trong phạm vi kiến thức để lập ma trận.');
     return {
       schema_version:SCHEMA,
-      matrix_version:'111',
+      matrix_version:'114',
       mode:'FLEX_GEOGRAPHY',
       grade:grade(),
       source_policy:{
         curriculum_base:'TT32_2018_GEOGRAPHY',
         current_patch:grade()===12?'TT17_2025_CURRENT':null,
-        lesson_mapping:'ACTIVE_TEXTBOOK_KNOWLEDGE_SCOPE'
+        lesson_mapping:'CURRICULUM_CATALOG_114_ACTIVE_NORMALIZED_TEXTBOOK',
+        curriculum_catalog_version:'114'
       },
       time_minutes:Number(document.getElementById('matrixTime111')?.value||Math.max(15,Math.ceil((requested.p1+requested.p2*4+requested.p3)*1.25))),
       counts:requested,
@@ -242,7 +164,7 @@
     const mode=document.getElementById('geoMatrixMode111');
     if(mode)mode.textContent=strict()?'STRICT_TNTHPT — ma trận chỉ hiển thị YCCĐ/phạm vi; cấu trúc 18–4–6 không đổi.':'FLEX_GEOGRAPHY — ma trận này khóa cấu trúc và được server biên dịch thành slot.';
     if(!state.rows.length){
-      body.innerHTML=`<tr><td colspan="10">${g===11?'Khối 11 chưa có SGK normalized trong Kho tri thức. Catalog chương trình có thể chuẩn hóa sau, nhưng hệ thống không tự bịa ánh xạ theo bài.':'Hãy chọn ít nhất một bài ở PHẠM VI KIẾN THỨC.'}</td></tr>`;
+      body.innerHTML=`<tr><td colspan="10">${g===11?'Khối 11 chưa có SGK normalized trong Kho tri thức. Catalog 114 khóa lesson mapping lớp 11; hệ thống không tự bịa ánh xạ theo bài.':'Không có mapping catalog 114 phù hợp với phạm vi đã chọn. Hãy kiểm tra bài/khối hoặc nguồn normalized.'}</td></tr>`;
       if(summary)summary.textContent='Chưa có dòng ma trận.';
       return;
     }
