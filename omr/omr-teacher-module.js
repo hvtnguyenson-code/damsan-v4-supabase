@@ -129,6 +129,8 @@
       state.autoScanStable=0;state.autoScanLastCorners=null;
       q('omrAutoToggle').textContent='Tự động: '+(state.autoScanEnabled?'Bật':'Tắt');
       updateAutoHud(state.autoScanEnabled?'Đưa trọn phiếu vào khung':'Chế độ thủ công',false);
+      if(state.autoScanEnabled&&state.stream)startAutoScanLoop();
+      else if(!state.autoScanEnabled)stopAutoScanLoop();
     };
     q('omrRecheck').onclick=reviewCurrent;
     q('omrNext').onclick=()=>{resetScan();openCamera();};
