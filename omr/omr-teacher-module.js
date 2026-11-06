@@ -3,7 +3,7 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual'};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65};
   const q=id=>document.getElementById(id);
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -47,7 +47,15 @@
       #omrAutoGuide{position:absolute;left:8%;right:8%;top:9%;bottom:17%;border:2px solid rgba(255,255,255,.72);border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.12);pointer-events:none;z-index:1}
       #omrAutoGuide.ready{border-color:#22c55e;box-shadow:0 0 0 9999px rgba(0,0,0,.06),0 0 0 3px rgba(34,197,94,.22) inset}
       #omrTeacherVideo{flex:1;width:100%;min-height:0;object-fit:contain}.omr-camera-bar{display:flex;gap:8px;justify-content:center;padding:10px;flex-wrap:wrap}
-      #omrTeacherCanvas{width:100%;max-height:52vh;object-fit:contain;background:#111;border-radius:8px}
+      .omr-photo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+      .omr-photo-head button{border:0;border-radius:8px;background:#eef2f7;color:#1f2937;font-weight:700;padding:8px 10px;cursor:pointer}
+      #omrTeacherCanvas{display:block;max-width:100%;width:auto;height:auto;max-height:75dvh;object-fit:contain;background:#111;border-radius:8px;margin:auto;cursor:zoom-in}
+      #omrPhotoLightbox{display:none;position:fixed;inset:0;z-index:4700;background:#0b1220;color:white;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+      #omrPhotoLightbox.show{display:flex}
+      .omr-photo-controls{flex-shrink:0;display:flex;gap:8px;align-items:center;padding:10px;background:#0f172a}
+      .omr-photo-controls button{border:0;border-radius:8px;background:#334155;color:#fff;font-weight:700;padding:10px 14px;cursor:pointer}
+      #omrPhotoPan{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y}
+      #omrPhotoZoomCanvas{display:block;max-width:none;height:auto;margin:0 auto}
       .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
       .omr-score{font-size:30px;font-weight:800;color:#0f766e}.omr-progress{font-weight:700;color:#334155}
       @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}}
@@ -74,7 +82,10 @@
           <div class="omr-muted" style="margin-top:8px">Camera chỉ đọc phiếu trên máy. Điểm chỉ được ghi sau khi giáo viên bấm Xác nhận & Lưu.</div>
         </div>
         <div id="omrScanArea" style="display:none">
-          <div class="omr-card"><canvas id="omrTeacherCanvas"></canvas></div>
+          <div class="omr-card">
+            <div class="omr-photo-head"><span class="omr-muted" id="omrPhotoHint">Ảnh phiếu sau khi chụp</span><button type="button" id="omrPhotoExpand">Xem chi tiết</button></div>
+            <canvas id="omrTeacherCanvas" aria-label="Ảnh phiếu để đối chiếu kết quả nhận dạng"></canvas>
+          </div>
           <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
             <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra đúng các vị trí được đánh dấu và xác nhận dữ liệu đang hiển thị là đúng.
@@ -115,7 +126,14 @@
         </div>
       </div>
     </div></div>
-    <div id="omrTeacherVideoWrap"><div id="omrAutoHud">Đưa trọn phiếu vào khung</div><div id="omrAutoGuide"></div><video id="omrTeacherVideo" autoplay playsinline muted></video><div class="omr-camera-bar"><button id="omrCameraClose">Đóng</button><button id="omrAutoToggle">Tự động: Bật</button><button id="omrCameraSwitch">Đổi camera</button><button id="omrCameraCapture" class="omr-primary">Chụp thủ công</button></div></div>`;
+    <div id="omrTeacherVideoWrap"><div id="omrAutoHud">Đưa trọn phiếu vào khung</div><div id="omrAutoGuide"></div><video id="omrTeacherVideo" autoplay playsinline muted></video><div class="omr-camera-bar"><button id="omrCameraClose">Đóng</button><button id="omrAutoToggle">Tự động: Bật</button><button id="omrCameraSwitch">Đổi camera</button><button id="omrCameraCapture" class="omr-primary">Chụp thủ công</button></div></div>
+    <div id="omrPhotoLightbox" role="dialog" aria-modal="true" aria-label="Xem ảnh phiếu phóng to">
+      <div class="omr-photo-controls"><strong style="flex:1">Ảnh phiếu đã phóng</strong>
+        <button type="button" id="omrPhotoMinus" aria-label="Thu nhỏ">−</button>
+        <button type="button" id="omrPhotoPlus" aria-label="Phóng to">+</button>
+        <button type="button" id="omrPhotoClose">Đóng</button>
+      </div><div id="omrPhotoPan"><canvas id="omrPhotoZoomCanvas"></canvas></div>
+    </div>`;
     document.body.appendChild(wrap);
     q('omrClose').onclick=close;
     q('omrRoomSelect').onchange=()=>loadRoom(q('omrRoomSelect').value);
@@ -124,6 +142,12 @@
     q('omrCameraClose').onclick=closeCamera;
     q('omrCameraSwitch').onclick=()=>{state.facing=state.facing==='environment'?'user':'environment';openCamera();};
     q('omrCameraCapture').onclick=()=>capture('manual');
+    q('omrPhotoExpand').onclick=openPhotoDetail;
+    q('omrTeacherCanvas').onclick=openPhotoDetail;
+    q('omrPhotoClose').onclick=closePhotoDetail;
+    q('omrPhotoPlus').onclick=()=>setPhotoZoom(state.photoZoom+.45);
+    q('omrPhotoMinus').onclick=()=>setPhotoZoom(state.photoZoom-.45);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape')closePhotoDetail();});
     q('omrAutoToggle').onclick=()=>{
       state.autoScanEnabled=!state.autoScanEnabled;
       state.autoScanStable=0;state.autoScanLastCorners=null;
@@ -150,7 +174,7 @@
       if(rooms.length===1){q('omrRoomSelect').value=rooms[0].id;await loadRoom(rooms[0].id);}
     }catch(e){q('omrRoomSummary').textContent='Không tải được danh sách phòng: '+e.message;}
   }
-  function close(){closeCamera();q('omrTeacherOverlay')?.classList.remove('show');}
+  function close(){closePhotoDetail();closeCamera();q('omrTeacherOverlay')?.classList.remove('show');}
   async function loadRoom(id){
     resetScan();
     state.roomModel=null;
@@ -261,6 +285,57 @@
       c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);ctx.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);analyzeCanvas();
     };img.src=URL.createObjectURL(file);
   }
+  // The source image is only cropped AFTER OMR analysis has used the full
+  // camera frame. Marker coordinates are in that original image pixel space.
+  function photoCropBounds(corners,width,height){
+    if(!Array.isArray(corners)||corners.length!==4||width<1||height<1)return null;
+    if(corners.some(p=>!Array.isArray(p)||p.length<2||!p.every(Number.isFinite)))return null;
+    const xx=corners.map(p=>p[0]),yy=corners.map(p=>p[1]);
+    const minX=Math.min(...xx),maxX=Math.max(...xx),minY=Math.min(...yy),maxY=Math.max(...yy);
+    const spanX=maxX-minX,spanY=maxY-minY;
+    if(spanX<width*.22||spanY<height*.22)return null;
+    const area=Math.abs(corners.reduce((s,p,i)=>{
+      const q=corners[(i+1)%corners.length];return s+p[0]*q[1]-q[0]*p[1];
+    },0))*.5;
+    if(area<width*height*.07)return null;
+    // The outer printed markers sit about 3% inside each paper edge.
+    const padX=Math.max(6,spanX*.055),padY=Math.max(6,spanY*.045);
+    const x=Math.max(0,Math.floor(minX-padX)),y=Math.max(0,Math.floor(minY-padY));
+    const right=Math.min(width,Math.ceil(maxX+padX)),bottom=Math.min(height,Math.ceil(maxY+padY));
+    return right>x&&bottom>y?{x,y,width:right-x,height:bottom-y}:null;
+  }
+  function renderReviewPhoto(canvas,corners){
+    const bounds=photoCropBounds(corners,canvas.width,canvas.height);
+    if(!bounds)return false;
+    const cropped=document.createElement('canvas');
+    cropped.width=bounds.width;cropped.height=bounds.height;
+    const croppedCtx=cropped.getContext('2d');
+    if(!croppedCtx)return false;
+    croppedCtx.drawImage(canvas,bounds.x,bounds.y,bounds.width,bounds.height,0,0,bounds.width,bounds.height);
+    canvas.width=bounds.width;canvas.height=bounds.height;
+    canvas.getContext('2d').drawImage(cropped,0,0);
+    return true;
+  }
+  function setPhotoZoom(value){
+    state.photoZoom=Math.max(1,Math.min(3.2,value));
+    const c=q('omrPhotoZoomCanvas');
+    if(c)c.style.width=Math.round(state.photoZoom*100)+'%';
+  }
+  function openPhotoDetail(){
+    const src=q('omrTeacherCanvas'),viewer=q('omrPhotoLightbox');
+    if(!src?.width||!src?.height||!viewer)return;
+    const zoom=q('omrPhotoZoomCanvas');
+    zoom.width=src.width;zoom.height=src.height;
+    zoom.getContext('2d').drawImage(src,0,0);
+    viewer.classList.add('show');
+    setPhotoZoom(1.65);
+    const pan=q('omrPhotoPan');if(pan){pan.scrollLeft=0;pan.scrollTop=0;}
+  }
+  function closePhotoDetail(){
+    q('omrPhotoLightbox')?.classList.remove('show');
+    const zoom=q('omrPhotoZoomCanvas');
+    if(zoom){zoom.width=0;zoom.height=0;}
+  }
   function analyzeCanvas(){
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true});
     try{
@@ -273,6 +348,11 @@
         return;
       }
       scan.templateId=T.template.id;state.lastScan=scan;
+      // Presentation only: crop around validated four-corner markers after
+      // recognition. Never send the cropped image back to the OMR engine.
+      let cropped=false;
+      try{cropped=renderReviewPhoto(c,scan.markerCorners);}catch(e){console.warn('OMR preview crop:',e);}
+      q('omrPhotoHint').textContent=cropped?'Phiếu đã phóng vừa khung theo 4 mốc góc • Chạm để xem lớn':'Ảnh gốc • Chạm để xem lớn';
       q('omrScanArea').style.display='block';
       q('omrSbd').value=scan.sbd;
       q('omrMaDe').value=scan.maDe;
@@ -368,6 +448,7 @@
     q('omrProgress').textContent=`${state.saved.size} phiếu đã lưu trong phiên${total?' / '+total+' học sinh':''}`;
   }
   function resetScan(){
+    closePhotoDetail();
     state.lastScan=null;state.lastPreview=null;
     if(q('omrScanArea'))q('omrScanArea').style.display='none';
     if(q('omrGradeCard'))q('omrGradeCard').style.display='none';
@@ -409,5 +490,5 @@
   function showWarning(msg){const el=q('omrWarning');if(!el)return;clearWarningHighlights();el.style.display='block';el.textContent=msg;}
   function hideWarning(){const el=q('omrWarning');if(el){el.style.display='none';el.textContent='';}}
 
-  root.DamSanOmrTeacher={open,close,loadRoom,reviewCurrent,_state:state};
+  root.DamSanOmrTeacher={open,close,loadRoom,reviewCurrent,_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto};
 })(window);
