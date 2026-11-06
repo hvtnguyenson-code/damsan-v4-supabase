@@ -4,6 +4,7 @@ console.log('=== OMR BATCH UX 005 ===');
 const html=fs.readFileSync('giaovien.html','utf8');
 const studentHtml=fs.readFileSync('hoc_sinh.html','utf8');
 const teacherModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');
+const core=fs.readFileSync('omr/omr-core.js','utf8');
 const write=fs.readFileSync('omr/omr-result-write.js','utf8');
 const scoring=fs.readFileSync('omr/omr-scoring.js','utf8');
 const migration=fs.readFileSync('supabase/migrations/20261105143000_omr_staff_submission_004.sql','utf8');
@@ -43,8 +44,6 @@ assert(migration.includes('public.rpc_grade_submission(v_submission.id)'));
 assert(!/insert\s+into\s+public\.ket_qua/i.test(migration));
 assert(migration.includes("code','existing_result"));
 
-console.log('PASS omr_batch_ux_005');
-
 assert(teacherModule.includes("autoScanEnabled:true"),'auto scan must default ON');
 assert(teacherModule.includes("setInterval(()=>"),'auto scan loop missing');
 assert(teacherModule.includes("refineTemplateHomography"),'auto scan must validate geometry before capture');
@@ -58,3 +57,5 @@ assert(core.includes("RECTIFIED_INK_V1"),'rectified ink engine marker missing');
 assert(core.includes("warpTemplateGray"),'sheet must be rectified before recognition');
 assert(core.includes("bubbleInkScore"),'per-pixel ink scorer missing');
 assert(core.includes("refineTemplateHomographyDeep"),'deep fiducial refinement missing');
+
+console.log('PASS omr_batch_ux_005');
