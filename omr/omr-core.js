@@ -155,6 +155,30 @@
     return {ok,H,matches:matched.pairs.length,rmse:matched.rmse,tolerance:matched.tolerance,spanX,spanY,pairs:matched.pairs};
   }
 
+  function fastTemplateRegistration(template,markers,w,h){
+    const H=estimateTemplateHomography(template,markers.corners);
+    const xs=markers.corners.map(p=>p[0]),ys=markers.corners.map(p=>p[1]);
+    const spanX=(Math.max(...xs)-Math.min(...xs))/w,spanY=(Math.max(...ys)-Math.min(...ys))/h;
+    const area=Math.abs(
+      markers.corners.reduce((s,p,i,a)=>{
+        const q=a[(i+1)%a.length];
+        return s+p[0]*q[1]-q[0]*p[1];
+      },0)
+    )/2/(w*h);
+    const diagNames=new Set(['TOP-C','MID-L','MID-C','MID-R','P3-B3']);
+    const diagnostics=matchTemplateMarkers(
+      {...template,markers:(template.markers||[]).filter(m=>diagNames.has(m.name))},
+      H,markers.candidates,w,h
+    );
+    const ok=spanX>=0.42&&spanY>=0.42&&area>=0.18;
+    return {
+      ok,H,spanX,spanY,area,
+      matches:4+diagnostics.pairs.length,
+      rmse:diagnostics.rmse,
+      diagnosticPairs:diagnostics.pairs
+    };
+  }
+
   function darkIntegral(gray,w,h){
     const out=new Uint32Array((w+1)*(h+1));
     for(let y=1;y<=h;y++){
@@ -410,18 +434,16 @@
     const markers=detectCornerMarkers(gray,w,h);
     if(!markers.ok) return {ok:false,error:'Không nhận đủ 4 mốc góc',markerCandidates:markers.candidates.length};
 
-    const coarse=refineTemplateHomography(template,markers,w,h);
-    if(!coarse.ok) return {
-      ok:false,error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc và chụp lại phiếu.',
-      markerCandidates:markers.candidates.length,markerMatches:coarse.matches,markerRmse:coarse.rmse,markerSpan:[coarse.spanX,coarse.spanY]
-    };
-
-    const geometry=refineTemplateHomographyDeep(template,markers,gray,w,h);
+    const geometry=fastTemplateRegistration(template,markers,w,h);
     if(!geometry.ok) return {
-      ok:false,error:'Không khóa đủ mốc khống chế trên phiếu. Giữ thẳng phiếu, đủ sáng và chụp lại.',
-      markerCandidates:markers.candidates.length,markerMatches:geometry.matches,markerRmse:geometry.rmse
+      ok:false,error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc ngoài và chụp lại phiếu.',
+      markerCandidates:markers.candidates.length,markerMatches:geometry.matches,markerRmse:geometry.rmse,
+      markerSpan:[geometry.spanX,geometry.spanY],markerArea:geometry.area
     };
 
+    // Bốn mốc vuông ngoài là các điểm khống chế hình học chính. Các mốc nhỏ
+    // bên trong chỉ dùng chẩn đoán; không được kéo homography vì có thể bị
+    // nhầm với ô tô/chữ in và làm lệch ROI.
     const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[],uncertainDetails=[];
     const addWarning=(key,label,r)=>{uncertain.push(key);uncertainDetails.push({key,label,reason:r.reason||'Khó xác định ô tô',top:r.top??null,second:r.second??null,margin:r.margin??null});};
     const p1=template.p1.map((pts,i)=>{
@@ -449,9 +471,9 @@
     return {
       ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,
       markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
-      homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_V1'
+      markerArea:geometry.area,homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_HYBRID_V2'
     };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
