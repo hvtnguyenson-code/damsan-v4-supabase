@@ -9,6 +9,7 @@ on:
       - 'tests/omr_*'
       - 'tests/teacher_pwa_006_simulation.js'
       - 'tests/teacher_pwa_install_entry_007_simulation.js'
+      - 'tests/run_teacher_pwa_installability_probe_008.mjs'
       - 'supabase/migrations/20261105143000_omr_staff_submission_004.sql'
       - '.github/workflows/omr_camera_grading_ci.yml'
   workflow_dispatch:
@@ -36,3 +37,30 @@ jobs:
         run: node tests/teacher_pwa_006_simulation.js
       - name: Teacher PWA install entry 007
         run: node tests/teacher_pwa_install_entry_007_simulation.js
+      - name: Teacher PWA Chromium installability 008
+        run: |
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium not found on runner"
+            exit 1
+          fi
+          python3 -m http.server 8769 --bind 127.0.0.1 >/tmp/teacher-pwa-http.log 2>&1 &
+          SERVER_PID=$!
+          "$CHROME"             --headless=new             --no-sandbox             --disable-gpu             --disable-dev-shm-usage             --disable-background-timer-throttling             --remote-debugging-address=127.0.0.1             --remote-debugging-port=9236             --user-data-dir=/tmp/damsan-teacher-pwa-chrome             about:blank >/tmp/teacher-pwa-chrome.out 2>/tmp/teacher-pwa-chrome.log &
+          CHROME_PID=$!
+          cleanup() {
+            kill "$CHROME_PID" >/dev/null 2>&1 || true
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8769/teacher/index.html >/dev/null && curl -fsS http://127.0.0.1:9236/json/version >/dev/null; then break; fi
+            sleep 1
+          done
+          set +e
+          timeout 100s node tests/run_teacher_pwa_installability_probe_008.mjs
+          PROBE_EXIT=$?
+          set -e
+          echo "=== Teacher PWA Chrome diagnostics ==="
+          tail -n 120 /tmp/teacher-pwa-chrome.log || true
+          exit "$PROBE_EXIT"
