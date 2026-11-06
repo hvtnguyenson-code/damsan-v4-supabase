@@ -40,7 +40,7 @@
       .omr-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid #e2e8f0;position:sticky;top:0;background:#fff;z-index:3}
       .omr-head h2{margin:0;font-size:18px}.omr-close{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 11px;font-weight:700}
       .omr-body{padding:16px}.omr-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.omr-field{flex:1;min-width:180px}.omr-field label{font-size:12px;margin-bottom:4px}
-      .omr-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:12px 0;background:#fff}.omr-muted{color:#64748b;font-size:12px}.omr-warn{background:#fff7ed;border-color:#fdba74}.omr-ok{background:#f0fdf4;border-color:#86efac}
+      .omr-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:12px 0;background:#fff}.omr-muted{color:#64748b;font-size:12px}.omr-warn{background:#fff7ed;border-color:#fdba74}.omr-ok{background:#f0fdf4;border-color:#86efac}.omr-alert-field input,.omr-alert-field select{border:2px solid #f59e0b!important;background:#fffbeb!important}.omr-warning-list{margin:8px 0 0 18px;padding:0}.omr-warning-list li{margin:5px 0;line-height:1.4}
       .omr-actions{display:flex;gap:8px;flex-wrap:wrap}.omr-actions button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.omr-primary{background:#1769e0;color:#fff}.omr-green{background:#15803d;color:#fff}.omr-light{background:#eef2f7;color:#1f2937}
       #omrTeacherVideoWrap{display:none;position:fixed;inset:0;background:#000;z-index:4500;padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom));flex-direction:column}#omrTeacherVideoWrap.show{display:flex}
       #omrAutoHud{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:2;background:rgba(15,23,42,.78);color:#fff;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800;max-width:88vw;text-align:center;pointer-events:none}
@@ -77,7 +77,7 @@
           <div class="omr-card"><canvas id="omrTeacherCanvas"></canvas></div>
           <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
-            <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra các ô bị cảnh báo và xác nhận dữ liệu đang hiển thị là đúng.
+            <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra đúng các vị trí được đánh dấu và xác nhận dữ liệu đang hiển thị là đúng.
           </label>
           <div class="omr-card">
             <div class="omr-row">
@@ -281,8 +281,8 @@
       scan.p3.forEach((v,i)=>q('omrP3_'+(i+1)).value=v);
       const sr=B.resolveStudent(scan.sbd,state.roomModel.studentIndex);
       fillStudentSelect(sr.status==='matched'?sr.student.id:null);
-      if(scan.uncertain.length) showWarning('Cần kiểm tra: '+scan.uncertain.join(', '));
-      else hideWarning();
+      if(scan.uncertain.length) showScanWarnings(scan);
+      else {clearWarningHighlights();hideWarning();}
       reviewCurrent();
     }catch(e){showWarning('Lỗi đọc ảnh: '+e.message);}
   }
@@ -296,7 +296,8 @@
       p1:q('omrP1').value.trim().toUpperCase(),
       p2:[1,2,3,4].map(i=>q('omrP2_'+i).value.trim().toUpperCase()),
       p3:[1,2,3,4,5,6].map(i=>q('omrP3_'+i).value.trim()),
-      uncertain:[...(state.lastScan?.uncertain||[])]
+      uncertain:[...(state.lastScan?.uncertain||[])],
+      uncertainDetails:[...(state.lastScan?.uncertainDetails||[])]
     };
   }
   function selectedStudent(){return state.roomModel?.students.find(s=>String(s.id)===String(q('omrStudent').value));}
@@ -334,8 +335,8 @@
     q('omrScore').textContent=String(preview.grade.score);
     q('omrPartScores').textContent=`P1: ${preview.grade.parts.p1} • P2: ${preview.grade.parts.p2} • P3: ${preview.grade.parts.p3}`;
     q('omrGradeCard').style.display='block';
-    if(scan.uncertain.length) showWarning('Phiếu có ô bị cảnh báo. Kiểm tra/sửa đáp án rồi tích xác nhận bên dưới trước khi lưu.');
-    else hideWarning();
+    if(scan.uncertain.length) showScanWarnings(scan);
+    else {clearWarningHighlights();hideWarning();}
     q('omrSave').disabled=hasUncertain && !reviewed;
   }
 
@@ -368,10 +369,37 @@
     if(q('omrSave'))q('omrSave').disabled=true;
     if(q('omrReviewUncertain'))q('omrReviewUncertain').checked=false;
     if(q('omrReviewUncertainWrap'))q('omrReviewUncertainWrap').style.display='none';
-    hideWarning();
+    clearWarningHighlights();hideWarning();
   }
-  function showWarning(msg){const el=q('omrWarning');if(!el)return;el.style.display='block';el.textContent=msg;}
-  function hideWarning(){const el=q('omrWarning');if(el)el.style.display='none';}
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+  function warningFieldId(key){
+    if(/^P1\./.test(key))return 'omrP1';
+    const p2=key.match(/^P2\.(\d)/);if(p2)return 'omrP2_'+p2[1];
+    const p3=key.match(/^P3\.(\d)/);if(p3)return 'omrP3_'+p3[1];
+    if(/^SBD\./.test(key))return 'omrSbd';
+    if(/^MADE\./.test(key))return 'omrMaDe';
+    return null;
+  }
+  function clearWarningHighlights(){
+    document.querySelectorAll('#omrTeacherOverlay .omr-alert-field').forEach(el=>el.classList.remove('omr-alert-field'));
+  }
+  function showScanWarnings(scan){
+    const el=q('omrWarning');if(!el)return;
+    clearWarningHighlights();
+    const details=Array.isArray(scan?.uncertainDetails)&&scan.uncertainDetails.length
+      ? scan.uncertainDetails
+      : (scan?.uncertain||[]).map(key=>({key,label:key,reason:'Cần kiểm tra lại vị trí này'}));
+    details.forEach(d=>{
+      const id=warningFieldId(d.key||'');const field=id?q(id):null;
+      field?.parentElement?.classList.add('omr-alert-field');
+    });
+    el.style.display='block';
+    el.innerHTML='<b>Có '+details.length+' vị trí cần kiểm tra:</b><ul class="omr-warning-list">'+
+      details.map(d=>'<li><b>'+escapeHtml(d.label||d.key)+'</b>: '+escapeHtml(d.reason||'Cần kiểm tra lại')+'</li>').join('')+
+      '</ul><div class="omr-muted" style="margin-top:8px">Các ô liên quan đã được đánh dấu màu vàng bên dưới.</div>';
+  }
+  function showWarning(msg){const el=q('omrWarning');if(!el)return;clearWarningHighlights();el.style.display='block';el.textContent=msg;}
+  function hideWarning(){const el=q('omrWarning');if(el){el.style.display='none';el.textContent='';}}
 
   root.DamSanOmrTeacher={open,close,loadRoom,reviewCurrent,_state:state};
 })(window);

@@ -38,5 +38,13 @@ assert.throws(()=>W.assertConfirmed({...preview,scan:{uncertain:['P1.2']}}),/unc
   assert.deepStrictEqual(call.args.p_raw_answers,[{chon:'A'}]);
   assert.strictEqual(call.args.p_source_metadata.reviewed,true);
   assert.strictEqual(res.status,'success');
-  console.log('PASS omr_result_write_004');
+  const meta=W.metadataFrom({
+  scan:{templateId:'T',uncertain:['P2.2d'],uncertainDetails:[{key:'P2.2d',label:'Phần II – Câu 2, ý d',reason:'Có dấu tô ở nhiều ô; mức tô gần nhau',top:0.51,second:0.48,margin:0.03}]},
+  reviewedUncertain:true,grade:{score:8.5}
+});
+assert.strictEqual(meta.uncertain_count,1);
+assert.strictEqual(meta.uncertain_details[0].vi_tri,'P2.2d');
+assert.strictEqual(meta.uncertain_details[0].ly_do,'Có dấu tô ở nhiều ô; mức tô gần nhau');
+
+console.log('PASS omr_result_write_004');
 })().catch(e=>{console.error(e);process.exit(1);});

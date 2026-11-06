@@ -18,6 +18,14 @@
       reviewed:true,
       uncertain_reviewed: preview.reviewedUncertain === true,
       uncertain_count:(preview.scan?.uncertain||[]).length,
+      uncertain_details:(preview.scan?.uncertainDetails||[]).map(d=>({
+        vi_tri:d.key||null,
+        mo_ta:d.label||d.key||null,
+        ly_do:d.reason||'Cần kiểm tra lại',
+        muc_to_chon:Number.isFinite(d.top)?Number(d.top.toFixed(4)):null,
+        muc_to_thu_hai:Number.isFinite(d.second)?Number(d.second.toFixed(4)):null,
+        do_chenh:Number.isFinite(d.margin)?Number(d.margin.toFixed(4)):null
+      })),
       client_preview_score:preview.grade?.score??null
     };
   }
