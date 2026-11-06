@@ -267,9 +267,10 @@ Khi chat hiện tại bị đầy hoặc chuyển phiên, trước khi làm OMR 
 - OMR-03: ĐÃ CODE — preview grading mirror đúng canonical grader V4.
 - OMR-04: ĐÃ CODE TRÊN NHÁNH — staff-confirmed canonical write RPC; migration CHƯA APPLY vào production DB; không ghi thẳng ket_qua; khóa trường + môn; không tự ghi đè kết quả.
 - OMR-05: ĐÃ CODE — một nút Chấm Phiếu riêng, camera/chọn ảnh, chỉnh đáp án, review ô nghi ngờ, xác nhận thủ công, batch scan.
+- Teacher PWA 006: ĐÃ CODE — app shell mobile-first riêng tại `/teacher/`, manifest + service worker scope riêng, đăng nhập/session hiện tại, đổi mật khẩu bắt buộc, phòng thi, bảng điểm mobile, OMR, `100dvh` + safe-area; PWA học sinh không thay đổi.
 - Final branch: `feat/omr-05-batch-ux`.
 - Final PR: **#153**, trạng thái **DRAFT / CHƯA MERGE**.
-- OMR Camera Grading CI: GREEN tại code commit `23734374d78a9dbe912dbbecdcee72ed4e30d1e3`.
+- OMR Camera Grading CI + Teacher PWA 006: GREEN tại code commit `585ae9e23310ae23de8ac34a032d942926902294`.
 - Submission Safety CI: GREEN tại cùng code commit.
 - Production `main`: CHƯA CÓ OMR.
 - Supabase production: CHƯA APPLY migration OMR.
@@ -277,7 +278,7 @@ Khi chat hiện tại bị đầy hoặc chuyển phiên, trước khi làm OMR 
 
 ### Gate còn lại trước merge main
 
-BẮT BUỘC nghiệm thu bằng phiếu 18–4–6 in thật và camera điện thoại thật:
+Teacher PWA đã hoàn tất ở mức code/CI. BẮT BUỘC nghiệm thu trên PWA thật bằng phiếu 18–4–6 in thật và camera điện thoại thật:
 1. ảnh thẳng, nghiêng và ánh sáng thông thường;
 2. SBD và mã đề (đặc biệt 0444 ↔ 444);
 3. P1/P2/P3 với mức tô thực tế;
