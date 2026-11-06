@@ -17,13 +17,14 @@ assert.strictEqual(teacherManifest.scope,'./');
 assert.strictEqual(teacherManifest.display,'standalone');
 assert.strictEqual(teacherManifest.orientation,'portrait-primary');
 assert(teacherManifest.name.includes('Giáo viên'));
+assert(teacherManifest.icons.some(i=>i.src==='./icons/exam-installable.svg'&&i.sizes==='any'&&i.purpose==='any'),'teacher PWA must provide scalable any-purpose install icon');
 
 assert.strictEqual(studentManifest.start_url,'./hoc_sinh.html','student PWA start_url must remain unchanged');
 assert.strictEqual(studentManifest.id,'./hoc_sinh.html','student PWA id must remain unchanged');
 assert(studentSw.includes("'./hoc_sinh.html'"),'student service worker core remains student-only');
 assert(!studentSw.includes("teacher/index.html"),'teacher shell must not be added to student SW');
 
-assert(teacherHtml.includes('href="./manifest.json?v=20261106-teacher-pwa-006"'));
+assert(teacherHtml.includes('href="./manifest.json?v=20261106-teacher-pwa-008"'));
 assert(teacherHtml.includes('../omr/omr-teacher-module.js'));
 assert(teacherHtml.includes('../vendor/student/supabase-js-2.118.0.min.js'));
 assert(teacherHtml.includes('id="homeOmrBtn"'));
@@ -49,6 +50,7 @@ assert(!teacherJs.includes("localStorage.setItem('damSan_StaffToken'"),'staff be
 
 assert(teacherSw.includes("const CACHE='damsan-teacher-'"));
 assert(teacherSw.includes("../omr/omr-core.js"));
+assert(teacherSw.includes("./icons/exam-installable.svg"));
 assert(teacherSw.includes("u.hostname.endsWith('.supabase.co')"));
 assert(teacherSw.includes("fetch(event.request,{cache:'no-store'})"));
 assert(!teacherSw.includes("self.skipWaiting()"),'teacher SW must not force reload during an active scan');

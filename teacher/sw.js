@@ -1,4 +1,4 @@
-const VERSION='20261106-teacher-pwa-006';
+const VERSION='20261106-teacher-pwa-008';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -6,8 +6,9 @@ const CORE=[
   './app.css',
   './app.js',
   './manifest.json',
-  '../icons/exam-192.png',
-  '../icons/exam-512.png',
+  './icons/exam-192.png',
+  './icons/exam-512.png',
+  './icons/exam-installable.svg',
   '../vendor/student/supabase-js-2.118.0.min.js',
   '../omr/omr-template-moet-18-4-6.js',
   '../omr/omr-core.js',
