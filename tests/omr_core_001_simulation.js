@@ -10,7 +10,8 @@ assert.strictEqual(T.template.p2.length,16);
 assert.strictEqual(T.template.p3.length,6);
 assert.strictEqual(T.template.sbd.length,8);
 assert.strictEqual(T.template.maDe.length,4);
-assert.strictEqual(T.template.id,'MOET_TLTN_2025_PHIEU_CHINH_18_4_6_V2');
+assert.strictEqual(T.template.id,'MOET_TLTN_2025_PHIEU_CHINH_18_4_6_V3');
+assert(T.template.markers.length>=30,'full control-marker constellation required');
 
 const src=[[0,0],[10,0],[10,20],[0,20]], dst=[[100,50],[900,80],[850,1180],[120,1150]];
 const H=O.homography4(src,dst);
@@ -100,7 +101,9 @@ assert.strictEqual(full.maDe,maDeExpected);
 assert.strictEqual(full.p1,p1Expected);
 assert.deepStrictEqual(full.p2,p2Expected);
 assert.deepStrictEqual(full.p3,p3Expected);
-assert(full.markerMatches>=6);
+assert(full.markerMatches>=20);
+assert.strictEqual(full.engine,'RECTIFIED_INK_V1');
+assert(full.rectifiedSize[1]===1800);
 assert(full.markerRmse<20);
 
 // Nếu một mốc góc ngoài bị mất nhưng các mốc phụ vẫn còn, engine phải từ chối
@@ -114,5 +117,37 @@ for(let y=Math.max(0,Math.floor(br[1]-45));y<=Math.min(sh-1,Math.ceil(br[1]+45))
 const rejected=O.analyzeImageData({data:broken,width:sw,height:sh},tpl);
 assert.strictEqual(rejected.ok,false);
 assert(/căn được phiếu|mốc góc/.test(rejected.error));
+
+// Faint / partial pencil mark: printed outlines exist on every option, only one
+// option gets a light partial fill. The rectified ink scorer must still separate it.
+const rw=900,rh=Math.round(rw*tpl.heightCm/tpl.widthCm),rectGray=new Uint8Array(rw*rh).fill(238);
+function rxy(pt){return [pt[0]*(rw-1)/tpl.widthCm,pt[1]*(rh-1)/tpl.heightCm];}
+function grayDisk(buf,cx,cy,r,val){
+  const rr=r*r;
+  for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(rh-1,Math.ceil(cy+r));y++)
+    for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(rw-1,Math.ceil(cx+r));x++)
+      if((x-cx)**2+(y-cy)**2<=rr)buf[y*rw+x]=Math.min(buf[y*rw+x],val);
+}
+function grayRing(buf,cx,cy,r,val){
+  const r0=r*0.80,r02=r0*r,rr=r*r;
+  for(let y=Math.max(0,Math.floor(cy-r));y<=Math.min(rh-1,Math.ceil(cy+r));y++)
+    for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(rw-1,Math.ceil(cx+r));x++){
+      const d=(x-cx)**2+(y-cy)**2;
+      if(d<=rr&&d>=r02)buf[y*rw+x]=Math.min(buf[y*rw+x],val);
+    }
+}
+const testRow=tpl.p1[0],rr=tpl.bubbleRadiusCm*(rw-1)/tpl.widthCm;
+testRow.forEach(pt=>{const [x,y]=rxy(pt);grayRing(rectGray,x,y,rr,150);});
+const [fx,fy]=rxy(testRow[2]);
+for(let dy=-Math.floor(rr*.45);dy<=Math.floor(rr*.45);dy++)
+  for(let dx=-Math.floor(rr*.65);dx<=Math.floor(rr*.65);dx++)
+    if((dx*dx)/(rr*rr*.42)+(dy*dy)/(rr*rr*.20)<=1) {
+      const x=Math.round(fx+dx),y=Math.round(fy+dy);
+      if(x>=0&&x<rw&&y>=0&&y<rh)rectGray[y*rw+x]=205;
+    }
+const faintRect={gray:rectGray,width:rw,height:rh};
+const faint=O.readChoiceGroupRectified(faintRect,tpl,testRow,tpl.p1Labels,tpl.bubbleRadiusCm,{gap:0.06,ratio:1.10});
+assert.strictEqual(faint.value,'C','faint partial fill must be detected');
+assert(faint.margin>0.06,'faint fill must retain a usable confidence margin');
 
 console.log('PASS omr_core_001');
