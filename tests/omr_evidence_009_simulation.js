@@ -23,7 +23,16 @@ function ring(buf,cx,cy,rad,v){
 }
 function scene(extra='blank',noise=0){
   const b=new Uint8Array(base);
-  q.forEach(col=>col.forEach(pt=>{if(pt){const p=xy(pt);ring(b,p[0],p[1],r,155);}}));
+  T.p3.forEach(cols=>cols.forEach(col=>col.forEach(pt=>{
+    if(pt){const p=xy(pt);ring(b,p[0],p[1],r,155);}
+  })));
+  T.p3.forEach((cols,qi)=>{
+    if(qi===4)return;
+    cols.forEach((col,ci)=>{
+      const pt=col[idx(String(ci+1))],p=xy(pt);
+      disk(b,p[0],p[1],r*.56,65);
+    });
+  });
   for(const [col,val] of [[0,'3'],[1,'0'],[2,'0']]){
     const p=xy(q[col][idx(val)]);disk(b,p[0],p[1],r*.56,65);
   }
@@ -39,7 +48,7 @@ function scene(extra='blank',noise=0){
   }
   return {gray:b,width:w,height:h};
 }
-const run=(mode,noise=0)=>O.readP3QuestionRectified(scene(mode,noise),T,q,T.p3Labels,T.bubbleRadiusCm);
+const run=(mode,noise=0)=>O.readP3SectionRectified(scene(mode,noise),T).questions[4];
 for(let n=0;n<5;n++){
   const a=run('blank',n);
   assert.strictEqual(a.value,'300','blank fourth column must stay blank');
