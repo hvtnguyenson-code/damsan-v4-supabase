@@ -196,8 +196,8 @@ assert.strictEqual(erased.invalidMultiple,false);
 assert.strictEqual(erased.index,0);
 const unsure=O.chooseSingleMark([.84,.312],[mk(.84,.98,.266),mk(.312,.393,.11)],{});
 assert.strictEqual(unsure.invalidMultiple,false);
-assert.strictEqual(unsure.uncertain,true);
-assert.strictEqual(unsure.index,-1);
+assert.strictEqual(unsure.uncertain,false);
+assert.strictEqual(unsure.index,0);
 // White bubbles in genuine 9001-style sheet must not produce fake erase warnings.
 const blankOutlines=O.chooseSingleMark([.83,.35,.31,.32],[
   mk(.83,.96,.39),mk(.35,.44,.12),mk(.31,.32,.09),mk(.32,.15,.05)
@@ -226,6 +226,35 @@ assert(multiFull.invalidMarks.includes('P1.1'));
 assert(multiFull.invalidMarks.includes('P2.1a'));
 assert.strictEqual(multiFull.p1[0],'?');
 assert.strictEqual(multiFull.p2[0].split('-')[0],'?');
+
+// Four P2 cases using center-ink contrasts measured on the physical 9002 sheet.
+// Three are erased residue; only the fourth requires teacher review.
+const photographed=(a,b,ca,cb)=>O.chooseSingleMark([a,b],[
+  {score:a,centerInk25:1,centerContrast:ca},
+  {score:b,centerInk25:1,centerContrast:cb}],{});
+for(const example of [
+  [.88,.40,.467,.129], // P2.1b: faint erased true bubble
+  [.91,.29,.498,.063], // P2.1c: barely visible erased false bubble
+  [.95,.52,.518,.184]  // P2.2a: visibly erased false bubble
+]){
+  const actual=photographed(...example);
+  assert.strictEqual(actual.index,0);
+  assert.strictEqual(actual.uncertain,false);
+  assert.strictEqual(actual.invalidMultiple,false);
+}
+const disputed=photographed(.88,.78,.443,.318);
+assert.strictEqual(disputed.index,-1);
+assert.strictEqual(disputed.uncertain,true);
+assert.strictEqual(disputed.invalidMultiple,false);
+const obviousDouble=photographed(.92,.90,.45,.42);
+assert.strictEqual(obviousDouble.index,-1);
+assert.strictEqual(obviousDouble.invalidMultiple,true);
+const faintOutlineInP3=O.chooseP3Ink({metrics:[
+  {score:.23,centerInk25:.06,centerContrast:.035},
+  {score:.09,centerInk25:.02,centerContrast:.02}
+],scores:[.23,.09]},{markGate:.42,blankGate:.16,contrastGate:.18});
+assert.strictEqual(faintOutlineInP3.blank,true);
+assert.strictEqual(faintOutlineInP3.uncertain,false);
 
 const doubleMark=O.chooseInk([0.51,0.48],{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
 assert.strictEqual(doubleMark.uncertain,true);
