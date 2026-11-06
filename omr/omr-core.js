@@ -100,8 +100,11 @@
       const ratio=c.width/c.height, fill=c.count/(c.width*c.height);
       return c.width>=minSide&&c.height>=minSide&&c.width<=maxSide&&c.height<=maxSide&&ratio>0.72&&ratio<1.38&&fill>0.48;
     });
-    if(candidates.length<4) return {ok:false,candidates,corners:null};
-    const pick=(score,dir)=>candidates.reduce((best,c)=>{
+    if(candidates.length<4) return {ok:false,candidates,outerCandidates:[],corners:null};
+    const maxSide=Math.max(...candidates.map(c=>Math.max(c.width,c.height)));
+    const outerCandidates=candidates.filter(c=>Math.max(c.width,c.height)>=maxSide*0.74);
+    if(outerCandidates.length<4) return {ok:false,candidates,outerCandidates,corners:null};
+    const pick=(score,dir)=>outerCandidates.reduce((best,c)=>{
       const v=score(c); return !best||(dir<0?v<best.v:v>best.v)?{c,v}:best;
     },null).c;
     const picked=[
@@ -110,8 +113,8 @@
       pick(c=>c.cx+c.cy,1),
       pick(c=>c.cx-c.cy,-1)
     ];
-    if(new Set(picked).size<4) return {ok:false,candidates,corners:null};
-    return {ok:true,candidates,corners:picked.map(c=>[c.cx,c.cy])};
+    if(new Set(picked).size<4) return {ok:false,candidates,outerCandidates,corners:null};
+    return {ok:true,candidates,outerCandidates,corners:picked.map(c=>[c.cx,c.cy])};
   }
 
   function estimateTemplateHomography(template,cornersPx){
