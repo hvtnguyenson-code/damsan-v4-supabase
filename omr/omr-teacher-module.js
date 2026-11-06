@@ -79,6 +79,9 @@
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
             <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra đúng các vị trí được đánh dấu và xác nhận dữ liệu đang hiển thị là đúng.
           </label>
+          <label id="omrOverrideInvalidWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
+            <input id="omrOverrideInvalid" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra phiếu giấy và chủ động sửa một đáp án máy xác định tô nhiều ô. Thay đổi sẽ được ghi lại.
+          </label>
           <div class="omr-card">
             <div class="omr-row">
               <div class="omr-field"><label>SBD / mã học sinh</label><input id="omrSbd" type="text"></div>
@@ -87,6 +90,7 @@
             </div>
           </div>
           <details class="omr-card" open><summary><b>Đáp án đọc được</b> — có thể sửa trước khi chấm</summary>
+            <div class="omr-muted" style="margin:8px 0">Phần II: X = tô cả Đúng và Sai, không tính điểm ý đó; ? = chưa rõ, cần kiểm tra và sửa sau khi xem phiếu giấy.</div>
             <div class="omr-grid" style="margin-top:10px">
               <div class="omr-answer"><label>Phần I (18 ký tự A/B/C/D)</label><input id="omrP1" type="text" maxlength="18"></div>
               <div class="omr-answer"><label>P2 Câu 1</label><input id="omrP2_1" type="text"></div>
@@ -136,6 +140,7 @@
     q('omrNext').onclick=()=>{resetScan();openCamera();};
     q('omrSave').onclick=saveCurrent;
     q('omrReviewUncertain').onchange=reviewCurrent;
+    q('omrOverrideInvalid').onchange=reviewCurrent;
     ['omrSbd','omrMaDe','omrStudent','omrP1','omrP2_1','omrP2_2','omrP2_3','omrP2_4','omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'].forEach(id=>q(id).addEventListener('change',reviewCurrent));
   }
 
@@ -288,7 +293,7 @@
   }
 
   function scanFromForm(){
-    return {
+    const scan={
       ...(state.lastScan||{}),
       templateId:T.template.id,
       sbd:q('omrSbd').value.trim(),
@@ -297,8 +302,17 @@
       p2:[1,2,3,4].map(i=>q('omrP2_'+i).value.trim().toUpperCase()),
       p3:[1,2,3,4,5,6].map(i=>q('omrP3_'+i).value.trim()),
       uncertain:[...(state.lastScan?.uncertain||[])],
-      uncertainDetails:[...(state.lastScan?.uncertainDetails||[])]
+      uncertainDetails:[...(state.lastScan?.uncertainDetails||[])],
+      invalidChoices:[...(state.lastScan?.invalidChoices||[])]
     };
+    scan.manualOverrides=scan.invalidChoices.map(item=>{
+      const p1=item.key.match(/^P1\.(\d+)$/);
+      const p2=item.key.match(/^P2\.(\d+)([abcd])$/);
+      const actual=p1?scan.p1[Number(p1[1])-1]:
+        p2?scan.p2[Number(p2[1])-1]?.split('-')['abcd'.indexOf(p2[2])]:item.answer;
+      return actual!==item.answer?{key:item.key,from:item.answer,to:actual||''}:null;
+    }).filter(Boolean);
+    return scan;
   }
   function selectedStudent(){return state.roomModel?.students.find(s=>String(s.id)===String(q('omrStudent').value));}
   function reviewCurrent(){
@@ -328,7 +342,10 @@
     const hasUncertain=(scan.uncertain||[]).length>0;
     const reviewed=hasUncertain && q('omrReviewUncertain').checked;
     preview.reviewedUncertain=reviewed;
+    const hasOverride=scan.manualOverrides.length>0;
+    preview.invalidOverrideConfirmed=!hasOverride||q('omrOverrideInvalid').checked;
     q('omrReviewUncertainWrap').style.display=hasUncertain?'block':'none';
+    q('omrOverrideInvalidWrap').style.display=hasOverride?'block':'none';
     state.lastPreview=preview;
     q('omrStudentName').textContent=`${st.ma_hs} — ${st.ho_ten} (${st.lop})`;
     q('omrGradeCode').textContent=vr.variant.code;
@@ -337,7 +354,7 @@
     q('omrGradeCard').style.display='block';
     if(scan.uncertain.length) showScanWarnings(scan);
     else {clearWarningHighlights();hideWarning();}
-    q('omrSave').disabled=hasUncertain && !reviewed;
+    q('omrSave').disabled=(hasUncertain && !reviewed)||!preview.invalidOverrideConfirmed;
   }
 
   async function saveCurrent(){
@@ -369,6 +386,8 @@
     if(q('omrSave'))q('omrSave').disabled=true;
     if(q('omrReviewUncertain'))q('omrReviewUncertain').checked=false;
     if(q('omrReviewUncertainWrap'))q('omrReviewUncertainWrap').style.display='none';
+    if(q('omrOverrideInvalid'))q('omrOverrideInvalid').checked=false;
+    if(q('omrOverrideInvalidWrap'))q('omrOverrideInvalidWrap').style.display='none';
     clearWarningHighlights();hideWarning();
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
