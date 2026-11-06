@@ -12,7 +12,7 @@ const teacherJs=fs.readFileSync('teacher/app.js','utf8');
 const teacherSw=fs.readFileSync('teacher/sw.js','utf8');
 const studentSw=fs.readFileSync('sw.js','utf8');
 
-assert.strictEqual(teacherManifest.start_url,'./');
+assert.strictEqual(teacherManifest.start_url,'./index.html');
 assert.strictEqual(teacherManifest.scope,'./');
 assert.strictEqual(teacherManifest.display,'standalone');
 assert.strictEqual(teacherManifest.orientation,'portrait-primary');
