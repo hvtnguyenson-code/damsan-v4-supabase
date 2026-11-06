@@ -79,6 +79,9 @@ try{ws.close();}catch{}
 const parsed=JSON.parse(snapshot.result.value);
 if(!parsed.secure)throw new Error('teacher PWA not secure');
 if(!manifestInfo?.url||!manifestInfo.url.includes('/teacher/manifest.json'))throw new Error('teacher manifest not discovered');
+const manifestIcons=manifestInfo?.manifest?.icons||[];
+if(!manifestIcons.some(i=>String(i.url||'').includes('/teacher/icons/teacher-gv-installable.svg')))throw new Error('teacher launcher icon not selected from teacher scope');
+if(manifestIcons.some(i=>/\/teacher\/icons\/exam-(192|512|installable)/.test(String(i.url||''))))throw new Error('teacher manifest still exposes student launcher icon');
 if(Array.isArray(manifestInfo.errors)&&manifestInfo.errors.some(e=>e.critical===2))throw new Error('critical manifest errors: '+JSON.stringify(manifestInfo.errors));
 if(!parsed.teacherRegistration?.active)throw new Error('teacher service worker not active');
 if(!String(parsed.teacherRegistration.scope||'').endsWith('/teacher/'))throw new Error('teacher SW scope mismatch: '+parsed.teacherRegistration?.scope);
