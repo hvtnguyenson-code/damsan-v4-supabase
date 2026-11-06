@@ -61,7 +61,7 @@ assert(core.includes("Có dấu tô ở nhiều ô; mức tô gần nhau"),'doub
 assert(core.includes("Nét tô mờ hoặc chưa kín ô"),'faint-mark Vietnamese classification missing');
 assert(teacherModule.includes("Có '+details.length+' vị trí cần kiểm tra"),'warning list must show exact count');
 assert(teacherModule.includes("Các ô liên quan đã được đánh dấu màu vàng"),'warning UI must highlight affected fields');
-assert(teacherModule.includes("Phần II – Câu"),'warning labels must be Vietnamese');
+assert(core.includes("Phần II – Câu"),'warning labels must be Vietnamese');
 assert(!/confidence/i.test(teacherModule),'teacher warning UX must not expose English technical jargon');
 assert(write.includes("uncertain_details"),'warning details must be persisted for audit');
 assert(write.includes("vi_tri")&&write.includes("ly_do"),'warning audit metadata must use clear Vietnamese keys');
