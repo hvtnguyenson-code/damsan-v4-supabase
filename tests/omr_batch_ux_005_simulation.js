@@ -53,10 +53,10 @@ assert(teacherModule.includes("Chụp thủ công"),'manual capture fallback mus
 assert(teacherModule.includes("Tự động: Bật"),'auto scan toggle missing');
 assert(teacherModule.includes("await openCamera();"),'successful save must return to next scan automatically');
 
-assert(core.includes("RECTIFIED_INK_V1"),'rectified ink engine marker missing');
+assert(core.includes("RECTIFIED_INK_HYBRID_V2"),'hybrid rectified ink engine marker missing');
 assert(core.includes("warpTemplateGray"),'sheet must be rectified before recognition');
 assert(core.includes("bubbleInkScore"),'per-pixel ink scorer missing');
-assert(core.includes("refineTemplateHomographyDeep"),'deep fiducial refinement missing');
+assert(core.includes("fastTemplateRegistration"),'fast outer registration missing');
 assert(core.includes("Có dấu tô ở nhiều ô; mức tô gần nhau"),'double-mark Vietnamese classification missing');
 assert(core.includes("Nét tô mờ hoặc chưa kín ô"),'faint-mark Vietnamese classification missing');
 assert(teacherModule.includes("Có '+details.length+' vị trí cần kiểm tra"),'warning list must show exact count');
@@ -67,3 +67,7 @@ assert(write.includes("uncertain_details"),'warning details must be persisted fo
 assert(write.includes("vi_tri")&&write.includes("ly_do"),'warning audit metadata must use clear Vietnamese keys');
 
 console.log('PASS omr_batch_ux_005');
+
+assert(teacherModule.includes("O.fastTemplateRegistration"),'auto scan must use fast outer registration');
+assert(teacherModule.includes("const need=2"),'auto scan should capture after two stable frames');
+assert(teacherModule.includes("},240);"),'auto scan probe interval should remain fast');
