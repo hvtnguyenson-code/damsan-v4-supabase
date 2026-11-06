@@ -188,7 +188,12 @@
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true});
     try{
       const scan=O.analyzeImageData(ctx.getImageData(0,0,c.width,c.height),T.template);
-      if(!scan.ok){showWarning(scan.error||'Không đọc được phiếu');return;}
+      if(!scan.ok){
+        q('omrScanArea').style.display='block';
+        const detail=scan.markerMatches!==undefined?` (${scan.markerMatches} mốc khớp)`:'';
+        showWarning((scan.error||'Không đọc được phiếu')+detail);
+        return;
+      }
       scan.templateId=T.template.id;state.lastScan=scan;
       q('omrScanArea').style.display='block';
       q('omrSbd').value=scan.sbd;
