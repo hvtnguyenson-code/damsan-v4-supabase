@@ -362,8 +362,14 @@
     if(marked.length>=2)return {...chosen,index:-1,invalidMultiple:true,
       uncertain:true,markedIndices:marked.map(x=>x.i),
       reason:'Tô từ hai ô trở lên: câu/ý này không được tính điểm'};
-    const residual=ranked.slice(1).some(m=>m.v>=Math.max(.27,top.v*.32)
-      &&m.center>=.29&&m.contrast>=.09);
+    // Four-choice rows provide two more unfilled outlines as a noise baseline.
+    // A two-choice true/false row cannot use this extra comparison.
+    const residual=ranked.length>2
+      ? ranked.slice(1).some(m=>m.v>=Math.max(.42,top.v*.40)
+          &&m.center>=.42&&m.contrast>=.12
+          &&m.v-(ranked[2]?.v||0)>=.12)
+      : ranked.slice(1).some(m=>m.v>=Math.max(.27,top.v*.32)
+          &&m.center>=.29&&m.contrast>=.09);
     if(residual)return {...chosen,index:-1,invalidMultiple:false,uncertain:true,
       reason:'Ô thứ hai còn dấu tô; cần kiểm tra tẩy xóa'};
     if(chosen.uncertain)return {...chosen,index:-1,invalidMultiple:false};
