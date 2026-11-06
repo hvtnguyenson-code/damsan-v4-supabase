@@ -427,11 +427,11 @@
     const calibration=options.calibration||calibrateP3(probes);
     const cols=probes.map(probe=>chooseP3Ink(probe,calibration));
     const selected=cols.map(x=>x.index<0?'':labels[x.index]),negative=selected.includes('-'),commaCol=selected.findIndex(v=>v===',');
-    const digits=selected.map(v=>/^\\d$/.test(v)?v:'').join('');
+    const digits=selected.map(v=>/^\d$/.test(v)?v:'').join('');
     let value=digits;
     if(commaCol>=0){
-      const before=selected.slice(0,commaCol).filter(v=>/^\\d$/.test(v)).join('');
-      const after=selected.slice(commaCol+1).filter(v=>/^\\d$/.test(v)).join('');
+      const before=selected.slice(0,commaCol).filter(v=>/^\d$/.test(v)).join('');
+      const after=selected.slice(commaCol+1).filter(v=>/^\d$/.test(v)).join('');
       value=(before||'0')+','+after;
     }
     if(negative&&value)value='-'+value;
