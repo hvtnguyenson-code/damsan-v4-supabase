@@ -4,11 +4,13 @@ const O=require('../omr/omr-core.js');
 console.log('=== OMR CORE 001 ===');
 
 assert.strictEqual(T.validate().ok,true);
+assert.strictEqual(T.template.sourceProfile,'BGD_2025_PHIEU_CHINH_PDF');
 assert.strictEqual(T.template.p1.length,18);
 assert.strictEqual(T.template.p2.length,16);
 assert.strictEqual(T.template.p3.length,6);
 assert.strictEqual(T.template.sbd.length,8);
 assert.strictEqual(T.template.maDe.length,4);
+assert.strictEqual(T.template.id,'MOET_TLTN_2025_PHIEU_CHINH_18_4_6_V2');
 
 const src=[[0,0],[10,0],[10,20],[0,20]], dst=[[100,50],[900,80],[850,1180],[120,1150]];
 const H=O.homography4(src,dst);
@@ -34,8 +36,11 @@ const g=O.grayscale(rgba,w,h),marks=O.detectCornerMarkers(g,w,h);
 assert.strictEqual(marks.ok,true);
 assert.strictEqual(marks.corners.length,4);
 
-const tpl=T.template, sw=1638, sh=2339, sheet=new Uint8ClampedArray(sw*sh*4);
+const tpl=T.template;
+const pxPerCm=tpl.sourceDpi/2.54;
+const sw=1552, sh=2254, sheet=new Uint8ClampedArray(sw*sh*4);
 for(let i=0;i<sheet.length;i+=4){sheet[i]=sheet[i+1]=sheet[i+2]=255;sheet[i+3]=255;}
+function toPx(pt){return [pt[0]*pxPerCm,pt[1]*pxPerCm];}
 function blackRect(cx,cy,half){
   for(let y=Math.max(0,Math.round(cy-half));y<=Math.min(sh-1,Math.round(cy+half));y++)
     for(let x=Math.max(0,Math.round(cx-half));x<=Math.min(sw-1,Math.round(cx+half));x++){
@@ -48,24 +53,45 @@ function blackDisk(cx,cy,r){
     for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(sw-1,Math.ceil(cx+r));x++)
       if((x-cx)**2+(y-cy)**2<=rr){const j=(y*sw+x)*4;sheet[j]=sheet[j+1]=sheet[j+2]=0;}
 }
-for(const mk of tpl.markers.slice(0,4)) blackRect(mk.x*100,mk.y*100,15);
+for(const mk of tpl.markers.slice(0,4)) blackRect(mk.x*pxPerCm,mk.y*pxPerCm,20);
 
-const p1Expected='ABCDABCDABCDABCDAB';
+const p1Expected='AACADCBDBDDAACCAAD';
 tpl.p1.forEach((row,i)=>{
-  const idx=tpl.p1Labels.indexOf(p1Expected[i]);
-  blackDisk(row[idx][0]*100,row[idx][1]*100,9);
+  const idx=tpl.p1Labels.indexOf(p1Expected[i]),pt=toPx(row[idx]);
+  blackDisk(pt[0],pt[1],10);
 });
 
-const p2Expected=['Đ-S-Đ-S','S-Đ-S-Đ','Đ-Đ-S-S','S-S-Đ-Đ'];
+const p2Expected=['Đ-Đ-Đ-S','Đ-Đ-S-Đ','Đ-Đ-Đ-S','Đ-Đ-Đ-S'];
 tpl.p2.forEach((row,i)=>{
-  const label=p2Expected[Math.floor(i/4)].split('-')[i%4],idx=tpl.p2Labels.indexOf(label);
-  blackDisk(row[idx][0]*100,row[idx][1]*100,9);
+  const label=p2Expected[Math.floor(i/4)].split('-')[i%4],idx=tpl.p2Labels.indexOf(label),pt=toPx(row[idx]);
+  blackDisk(pt[0],pt[1],10);
 });
 
-const sbdExpected='00001234';
-tpl.sbd.forEach((col,i)=>blackDisk(col[Number(sbdExpected[i])][0]*100,col[Number(sbdExpected[i])][1]*100,8));
-const maDeExpected='0444';
-tpl.maDe.forEach((col,i)=>blackDisk(col[Number(maDeExpected[i])][0]*100,col[Number(maDeExpected[i])][1]*100,8));
+const sbdExpected='00120601';
+tpl.sbd.forEach((col,i)=>{
+  const pt=toPx(col[Number(sbdExpected[i])]);blackDisk(pt[0],pt[1],9);
+});
+const maDeExpected='9001';
+tpl.maDe.forEach((col,i)=>{
+  const pt=toPx(col[Number(maDeExpected[i])]);blackDisk(pt[0],pt[1],9);
+});
+
+const p3Selections=[
+  ['-','1',',','2'],
+  ['3',',','4','5'],
+  ['6','7',',','8'],
+  ['9','0','0','0'],
+  ['1','2',',','3'],
+  ['4','5','6','7']
+];
+const p3Expected=['-1,2','3,45','67,8','9000','12,3','4567'];
+p3Selections.forEach((cols,q)=>{
+  cols.forEach((label,col)=>{
+    const idx=tpl.p3Labels.indexOf(label),pt=tpl.p3[q][col][idx];
+    assert(pt,'P3 '+(q+1)+' col '+(col+1)+' must support '+label);
+    const px=toPx(pt);blackDisk(px[0],px[1],9);
+  });
+});
 
 const full=O.analyzeImageData({data:sheet,width:sw,height:sh},tpl);
 assert.strictEqual(full.ok,true);
@@ -73,5 +99,6 @@ assert.strictEqual(full.sbd,sbdExpected);
 assert.strictEqual(full.maDe,maDeExpected);
 assert.strictEqual(full.p1,p1Expected);
 assert.deepStrictEqual(full.p2,p2Expected);
+assert.deepStrictEqual(full.p3,p3Expected);
 
 console.log('PASS omr_core_001');
