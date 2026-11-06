@@ -65,7 +65,16 @@ const expression="(async()=>{"+
 "try{const r=await fetch('./manifest.json',{cache:'no-store'});manifestStatus=r.status;manifest=await r.json();}catch(e){manifest={error:String(e)}}"+
 "return JSON.stringify({href:location.href,secure:isSecureContext,hasSW:'serviceWorker' in navigator,controller:navigator.serviceWorker.controller?.scriptURL||null,registrations:regs.map(r=>({scope:r.scope,active:r.active?.scriptURL||null,installing:r.installing?.scriptURL||null,waiting:r.waiting?.scriptURL||null})),teacherRegistration:reg?{scope:reg.scope,active:reg.active?.scriptURL||null,installing:reg.installing?.scriptURL||null,waiting:reg.waiting?.scriptURL||null}:null,manifestStatus,manifest,installButton:document.getElementById('installBtn')?.textContent||null,installCard:!!document.getElementById('installCard')});"+
 "})()";
-const snapshot=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});
+// Service-worker installation is asynchronous: cache.addAll(CORE) may take
+// several seconds on a cold GitHub runner even after the page is visible.
+// Wait for the actual active state instead of snapshotting after 1.8 seconds.
+let snapshot,parsed;
+for(let attempt=0;attempt<40;attempt++){
+  snapshot=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});
+  parsed=JSON.parse(snapshot.result.value);
+  if(parsed.teacherRegistration?.active)break;
+  await sleep(500);
+}
 const manifestInfo=await send('Page.getAppManifest');
 const installability=await send('Page.getInstallabilityErrors');
 
@@ -76,7 +85,6 @@ process.stdout.write('=== TEACHER PWA MANIFEST ===\n'+JSON.stringify(manifestInf
 process.stdout.write('=== TEACHER PWA INSTALLABILITY ===\n'+JSON.stringify(installability,null,2)+'\n');
 try{ws.close();}catch{}
 
-const parsed=JSON.parse(snapshot.result.value);
 if(!parsed.secure)throw new Error('teacher PWA not secure');
 if(!manifestInfo?.url||!manifestInfo.url.includes('/teacher/manifest.json'))throw new Error('teacher manifest not discovered');
 const manifestIcons=manifestInfo?.manifest?.icons||[];
