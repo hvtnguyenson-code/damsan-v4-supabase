@@ -198,6 +198,13 @@ const unsure=O.chooseSingleMark([.84,.312],[mk(.84,.98,.266),mk(.312,.393,.11)],
 assert.strictEqual(unsure.invalidMultiple,false);
 assert.strictEqual(unsure.uncertain,true);
 assert.strictEqual(unsure.index,-1);
+// White bubbles in genuine 9001-style sheet must not produce fake erase warnings.
+const blankOutlines=O.chooseSingleMark([.83,.35,.31,.32],[
+  mk(.83,.96,.39),mk(.35,.44,.12),mk(.31,.32,.09),mk(.32,.15,.05)
+],{singleMark:true});
+assert.strictEqual(blankOutlines.invalidMultiple,false);
+assert.strictEqual(blankOutlines.uncertain,false);
+assert.strictEqual(blankOutlines.index,0);
 const goodFaint=O.chooseSingleMark([.42,.04],[mk(.42,.5,.16),mk(.04,0,.01)],{});
 assert.strictEqual(goodFaint.index,0);
 
