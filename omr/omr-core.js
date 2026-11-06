@@ -309,7 +309,7 @@
     let target=patchN*0.80,acc=0,bg=245;
     for(let i=0;i<256;i++){acc+=hist[i];if(acc>=target){bg=i;break;}}
 
-    let n=0,d8=0,d15=0,d25=0,deficit=0,centerN=0,center25=0,center45=0;
+    let n=0,d8=0,d15=0,d25=0,deficit=0,centerN=0,center25=0,center45=0,centerDeficit=0;
     const centerR2=(r*0.44)*(r*0.44);
     const ix0=Math.max(0,Math.floor(cx-coreR)),ix1=Math.min(w-1,Math.ceil(cx+coreR));
     const iy0=Math.max(0,Math.floor(cy-coreR)),iy1=Math.min(h-1,Math.ceil(cy+coreR));
@@ -318,14 +318,15 @@
       const v=gray[y*w+x],d=bg-v;n++;
       if(d>8)d8++;if(d>15)d15++;if(d>25)d25++;if(d>0)deficit+=d;
       if((x-cx)*(x-cx)+(y-cy)*(y-cy)<=centerR2){
-        centerN++;if(d>25)center25++;if(d>45)center45++;
+        centerN++;if(d>25)center25++;if(d>45)center45++;if(d>0)centerDeficit+=d;
       }
     }
     if(!n) return {score:0,bg,ink8:0,ink15:0,ink25:0,deficit:0};
     const f8=d8/n,f15=d15/n,f25=d25/n,meanDef=deficit/n/255;
     const score=Math.max(0,Math.min(1,0.38*f8+0.32*f15+0.20*f25+0.10*Math.min(1,meanDef*5)));
     return {score,bg,ink8:f8,ink15:f15,ink25:f25,deficit:meanDef,
-      centerInk25:centerN?center25/centerN:0,centerInk45:centerN?center45/centerN:0};
+      centerInk25:centerN?center25/centerN:0,centerInk45:centerN?center45/centerN:0,
+      centerContrast:centerN?centerDeficit/centerN/255:0};
   }
 
   function chooseInk(scores,opts={}){
@@ -384,14 +385,16 @@
   }
 
   function calibrateP3(probes){
-    const positives=[],negatives=[];
+    const positives=[],positiveContrast=[],negatives=[];
     for(const probe of probes){
       const ranked=probe.metrics.map((m,i)=>m?{i,v:m.score,m}:null)
         .filter(Boolean).sort((a,b)=>b.v-a.v);
       if(!ranked.length)continue;
       const top=ranked[0],second=ranked[1]||{v:0};
-      if(top.v>=0.26&&top.v-second.v>=0.09&&top.m.centerInk25>=0.28)
+      if(top.v>=0.26&&top.v-second.v>=0.09&&top.m.centerInk25>=0.28){
         positives.push(top.v);
+        positiveContrast.push(top.m.centerContrast||0);
+      }
       ranked.slice(1).forEach(r=>negatives.push(r.v));
     }
     const background=percentile(negatives,0.90);
@@ -400,7 +403,10 @@
     const reference=positives.length>=5?percentile(positives,0.25):0.58;
     const markGate=Math.max(0.30,background+0.17,reference*0.58);
     const blankGate=Math.max(0.16,Math.min(markGate-0.11,background+0.085));
-    return {background,reference,markGate,blankGate,samples:positives.length};
+    const contrastReference=positives.length>=5?percentile(positiveContrast,0.25):0.42;
+    const contrastGate=Math.max(0.15,contrastReference*0.38);
+    return {background,reference,markGate,blankGate,
+      contrastReference,contrastGate,samples:positives.length};
   }
 
   function chooseP3Ink(probe,calibration){
@@ -408,13 +414,13 @@
       .filter(Boolean).sort((a,b)=>b.v-a.v);
     const top=ranked[0]||{i:-1,v:0,m:{centerInk25:0,centerInk45:0}};
     const second=ranked[1]||{v:0},margin=top.v-second.v;
-    const center=top.m.centerInk25||0;
+    const center=top.m.centerInk25||0,contrast=top.m.centerContrast||0;
     const ratio=top.v/Math.max(0.04,second.v);
     const strong=top.v>=calibration.markGate&&center>=0.24&&
-      margin>=0.075&&ratio>=1.14;
+      contrast>=calibration.contrastGate&&margin>=0.075&&ratio>=1.14;
     const blank=top.v<=calibration.blankGate&&center<=0.20;
     const common={scores:probe.scores,top:top.v,second:second.v,
-      margin,ratio,centerInk25:center};
+      margin,ratio,centerInk25:center,centerContrast:contrast};
     if(strong)return {...common,index:top.i,blank:false,uncertain:false,reason:''};
     if(blank)return {...common,index:-1,blank:true,uncertain:false,reason:'Ô để trống'};
     // Abstain rather than silently append a digit when the ink evidence is weak.
@@ -438,6 +444,16 @@
     const details=cols.map((x,i)=>x.uncertain?{column:i,reason:x.reason,top:x.top,
       second:x.second,margin:x.margin}:null).filter(Boolean);
     return {value,raw:selected,uncertain:details.length>0,details};
+  }
+
+  function readP3SectionRectified(rect,template){
+    const probes=template.p3.map(q=>q.map(pts=>measureP3Column(rect,template,pts,template.bubbleRadiusCm)));
+    const calibration=calibrateP3(probes.flat());
+    const questions=template.p3.map((q,i)=>readP3QuestionRectified(
+      rect,template,q,template.p3Labels,template.bubbleRadiusCm,
+      {probes:probes[i],calibration}
+    ));
+    return {questions,calibration};
   }
 
   function sampleDisk(gray,w,h,cx,cy,r){
@@ -527,11 +543,8 @@
       return r.value||'?';
     });
     const p2=Array.from({length:4},(_,q)=>p2Flat.slice(q*4,q*4+4).join('-'));
-    const p3Probes=template.p3.map(q=>q.map(pts=>measureP3Column(rect,template,pts,template.bubbleRadiusCm)));
-    const p3Calibration=calibrateP3(p3Probes.flat());
-    const p3=template.p3.map((q,i)=>{
-      const r=readP3QuestionRectified(rect,template,q,template.p3Labels,template.bubbleRadiusCm,
-        {probes:p3Probes[i],calibration:p3Calibration});
+    const p3Section=readP3SectionRectified(rect,template);
+    const p3=p3Section.questions.map((r,i)=>{
       r.details.forEach(d=>addWarning(`P3.${i+1}.${d.column+1}`,`Phần III – Câu ${i+1}, vị trí ${d.column+1}`,d));
       return r.value||'?';
     });
@@ -548,5 +561,5 @@
     };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,readP3SectionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
