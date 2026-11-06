@@ -4,45 +4,76 @@
   else root.DamSanOmrTemplate=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const p=(x,y)=>[x/100,y/100];
-  const m=(name,x,y)=>({name,x:x/100,y:y/100,size:0.30});
-  const digitY=Array.from({length:10},(_,i)=>267+i*46.05);
-  const p3Rows=Array.from({length:10},(_,i)=>1798+i*43.9);
+
+  // Calibration source: assets/assets/phieu-chinh.pdf rendered at 200 DPI.
+  // Coordinates are converted back to physical centimetre-like units so the
+  // homography remains independent of camera resolution.
+  const PX_PER_CM=200/2.54;
+  const p=(x,y)=>[x/PX_PER_CM,y/PX_PER_CM];
+  const m=(name,x,y,sizePx=42)=>({name,x:x/PX_PER_CM,y:y/PX_PER_CM,size:sizePx/PX_PER_CM});
+
+  const digitY=[220.2,264.6,310.8,355.8,401.4,447.0,492.0,537.0,582.6,628.2];
+  const p1Y=[852.67,887.55,922.8,957.6,992.77,1029.0,1063.88,1098.3,1133.32,1169.18];
+  const p1X=[
+    [178.44,246.6,314.76,381.36],
+    [518.28,586.2,654.6,721.8]
+  ];
+  const p2X=[
+    [178.92,246.6],
+    [316.2,382.2],
+    [519.24,587.4],
+    [655.5,723.0]
+  ];
+  const p2Y=[1361.47,1396.34,1431.0,1465.8];
+  const p3X=[
+    [167.2,214.2,261.11,307.92],
+    [384.4,431.4,478.09,525.0],
+    [601.4,648.6,695.4,742.2],
+    [819.0,867.0,914.02,960.72],
+    [1037.1,1084.2,1131.0,1177.92],
+    [1254.2,1301.4,1348.2,1395.0]
+  ];
+  const p3MinusY=1673.4;
+  const p3CommaY=1708.3;
+  const p3DigitY=[1747.35,1782.6,1818.6,1855.8,1890.6,1925.4,1962.55,1997.4,2034.55,2070.6];
+
   const template={
-    id:'MOET_TLTN_2025_18_4_6_V1',
-    name:'Phiếu TLTN BGD 2025 gốc — profile Địa lí 18-4-6',
-    sourceProfile:'BGD_2025_ORIGINAL',
-    widthCm:16.38,
-    heightCm:23.39,
-    bubbleRadiusCm:0.115,
-    frame:[0,0,16.38,23.39],
+    id:'MOET_TLTN_2025_PHIEU_CHINH_18_4_6_V2',
+    name:'Phiếu TLTN BGD 2025 phieu-chinh.pdf — profile Địa lí 18-4-6',
+    sourceProfile:'BGD_2025_PHIEU_CHINH_PDF',
+    sourceDpi:200,
+    widthCm:1552/PX_PER_CM,
+    heightCm:2254/PX_PER_CM,
+    bubbleRadiusCm:12/PX_PER_CM,
+    frame:[0,0,1552/PX_PER_CM,2254/PX_PER_CM],
     markers:[
-      m('TL',53,43),m('TR',1594,43),m('BR',1594,2269),m('BL',53,2269),
-      m('I0',54,759),m('I1',1594,759),m('I2',54,1270),m('I3',1594,1270),
-      m('I4',53,1597),m('I5',1594,1597)
+      m('TL',50.5,60.5),m('TR',1496.0,60.5),m('BR',1496.0,2197.5),m('BL',50.5,2197.5),
+      m('P1-L',50.5,693.5),m('P1-R',1496.0,693.5),
+      m('P3-BL',337.5,2142.5,20),m('P3-BR',1208.0,2142.5,20)
     ],
-    p1:Array.from({length:18},(_,i)=>[177,243,309,374].map(x=>p(x+Math.floor(i/10)*370,859+(i%10)*39.4))),
+    p1:Array.from({length:18},(_,i)=>{
+      const block=i<10?0:1, row=i<10?i:i-10;
+      return p1X[block].map(x=>p(x,p1Y[row]));
+    }),
     p1Labels:['A','B','C','D'],
     p2:Array.from({length:16},(_,i)=>{
-      const q=Math.floor(i/4), offset=Math.floor(q/2)*370+(q%2)*132;
-      return [177,243].map(x=>p(x+offset,1413+(i%4)*39.4));
+      const q=Math.floor(i/4), row=i%4;
+      return p2X[q].map(x=>p(x,p2Y[row]));
     }),
     p2Labels:['Đ','S'],
-    p3:Array.from({length:6},(_,q)=>{
-      const base=169+q*236.3;
-      return Array.from({length:4},(_,col)=>[
-        p(base+col*39.4,col===0?1710:1650),
-        p(base+col*39.4,(col===1||col===2)?1754:1650),
-        ...p3Rows.map(y=>p(base+col*39.4,y))
-      ]);
-    }),
+    p3:p3X.map(xs=>xs.map((x,col)=>[
+      col===0?p(x,p3MinusY):null,
+      (col===1||col===2)?p(x,p3CommaY):null,
+      ...p3DigitY.map(y=>p(x,y))
+    ])),
     p3Labels:['-',',','0','1','2','3','4','5','6','7','8','9'],
-    sbd:Array.from({length:8},(_,i)=>digitY.map(y=>p(1147+i*31.65,y))),
+    sbd:[1062.6,1095.0,1126.32,1158.6,1189.68,1220.64,1252.2,1283.4].map(x=>digitY.map(y=>p(x,y))),
     sbdLabels:Array.from({length:10},(_,i)=>String(i)),
-    maDe:[1433,1465,1496,1528].map(x=>digitY.map(y=>p(x,y))),
+    maDe:[1362.36,1393.8,1425.12,1456.2].map(x=>digitY.map(y=>p(x,y))),
     maDeLabels:Array.from({length:10},(_,i)=>String(i)),
     expected:{p1:18,p2Questions:4,p2Items:16,p3:6,sbdDigits:8,maDeDigits:4}
   };
+
   function validate(t=template){
     const errors=[];
     if(t.p1.length!==18) errors.push('P1 must have 18 rows');
@@ -53,5 +84,6 @@
     if(t.markers.length<4) errors.push('At least four markers required');
     return {ok:errors.length===0,errors};
   }
+
   return {template,validate};
 });

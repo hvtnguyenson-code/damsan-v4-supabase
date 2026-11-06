@@ -133,7 +133,7 @@
   }
 
   function readChoiceGroup(gray,w,h,H,points,labels,rCm,opts){
-    const scores=points.map(pt=>bubbleDarkness(gray,w,h,H,pt,rCm));
+    const scores=points.map(pt=>pt?bubbleDarkness(gray,w,h,H,pt,rCm):0);
     const c=choose(scores,opts); return {...c,value:c.index<0?'':labels[c.index]};
   }
 
