@@ -148,6 +148,16 @@ for(let dy=-Math.floor(rr*.45);dy<=Math.floor(rr*.45);dy++)
 const faintRect={gray:rectGray,width:rw,height:rh};
 const faint=O.readChoiceGroupRectified(faintRect,tpl,testRow,tpl.p1Labels,tpl.bubbleRadiusCm,{gap:0.06,ratio:1.10});
 assert.strictEqual(faint.value,'C','faint partial fill must be detected');
-assert(faint.margin>0.06,'faint fill must retain a usable confidence margin');
+assert(faint.margin>0.06,'faint fill must retain a usable separation margin');
+
+const doubleMark=O.chooseInk([0.51,0.48],{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
+assert.strictEqual(doubleMark.uncertain,true);
+assert.strictEqual(doubleMark.reason,'Có dấu tô ở nhiều ô; mức tô gần nhau');
+
+const cleanBlank=O.chooseInk([0.20,0.19,0.18,0.17,0.19,0.18,0.17,0.20,0.18,0.19],{
+  allowBlank:true,blankMax:0.18,blankBaseGap:0.055,blankWarnGap:0.095,blankCeil:0.52
+});
+assert.strictEqual(cleanBlank.index,-1,'blank P3 column must remain blank');
+assert.strictEqual(cleanBlank.uncertain,false,'clean blank P3 column must not create a false warning');
 
 console.log('PASS omr_core_001');
