@@ -44,3 +44,12 @@ assert(!/insert\s+into\s+public\.ket_qua/i.test(migration));
 assert(migration.includes("code','existing_result"));
 
 console.log('PASS omr_batch_ux_005');
+
+assert(teacherModule.includes("autoScanEnabled:true"),'auto scan must default ON');
+assert(teacherModule.includes("setInterval(()=>"),'auto scan loop missing');
+assert(teacherModule.includes("refineTemplateHomography"),'auto scan must validate geometry before capture');
+assert(teacherModule.includes("state.autoScanStable>=need"),'auto scan stability gate missing');
+assert(teacherModule.includes("capture('auto')"),'auto capture trigger missing');
+assert(teacherModule.includes("Chụp thủ công"),'manual capture fallback must remain');
+assert(teacherModule.includes("Tự động: Bật"),'auto scan toggle missing');
+assert(teacherModule.includes("await openCamera();"),'successful save must return to next scan automatically');
