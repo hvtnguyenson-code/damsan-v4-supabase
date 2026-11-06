@@ -208,7 +208,7 @@
           updateAutoHud('Đưa trọn phiếu và 4 mốc góc vào khung',false);
           return;
         }
-        const geometry=O.refineTemplateHomography(T.template,markers,probe.width,probe.height);
+        const geometry=O.fastTemplateRegistration(T.template,markers,probe.width,probe.height);
         if(!geometry.ok){
           state.autoScanStable=0;state.autoScanLastCorners=markers.corners;
           updateAutoHud('Đang căn phiếu — giữ đủ 4 góc',false);
@@ -216,9 +216,9 @@
         }
         const motion=cornerMotion(markers.corners,state.autoScanLastCorners,Math.min(probe.width,probe.height));
         state.autoScanLastCorners=markers.corners.map(p=>p.slice());
-        state.autoScanStable=motion<0.012?state.autoScanStable+1:1;
-        const need=3;
-        updateAutoHud('Đã nhận phiếu • giữ yên '+Math.min(state.autoScanStable,need)+'/'+need,true);
+        state.autoScanStable=motion<0.018?state.autoScanStable+1:1;
+        const need=2;
+        updateAutoHud('Đã bắt 4 mốc ngoài • giữ yên '+Math.min(state.autoScanStable,need)+'/'+need,true);
         if(state.autoScanStable>=need){
           state.autoScanBusy=true;
           updateAutoHud('Đang tự chụp và nhận dạng…',true);
@@ -228,7 +228,7 @@
         state.autoScanStable=0;state.autoScanLastCorners=null;
         updateAutoHud('Không nhận được phiếu — thử giữ thẳng hơn',false);
       }
-    },320);
+    },240);
   }
   async function openCamera(){
     if(!state.roomModel?.valid1846){alert('Hãy chọn phòng 18–4–6 hợp lệ trước.');return;}

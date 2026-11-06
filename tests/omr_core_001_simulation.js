@@ -101,10 +101,10 @@ assert.strictEqual(full.maDe,maDeExpected);
 assert.strictEqual(full.p1,p1Expected);
 assert.deepStrictEqual(full.p2,p2Expected);
 assert.deepStrictEqual(full.p3,p3Expected);
-assert(full.markerMatches>=20);
-assert.strictEqual(full.engine,'RECTIFIED_INK_V1');
+assert(full.markerMatches>=4);
+assert.strictEqual(full.engine,'RECTIFIED_INK_HYBRID_V2');
 assert(full.rectifiedSize[1]===1800);
-assert(full.markerRmse<20);
+assert(full.markerArea>=0.18);
 
 // Nếu một mốc góc ngoài bị mất nhưng các mốc phụ vẫn còn, engine phải từ chối
 // thay vì dùng nhầm mốc phụ để tiếp tục đọc sai toàn phiếu.
@@ -149,6 +149,17 @@ const faintRect={gray:rectGray,width:rw,height:rh};
 const faint=O.readChoiceGroupRectified(faintRect,tpl,testRow,tpl.p1Labels,tpl.bubbleRadiusCm,{gap:0.06,ratio:1.10});
 assert.strictEqual(faint.value,'C','faint partial fill must be detected');
 assert(faint.margin>0.06,'faint fill must retain a usable separation margin');
+
+const p3RectGray=new Uint8Array(rw*rh).fill(238);
+const p3q=tpl.p3[4];
+p3q.forEach(col=>col.forEach(pt=>{if(pt){const [x,y]=rxy(pt);grayRing(p3RectGray,x,y,rr,150);}}));
+for(const [col,label] of [[0,'3'],[1,'0'],[2,'0']]){
+  const idx=tpl.p3Labels.indexOf(label),pt=p3q[col][idx],xy=rxy(pt);
+  grayDisk(p3RectGray,xy[0],xy[1],rr*.55,70);
+}
+const p3Read=O.readP3QuestionRectified({gray:p3RectGray,width:rw,height:rh},tpl,p3q,tpl.p3Labels,tpl.bubbleRadiusCm);
+assert.strictEqual(p3Read.value,'300','blank fourth P3 column must stay blank, never become 3000/3009');
+assert.strictEqual(p3Read.raw[3],'','blank fourth P3 column must remain empty');
 
 const doubleMark=O.chooseInk([0.51,0.48],{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
 assert.strictEqual(doubleMark.uncertain,true);

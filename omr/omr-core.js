@@ -100,8 +100,11 @@
       const ratio=c.width/c.height, fill=c.count/(c.width*c.height);
       return c.width>=minSide&&c.height>=minSide&&c.width<=maxSide&&c.height<=maxSide&&ratio>0.72&&ratio<1.38&&fill>0.48;
     });
-    if(candidates.length<4) return {ok:false,candidates,corners:null};
-    const pick=(score,dir)=>candidates.reduce((best,c)=>{
+    if(candidates.length<4) return {ok:false,candidates,outerCandidates:[],corners:null};
+    const observedMaxSide=Math.max(...candidates.map(c=>Math.max(c.width,c.height)));
+    const outerCandidates=candidates.filter(c=>Math.max(c.width,c.height)>=observedMaxSide*0.74);
+    if(outerCandidates.length<4) return {ok:false,candidates,outerCandidates,corners:null};
+    const pick=(score,dir)=>outerCandidates.reduce((best,c)=>{
       const v=score(c); return !best||(dir<0?v<best.v:v>best.v)?{c,v}:best;
     },null).c;
     const picked=[
@@ -110,8 +113,8 @@
       pick(c=>c.cx+c.cy,1),
       pick(c=>c.cx-c.cy,-1)
     ];
-    if(new Set(picked).size<4) return {ok:false,candidates,corners:null};
-    return {ok:true,candidates,corners:picked.map(c=>[c.cx,c.cy])};
+    if(new Set(picked).size<4) return {ok:false,candidates,outerCandidates,corners:null};
+    return {ok:true,candidates,outerCandidates,corners:picked.map(c=>[c.cx,c.cy])};
   }
 
   function estimateTemplateHomography(template,cornersPx){
@@ -153,6 +156,30 @@
       && matched.rmse<=matched.tolerance*0.45
       && spanX>=0.45 && spanY>=0.45;
     return {ok,H,matches:matched.pairs.length,rmse:matched.rmse,tolerance:matched.tolerance,spanX,spanY,pairs:matched.pairs};
+  }
+
+  function fastTemplateRegistration(template,markers,w,h){
+    const H=estimateTemplateHomography(template,markers.corners);
+    const xs=markers.corners.map(p=>p[0]),ys=markers.corners.map(p=>p[1]);
+    const spanX=(Math.max(...xs)-Math.min(...xs))/w,spanY=(Math.max(...ys)-Math.min(...ys))/h;
+    const area=Math.abs(
+      markers.corners.reduce((s,p,i,a)=>{
+        const q=a[(i+1)%a.length];
+        return s+p[0]*q[1]-q[0]*p[1];
+      },0)
+    )/2/(w*h);
+    const diagNames=new Set(['TOP-C','MID-L','MID-C','MID-R','P3-B3']);
+    const diagnostics=matchTemplateMarkers(
+      {...template,markers:(template.markers||[]).filter(m=>diagNames.has(m.name))},
+      H,markers.candidates,w,h
+    );
+    const ok=spanX>=0.42&&spanY>=0.42&&area>=0.18;
+    return {
+      ok,H,spanX,spanY,area,
+      matches:4+diagnostics.pairs.length,
+      rmse:diagnostics.rmse,
+      diagnosticPairs:diagnostics.pairs
+    };
   }
 
   function darkIntegral(gray,w,h){
@@ -410,18 +437,16 @@
     const markers=detectCornerMarkers(gray,w,h);
     if(!markers.ok) return {ok:false,error:'Không nhận đủ 4 mốc góc',markerCandidates:markers.candidates.length};
 
-    const coarse=refineTemplateHomography(template,markers,w,h);
-    if(!coarse.ok) return {
-      ok:false,error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc và chụp lại phiếu.',
-      markerCandidates:markers.candidates.length,markerMatches:coarse.matches,markerRmse:coarse.rmse,markerSpan:[coarse.spanX,coarse.spanY]
-    };
-
-    const geometry=refineTemplateHomographyDeep(template,markers,gray,w,h);
+    const geometry=fastTemplateRegistration(template,markers,w,h);
     if(!geometry.ok) return {
-      ok:false,error:'Không khóa đủ mốc khống chế trên phiếu. Giữ thẳng phiếu, đủ sáng và chụp lại.',
-      markerCandidates:markers.candidates.length,markerMatches:geometry.matches,markerRmse:geometry.rmse
+      ok:false,error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc ngoài và chụp lại phiếu.',
+      markerCandidates:markers.candidates.length,markerMatches:geometry.matches,markerRmse:geometry.rmse,
+      markerSpan:[geometry.spanX,geometry.spanY],markerArea:geometry.area
     };
 
+    // Bốn mốc vuông ngoài là các điểm khống chế hình học chính. Các mốc nhỏ
+    // bên trong chỉ dùng chẩn đoán; không được kéo homography vì có thể bị
+    // nhầm với ô tô/chữ in và làm lệch ROI.
     const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[],uncertainDetails=[];
     const addWarning=(key,label,r)=>{uncertain.push(key);uncertainDetails.push({key,label,reason:r.reason||'Khó xác định ô tô',top:r.top??null,second:r.second??null,margin:r.margin??null});};
     const p1=template.p1.map((pts,i)=>{
@@ -449,9 +474,9 @@
     return {
       ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,
       markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
-      homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_V1'
+      markerArea:geometry.area,homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_HYBRID_V2'
     };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
