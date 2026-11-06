@@ -1,0 +1,35 @@
+name: OMR Camera Grading CI
+
+on:
+  pull_request:
+    paths:
+      - 'omr/**'
+      - 'giaovien.html'
+      - 'teacher/**'
+      - 'tests/omr_*'
+      - 'tests/teacher_pwa_006_simulation.js'
+      - 'supabase/migrations/20261105143000_omr_staff_submission_004.sql'
+      - '.github/workflows/omr_camera_grading_ci.yml'
+  workflow_dispatch:
+
+jobs:
+  omr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: OMR 001 core
+        run: node tests/omr_core_001_simulation.js
+      - name: OMR 002 room binding
+        run: node tests/omr_room_binding_002_simulation.js
+      - name: OMR 003 scoring parity
+        run: node tests/omr_v4_scoring_003_simulation.js
+      - name: OMR 004 canonical result write
+        run: node tests/omr_result_write_004_simulation.js
+      - name: OMR 005 batch UX
+        run: node tests/omr_batch_ux_005_simulation.js
+      - name: Teacher PWA 006
+        run: node tests/teacher_pwa_006_simulation.js

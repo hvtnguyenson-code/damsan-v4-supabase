@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://xcervjnwlchwfqvbeahy.supabase.co wss://xcervjnwlchwfqvbeahy.supabase.co; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; upgrade-insecure-requests">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f5bd8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Đam San GV">
+  <link rel="manifest" href="./manifest.json?v=20261106-teacher-pwa-006">
+  <link rel="icon" href="../icons/exam-192.png">
+  <link rel="apple-touch-icon" href="../icons/exam-192.png">
+  <link rel="stylesheet" href="./app.css?v=20261106-teacher-pwa-006">
+  <title>Đam San V4 - Giáo viên</title>
+</head>
+<body>
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">ĐS</div>
+      <h1>Đam San V4</h1>
+      <p>PWA giáo viên — tối ưu cho điện thoại và chấm phiếu bằng camera.</p>
+      <form id="loginForm" class="form" autocomplete="on">
+        <div class="field"><label>Mã giáo viên</label><input id="loginUser" autocomplete="username" inputmode="text" required></div>
+        <div class="field"><label>Mật khẩu</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+        <button id="loginBtn" class="primary-btn" type="submit">Đăng nhập</button>
+      </form>
+      <div id="loginMsg" class="msg"></div>
+      <div id="installBanner" class="install-banner">
+        <b>Cài PWA giáo viên</b><br>
+        Chạy ở chế độ độc lập sẽ dành nhiều diện tích màn hình hơn cho camera.
+        <button id="installBtn" class="secondary-btn" type="button" hidden>Cài ứng dụng</button>
+        <div id="iosInstallHint" hidden>Trên iPhone/iPad: mở menu Chia sẻ → <b>Thêm vào Màn hình chính</b>.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="forcePassScreen" class="login-screen" hidden>
+    <div class="login-card">
+      <div class="login-logo">ĐS</div>
+      <h1>Đổi mật khẩu</h1>
+      <p>Tài khoản đang dùng mật khẩu mặc định. Hãy đổi trước khi tiếp tục.</p>
+      <form id="forcePassForm" class="form">
+        <div class="field"><label>Mật khẩu mới</label><input id="newPass1" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="field"><label>Nhập lại mật khẩu</label><input id="newPass2" type="password" autocomplete="new-password" minlength="6" required></div>
+        <button id="forcePassBtn" class="primary-btn" type="submit">Đổi mật khẩu & vào PWA</button>
+      </form>
+      <div id="forcePassMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div id="appShell" class="safe-shell" hidden>
+    <header class="topbar">
+      <div class="brand">ĐAM SAN V4<small>GIÁO VIÊN</small></div>
+      <div class="user-mini"><span id="userName">Giáo viên</span><button id="logoutBtn" class="icon-btn" title="Đăng xuất">↪</button></div>
+    </header>
+
+    <main class="main">
+      <section id="viewHome" class="view active">
+        <div class="hero">
+          <h1 id="helloTitle">Chào giáo viên</h1>
+          <p>Giao diện mobile tập trung vào phòng thi, chấm phiếu và kiểm tra điểm.</p>
+        </div>
+        <div class="grid">
+          <button id="homeOmrBtn" class="card action-card primary" type="button">
+            <span class="ico">📷</span><b>Chấm phiếu</b><small>Mở camera, đọc phiếu 18–4–6 và lưu sau xác nhận.</small>
+          </button>
+          <button id="homeScoresBtn" class="card action-card green" type="button">
+            <span class="ico">📊</span><b>Bảng điểm</b><small>Xem nhanh kết quả theo phòng ngay trên điện thoại.</small>
+          </button>
+        </div>
+
+        <div id="workspaceCard" class="card" style="margin-top:12px" hidden>
+          <div class="section-title" style="margin-top:0">Bộ lọc Admin</div>
+          <div class="form">
+            <div class="field"><label>Trường</label><select id="schoolSelect"></select></div>
+            <div class="field"><label>Môn</label><select id="subjectSelect"></select></div>
+          </div>
+        </div>
+
+        <div class="section-title">Phòng gần đây</div>
+        <div id="roomList" class="room-list"><div class="card empty">Đang tải phòng thi…</div></div>
+      </section>
+
+      <section id="viewScores" class="view">
+        <div class="card">
+          <div class="toolbar">
+            <div class="field"><label>Phòng thi</label><select id="scoreRoomSelect"></select></div>
+            <button id="reloadScoresBtn" class="secondary-btn" type="button">Tải lại</button>
+          </div>
+          <div id="scoreSummary" class="score-summary"></div>
+        </div>
+        <div id="scoreList" class="score-list"><div class="card empty">Chọn phòng để xem điểm.</div></div>
+      </section>
+
+      <section id="viewMore" class="view">
+        <div class="card">
+          <h3 style="margin-top:0">Giao diện đầy đủ</h3>
+          <p style="font-size:13px;color:#64748b;line-height:1.5">Các chức năng tạo đề, AI, ngân hàng câu hỏi và quản trị sâu vẫn dùng giao diện desktop hiện tại.</p>
+          <a href="../giaovien.html" class="primary-btn" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Mở giao diện đầy đủ</a>
+        </div>
+        <div class="card">
+          <b>Trạng thái PWA</b>
+          <div id="pwaStatus" class="score-summary">Đang kiểm tra…</div>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav">
+      <button data-view="home" class="active"><span class="nav-icon">⌂</span>Trang chủ</button>
+      <button id="navOmrBtn"><span class="nav-icon">📷</span>Chấm phiếu</button>
+      <button data-view="scores"><span class="nav-icon">▤</span>Bảng điểm</button>
+      <button data-view="more"><span class="nav-icon">⋯</span>Thêm</button>
+    </nav>
+  </div>
+
+  <script src="../vendor/student/supabase-js-2.118.0.min.js"></script>
+  <script src="../omr/omr-template-moet-18-4-6.js?v=20261106-teacher-pwa-006"></script>
+  <script src="../omr/omr-core.js?v=20261106-teacher-pwa-006"></script>
+  <script src="../omr/omr-room-binding.js?v=20261106-teacher-pwa-006"></script>
+  <script src="../omr/omr-scoring.js?v=20261106-teacher-pwa-006"></script>
+  <script src="../omr/omr-result-write.js?v=20261106-teacher-pwa-006"></script>
+  <script src="../omr/omr-teacher-module.js?v=20261106-teacher-pwa-006"></script>
+  <script src="./app.js?v=20261106-teacher-pwa-006"></script>
+</body>
+</html>
