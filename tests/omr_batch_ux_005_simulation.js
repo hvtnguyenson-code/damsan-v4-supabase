@@ -46,7 +46,7 @@ assert(migration.includes("code','existing_result"));
 
 assert(teacherModule.includes("autoScanEnabled:true"),'auto scan must default ON');
 assert(teacherModule.includes("setInterval(()=>"),'auto scan loop missing');
-assert(teacherModule.includes("refineTemplateHomography"),'auto scan must validate geometry before capture');
+assert(teacherModule.includes("fastTemplateRegistration"),'auto scan must validate outer-marker geometry before capture');
 assert(teacherModule.includes("state.autoScanStable>=need"),'auto scan stability gate missing');
 assert(teacherModule.includes("capture('auto')"),'auto capture trigger missing');
 assert(teacherModule.includes("Chụp thủ công"),'manual capture fallback must remain');
