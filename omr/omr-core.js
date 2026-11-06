@@ -350,9 +350,36 @@
     return {index:top.i,blank:false,uncertain,reason,scores,top:top.v,second:second.v,margin,ratio,base,aboveBase};
   }
 
+  // Exactly one filled circle is required by P1/P2. A confirmed second ink
+  // center invalidates the item; possible erased marks require review.
+  function chooseSingleMark(scores,metrics,opts={}){
+    const chosen=chooseInk(scores,opts);
+    const ranked=metrics.map((m,i)=>({i,v:scores[i]||0,
+      center:m.centerInk25||0,contrast:m.centerContrast||0})).sort((a,b)=>b.v-a.v);
+    const top=ranked[0]||{v:0};
+    const strong=m=>m.v>=Math.max(.30,top.v*.52)&&m.center>=.52&&m.contrast>=.12;
+    const marked=ranked.filter(strong);
+    if(marked.length>=2)return {...chosen,index:-1,invalidMultiple:true,
+      uncertain:true,markedIndices:marked.map(x=>x.i),
+      reason:'Tô từ hai ô trở lên: câu/ý này không được tính điểm'};
+    // Four-choice rows provide two more unfilled outlines as a noise baseline.
+    // A two-choice true/false row cannot use this extra comparison.
+    const residual=ranked.length>2
+      ? ranked.slice(1).some(m=>m.v>=Math.max(.42,top.v*.40)
+          &&m.center>=.42&&m.contrast>=.12
+          &&m.v-(ranked[2]?.v||0)>=.12)
+      : ranked.slice(1).some(m=>m.v>=Math.max(.27,top.v*.32)
+          &&m.center>=.29&&m.contrast>=.09);
+    if(residual)return {...chosen,index:-1,invalidMultiple:false,uncertain:true,
+      reason:'Ô thứ hai còn dấu tô; cần kiểm tra tẩy xóa'};
+    if(chosen.uncertain)return {...chosen,index:-1,invalidMultiple:false};
+    return {...chosen,invalidMultiple:false};
+  }
+
   function readChoiceGroupRectified(rect,template,points,labels,rCm,opts={}){
     const metrics=points.map(pt=>pt?bubbleInkScore(rect.gray,rect.width,rect.height,template,pt,rCm):{score:0});
-    const scores=metrics.map(m=>m.score),c=chooseInk(scores,opts);
+    const scores=metrics.map(m=>m.score),c=opts.singleMark
+      ?chooseSingleMark(scores,metrics,opts):chooseInk(scores,opts);
     return {...c,metrics,value:c.index<0?'':labels[c.index]};
   }
 
@@ -529,15 +556,21 @@
     // Bốn mốc vuông ngoài là các điểm khống chế hình học chính. Các mốc nhỏ
     // bên trong chỉ dùng chẩn đoán; không được kéo homography vì có thể bị
     // nhầm với ô tô/chữ in và làm lệch ROI.
-    const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[],uncertainDetails=[];
-    const addWarning=(key,label,r)=>{uncertain.push(key);uncertainDetails.push({key,label,reason:r.reason||'Khó xác định ô tô',top:r.top??null,second:r.second??null,margin:r.margin??null});};
+    const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[],uncertainDetails=[],invalidMarks=[];
+    const addWarning=(key,label,r)=>{
+      uncertain.push(key);
+      if(r.invalidMultiple)invalidMarks.push(key);
+      uncertainDetails.push({key,label,reason:r.reason||'Khó xác định ô tô',
+        invalidMultiple:!!r.invalidMultiple,markedIndices:r.markedIndices||[],
+        top:r.top??null,second:r.second??null,margin:r.margin??null});
+    };
     const p1=template.p1.map((pts,i)=>{
-      const r=readChoiceGroupRectified(rect,template,pts,template.p1Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
+      const r=readChoiceGroupRectified(rect,template,pts,template.p1Labels,template.bubbleRadiusCm,{singleMark:true,gap:0.075,ratio:1.14});
       if(r.uncertain||r.index<0)addWarning(`P1.${i+1}`,`Phần I – Câu ${i+1}`,r);
       return r.value||'?';
     });
     const p2Flat=template.p2.map((pts,i)=>{
-      const r=readChoiceGroupRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
+      const r=readChoiceGroupRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,{singleMark:true,gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
       const q=Math.floor(i/4)+1,letter='abcd'[i%4];
       if(r.uncertain||r.index<0)addWarning(`P2.${q}${letter}`,`Phần II – Câu ${q}, ý ${letter}`,r);
       return r.value||'?';
@@ -554,12 +587,12 @@
     maDe.details.forEach(d=>addWarning(`MADE.${d.index+1}`,`Mã đề – chữ số thứ ${d.index+1}`,d));
 
     return {
-      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,
+      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,invalidMarks,
       markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
       markerArea:geometry.area,homography:geometry.H,rectifiedSize:[rect.width,rect.height],
       engine:'CALIBRATED_INK_V3'
     };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,readP3SectionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,chooseSingleMark,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,readP3SectionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
