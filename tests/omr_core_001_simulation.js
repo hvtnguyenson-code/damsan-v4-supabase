@@ -102,7 +102,7 @@ assert.strictEqual(full.p1,p1Expected);
 assert.deepStrictEqual(full.p2,p2Expected);
 assert.deepStrictEqual(full.p3,p3Expected);
 assert(full.markerMatches>=4);
-assert.strictEqual(full.engine,'RECTIFIED_INK_HYBRID_V2');
+assert.strictEqual(full.engine,'CALIBRATED_INK_V3');
 assert(full.rectifiedSize[1]===1800);
 assert(full.markerArea>=0.18);
 
@@ -160,6 +160,31 @@ for(const [col,label] of [[0,'3'],[1,'0'],[2,'0']]){
 const p3Read=O.readP3QuestionRectified({gray:p3RectGray,width:rw,height:rh},tpl,p3q,tpl.p3Labels,tpl.bubbleRadiusCm);
 assert.strictEqual(p3Read.value,'300','blank fourth P3 column must stay blank, never become 3000/3009');
 assert.strictEqual(p3Read.raw[3],'','blank fourth P3 column must remain empty');
+
+const artifact=new Uint8Array(p3RectGray);
+const zeroPt=p3q[3][tpl.p3Labels.indexOf('0')],zeroXY=rxy(zeroPt);
+// A partial smudge in the nominally blank fourth position is not a fourth digit.
+grayDisk(artifact,zeroXY[0],zeroXY[1],rr*.27,160);
+const artifactRead=O.readP3QuestionRectified({gray:artifact,width:rw,height:rh},tpl,p3q,tpl.p3Labels,tpl.bubbleRadiusCm);
+assert.notStrictEqual(artifactRead.value,'3000','minor smudge must not silently become a fourth digit');
+const markedFourth=new Uint8Array(p3RectGray);
+grayDisk(markedFourth,zeroXY[0],zeroXY[1],rr*.55,70);
+const markedRead=O.readP3QuestionRectified({gray:markedFourth,width:rw,height:rh},tpl,p3q,tpl.p3Labels,tpl.bubbleRadiusCm);
+assert.strictEqual(markedRead.value,'3000','actual fourth digit must be preserved');
+
+const calibrated=O.calibrateP3([
+  {metrics:[{score:.76,centerInk25:.95},{score:.07,centerInk25:0}]},
+  {metrics:[{score:.70,centerInk25:.9},{score:.05,centerInk25:0}]},
+  {metrics:[{score:.68,centerInk25:.9},{score:.08,centerInk25:0}]},
+  {metrics:[{score:.72,centerInk25:.9},{score:.09,centerInk25:0}]},
+  {metrics:[{score:.74,centerInk25:.9},{score:.08,centerInk25:0}]}
+]);
+const suspicious=O.chooseP3Ink({metrics:[
+  {score:.30,centerInk25:.27},{score:.08,centerInk25:0}
+],scores:[.30,.08]},calibrated);
+assert.strictEqual(suspicious.index,-1,'ambiguous fourth column must abstain');
+assert.strictEqual(suspicious.uncertain,true,'ambiguous fourth column must alert teacher');
+
 
 const doubleMark=O.chooseInk([0.51,0.48],{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
 assert.strictEqual(doubleMark.uncertain,true);

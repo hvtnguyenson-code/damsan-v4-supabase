@@ -281,11 +281,17 @@
     const ch=Math.max(900,Math.round(longSide));
     const cw=Math.max(620,Math.round(ch*template.widthCm/template.heightCm));
     const out=new Uint8Array(cw*ch);
+    // Evaluate the perspective mapping incrementally along each row. Identical
+    // bilinear sampling, without allocating a point array for every output pixel.
+    const stepX=template.widthCm/(cw-1),stepY=template.heightCm/(ch-1);
+    const du=H[0]*stepX,dv=H[3]*stepX,dd=H[6]*stepX;
     for(let y=0;y<ch;y++){
-      const ty=(y/(ch-1))*template.heightCm;
+      const ty=y*stepY;
+      let u=H[1]*ty+H[2],v=H[4]*ty+H[5],d=H[7]*ty+H[8];
+      const row=y*cw;
       for(let x=0;x<cw;x++){
-        const tx=(x/(cw-1))*template.widthCm,q=project(H,tx,ty);
-        out[y*cw+x]=bilinear(gray,w,h,q[0],q[1]);
+        out[row+x]=bilinear(gray,w,h,u/d,v/d);
+        u+=du;v+=dv;d+=dd;
       }
     }
     return {gray:out,width:cw,height:ch};
@@ -303,18 +309,24 @@
     let target=patchN*0.80,acc=0,bg=245;
     for(let i=0;i<256;i++){acc+=hist[i];if(acc>=target){bg=i;break;}}
 
-    let n=0,d8=0,d15=0,d25=0,deficit=0;
+    let n=0,d8=0,d15=0,d25=0,deficit=0,centerN=0,center25=0,center45=0,centerDeficit=0;
+    const centerR2=(r*0.44)*(r*0.44);
     const ix0=Math.max(0,Math.floor(cx-coreR)),ix1=Math.min(w-1,Math.ceil(cx+coreR));
     const iy0=Math.max(0,Math.floor(cy-coreR)),iy1=Math.min(h-1,Math.ceil(cy+coreR));
     for(let y=iy0;y<=iy1;y++) for(let x=ix0;x<=ix1;x++){
       if((x-cx)*(x-cx)+(y-cy)*(y-cy)>coreR2) continue;
       const v=gray[y*w+x],d=bg-v;n++;
       if(d>8)d8++;if(d>15)d15++;if(d>25)d25++;if(d>0)deficit+=d;
+      if((x-cx)*(x-cx)+(y-cy)*(y-cy)<=centerR2){
+        centerN++;if(d>25)center25++;if(d>45)center45++;if(d>0)centerDeficit+=d;
+      }
     }
     if(!n) return {score:0,bg,ink8:0,ink15:0,ink25:0,deficit:0};
     const f8=d8/n,f15=d15/n,f25=d25/n,meanDef=deficit/n/255;
     const score=Math.max(0,Math.min(1,0.38*f8+0.32*f15+0.20*f25+0.10*Math.min(1,meanDef*5)));
-    return {score,bg,ink8:f8,ink15:f15,ink25:f25,deficit:meanDef};
+    return {score,bg,ink8:f8,ink15:f15,ink25:f25,deficit:meanDef,
+      centerInk25:centerN?center25/centerN:0,centerInk45:centerN?center45/centerN:0,
+      centerContrast:centerN?centerDeficit/centerN/255:0};
   }
 
   function chooseInk(scores,opts={}){
@@ -357,11 +369,70 @@
     return {value:values.join(''),uncertain,details};
   }
 
-  function readP3QuestionRectified(rect,template,question,labels,rCm){
-    const cols=question.map(pts=>readChoiceGroupRectified(rect,template,pts,labels,rCm,{
-      allowBlank:true,blankMax:0.18,blankBaseGap:0.055,blankWarnGap:0.095,blankCeil:0.52,gap:0.07,ratio:1.12
-    }));
-    const selected=cols.map(x=>x.value||''),negative=selected.includes('-'),commaCol=selected.findIndex(v=>v===',');
+  // The numeric part has a distinct grammar: each column may legally be empty.
+  // Measure the sheet's P3 columns before choosing digits; do not interpret the
+  // darkest printed outline as a mark merely because it wins its column.
+  function percentile(values,p){
+    if(!values.length)return 0;
+    const a=values.slice().sort((x,y)=>x-y),pos=(a.length-1)*p;
+    const i=Math.floor(pos),k=pos-i;
+    return a[i]+(a[Math.min(i+1,a.length-1)]-a[i])*k;
+  }
+
+  function measureP3Column(rect,template,pts,rCm){
+    const metrics=pts.map(pt=>pt?bubbleInkScore(rect.gray,rect.width,rect.height,template,pt,rCm):null);
+    return {metrics,scores:metrics.map(m=>m?m.score:0)};
+  }
+
+  function calibrateP3(probes){
+    const positives=[],positiveContrast=[],negatives=[];
+    for(const probe of probes){
+      const ranked=probe.metrics.map((m,i)=>m?{i,v:m.score,m}:null)
+        .filter(Boolean).sort((a,b)=>b.v-a.v);
+      if(!ranked.length)continue;
+      const top=ranked[0],second=ranked[1]||{v:0};
+      if(top.v>=0.26&&top.v-second.v>=0.09&&top.m.centerInk25>=0.28){
+        positives.push(top.v);
+        positiveContrast.push(top.m.centerContrast||0);
+      }
+      ranked.slice(1).forEach(r=>negatives.push(r.v));
+    }
+    const background=percentile(negatives,0.90);
+    // A few partial marks must not drag down the fill reference. When the
+    // sheet is sparse, use a conservative deterministic fallback.
+    const reference=positives.length>=5?percentile(positives,0.25):0.58;
+    const markGate=Math.max(0.30,background+0.17,reference*0.58);
+    const blankGate=Math.max(0.16,Math.min(markGate-0.11,background+0.085));
+    const contrastReference=positives.length>=5?percentile(positiveContrast,0.25):0.42;
+    const contrastGate=Math.max(0.15,contrastReference*0.38);
+    return {background,reference,markGate,blankGate,
+      contrastReference,contrastGate,samples:positives.length};
+  }
+
+  function chooseP3Ink(probe,calibration){
+    const ranked=probe.metrics.map((m,i)=>m?{i,v:m.score,m}:null)
+      .filter(Boolean).sort((a,b)=>b.v-a.v);
+    const top=ranked[0]||{i:-1,v:0,m:{centerInk25:0,centerInk45:0}};
+    const second=ranked[1]||{v:0},margin=top.v-second.v;
+    const center=top.m.centerInk25||0,contrast=top.m.centerContrast||0;
+    const ratio=top.v/Math.max(0.04,second.v);
+    const strong=top.v>=calibration.markGate&&center>=0.24&&
+      contrast>=calibration.contrastGate&&margin>=0.075&&ratio>=1.14;
+    const blank=top.v<=calibration.blankGate&&center<=0.20;
+    const common={scores:probe.scores,top:top.v,second:second.v,
+      margin,ratio,centerInk25:center,centerContrast:contrast};
+    if(strong)return {...common,index:top.i,blank:false,uncertain:false,reason:''};
+    if(blank)return {...common,index:-1,blank:true,uncertain:false,reason:'Ô để trống'};
+    // Abstain rather than silently append a digit when the ink evidence is weak.
+    return {...common,index:-1,blank:true,uncertain:true,
+      reason:'Ô có tín hiệu mực chưa rõ; cần đối chiếu trên phiếu giấy'};
+  }
+
+  function readP3QuestionRectified(rect,template,question,labels,rCm,options={}){
+    const probes=options.probes||question.map(pts=>measureP3Column(rect,template,pts,rCm));
+    const calibration=options.calibration||calibrateP3(probes);
+    const cols=probes.map(probe=>chooseP3Ink(probe,calibration));
+    const selected=cols.map(x=>x.index<0?'':labels[x.index]),negative=selected.includes('-'),commaCol=selected.findIndex(v=>v===',');
     const digits=selected.map(v=>/^\d$/.test(v)?v:'').join('');
     let value=digits;
     if(commaCol>=0){
@@ -370,8 +441,19 @@
       value=(before||'0')+','+after;
     }
     if(negative&&value)value='-'+value;
-    const details=cols.map((x,i)=>x.uncertain?{column:i,reason:x.reason||'Khó xác định ô tô',top:x.top,second:x.second,margin:x.margin}:null).filter(Boolean);
+    const details=cols.map((x,i)=>x.uncertain?{column:i,reason:x.reason,top:x.top,
+      second:x.second,margin:x.margin}:null).filter(Boolean);
     return {value,raw:selected,uncertain:details.length>0,details};
+  }
+
+  function readP3SectionRectified(rect,template){
+    const probes=template.p3.map(q=>q.map(pts=>measureP3Column(rect,template,pts,template.bubbleRadiusCm)));
+    const calibration=calibrateP3(probes.flat());
+    const questions=template.p3.map((q,i)=>readP3QuestionRectified(
+      rect,template,q,template.p3Labels,template.bubbleRadiusCm,
+      {probes:probes[i],calibration}
+    ));
+    return {questions,calibration};
   }
 
   function sampleDisk(gray,w,h,cx,cy,r){
@@ -461,8 +543,8 @@
       return r.value||'?';
     });
     const p2=Array.from({length:4},(_,q)=>p2Flat.slice(q*4,q*4+4).join('-'));
-    const p3=template.p3.map((q,i)=>{
-      const r=readP3QuestionRectified(rect,template,q,template.p3Labels,template.bubbleRadiusCm);
+    const p3Section=readP3SectionRectified(rect,template);
+    const p3=p3Section.questions.map((r,i)=>{
       r.details.forEach(d=>addWarning(`P3.${i+1}.${d.column+1}`,`Phần III – Câu ${i+1}, vị trí ${d.column+1}`,d));
       return r.value||'?';
     });
@@ -474,9 +556,10 @@
     return {
       ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,
       markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
-      markerArea:geometry.area,homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_HYBRID_V2'
+      markerArea:geometry.area,homography:geometry.H,rectifiedSize:[rect.width,rect.height],
+      engine:'CALIBRATED_INK_V3'
     };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,readP3SectionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });

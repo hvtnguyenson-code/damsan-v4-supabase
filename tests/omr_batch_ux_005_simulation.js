@@ -53,7 +53,7 @@ assert(teacherModule.includes("Chụp thủ công"),'manual capture fallback mus
 assert(teacherModule.includes("Tự động: Bật"),'auto scan toggle missing');
 assert(teacherModule.includes("await openCamera();"),'successful save must return to next scan automatically');
 
-assert(core.includes("RECTIFIED_INK_HYBRID_V2"),'hybrid rectified ink engine marker missing');
+assert(core.includes("CALIBRATED_INK_V3"),'calibrated ink engine marker missing');
 assert(core.includes("warpTemplateGray"),'sheet must be rectified before recognition');
 assert(core.includes("bubbleInkScore"),'per-pixel ink scorer missing');
 assert(core.includes("fastTemplateRegistration"),'fast outer registration missing');
