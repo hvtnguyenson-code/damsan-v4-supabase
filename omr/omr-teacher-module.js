@@ -3,7 +3,7 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment'};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual'};
   const q=id=>document.getElementById(id);
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -43,6 +43,9 @@
       .omr-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:12px 0;background:#fff}.omr-muted{color:#64748b;font-size:12px}.omr-warn{background:#fff7ed;border-color:#fdba74}.omr-ok{background:#f0fdf4;border-color:#86efac}
       .omr-actions{display:flex;gap:8px;flex-wrap:wrap}.omr-actions button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.omr-primary{background:#1769e0;color:#fff}.omr-green{background:#15803d;color:#fff}.omr-light{background:#eef2f7;color:#1f2937}
       #omrTeacherVideoWrap{display:none;position:fixed;inset:0;background:#000;z-index:4500;padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom));flex-direction:column}#omrTeacherVideoWrap.show{display:flex}
+      #omrAutoHud{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top));transform:translateX(-50%);z-index:2;background:rgba(15,23,42,.78);color:#fff;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:800;max-width:88vw;text-align:center;pointer-events:none}
+      #omrAutoGuide{position:absolute;left:8%;right:8%;top:9%;bottom:17%;border:2px solid rgba(255,255,255,.72);border-radius:18px;box-shadow:0 0 0 9999px rgba(0,0,0,.12);pointer-events:none;z-index:1}
+      #omrAutoGuide.ready{border-color:#22c55e;box-shadow:0 0 0 9999px rgba(0,0,0,.06),0 0 0 3px rgba(34,197,94,.22) inset}
       #omrTeacherVideo{flex:1;width:100%;min-height:0;object-fit:contain}.omr-camera-bar{display:flex;gap:8px;justify-content:center;padding:10px;flex-wrap:wrap}
       #omrTeacherCanvas{width:100%;max-height:52vh;object-fit:contain;background:#111;border-radius:8px}
       .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
@@ -112,7 +115,7 @@
         </div>
       </div>
     </div></div>
-    <div id="omrTeacherVideoWrap"><video id="omrTeacherVideo" autoplay playsinline muted></video><div class="omr-camera-bar"><button id="omrCameraClose">Đóng</button><button id="omrCameraSwitch">Đổi camera</button><button id="omrCameraCapture" class="omr-primary">Chụp phiếu</button></div></div>`;
+    <div id="omrTeacherVideoWrap"><div id="omrAutoHud">Đưa trọn phiếu vào khung</div><div id="omrAutoGuide"></div><video id="omrTeacherVideo" autoplay playsinline muted></video><div class="omr-camera-bar"><button id="omrCameraClose">Đóng</button><button id="omrAutoToggle">Tự động: Bật</button><button id="omrCameraSwitch">Đổi camera</button><button id="omrCameraCapture" class="omr-primary">Chụp thủ công</button></div></div>`;
     document.body.appendChild(wrap);
     q('omrClose').onclick=close;
     q('omrRoomSelect').onchange=()=>loadRoom(q('omrRoomSelect').value);
@@ -120,7 +123,13 @@
     q('omrPickFile').onchange=e=>e.target.files[0]&&loadImageFile(e.target.files[0]);
     q('omrCameraClose').onclick=closeCamera;
     q('omrCameraSwitch').onclick=()=>{state.facing=state.facing==='environment'?'user':'environment';openCamera();};
-    q('omrCameraCapture').onclick=capture;
+    q('omrCameraCapture').onclick=()=>capture('manual');
+    q('omrAutoToggle').onclick=()=>{
+      state.autoScanEnabled=!state.autoScanEnabled;
+      state.autoScanStable=0;state.autoScanLastCorners=null;
+      q('omrAutoToggle').textContent='Tự động: '+(state.autoScanEnabled?'Bật':'Tắt');
+      updateAutoHud(state.autoScanEnabled?'Đưa trọn phiếu vào khung':'Chế độ thủ công',false);
+    };
     q('omrRecheck').onclick=reviewCurrent;
     q('omrNext').onclick=()=>{resetScan();openCamera();};
     q('omrSave').onclick=saveCurrent;
@@ -163,17 +172,83 @@
     if(selected)q('omrStudent').value=selected;
   }
 
+  function updateAutoHud(text,ready=false){
+    const hud=q('omrAutoHud'),guide=q('omrAutoGuide');
+    if(hud)hud.textContent=text;
+    if(guide)guide.classList.toggle('ready',!!ready);
+  }
+  function stopAutoScanLoop(){
+    if(state.autoScanTimer){clearInterval(state.autoScanTimer);state.autoScanTimer=null;}
+    state.autoScanStable=0;state.autoScanLastCorners=null;state.autoScanBusy=false;
+  }
+  function cornerMotion(a,b,scale){
+    if(!a||!b||a.length!==b.length)return Infinity;
+    let sum=0;
+    for(let i=0;i<a.length;i++)sum+=Math.hypot(a[i][0]-b[i][0],a[i][1]-b[i][1]);
+    return sum/a.length/Math.max(1,scale);
+  }
+  function startAutoScanLoop(){
+    stopAutoScanLoop();
+    const probe=document.createElement('canvas'),pctx=probe.getContext('2d',{willReadFrequently:true});
+    state.autoScanTimer=setInterval(()=>{
+      if(!state.autoScanEnabled||state.autoScanBusy||!state.stream)return;
+      const v=q('omrTeacherVideo');
+      if(!v?.videoWidth||!v?.videoHeight)return;
+      try{
+        const max=720,s=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));
+        probe.width=Math.max(1,Math.round(v.videoWidth*s));probe.height=Math.max(1,Math.round(v.videoHeight*s));
+        pctx.drawImage(v,0,0,probe.width,probe.height);
+        const img=pctx.getImageData(0,0,probe.width,probe.height);
+        const gray=O.grayscale(img.data,probe.width,probe.height);
+        const markers=O.detectCornerMarkers(gray,probe.width,probe.height);
+        if(!markers.ok){
+          state.autoScanStable=0;state.autoScanLastCorners=null;
+          updateAutoHud('Đưa trọn phiếu và 4 mốc góc vào khung',false);
+          return;
+        }
+        const geometry=O.refineTemplateHomography(T.template,markers,probe.width,probe.height);
+        if(!geometry.ok){
+          state.autoScanStable=0;state.autoScanLastCorners=markers.corners;
+          updateAutoHud('Đang căn phiếu — giữ đủ 4 góc',false);
+          return;
+        }
+        const motion=cornerMotion(markers.corners,state.autoScanLastCorners,Math.min(probe.width,probe.height));
+        state.autoScanLastCorners=markers.corners.map(p=>p.slice());
+        state.autoScanStable=motion<0.012?state.autoScanStable+1:1;
+        const need=3;
+        updateAutoHud('Đã nhận phiếu • giữ yên '+Math.min(state.autoScanStable,need)+'/'+need,true);
+        if(state.autoScanStable>=need){
+          state.autoScanBusy=true;
+          updateAutoHud('Đang tự chụp và nhận dạng…',true);
+          setTimeout(()=>capture('auto'),80);
+        }
+      }catch(e){
+        state.autoScanStable=0;state.autoScanLastCorners=null;
+        updateAutoHud('Không nhận được phiếu — thử giữ thẳng hơn',false);
+      }
+    },320);
+  }
   async function openCamera(){
     if(!state.roomModel?.valid1846){alert('Hãy chọn phòng 18–4–6 hợp lệ trước.');return;}
     closeCamera();
     try{
       state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:state.facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
-      q('omrTeacherVideo').srcObject=state.stream;q('omrTeacherVideoWrap').classList.add('show');
+      const v=q('omrTeacherVideo');
+      v.srcObject=state.stream;q('omrTeacherVideoWrap').classList.add('show');
+      q('omrAutoToggle').textContent='Tự động: '+(state.autoScanEnabled?'Bật':'Tắt');
+      updateAutoHud(state.autoScanEnabled?'Đưa trọn phiếu vào khung':'Chế độ thủ công',false);
+      try{await v.play();}catch(_){}
+      if(state.autoScanEnabled)startAutoScanLoop();
     }catch(e){alert('Không mở được camera: '+e.message);}
   }
-  function closeCamera(){if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null;}q('omrTeacherVideoWrap')?.classList.remove('show');}
-  function capture(){
+  function closeCamera(){
+    stopAutoScanLoop();
+    if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null;}
+    q('omrTeacherVideoWrap')?.classList.remove('show');
+  }
+  function capture(mode='manual'){
     const v=q('omrTeacherVideo');if(!v.videoWidth)return;
+    state.lastCaptureMode=mode;
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true}),max=1800,s=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));
     c.width=Math.round(v.videoWidth*s);c.height=Math.round(v.videoHeight*s);ctx.drawImage(v,0,0,c.width,c.height);closeCamera();analyzeCanvas();
   }
@@ -192,6 +267,7 @@
         q('omrScanArea').style.display='block';
         const detail=scan.markerMatches!==undefined?` (${scan.markerMatches} mốc khớp)`:'';
         showWarning((scan.error||'Không đọc được phiếu')+detail);
+        if(state.lastCaptureMode==='auto')setTimeout(()=>openCamera().catch(()=>{}),700);
         return;
       }
       scan.templateId=T.template.id;state.lastScan=scan;
