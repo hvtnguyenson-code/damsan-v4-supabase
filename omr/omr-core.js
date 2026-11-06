@@ -101,8 +101,8 @@
       return c.width>=minSide&&c.height>=minSide&&c.width<=maxSide&&c.height<=maxSide&&ratio>0.72&&ratio<1.38&&fill>0.48;
     });
     if(candidates.length<4) return {ok:false,candidates,outerCandidates:[],corners:null};
-    const maxSide=Math.max(...candidates.map(c=>Math.max(c.width,c.height)));
-    const outerCandidates=candidates.filter(c=>Math.max(c.width,c.height)>=maxSide*0.74);
+    const observedMaxSide=Math.max(...candidates.map(c=>Math.max(c.width,c.height)));
+    const outerCandidates=candidates.filter(c=>Math.max(c.width,c.height)>=observedMaxSide*0.74);
     if(outerCandidates.length<4) return {ok:false,candidates,outerCandidates,corners:null};
     const pick=(score,dir)=>outerCandidates.reduce((best,c)=>{
       const v=score(c); return !best||(dir<0?v<best.v:v>best.v)?{c,v}:best;
