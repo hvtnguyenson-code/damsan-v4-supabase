@@ -7,6 +7,8 @@
   function assertConfirmed(preview){
     if(!preview?.ok) throw new Error('preview_required');
     if((preview.scan?.uncertain||[]).length && preview.reviewedUncertain !== true) throw new Error('uncertain_scan_requires_review');
+    if((preview.scan?.manualOverrides||[]).length && preview.invalidOverrideConfirmed!==true)
+      throw new Error('invalid_mark_override_requires_explicit_approval');
     if(!preview.student?.id) throw new Error('student_id_required');
     if(!preview.room?.id) throw new Error('room_id_required');
     if(!preview.variant?.code) throw new Error('exam_code_required');
@@ -26,6 +28,9 @@
         muc_to_thu_hai:Number.isFinite(d.second)?Number(d.second.toFixed(4)):null,
         do_chenh:Number.isFinite(d.margin)?Number(d.margin.toFixed(4)):null
       })),
+      invalid_choices:(preview.scan?.invalidChoices||[]).map(c=>({vi_tri:c.key,nhan_dang:c.answer,ly_do:c.reason})),
+      manual_overrides:(preview.scan?.manualOverrides||[]).map(c=>({vi_tri:c.key,truoc:c.from,sau:c.to})),
+      invalid_override_confirmed:preview.invalidOverrideConfirmed===true,
       client_preview_score:preview.grade?.score??null
     };
   }
