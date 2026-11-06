@@ -17,12 +17,12 @@ assert(!/id="installBtn"[^>]*hidden/.test(html),'login install action must not b
 assert(html.includes('id="installCard"'),'logged-in app must expose install card');
 assert(html.includes('id="installAppBtn"'),'logged-in app install button missing');
 assert(html.includes('id="androidInstallHint"'),'Android fallback instructions missing');
-assert(html.includes('Thêm vào màn hình chính'),'Android install fallback wording missing');
+assert(html.includes('Không chọn <b>Tạo lối tắt</b>'),'Android must explicitly reject shortcut installation');
 
 assert(js.includes("const isAndroid=/Android/i.test(ua)"),'Android install detection missing');
 assert(js.includes("if(appBtn)appBtn.addEventListener('click',installOrGuide)"),'logged-in install action not wired');
 assert(js.includes("if(loginBtn)loginBtn.addEventListener('click',installOrGuide)"),'login install action not wired');
-assert(js.includes("Android/Chrome: bấm menu ⋮"),'Android fallback alert missing');
+assert(js.includes("Không chọn Tạo lối tắt"),'Android fallback must reject Chrome shortcut');
 assert(js.includes("if(card)card.hidden=true"),'install card must disappear in standalone mode');
 
 child.execFileSync(process.execPath,['--check','teacher/app.js'],{stdio:'inherit'});

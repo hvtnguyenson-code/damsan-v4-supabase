@@ -275,7 +275,7 @@ function updatePwaStatus(){
 }
 async function registerServiceWorker(){
   if(!('serviceWorker' in navigator))return;
-  try{await navigator.serviceWorker.register('./sw.js?v=20261106-teacher-pwa-008',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
+  try{await navigator.serviceWorker.register('./sw.js?v=20261106-teacher-pwa-009',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
 }
 function setupInstall(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
@@ -296,7 +296,7 @@ function setupInstall(){
     if(help)help.innerHTML='Trên iPhone/iPad: mở menu <b>Chia sẻ</b> → <b>Thêm vào Màn hình chính</b>.';
   }else if(isAndroid){
     if(androidHint)androidHint.hidden=false;
-    if(help)help.innerHTML='Nếu nút cài tự động chưa xuất hiện: mở menu <b>⋮</b> của Chrome → <b>Cài đặt ứng dụng</b> hoặc <b>Thêm vào màn hình chính</b>.';
+    if(help)help.innerHTML='Mở menu <b>⋮</b> của Chrome → <b>Cài đặt ứng dụng</b>. <b>Không chọn Tạo lối tắt</b>, vì đó chỉ là shortcut mở trong Chrome.';
   }else if(help){
     help.textContent='Dùng menu của trình duyệt để cài ứng dụng hoặc thêm trang vào màn hình chính.';
   }
@@ -311,8 +311,8 @@ function setupInstall(){
       return;
     }
     if(isIos)alert('iPhone/iPad: bấm Chia sẻ → Thêm vào Màn hình chính.');
-    else if(isAndroid)alert('Android/Chrome: bấm menu ⋮ → Cài đặt ứng dụng hoặc Thêm vào màn hình chính.');
-    else alert('Mở menu trình duyệt và chọn Cài đặt ứng dụng / Thêm vào màn hình chính.');
+    else if(isAndroid)alert('Android/Chrome: bấm menu ⋮ → Cài đặt ứng dụng. Không chọn Tạo lối tắt. Nếu chưa có mục Cài đặt ứng dụng, hãy tải lại trang một lần.');
+    else alert('Mở menu trình duyệt và chọn Cài đặt ứng dụng. Không tạo shortcut nếu mục cài ứng dụng chưa sẵn sàng.');
   }
 
   if(loginBtn)loginBtn.addEventListener('click',installOrGuide);
@@ -323,6 +323,11 @@ function setupInstall(){
     deferredInstallPrompt=e;
     if(loginBtn)loginBtn.textContent='Cài ứng dụng ngay';
     if(appBtn)appBtn.textContent='Cài ứng dụng ngay';
+  });
+  window.addEventListener('appinstalled',()=>{
+    deferredInstallPrompt=null;
+    if(banner)banner.hidden=true;
+    if(card)card.hidden=true;
   });
 }
 

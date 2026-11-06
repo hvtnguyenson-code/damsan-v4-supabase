@@ -7,25 +7,19 @@
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#f4f7fb",
-  "theme_color": "#0f5bd8",
+  "theme_color": "#1a73e8",
   "icons": [
     {
-      "src": "./icons/exam-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icons/exam-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icons/exam-installable.svg",
+      "src": "./icons/teacher-gv-installable.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    },
+    {
+      "src": "./icons/teacher-gv-installable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -33,13 +27,25 @@
       "name": "Chấm phiếu",
       "short_name": "OMR",
       "url": "./index.html?view=omr",
-      "icons": [{"src":"./icons/exam-192.png","sizes":"192x192","type":"image/png"}]
+      "icons": [
+        {
+          "src": "./icons/teacher-gv-installable.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
     },
     {
       "name": "Bảng điểm",
       "short_name": "Điểm",
       "url": "./index.html?view=scores",
-      "icons": [{"src":"./icons/exam-192.png","sizes":"192x192","type":"image/png"}]
+      "icons": [
+        {
+          "src": "./icons/teacher-gv-installable.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
     }
   ]
 }
