@@ -101,10 +101,15 @@
       return c.width>=minSide&&c.height>=minSide&&c.width<=maxSide&&c.height<=maxSide&&ratio>0.72&&ratio<1.38&&fill>0.48;
     });
     if(candidates.length<4) return {ok:false,candidates,corners:null};
-    const targets=[[0,0],[w,0],[w,h],[0,h]];
-    const picked=targets.map(([tx,ty])=>candidates.reduce((best,c)=>{
-      const d=(c.cx-tx)**2+(c.cy-ty)**2; return !best||d<best.d?{c,d}:best;
-    },null).c);
+    const pick=(score,dir)=>candidates.reduce((best,c)=>{
+      const v=score(c); return !best||(dir<0?v<best.v:v>best.v)?{c,v}:best;
+    },null).c;
+    const picked=[
+      pick(c=>c.cx+c.cy,-1),
+      pick(c=>c.cx-c.cy,1),
+      pick(c=>c.cx+c.cy,1),
+      pick(c=>c.cx-c.cy,-1)
+    ];
     if(new Set(picked).size<4) return {ok:false,candidates,corners:null};
     return {ok:true,candidates,corners:picked.map(c=>[c.cx,c.cy])};
   }
@@ -148,6 +153,183 @@
       && matched.rmse<=matched.tolerance*0.45
       && spanX>=0.45 && spanY>=0.45;
     return {ok,H,matches:matched.pairs.length,rmse:matched.rmse,tolerance:matched.tolerance,spanX,spanY,pairs:matched.pairs};
+  }
+
+  function darkIntegral(gray,w,h){
+    const out=new Uint32Array((w+1)*(h+1));
+    for(let y=1;y<=h;y++){
+      let row=0;
+      for(let x=1;x<=w;x++){
+        row+=255-gray[(y-1)*w+(x-1)];
+        out[y*(w+1)+x]=out[(y-1)*(w+1)+x]+row;
+      }
+    }
+    return out;
+  }
+
+  function boxDarkMean(integral,w,h,cx,cy,half){
+    const x0=Math.max(0,Math.floor(cx-half)),x1=Math.min(w-1,Math.ceil(cx+half));
+    const y0=Math.max(0,Math.floor(cy-half)),y1=Math.min(h-1,Math.ceil(cy+half));
+    if(x1<x0||y1<y0) return 0;
+    const stride=w+1;
+    const A=integral[y0*stride+x0],B=integral[y0*stride+x1+1];
+    const C=integral[(y1+1)*stride+x0],D=integral[(y1+1)*stride+x1+1];
+    return (D-B-C+A)/((x1-x0+1)*(y1-y0+1));
+  }
+
+  function locateMarkerNear(gray,w,h,H,mk,integral){
+    const pred=project(H,mk.x,mk.y),scale=Math.max(0.1,localScale(H,[mk.x,mk.y]));
+    const expected=Math.max(4,(mk.size||0.25)*scale);
+    const search=Math.max(7,expected*1.9),inner=Math.max(2,expected*0.30);
+    const step=Math.max(1,Math.round(expected*0.12));
+    let best=null;
+    const x0=Math.max(1,Math.floor(pred[0]-search)),x1=Math.min(w-2,Math.ceil(pred[0]+search));
+    const y0=Math.max(1,Math.floor(pred[1]-search)),y1=Math.min(h-2,Math.ceil(pred[1]+search));
+    for(let y=y0;y<=y1;y+=step) for(let x=x0;x<=x1;x+=step){
+      const score=boxDarkMean(integral,w,h,x,y,inner);
+      if(!best||score>best.score) best={x,y,score};
+    }
+    if(!best||best.score<55) return null;
+
+    const half=Math.max(3,expected*0.65);
+    let sx=0,sy=0,sw=0;
+    for(let y=Math.max(0,Math.floor(best.y-half));y<=Math.min(h-1,Math.ceil(best.y+half));y++){
+      for(let x=Math.max(0,Math.floor(best.x-half));x<=Math.min(w-1,Math.ceil(best.x+half));x++){
+        const weight=Math.max(0,205-gray[y*w+x]);
+        if(weight<18) continue;
+        sx+=x*weight;sy+=y*weight;sw+=weight;
+      }
+    }
+    const cx=sw?sx/sw:best.x,cy=sw?sy/sw:best.y;
+    return {src:[mk.x,mk.y],dst:[cx,cy],name:mk.name,score:best.score,expectedSide:expected};
+  }
+
+  function median(values){
+    if(!values.length) return NaN;
+    const a=values.slice().sort((x,y)=>x-y),m=a.length>>1;
+    return a.length%2?a[m]:(a[m-1]+a[m])/2;
+  }
+
+  function refineTemplateHomographyDeep(template,markers,gray,w,h){
+    const initial=estimateTemplateHomography(template,markers.corners);
+    const integral=darkIntegral(gray,w,h);
+    let pairs=(template.markers||[]).map(mk=>locateMarkerNear(gray,w,h,initial,mk,integral)).filter(Boolean);
+    if(pairs.length<10) return {ok:false,H:initial,matches:pairs.length,rmse:Infinity,pairs};
+
+    let H=initial;
+    for(let iter=0;iter<3&&pairs.length>=8;iter++){
+      H=homographyN(pairs.map(p=>p.src),pairs.map(p=>p.dst));
+      const errors=pairs.map(p=>{
+        const q=project(H,p.src[0],p.src[1]);
+        return Math.hypot(q[0]-p.dst[0],q[1]-p.dst[1]);
+      });
+      const med=median(errors),floor=Math.max(2.2,Math.min(w,h)*0.0025);
+      const cut=Math.max(floor,Number.isFinite(med)?med*2.8:floor);
+      const next=pairs.filter((p,i)=>errors[i]<=cut);
+      if(next.length===pairs.length) break;
+      pairs=next;
+    }
+    if(pairs.length>=8) H=homographyN(pairs.map(p=>p.src),pairs.map(p=>p.dst));
+    const errors=pairs.map(p=>{
+      const q=project(H,p.src[0],p.src[1]);
+      return Math.hypot(q[0]-p.dst[0],q[1]-p.dst[1]);
+    });
+    const rmse=errors.length?Math.sqrt(errors.reduce((s,e)=>s+e*e,0)/errors.length):Infinity;
+    const names=new Set(pairs.map(p=>p.name));
+    const outerOk=['TL','TR','BR','BL'].every(n=>names.has(n));
+    const maxRmse=Math.max(3,Math.min(w,h)*0.0045);
+    return {ok:outerOk&&pairs.length>=10&&rmse<=maxRmse,H,matches:pairs.length,rmse,pairs};
+  }
+
+  function bilinear(gray,w,h,x,y){
+    if(x<0||y<0||x>w-1||y>h-1) return 255;
+    const x0=Math.floor(x),y0=Math.floor(y),x1=Math.min(w-1,x0+1),y1=Math.min(h-1,y0+1);
+    const fx=x-x0,fy=y-y0;
+    const a=gray[y0*w+x0]*(1-fx)+gray[y0*w+x1]*fx;
+    const b=gray[y1*w+x0]*(1-fx)+gray[y1*w+x1]*fx;
+    return Math.round(a*(1-fy)+b*fy);
+  }
+
+  function warpTemplateGray(gray,w,h,H,template,longSide=1800){
+    const ch=Math.max(900,Math.round(longSide));
+    const cw=Math.max(620,Math.round(ch*template.widthCm/template.heightCm));
+    const out=new Uint8Array(cw*ch);
+    for(let y=0;y<ch;y++){
+      const ty=(y/(ch-1))*template.heightCm;
+      for(let x=0;x<cw;x++){
+        const tx=(x/(cw-1))*template.widthCm,q=project(H,tx,ty);
+        out[y*cw+x]=bilinear(gray,w,h,q[0],q[1]);
+      }
+    }
+    return {gray:out,width:cw,height:ch};
+  }
+
+  function bubbleInkScore(gray,w,h,template,pt,rCm){
+    const sx=(w-1)/template.widthCm,sy=(h-1)/template.heightCm;
+    const cx=pt[0]*sx,cy=pt[1]*sy,r=Math.max(3,rCm*(sx+sy)/2);
+    const patchR=Math.max(5,r*1.8),coreR=Math.max(2.2,r*0.72),coreR2=coreR*coreR;
+    const hist=new Uint32Array(256);
+    const x0=Math.max(0,Math.floor(cx-patchR)),x1=Math.min(w-1,Math.ceil(cx+patchR));
+    const y0=Math.max(0,Math.floor(cy-patchR)),y1=Math.min(h-1,Math.ceil(cy+patchR));
+    let patchN=0;
+    for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){hist[gray[y*w+x]]++;patchN++;}
+    let target=patchN*0.80,acc=0,bg=245;
+    for(let i=0;i<256;i++){acc+=hist[i];if(acc>=target){bg=i;break;}}
+
+    let n=0,d8=0,d15=0,d25=0,deficit=0;
+    const ix0=Math.max(0,Math.floor(cx-coreR)),ix1=Math.min(w-1,Math.ceil(cx+coreR));
+    const iy0=Math.max(0,Math.floor(cy-coreR)),iy1=Math.min(h-1,Math.ceil(cy+coreR));
+    for(let y=iy0;y<=iy1;y++) for(let x=ix0;x<=ix1;x++){
+      if((x-cx)*(x-cx)+(y-cy)*(y-cy)>coreR2) continue;
+      const v=gray[y*w+x],d=bg-v;n++;
+      if(d>8)d8++;if(d>15)d15++;if(d>25)d25++;if(d>0)deficit+=d;
+    }
+    if(!n) return {score:0,bg,ink8:0,ink15:0,ink25:0,deficit:0};
+    const f8=d8/n,f15=d15/n,f25=d25/n,meanDef=deficit/n/255;
+    const score=Math.max(0,Math.min(1,0.38*f8+0.32*f15+0.20*f25+0.10*Math.min(1,meanDef*5)));
+    return {score,bg,ink8:f8,ink15:f15,ink25:f25,deficit:meanDef};
+  }
+
+  function chooseInk(scores,opts={}){
+    const ranked=scores.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v),top=ranked[0]||{v:0,i:-1},second=ranked[1]||{v:0,i:-1};
+    const margin=top.v-second.v,ratio=top.v/Math.max(0.04,second.v);
+    const allowBlank=!!opts.allowBlank;
+    const clearBlank=top.v<(opts.blankMax??0.24) || (margin<(opts.blankGap??0.035)&&top.v<(opts.blankCeil??0.66));
+    if(clearBlank) return {index:-1,blank:true,uncertain:!allowBlank,scores,top:top.v,second:second.v,margin,ratio};
+    const uncertain=margin<(opts.gap??0.075)||ratio<(opts.ratio??1.14);
+    return {index:top.i,blank:false,uncertain,scores,top:top.v,second:second.v,margin,ratio};
+  }
+
+  function readChoiceGroupRectified(rect,template,points,labels,rCm,opts={}){
+    const metrics=points.map(pt=>pt?bubbleInkScore(rect.gray,rect.width,rect.height,template,pt,rCm):{score:0});
+    const scores=metrics.map(m=>m.score),c=chooseInk(scores,opts);
+    return {...c,metrics,value:c.index<0?'':labels[c.index]};
+  }
+
+  function readDigitsRectified(rect,template,groups,labels,rCm){
+    const values=[],uncertain=[];
+    groups.forEach((pts,i)=>{
+      const r=readChoiceGroupRectified(rect,template,pts,labels,rCm,{gap:0.07,ratio:1.12});
+      values.push(r.value||'?');
+      if(r.uncertain||r.index<0) uncertain.push(i);
+    });
+    return {value:values.join(''),uncertain};
+  }
+
+  function readP3QuestionRectified(rect,template,question,labels,rCm){
+    const cols=question.map(pts=>readChoiceGroupRectified(rect,template,pts,labels,rCm,{
+      allowBlank:true,blankMax:0.28,blankGap:0.04,blankCeil:0.68,gap:0.07,ratio:1.12
+    }));
+    const selected=cols.map(x=>x.value||''),negative=selected.includes('-'),commaCol=selected.findIndex(v=>v===',');
+    const digits=selected.map(v=>/^\d$/.test(v)?v:'').join('');
+    let value=digits;
+    if(commaCol>=0){
+      const before=selected.slice(0,commaCol).filter(v=>/^\d$/.test(v)).join('');
+      const after=selected.slice(commaCol+1).filter(v=>/^\d$/.test(v)).join('');
+      value=(before||'0')+','+after;
+    }
+    if(negative&&value)value='-'+value;
+    return {value,raw:selected,uncertain:cols.some(x=>x.uncertain)};
   }
 
   function sampleDisk(gray,w,h,cx,cy,r){
@@ -209,28 +391,50 @@
   }
 
   function analyzeImageData(imageData,template){
-    const {data,width:w,height:h}=imageData, gray=grayscale(data,w,h);
+    const {data,width:w,height:h}=imageData,gray=grayscale(data,w,h);
     const markers=detectCornerMarkers(gray,w,h);
     if(!markers.ok) return {ok:false,error:'Không nhận đủ 4 mốc góc',markerCandidates:markers.candidates.length};
-    const geometry=refineTemplateHomography(template,markers,w,h);
-    if(!geometry.ok) return {
-      ok:false,
-      error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc và chụp lại phiếu.',
-      markerCandidates:markers.candidates.length,
-      markerMatches:geometry.matches,
-      markerRmse:geometry.rmse,
-      markerSpan:[geometry.spanX,geometry.spanY]
+
+    const coarse=refineTemplateHomography(template,markers,w,h);
+    if(!coarse.ok) return {
+      ok:false,error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc và chụp lại phiếu.',
+      markerCandidates:markers.candidates.length,markerMatches:coarse.matches,markerRmse:coarse.rmse,markerSpan:[coarse.spanX,coarse.spanY]
     };
-    const H=geometry.H;
-    const uncertain=[];
-    const p1=template.p1.map((pts,i)=>{const r=readChoiceGroup(gray,w,h,H,pts,template.p1Labels,template.bubbleRadiusCm);if(r.uncertain||r.index<0)uncertain.push(`P1.${i+1}`);return r.value||'?';});
-    const p2Flat=template.p2.map((pts,i)=>{const r=readChoiceGroup(gray,w,h,H,pts,template.p2Labels,template.bubbleRadiusCm);if(r.uncertain||r.index<0)uncertain.push(`P2.${Math.floor(i/4)+1}${'abcd'[i%4]}`);return r.value||'?';});
+
+    const geometry=refineTemplateHomographyDeep(template,markers,gray,w,h);
+    if(!geometry.ok) return {
+      ok:false,error:'Không khóa đủ mốc khống chế trên phiếu. Giữ thẳng phiếu, đủ sáng và chụp lại.',
+      markerCandidates:markers.candidates.length,markerMatches:geometry.matches,markerRmse:geometry.rmse
+    };
+
+    const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[];
+    const p1=template.p1.map((pts,i)=>{
+      const r=readChoiceGroupRectified(rect,template,pts,template.p1Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
+      if(r.uncertain||r.index<0)uncertain.push(`P1.${i+1}`);
+      return r.value||'?';
+    });
+    const p2Flat=template.p2.map((pts,i)=>{
+      const r=readChoiceGroupRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
+      if(r.uncertain||r.index<0)uncertain.push(`P2.${Math.floor(i/4)+1}${'abcd'[i%4]}`);
+      return r.value||'?';
+    });
     const p2=Array.from({length:4},(_,q)=>p2Flat.slice(q*4,q*4+4).join('-'));
-    const p3=template.p3.map((q,i)=>{const r=readP3Question(gray,w,h,H,q,template.p3Labels,template.bubbleRadiusCm);if(r.uncertain)uncertain.push(`P3.${i+1}`);return r.value||'?';});
-    const sbd=readDigits(gray,w,h,H,template.sbd,template.sbdLabels,template.bubbleRadiusCm); sbd.uncertain.forEach(i=>uncertain.push(`SBD.${i+1}`));
-    const maDe=readDigits(gray,w,h,H,template.maDe,template.maDeLabels,template.bubbleRadiusCm); maDe.uncertain.forEach(i=>uncertain.push(`MADE.${i+1}`));
-    return {ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,homography:H};
+    const p3=template.p3.map((q,i)=>{
+      const r=readP3QuestionRectified(rect,template,q,template.p3Labels,template.bubbleRadiusCm);
+      if(r.uncertain)uncertain.push(`P3.${i+1}`);
+      return r.value||'?';
+    });
+    const sbd=readDigitsRectified(rect,template,template.sbd,template.sbdLabels,template.bubbleRadiusCm);
+    sbd.uncertain.forEach(i=>uncertain.push(`SBD.${i+1}`));
+    const maDe=readDigitsRectified(rect,template,template.maDe,template.maDeLabels,template.bubbleRadiusCm);
+    maDe.uncertain.forEach(i=>uncertain.push(`MADE.${i+1}`));
+
+    return {
+      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,
+      markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
+      homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_V1'
+    };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
