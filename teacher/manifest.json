@@ -1,9 +1,9 @@
 {
-  "id": "./",
+  "id": "./index.html",
   "name": "Đam San V4 - Giáo viên",
   "short_name": "Đam San GV",
   "description": "PWA giáo viên Đam San V4: phòng thi, chấm phiếu OMR và bảng điểm.",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
@@ -27,13 +27,13 @@
     {
       "name": "Chấm phiếu",
       "short_name": "OMR",
-      "url": "./?view=omr",
+      "url": "./index.html?view=omr",
       "icons": [{"src":"../icons/exam-192.png","sizes":"192x192","type":"image/png"}]
     },
     {
       "name": "Bảng điểm",
       "short_name": "Điểm",
-      "url": "./?view=scores",
+      "url": "./index.html?view=scores",
       "icons": [{"src":"../icons/exam-192.png","sizes":"192x192","type":"image/png"}]
     }
   ]
