@@ -352,28 +352,31 @@
 
   // Exactly one filled circle is required by P1/P2. A confirmed second ink
   // center invalidates the item; possible erased marks require review.
+  // A lightly erased circle is not an answer. Compare the relative darkness
+  // of ink at each bubble center before declaring a multi-mark response.
   function chooseSingleMark(scores,metrics,opts={}){
     const chosen=chooseInk(scores,opts);
     const ranked=metrics.map((m,i)=>({i,v:scores[i]||0,
-      center:m.centerInk25||0,contrast:m.centerContrast||0})).sort((a,b)=>b.v-a.v);
-    const top=ranked[0]||{v:0};
-    const strong=m=>m.v>=Math.max(.30,top.v*.52)&&m.center>=.52&&m.contrast>=.12;
-    const marked=ranked.filter(strong);
-    if(marked.length>=2)return {...chosen,index:-1,invalidMultiple:true,
-      uncertain:true,markedIndices:marked.map(x=>x.i),
+      center:m.centerInk25||0,contrast:m.centerContrast||0}))
+      .sort((a,b)=>b.v-a.v);
+    const top=ranked[0]||{i:-1,v:0,center:0,contrast:0};
+    const second=ranked[1]||{i:-1,v:0,center:0,contrast:0};
+    const intensityRatio=second.contrast/Math.max(.10,top.contrast);
+    const scoreRatio=second.v/Math.max(.12,top.v);
+    const realTop=top.v>=.22&&top.center>=.24&&top.contrast>=.13;
+    const doubleMark=second.v>=.30&&second.center>=.52&&second.contrast>=.22
+      &&intensityRatio>=.75&&scoreRatio>=.68;
+    const needsReview=second.v>=.27&&second.center>=.30&&second.contrast>=.19
+      &&intensityRatio>=.52&&scoreRatio>=.44;
+    if(doubleMark)return {...chosen,index:-1,invalidMultiple:true,
+      uncertain:true,markedIndices:[top.i,second.i],
       reason:'Tô từ hai ô trở lên: câu/ý này không được tính điểm'};
-    // Four-choice rows provide two more unfilled outlines as a noise baseline.
-    // A two-choice true/false row cannot use this extra comparison.
-    const residual=ranked.length>2
-      ? ranked.slice(1).some(m=>m.v>=Math.max(.42,top.v*.40)
-          &&m.center>=.42&&m.contrast>=.12
-          &&m.v-(ranked[2]?.v||0)>=.12)
-      : ranked.slice(1).some(m=>m.v>=Math.max(.27,top.v*.32)
-          &&m.center>=.29&&m.contrast>=.09);
-    if(residual)return {...chosen,index:-1,invalidMultiple:false,uncertain:true,
-      reason:'Ô thứ hai còn dấu tô; cần kiểm tra tẩy xóa'};
-    if(chosen.uncertain)return {...chosen,index:-1,invalidMultiple:false};
-    return {...chosen,invalidMultiple:false};
+    if(needsReview)return {...chosen,index:-1,invalidMultiple:false,
+      uncertain:true,reason:'Hai ô có dấu tô đáng kể; cần kiểm tra tẩy xóa'};
+    if(!realTop)return {...chosen,index:-1,invalidMultiple:false,
+      uncertain:true,reason:'Nét tô chưa đủ rõ để xác định đáp án'};
+    return {...chosen,index:top.i,blank:false,invalidMultiple:false,
+      uncertain:false,reason:''};
   }
 
   function readChoiceGroupRectified(rect,template,points,labels,rCm,opts={}){
@@ -445,7 +448,10 @@
     const ratio=top.v/Math.max(0.04,second.v);
     const strong=top.v>=calibration.markGate&&center>=0.24&&
       contrast>=calibration.contrastGate&&margin>=0.075&&ratio>=1.14;
-    const blank=top.v<=calibration.blankGate&&center<=0.20;
+    // A stray outline can increase the full-patch score while its center is
+    // demonstrably blank. Do not issue a warning for clean, unmarked centers.
+    const centerClean=center<=.10&&contrast<=.07&&top.v<=calibration.markGate;
+    const blank=(top.v<=calibration.blankGate&&center<=.20)||centerClean;
     const common={scores:probe.scores,top:top.v,second:second.v,
       margin,ratio,centerInk25:center,centerContrast:contrast};
     if(strong)return {...common,index:top.i,blank:false,uncertain:false,reason:''};
