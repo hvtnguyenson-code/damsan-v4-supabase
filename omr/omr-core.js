@@ -24,15 +24,26 @@
     return M.map(r=>r[n]);
   }
 
+  function homographyN(src,dst){
+    if(src.length!==dst.length||src.length<4) throw new Error('homographyN requires at least four pairs');
+    const rows=[],b=[];
+    for(let i=0;i<src.length;i++){
+      const [x,y]=src[i], [u,v]=dst[i];
+      rows.push([x,y,1,0,0,0,-u*x,-u*y]); b.push(u);
+      rows.push([0,0,0,x,y,1,-v*x,-v*y]); b.push(v);
+    }
+    const AtA=Array.from({length:8},()=>Array(8).fill(0)),Atb=Array(8).fill(0);
+    for(let r=0;r<rows.length;r++) for(let i=0;i<8;i++){
+      Atb[i]+=rows[r][i]*b[r];
+      for(let j=0;j<8;j++) AtA[i][j]+=rows[r][i]*rows[r][j];
+    }
+    const h=solveLinear(AtA,Atb);
+    return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+  }
+
   function homography4(src,dst){
     if(src.length!==4||dst.length!==4) throw new Error('homography4 requires four pairs');
-    const A=[],b=[];
-    for(let i=0;i<4;i++){
-      const [x,y]=src[i], [u,v]=dst[i];
-      A.push([x,y,1,0,0,0,-u*x,-u*y]); b.push(u);
-      A.push([0,0,0,x,y,1,-v*x,-v*y]); b.push(v);
-    }
-    const h=solveLinear(A,b); return [h[0],h[1],h[2],h[3],h[4],h[5],h[6],h[7],1];
+    return homographyN(src,dst);
   }
 
   function project(H,x,y){
@@ -104,6 +115,41 @@
     return homography4(src,cornersPx);
   }
 
+  function matchTemplateMarkers(template,H,candidates,w,h){
+    const tol=Math.max(10,Math.min(w,h)*0.035),used=new Set(),pairs=[];
+    for(const mk of template.markers||[]){
+      const pred=project(H,mk.x,mk.y);
+      let best=null;
+      for(let i=0;i<candidates.length;i++){
+        if(used.has(i)) continue;
+        const c=candidates[i],d=Math.hypot(c.cx-pred[0],c.cy-pred[1]);
+        if(d<=tol&&(!best||d<best.d)) best={i,c,d,pred};
+      }
+      if(best){
+        used.add(best.i);
+        pairs.push({src:[mk.x,mk.y],dst:[best.c.cx,best.c.cy],error:best.d,name:mk.name});
+      }
+    }
+    const rmse=pairs.length?Math.sqrt(pairs.reduce((s,p)=>s+p.error*p.error,0)/pairs.length):Infinity;
+    return {pairs,rmse,tolerance:tol};
+  }
+
+  function refineTemplateHomography(template,markers,w,h){
+    const initial=estimateTemplateHomography(template,markers.corners);
+    const x=markers.corners.map(p=>p[0]),y=markers.corners.map(p=>p[1]);
+    const spanX=(Math.max(...x)-Math.min(...x))/w,spanY=(Math.max(...y)-Math.min(...y))/h;
+    let matched=matchTemplateMarkers(template,initial,markers.candidates,w,h),H=initial;
+    if(matched.pairs.length>=6){
+      H=homographyN(matched.pairs.map(p=>p.src),matched.pairs.map(p=>p.dst));
+      matched=matchTemplateMarkers(template,H,markers.candidates,w,h);
+    }
+    const minMatches=Math.min(6,(template.markers||[]).length);
+    const ok=matched.pairs.length>=minMatches
+      && matched.rmse<=matched.tolerance*0.45
+      && spanX>=0.45 && spanY>=0.45;
+    return {ok,H,matches:matched.pairs.length,rmse:matched.rmse,tolerance:matched.tolerance,spanX,spanY,pairs:matched.pairs};
+  }
+
   function sampleDisk(gray,w,h,cx,cy,r){
     const r2=r*r; let sum=0,n=0;
     const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(w-1,Math.ceil(cx+r));
@@ -166,7 +212,16 @@
     const {data,width:w,height:h}=imageData, gray=grayscale(data,w,h);
     const markers=detectCornerMarkers(gray,w,h);
     if(!markers.ok) return {ok:false,error:'Không nhận đủ 4 mốc góc',markerCandidates:markers.candidates.length};
-    const H=estimateTemplateHomography(template,markers.corners);
+    const geometry=refineTemplateHomography(template,markers,w,h);
+    if(!geometry.ok) return {
+      ok:false,
+      error:'Không căn được phiếu chắc chắn. Giữ trọn 4 mốc góc và chụp lại phiếu.',
+      markerCandidates:markers.candidates.length,
+      markerMatches:geometry.matches,
+      markerRmse:geometry.rmse,
+      markerSpan:[geometry.spanX,geometry.spanY]
+    };
+    const H=geometry.H;
     const uncertain=[];
     const p1=template.p1.map((pts,i)=>{const r=readChoiceGroup(gray,w,h,H,pts,template.p1Labels,template.bubbleRadiusCm);if(r.uncertain||r.index<0)uncertain.push(`P1.${i+1}`);return r.value||'?';});
     const p2Flat=template.p2.map((pts,i)=>{const r=readChoiceGroup(gray,w,h,H,pts,template.p2Labels,template.bubbleRadiusCm);if(r.uncertain||r.index<0)uncertain.push(`P2.${Math.floor(i/4)+1}${'abcd'[i%4]}`);return r.value||'?';});
@@ -174,8 +229,8 @@
     const p3=template.p3.map((q,i)=>{const r=readP3Question(gray,w,h,H,q,template.p3Labels,template.bubbleRadiusCm);if(r.uncertain)uncertain.push(`P3.${i+1}`);return r.value||'?';});
     const sbd=readDigits(gray,w,h,H,template.sbd,template.sbdLabels,template.bubbleRadiusCm); sbd.uncertain.forEach(i=>uncertain.push(`SBD.${i+1}`));
     const maDe=readDigits(gray,w,h,H,template.maDe,template.maDeLabels,template.bubbleRadiusCm); maDe.uncertain.forEach(i=>uncertain.push(`MADE.${i+1}`));
-    return {ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,markerCorners:markers.corners,homography:H};
+    return {ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,homography:H};
   }
 
-  return {grayscale,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
