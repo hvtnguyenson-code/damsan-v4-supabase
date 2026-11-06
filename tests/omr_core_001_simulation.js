@@ -186,6 +186,40 @@ assert.strictEqual(suspicious.index,-1,'ambiguous fourth column must abstain');
 assert.strictEqual(suspicious.uncertain,true,'ambiguous fourth column must alert teacher');
 
 
+// Calibrated physical-mark evidence from 9002-like faint and erased marks.
+const mk=(score,centerInk25,centerContrast)=>({score,centerInk25,centerContrast});
+const solidDouble=O.chooseSingleMark([.89,1],[mk(.89,1,.306),mk(1,1,.399)],{});
+assert.strictEqual(solidDouble.invalidMultiple,true);
+assert.strictEqual(solidDouble.index,-1);
+const erased=O.chooseSingleMark([.79,.536],[mk(.79,.929,.375),mk(.536,.214,.067)],{});
+assert.strictEqual(erased.invalidMultiple,false);
+assert.strictEqual(erased.index,0);
+const unsure=O.chooseSingleMark([.84,.312],[mk(.84,.98,.266),mk(.312,.393,.11)],{});
+assert.strictEqual(unsure.invalidMultiple,false);
+assert.strictEqual(unsure.uncertain,true);
+assert.strictEqual(unsure.index,-1);
+const goodFaint=O.chooseSingleMark([.42,.04],[mk(.42,.5,.16),mk(.04,0,.01)],{});
+assert.strictEqual(goodFaint.index,0);
+
+// Full-sheet integration: physically fill the second choice in P1.1 and P2.1a.
+const doubleSheet=new Uint8ClampedArray(sheet);
+function fillExtra(pt){
+  const [cx,cy]=toPx(pt),rad=9,rr=rad*rad;
+  for(let y=Math.max(0,Math.floor(cy-rad));y<=Math.min(sh-1,Math.ceil(cy+rad));y++)
+    for(let x=Math.max(0,Math.floor(cx-rad));x<=Math.min(sw-1,Math.ceil(cx+rad));x++)
+      if((x-cx)*(x-cx)+(y-cy)*(y-cy)<=rr){
+        const k=(y*sw+x)*4;doubleSheet[k]=doubleSheet[k+1]=doubleSheet[k+2]=0;
+      }
+}
+fillExtra(tpl.p1[0][1]);
+fillExtra(tpl.p2[0][1]);
+const multiFull=O.analyzeImageData({data:doubleSheet,width:sw,height:sh},tpl);
+assert.strictEqual(multiFull.ok,true);
+assert(multiFull.invalidMarks.includes('P1.1'));
+assert(multiFull.invalidMarks.includes('P2.1a'));
+assert.strictEqual(multiFull.p1[0],'?');
+assert.strictEqual(multiFull.p2[0].split('-')[0],'?');
+
 const doubleMark=O.chooseInk([0.51,0.48],{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
 assert.strictEqual(doubleMark.uncertain,true);
 assert.strictEqual(doubleMark.reason,'Có dấu tô ở nhiều ô; mức tô gần nhau');
