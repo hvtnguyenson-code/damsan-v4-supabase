@@ -1,4 +1,4 @@
-const VERSION='20261106-teacher-pwa-012';
+const VERSION='20261106-teacher-pwa-013';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
