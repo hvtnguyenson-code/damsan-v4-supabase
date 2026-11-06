@@ -53,7 +53,7 @@ function blackDisk(cx,cy,r){
     for(let x=Math.max(0,Math.floor(cx-r));x<=Math.min(sw-1,Math.ceil(cx+r));x++)
       if((x-cx)**2+(y-cy)**2<=rr){const j=(y*sw+x)*4;sheet[j]=sheet[j+1]=sheet[j+2]=0;}
 }
-for(const mk of tpl.markers.slice(0,4)) blackRect(mk.x*pxPerCm,mk.y*pxPerCm,20);
+for(const mk of tpl.markers) blackRect(mk.x*pxPerCm,mk.y*pxPerCm,Math.max(10,(mk.size||tpl.markers[0].size)*pxPerCm*0.42));
 
 const p1Expected='AACADCBDBDDAACCAAD';
 tpl.p1.forEach((row,i)=>{
@@ -100,5 +100,19 @@ assert.strictEqual(full.maDe,maDeExpected);
 assert.strictEqual(full.p1,p1Expected);
 assert.deepStrictEqual(full.p2,p2Expected);
 assert.deepStrictEqual(full.p3,p3Expected);
+assert(full.markerMatches>=6);
+assert(full.markerRmse<20);
+
+// Nếu một mốc góc ngoài bị mất nhưng các mốc phụ vẫn còn, engine phải từ chối
+// thay vì dùng nhầm mốc phụ để tiếp tục đọc sai toàn phiếu.
+const broken=new Uint8ClampedArray(sheet);
+const br=toPx([tpl.markers[2].x,tpl.markers[2].y]);
+for(let y=Math.max(0,Math.floor(br[1]-45));y<=Math.min(sh-1,Math.ceil(br[1]+45));y++)
+  for(let x=Math.max(0,Math.floor(br[0]-45));x<=Math.min(sw-1,Math.ceil(br[0]+45));x++){
+    const j=(y*sw+x)*4;broken[j]=broken[j+1]=broken[j+2]=255;broken[j+3]=255;
+  }
+const rejected=O.analyzeImageData({data:broken,width:sw,height:sh},tpl);
+assert.strictEqual(rejected.ok,false);
+assert(/căn được phiếu|mốc góc/.test(rejected.error));
 
 console.log('PASS omr_core_001');

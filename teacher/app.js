@@ -275,7 +275,7 @@ function updatePwaStatus(){
 }
 async function registerServiceWorker(){
   if(!('serviceWorker' in navigator))return;
-  try{await navigator.serviceWorker.register('./sw.js?v=20261106-teacher-pwa-010',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
+  try{await navigator.serviceWorker.register('./sw.js?v=20261106-teacher-pwa-011',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
 }
 function setupInstall(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
