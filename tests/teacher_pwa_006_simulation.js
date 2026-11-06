@@ -26,7 +26,7 @@ assert.strictEqual(studentManifest.id,'./hoc_sinh.html','student PWA id must rem
 assert(studentSw.includes("'./hoc_sinh.html'"),'student service worker core remains student-only');
 assert(!studentSw.includes("teacher/index.html"),'teacher shell must not be added to student SW');
 
-assert(teacherHtml.includes('href="./manifest.json?v=20261106-teacher-pwa-014"'));
+assert(teacherHtml.includes('href="./manifest.json?v=20261106-teacher-pwa-015"'));
 assert(teacherHtml.includes('../omr/omr-teacher-module.js'));
 assert(teacherHtml.includes('../vendor/student/supabase-js-2.118.0.min.js'));
 assert(teacherHtml.includes('id="homeOmrBtn"'));
