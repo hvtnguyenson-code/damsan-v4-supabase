@@ -251,7 +251,7 @@
   function capture(mode='manual'){
     const v=q('omrTeacherVideo');if(!v.videoWidth)return;
     state.lastCaptureMode=mode;
-    const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true}),max=1800,s=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));
+    const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true}),max=2200,s=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));
     c.width=Math.round(v.videoWidth*s);c.height=Math.round(v.videoHeight*s);ctx.drawImage(v,0,0,c.width,c.height);closeCamera();analyzeCanvas();
   }
   function loadImageFile(file){
