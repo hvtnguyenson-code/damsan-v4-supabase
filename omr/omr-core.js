@@ -292,12 +292,23 @@
 
   function chooseInk(scores,opts={}){
     const ranked=scores.map((v,i)=>({v,i})).sort((a,b)=>b.v-a.v),top=ranked[0]||{v:0,i:-1},second=ranked[1]||{v:0,i:-1};
-    const margin=top.v-second.v,ratio=top.v/Math.max(0.04,second.v);
+    const margin=top.v-second.v,ratio=top.v/Math.max(0.04,second.v),base=median(scores)||0,aboveBase=top.v-base;
     const allowBlank=!!opts.allowBlank;
-    const clearBlank=top.v<(opts.blankMax??0.24) || (margin<(opts.blankGap??0.035)&&top.v<(opts.blankCeil??0.66));
-    if(clearBlank) return {index:-1,blank:true,uncertain:!allowBlank,scores,top:top.v,second:second.v,margin,ratio};
-    const uncertain=margin<(opts.gap??0.075)||ratio<(opts.ratio??1.14);
-    return {index:top.i,blank:false,uncertain,scores,top:top.v,second:second.v,margin,ratio};
+    const cleanBlank=allowBlank && (top.v<(opts.blankMax??0.18) || aboveBase<(opts.blankBaseGap??0.055));
+    if(cleanBlank) return {index:-1,blank:true,uncertain:false,reason:'Ô để trống',scores,top:top.v,second:second.v,margin,ratio,base,aboveBase};
+    const doubtfulBlank=allowBlank && top.v<(opts.blankCeil??0.52) && aboveBase<(opts.blankWarnGap??0.095);
+    if(doubtfulBlank) return {index:-1,blank:true,uncertain:true,reason:'Nét tô quá mờ hoặc ô để trống',scores,top:top.v,second:second.v,margin,ratio,base,aboveBase};
+
+    const gap=opts.gap??0.075,ratioMin=opts.ratio??1.14;
+    const uncertain=margin<gap||ratio<ratioMin;
+    let reason='';
+    if(uncertain){
+      const doubleMin=opts.doubleMin??0.24,doubleGap=opts.doubleGap??0.10;
+      if(top.v>=doubleMin&&second.v>=doubleMin&&margin<doubleGap) reason='Có dấu tô ở nhiều ô; mức tô gần nhau';
+      else if(top.v<(opts.weakCeil??0.44)) reason='Nét tô mờ hoặc chưa kín ô';
+      else reason='Khó phân biệt giữa các ô';
+    }
+    return {index:top.i,blank:false,uncertain,reason,scores,top:top.v,second:second.v,margin,ratio,base,aboveBase};
   }
 
   function readChoiceGroupRectified(rect,template,points,labels,rCm,opts={}){
@@ -307,18 +318,21 @@
   }
 
   function readDigitsRectified(rect,template,groups,labels,rCm){
-    const values=[],uncertain=[];
+    const values=[],uncertain=[],details=[];
     groups.forEach((pts,i)=>{
       const r=readChoiceGroupRectified(rect,template,pts,labels,rCm,{gap:0.07,ratio:1.12});
       values.push(r.value||'?');
-      if(r.uncertain||r.index<0) uncertain.push(i);
+      if(r.uncertain||r.index<0){
+        uncertain.push(i);
+        details.push({index:i,reason:r.reason||'Không xác định được ô tô rõ ràng',top:r.top,second:r.second,margin:r.margin});
+      }
     });
-    return {value:values.join(''),uncertain};
+    return {value:values.join(''),uncertain,details};
   }
 
   function readP3QuestionRectified(rect,template,question,labels,rCm){
     const cols=question.map(pts=>readChoiceGroupRectified(rect,template,pts,labels,rCm,{
-      allowBlank:true,blankMax:0.28,blankGap:0.04,blankCeil:0.68,gap:0.07,ratio:1.12
+      allowBlank:true,blankMax:0.18,blankBaseGap:0.055,blankWarnGap:0.095,blankCeil:0.52,gap:0.07,ratio:1.12
     }));
     const selected=cols.map(x=>x.value||''),negative=selected.includes('-'),commaCol=selected.findIndex(v=>v===',');
     const digits=selected.map(v=>/^\d$/.test(v)?v:'').join('');
@@ -329,7 +343,8 @@
       value=(before||'0')+','+after;
     }
     if(negative&&value)value='-'+value;
-    return {value,raw:selected,uncertain:cols.some(x=>x.uncertain)};
+    const details=cols.map((x,i)=>x.uncertain?{column:i,reason:x.reason||'Khó xác định ô tô',top:x.top,second:x.second,margin:x.margin}:null).filter(Boolean);
+    return {value,raw:selected,uncertain:details.length>0,details};
   }
 
   function sampleDisk(gray,w,h,cx,cy,r){
@@ -407,30 +422,32 @@
       markerCandidates:markers.candidates.length,markerMatches:geometry.matches,markerRmse:geometry.rmse
     };
 
-    const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[];
+    const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[],uncertainDetails=[];
+    const addWarning=(key,label,r)=>{uncertain.push(key);uncertainDetails.push({key,label,reason:r.reason||'Khó xác định ô tô',top:r.top??null,second:r.second??null,margin:r.margin??null});};
     const p1=template.p1.map((pts,i)=>{
       const r=readChoiceGroupRectified(rect,template,pts,template.p1Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
-      if(r.uncertain||r.index<0)uncertain.push(`P1.${i+1}`);
+      if(r.uncertain||r.index<0)addWarning(`P1.${i+1}`,`Phần I – Câu ${i+1}`,r);
       return r.value||'?';
     });
     const p2Flat=template.p2.map((pts,i)=>{
-      const r=readChoiceGroupRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
-      if(r.uncertain||r.index<0)uncertain.push(`P2.${Math.floor(i/4)+1}${'abcd'[i%4]}`);
+      const r=readChoiceGroupRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
+      const q=Math.floor(i/4)+1,letter='abcd'[i%4];
+      if(r.uncertain||r.index<0)addWarning(`P2.${q}${letter}`,`Phần II – Câu ${q}, ý ${letter}`,r);
       return r.value||'?';
     });
     const p2=Array.from({length:4},(_,q)=>p2Flat.slice(q*4,q*4+4).join('-'));
     const p3=template.p3.map((q,i)=>{
       const r=readP3QuestionRectified(rect,template,q,template.p3Labels,template.bubbleRadiusCm);
-      if(r.uncertain)uncertain.push(`P3.${i+1}`);
+      r.details.forEach(d=>addWarning(`P3.${i+1}.${d.column+1}`,`Phần III – Câu ${i+1}, vị trí ${d.column+1}`,d));
       return r.value||'?';
     });
     const sbd=readDigitsRectified(rect,template,template.sbd,template.sbdLabels,template.bubbleRadiusCm);
-    sbd.uncertain.forEach(i=>uncertain.push(`SBD.${i+1}`));
+    sbd.details.forEach(d=>addWarning(`SBD.${d.index+1}`,`Số báo danh – chữ số thứ ${d.index+1}`,d));
     const maDe=readDigitsRectified(rect,template,template.maDe,template.maDeLabels,template.bubbleRadiusCm);
-    maDe.uncertain.forEach(i=>uncertain.push(`MADE.${i+1}`));
+    maDe.details.forEach(d=>addWarning(`MADE.${d.index+1}`,`Mã đề – chữ số thứ ${d.index+1}`,d));
 
     return {
-      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,
+      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,
       markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
       homography:geometry.H,rectifiedSize:[rect.width,rect.height],engine:'RECTIFIED_INK_V1'
     };
