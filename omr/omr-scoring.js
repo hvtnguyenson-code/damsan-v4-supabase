@@ -21,8 +21,27 @@
     const p3=Array.isArray(scan?.p3)?scan.p3.map(text):[];
     return {p1,p2,p3};
   }
+  function enforceInvalidMarks(scan){
+    const keys=Array.isArray(scan?.invalidMarks)?scan.invalidMarks:[];
+    if(!keys.length)return scan;
+    const p1=text(scan?.p1).split(''),p2=Array.isArray(scan?.p2)?scan.p2.map(text):[];
+    for(const key of keys){
+      const a=/^P1\.(\d{1,2})$/.exec(key);
+      if(a){const i=Number(a[1])-1;if(i>=0&&i<p1.length)p1[i]='?';continue;}
+      const b=/^P2\.(\d+)([abcd])$/.exec(key);
+      if(b){
+        const i=Number(b[1])-1,j='abcd'.indexOf(b[2]);
+        if(i>=0&&i<p2.length){
+          const parts=p2[i].split('-');
+          if(j<parts.length){parts[j]='?';p2[i]=parts.join('-');}
+        }
+      }
+    }
+    return {...scan,p1:p1.join(''),p2};
+  }
+
   function buildRawAnswers(scan,variant){
-    const pools=scanAnswers(scan),idx={1:0,2:0,3:0};
+    const pools=scanAnswers(enforceInvalidMarks(scan)),idx={1:0,2:0,3:0};
     return (variant?.items||[]).map(q=>{
       const p=partOf(q);
       let chosen='';
@@ -87,5 +106,5 @@
     const grade=previewGrade(rawAnswers,binding.variant,room.assessment_type||room.AssessmentType||'LEGACY',room.scoring_config||room.ScoringConfig||{});
     return {ok:true,room:binding.room,student:binding.student,variant:binding.variant,scan,rawAnswers,grade,reviewedUncertain:false};
   }
-  return {normalizeShort,normalizeDs,scoreP2,scanAnswers,buildRawAnswers,validateScanCoverage,previewGrade,previewScan};
+  return {normalizeShort,normalizeDs,scoreP2,scanAnswers,enforceInvalidMarks,buildRawAnswers,validateScanCoverage,previewGrade,previewScan};
 });
