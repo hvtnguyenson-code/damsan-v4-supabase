@@ -297,14 +297,19 @@
       p2:[1,2,3,4].map(i=>q('omrP2_'+i).value.trim().toUpperCase()),
       p3:[1,2,3,4,5,6].map(i=>q('omrP3_'+i).value.trim()),
       uncertain:[...(state.lastScan?.uncertain||[])],
-      uncertainDetails:[...(state.lastScan?.uncertainDetails||[])]
+      uncertainDetails:[...(state.lastScan?.uncertainDetails||[])],
+      invalidMarks:[...(state.lastScan?.invalidMarks||[])]
     };
   }
   function selectedStudent(){return state.roomModel?.students.find(s=>String(s.id)===String(q('omrStudent').value));}
   function reviewCurrent(){
     q('omrSave').disabled=true;q('omrGradeCard').style.display='none';state.lastPreview=null;
     if(!state.roomModel||!state.lastScan)return;
-    const scan=scanFromForm(),vr=B.resolveVariant(scan.maDe,state.roomModel.variants);
+    const scan=S.enforceInvalidMarks(scanFromForm()),vr=B.resolveVariant(scan.maDe,state.roomModel.variants);
+    if(scan.invalidMarks.length){
+      if(q('omrP1').value!==scan.p1)q('omrP1').value=scan.p1;
+      scan.p2.forEach((v,i)=>{const f=q('omrP2_'+(i+1));if(f.value!==v)f.value=v;});
+    }
     if(vr.status!=='matched'){showWarning('Mã đề không tồn tại trong phòng.');return;}
     const sr=B.resolveStudent(scan.sbd,state.roomModel.studentIndex);
     if(sr.status==='invalid_format'){showWarning('SBD trên phiếu phải đủ đúng 8 chữ số.');return;}
@@ -394,7 +399,10 @@
       field?.parentElement?.classList.add('omr-alert-field');
     });
     el.style.display='block';
-    el.innerHTML='<b>Có '+details.length+' vị trí cần kiểm tra:</b><ul class="omr-warning-list">'+
+    const invalid=details.filter(d=>d.invalidMultiple).length;
+    el.innerHTML='<b>Có '+details.length+' vị trí cần kiểm tra</b>'+
+      (invalid?' — '+invalid+' câu/ý tô nhiều ô đã bị tính sai, không sửa bằng nhập tay.':'')+
+      ':<ul class="omr-warning-list">'+
       details.map(d=>'<li><b>'+escapeHtml(d.label||d.key)+'</b>: '+escapeHtml(d.reason||'Cần kiểm tra lại')+'</li>').join('')+
       '</ul><div class="omr-muted" style="margin-top:8px">Các ô liên quan đã được đánh dấu màu vàng bên dưới.</div>';
   }
