@@ -356,6 +356,45 @@
     return {...c,metrics,value:c.index<0?'':labels[c.index]};
   }
 
+
+  // Multiple-choice answers must have exactly one reliably marked bubble.
+  // Count independent ink evidence in every option: the darkest wins only
+  // AFTER ruling out other marked options. Never award a lucky dual fill.
+  function classifyExclusiveInk(metrics,labels,opts={}){
+    const points=metrics.map((m,i)=>({i,score:Number(m.score)||0,
+      center25:Number(m.centerInk25)||0,center45:Number(m.centerInk45)||0,
+      contrast:Number(m.centerContrast)||0}));
+    const scores=points.map(p=>p.score);
+    const marked=points.filter(p=>p.score>=0.42&&p.center45>=0.62&&p.contrast>=0.19);
+    const residual=points.filter(p=>p.score>=0.28&&p.center25>=0.28&&p.contrast>=0.085);
+    const base=chooseInk(scores,opts);
+    const candidate=marked.length===1?marked[0].i:base.index;
+    const common={scores,top:base.top,second:base.second,margin:base.margin,
+      ratio:base.ratio};
+    if(marked.length>=2){
+      return {...common,index:-1,value:opts.invalidToken||'?',invalid:true,
+        uncertain:true,reason:'Tô nhiều ô cho một ý – đáp án không hợp lệ, không tính điểm',
+        markStatus:'MULTIPLE_MARKS',markedIndices:marked.map(p=>p.i)};
+    }
+    if(residual.some(p=>p.i!==candidate)){
+      return {...common,index:-1,value:'?',invalid:false,uncertain:true,
+        reason:'Có dấu tô hoặc vết tẩy ở ô khác – cần xác minh trên phiếu giấy',
+        markStatus:'REVIEW_RESIDUAL',markedIndices:residual.map(p=>p.i)};
+    }
+    if(candidate<0||base.uncertain){
+      return {...common,index:-1,value:'?',invalid:false,uncertain:true,
+        reason:base.reason||'Không xác định chắc chắn một ô được tô',
+        markStatus:'REVIEW_UNCERTAIN',markedIndices:[]};
+    }
+    return {...common,index:candidate,value:labels[candidate],invalid:false,
+      uncertain:false,reason:'',markStatus:'SINGLE_MARK',markedIndices:[candidate]};
+  }
+
+  function readExclusiveChoiceRectified(rect,template,points,labels,rCm,opts={}){
+    const metrics=points.map(pt=>pt?bubbleInkScore(rect.gray,rect.width,rect.height,template,pt,rCm):{score:0});
+    return {...classifyExclusiveInk(metrics,labels,opts),metrics};
+  }
+
   function readDigitsRectified(rect,template,groups,labels,rCm){
     const values=[],uncertain=[],details=[];
     groups.forEach((pts,i)=>{
@@ -531,16 +570,21 @@
     // nhầm với ô tô/chữ in và làm lệch ROI.
     const rect=warpTemplateGray(gray,w,h,geometry.H,template,1800),uncertain=[],uncertainDetails=[];
     const addWarning=(key,label,r)=>{uncertain.push(key);uncertainDetails.push({key,label,reason:r.reason||'Khó xác định ô tô',top:r.top??null,second:r.second??null,margin:r.margin??null});};
+    const invalidChoices=[];
     const p1=template.p1.map((pts,i)=>{
-      const r=readChoiceGroupRectified(rect,template,pts,template.p1Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
-      if(r.uncertain||r.index<0)addWarning(`P1.${i+1}`,`Phần I – Câu ${i+1}`,r);
-      return r.value||'?';
+      const r=readExclusiveChoiceRectified(rect,template,pts,template.p1Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14});
+      const key=`P1.${i+1}`;
+      if(r.uncertain||r.index<0)addWarning(key,`Phần I – Câu ${i+1}`,r);
+      if(r.invalid)invalidChoices.push({key,answer:r.value,reason:r.reason});
+      return r.value;
     });
     const p2Flat=template.p2.map((pts,i)=>{
-      const r=readChoiceGroupRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,{gap:0.075,ratio:1.14,doubleMin:0.22,doubleGap:0.11});
-      const q=Math.floor(i/4)+1,letter='abcd'[i%4];
-      if(r.uncertain||r.index<0)addWarning(`P2.${q}${letter}`,`Phần II – Câu ${q}, ý ${letter}`,r);
-      return r.value||'?';
+      const r=readExclusiveChoiceRectified(rect,template,pts,template.p2Labels,template.bubbleRadiusCm,
+        {gap:0.075,ratio:1.14,invalidToken:'X'});
+      const q=Math.floor(i/4)+1,letter='abcd'[i%4],key=`P2.${q}${letter}`;
+      if(r.uncertain||r.index<0)addWarning(key,`Phần II – Câu ${q}, ý ${letter}`,r);
+      if(r.invalid)invalidChoices.push({key,answer:r.value,reason:r.reason});
+      return r.value;
     });
     const p2=Array.from({length:4},(_,q)=>p2Flat.slice(q*4,q*4+4).join('-'));
     const p3Section=readP3SectionRectified(rect,template);
@@ -554,12 +598,12 @@
     maDe.details.forEach(d=>addWarning(`MADE.${d.index+1}`,`Mã đề – chữ số thứ ${d.index+1}`,d));
 
     return {
-      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,
+      ok:true,sbd:sbd.value,maDe:maDe.value,p1:p1.join(''),p2,p3,uncertain,uncertainDetails,invalidChoices,
       markerCorners:markers.corners,markerMatches:geometry.matches,markerRmse:geometry.rmse,
       markerArea:geometry.area,homography:geometry.H,rectifiedSize:[rect.width,rect.height],
       engine:'CALIBRATED_INK_V3'
     };
   }
 
-  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,readP3SectionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
+  return {grayscale,homographyN,homography4,project,adaptiveBinary,connectedComponents,detectCornerMarkers,estimateTemplateHomography,matchTemplateMarkers,refineTemplateHomography,fastTemplateRegistration,refineTemplateHomographyDeep,warpTemplateGray,bubbleInkScore,chooseInk,classifyExclusiveInk,readExclusiveChoiceRectified,calibrateP3,chooseP3Ink,readChoiceGroupRectified,readDigitsRectified,readP3QuestionRectified,readP3SectionRectified,bubbleDarkness,choose,readChoiceGroup,readDigits,readP3Question,analyzeImageData};
 });
