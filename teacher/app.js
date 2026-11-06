@@ -279,17 +279,50 @@ async function registerServiceWorker(){
 }
 function setupInstall(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
-  if(standalone){$('installBanner').hidden=true;return;}
   const ua=navigator.userAgent||'';
-  if(/iPhone|iPad|iPod/i.test(ua))$('iosInstallHint').hidden=false;
+  const isIos=/iPhone|iPad|iPod/i.test(ua);
+  const isAndroid=/Android/i.test(ua);
+  const banner=$('installBanner'), card=$('installCard'), loginBtn=$('installBtn'), appBtn=$('installAppBtn');
+  const iosHint=$('iosInstallHint'), androidHint=$('androidInstallHint'), help=$('installHelp');
+
+  if(standalone){
+    if(banner)banner.hidden=true;
+    if(card)card.hidden=true;
+    return;
+  }
+
+  if(isIos){
+    if(iosHint)iosHint.hidden=false;
+    if(help)help.innerHTML='Trên iPhone/iPad: mở menu <b>Chia sẻ</b> → <b>Thêm vào Màn hình chính</b>.';
+  }else if(isAndroid){
+    if(androidHint)androidHint.hidden=false;
+    if(help)help.innerHTML='Nếu nút cài tự động chưa xuất hiện: mở menu <b>⋮</b> của Chrome → <b>Cài đặt ứng dụng</b> hoặc <b>Thêm vào màn hình chính</b>.';
+  }else if(help){
+    help.textContent='Dùng menu của trình duyệt để cài ứng dụng hoặc thêm trang vào màn hình chính.';
+  }
+
+  async function installOrGuide(){
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt=null;
+      if(loginBtn)loginBtn.textContent='Đã xử lý yêu cầu cài';
+      if(appBtn)appBtn.textContent='Đã xử lý yêu cầu cài';
+      return;
+    }
+    if(isIos)alert('iPhone/iPad: bấm Chia sẻ → Thêm vào Màn hình chính.');
+    else if(isAndroid)alert('Android/Chrome: bấm menu ⋮ → Cài đặt ứng dụng hoặc Thêm vào màn hình chính.');
+    else alert('Mở menu trình duyệt và chọn Cài đặt ứng dụng / Thêm vào màn hình chính.');
+  }
+
+  if(loginBtn)loginBtn.addEventListener('click',installOrGuide);
+  if(appBtn)appBtn.addEventListener('click',installOrGuide);
+
   window.addEventListener('beforeinstallprompt',e=>{
-    e.preventDefault();deferredInstallPrompt=e;$('installBtn').hidden=false;
-  });
-  $('installBtn').addEventListener('click',async()=>{
-    if(!deferredInstallPrompt)return;
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt=null;$('installBtn').hidden=true;
+    e.preventDefault();
+    deferredInstallPrompt=e;
+    if(loginBtn)loginBtn.textContent='Cài ứng dụng ngay';
+    if(appBtn)appBtn.textContent='Cài ứng dụng ngay';
   });
 }
 

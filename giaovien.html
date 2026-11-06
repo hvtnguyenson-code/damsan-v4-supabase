@@ -165,11 +165,27 @@
         .bg-yeu { background: #e74c3c; }
         
         .hidden { display: none !important; }
+        #teacherPwaEntry {
+            display: none;
+            position: fixed;
+            right: 14px;
+            bottom: 14px;
+            z-index: 9998;
+            background: #0f5bd8;
+            color: #fff;
+            text-decoration: none;
+            padding: 11px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 800;
+            box-shadow: 0 6px 18px rgba(15,91,216,.28);
+        }
 
         /* =======================================================
            ĐIỀU CHỈNH GIAO DIỆN MOBILE (RESPONSIVE TỰ ĐỘNG)
            ======================================================= */
         @media (max-width: 768px) {
+            #teacherPwaEntry { display: inline-flex; align-items: center; gap: 6px; }
             .mobile-menu-btn { display: block; margin-right: 10px;}
             .header-titles h1 { font-size: 15px; white-space: normal; line-height: 1.2; letter-spacing: 0;}
             .header-titles h2 { font-size: 10px; }
@@ -432,6 +448,7 @@
 </style>
 </head>
 <body>
+    <a id="teacherPwaEntry" href="./teacher/index.html" aria-label="Mở PWA giáo viên">📱 PWA giáo viên</a>
 
     <div id="Ket_qua_filter_form" class="hidden">
         <label for="filter_select_mon">Môn học</label>

@@ -8,6 +8,7 @@ on:
       - 'teacher/**'
       - 'tests/omr_*'
       - 'tests/teacher_pwa_006_simulation.js'
+      - 'tests/teacher_pwa_install_entry_007_simulation.js'
       - 'supabase/migrations/20261105143000_omr_staff_submission_004.sql'
       - '.github/workflows/omr_camera_grading_ci.yml'
   workflow_dispatch:
@@ -33,3 +34,5 @@ jobs:
         run: node tests/omr_batch_ux_005_simulation.js
       - name: Teacher PWA 006
         run: node tests/teacher_pwa_006_simulation.js
+      - name: Teacher PWA install entry 007
+        run: node tests/teacher_pwa_install_entry_007_simulation.js
