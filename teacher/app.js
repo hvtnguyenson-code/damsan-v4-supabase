@@ -70,6 +70,7 @@ function setLoginBusy(busy){
   $('loginBtn').textContent=busy?'Đang xác thực…':'Đăng nhập';
 }
 function showLogin(message=''){
+  window.DamSanOmrTeacher?.close?.();
   $('appShell').hidden=true;
   $('forcePassScreen').hidden=true;
   $('loginScreen').hidden=false;
@@ -132,6 +133,7 @@ async function logout(){
     await Promise.allSettled(calls);
   }finally{
     gvLogoutInProgress=false;
+    history.replaceState(makeTeacherRoute('login'),'',location.href);
     showLogin();
   }
 }
@@ -233,20 +235,85 @@ async function loadScores(roomId){
     </div>`).join('');
 }
 
-function setView(name){
+// The browser history is the single navigation stack for both the teacher
+// tabs and OMR overlays. Android hardware Back then pops an actual app screen
+// instead of closing the PWA and destroying its sessionStorage context.
+const TEACHER_NAV_KEY='damSanTeacherRouteV1';
+let navApplySerial=0;
+function makeTeacherRoute(view,stage='main',depth=0,previousStage=null){
+  return {[TEACHER_NAV_KEY]:true,view,stage,depth,previousStage};
+}
+function teacherRoute(){return history.state?.[TEACHER_NAV_KEY]?history.state:null;}
+function recordTeacherRoute(route,replace=false){
+  const cur=teacherRoute();
+  if(cur&&cur.view===route.view&&cur.stage===route.stage)return;
+  if(replace)history.replaceState(route,'',location.href);
+  else history.pushState(route,'',location.href);
+}
+function renderTeacherView(name){
+  const view=['home','scores','more'].includes(name)?name:'home';
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.bottom-nav button[data-view]').forEach(b=>b.classList.remove('active'));
-  const map={home:'viewHome',scores:'viewScores',more:'viewMore'};
-  $(map[name]||'viewHome').classList.add('active');
-  const nav=document.querySelector(`.bottom-nav button[data-view="${name}"]`);
+  const ids={home:'viewHome',scores:'viewScores',more:'viewMore'};
+  $(ids[view]).classList.add('active');
+  const nav=document.querySelector('.bottom-nav button[data-view="'+view+'"]');
   if(nav)nav.classList.add('active');
-  if(name==='scores'&&$('scoreRoomSelect').value) loadScores($('scoreRoomSelect').value).catch(showAppError);
+  if(view==='scores'&&$('scoreRoomSelect').value)loadScores($('scoreRoomSelect').value).catch(showAppError);
 }
-async function openOmr(){
+function setView(name,{fromHistory=false,replace=false}={}){
+  const view=['home','scores','more'].includes(name)?name:'home';
+  if(!fromHistory)recordTeacherRoute(makeTeacherRoute(view),replace);
+  if(window.DamSanOmrTeacher?.isOpen?.())window.DamSanOmrTeacher.close();
+  renderTeacherView(view);
+}
+async function openOmr({fromHistory=false}={}){
   if(!getStaffToken()){showLogin('Vui lòng đăng nhập lại.');return;}
   if(!window.DamSanOmrTeacher)throw new Error('Module OMR chưa sẵn sàng.');
   await window.DamSanOmrTeacher.open();
+  if(!fromHistory)recordTeacherRoute(makeTeacherRoute('omr','main',1));
 }
+window.DamSanTeacherNav={
+  enterOmrStage(stage,{replace=false}={}){
+    const cur=teacherRoute();
+    if(cur?.view!=='omr'||!['main','camera','result','photo'].includes(stage))return false;
+    if(cur.stage===stage)return true;
+    recordTeacherRoute(makeTeacherRoute('omr',stage,cur.depth+(replace?0:1),cur.stage),replace);
+    return true;
+  },
+  backFrom(stage){
+    const cur=teacherRoute();
+    if(cur?.view!=='omr'||cur.stage!==stage||cur.depth<2)return false;
+    history.back();return true;
+  },
+  closeOmr(){
+    const cur=teacherRoute();
+    if(cur?.view!=='omr'||cur.depth<1)return false;
+    history.go(-cur.depth);return true;
+  },
+  resumeCamera(){
+    const cur=teacherRoute();
+    if(cur?.view==='omr'&&cur.stage==='result'&&cur.previousStage==='camera'){
+      history.back();return true;
+    }
+    return false;
+  },
+  current:teacherRoute
+};
+window.addEventListener('popstate',async event=>{
+  const route=event.state;
+  if(!route?.[TEACHER_NAV_KEY]||!gvData||$('appShell').hidden)return;
+  const serial=++navApplySerial;
+  if(route.view!=='omr'){
+    setView(route.view,{fromHistory:true});
+    return;
+  }
+  try{
+    if(!window.DamSanOmrTeacher?.isOpen?.())await openOmr({fromHistory:true});
+    if(serial!==navApplySerial)return;
+    await window.DamSanOmrTeacher.restoreNavigationStage(route.stage);
+  }catch(e){if(serial===navApplySerial)showAppError(e);}
+});
+
 function showAppError(err){
   console.error(err);
   alert(err?.message||String(err));
@@ -262,9 +329,10 @@ async function bootstrapApp(){
   await loadRooms();
   updatePwaStatus();
   const desired=new URLSearchParams(location.search).get('view');
+  // Root of the signed-in session; Back within the PWA does not log out.
+  setView('home',{replace:true});
   if(desired==='scores')setView('scores');
   else if(desired==='omr')setTimeout(()=>openOmr().catch(showAppError),100);
-  else setView('home');
 }
 
 function updatePwaStatus(){
@@ -275,7 +343,7 @@ function updatePwaStatus(){
 }
 async function registerServiceWorker(){
   if(!('serviceWorker' in navigator))return;
-  try{await navigator.serviceWorker.register('./sw.js?v=20261107-teacher-pwa-019',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
+  try{await navigator.serviceWorker.register('./sw.js?v=20261107-teacher-pwa-020',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
 }
 function setupInstall(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
