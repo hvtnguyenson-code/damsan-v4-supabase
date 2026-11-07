@@ -1,0 +1,26 @@
+const assert=require('assert'),fs=require('fs');
+const js=fs.readFileSync('omr/omr-teacher-module.js','utf8');
+const html=fs.readFileSync('teacher/index.html','utf8');
+const sw=fs.readFileSync('teacher/sw.js','utf8');
+console.log('=== OMR 015 V6 field trial ===');
+assert(html.includes('../omr/omr-reliability-v6.js'));
+assert(sw.includes('../omr/omr-reliability-v6.js'));
+assert(js.includes('id="omrV6Lab"'));
+assert(js.includes('scan._labReadOnly=state.labEnabled===true'));
+assert(js.includes('if(state.labEnabled||state.lastScan?._labReadOnly)'));
+assert(js.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
+assert(js.includes("q('omrSave').disabled=(hasUncertain && !reviewed)||!!state.lastScan?._labReadOnly"));
+assert(js.indexOf('const scan=O.analyzeImageData(pixels,T.template)')<
+       js.indexOf('root.DamSanOmrReliabilityV6.analyzeRectified'));
+assert(js.includes('Phần III vẫn dùng V5'));
+const env={DamSanOmrTemplate:{},DamSanOmr:{},DamSanOmrRoomBinding:{},DamSanOmrScoring:{},DamSanOmrResultWrite:{}};
+new Function('window','document',js)(env,{});
+const cmp=env.DamSanOmrTeacher._compareV5V6;
+const v5={p1:'ABCDABCDABCDABCDAB',p2:['Đ-S-Đ-S','S-Đ-S-Đ','Đ-Đ-S-S','S-S-Đ-Đ']};
+const v6={p1:'ABCAABCDABCDABCDAB',p2:['Đ-?-Đ-S','S-Đ-S-Đ','Đ-Đ-S-S','S-S-Đ-Đ']};
+const diffs=cmp(v5,v6);
+assert.deepStrictEqual(diffs.map(x=>x.key),['P1.4','P2.1b']);
+assert.strictEqual(diffs[0].old,'D');
+assert.strictEqual(diffs[0].now,'A');
+assert.deepStrictEqual(cmp(v5,v5),[]);
+console.log('PASS omr_v6_trial_015');
