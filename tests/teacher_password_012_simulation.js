@@ -46,7 +46,7 @@ async function run(){
     constructor(data){this.type='password';this.id=data.id;this.name=data.name;this.password=data.password;}
   }
   const ctx=vm.createContext({
-    document:{getElementById},
+    document:{getElementById,addEventListener(){}},
     window:{PasswordCredential,addEventListener(){},DamSanOmrTeacher:null},
     navigator:{credentials:manager},
     localStorage,sessionStorage,
@@ -107,7 +107,7 @@ async function run(){
   assert(js.includes("rememberAfterSuccessfulLogin($('loginUser').value.trim()||gvData?.ma_gv,p1)"),'password rotation must store only the NEW password');
   // Browsers without PasswordCredential use native autocomplete and never cache plaintext in PWA.
   const unsupported=vm.createContext({
-    document:{getElementById},window:{addEventListener(){}},navigator:{},
+    document:{getElementById,addEventListener(){}},window:{addEventListener(){}},navigator:{},
     localStorage,sessionStorage,
     supabase:{createClient:()=>({})},console,TextEncoder
   });
