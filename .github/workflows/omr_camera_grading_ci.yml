@@ -8,6 +8,7 @@ on:
       - 'teacher/**'
       - 'tests/omr_*'
       - 'tests/teacher_pwa_006_simulation.js'
+      - 'tests/teacher_navigation_011_simulation.js'
       - 'tests/teacher_pwa_install_entry_007_simulation.js'
       - 'tests/run_teacher_pwa_installability_probe_008.mjs'
       - 'supabase/migrations/20261105143000_omr_staff_submission_004.sql'
@@ -37,6 +38,8 @@ jobs:
         run: node tests/omr_result_write_004_simulation.js
       - name: OMR 005 batch UX
         run: node tests/omr_batch_ux_005_simulation.js
+      - name: Teacher PWA Android Back navigation 011
+        run: node tests/teacher_navigation_011_simulation.js
       - name: Teacher PWA 006
         run: node tests/teacher_pwa_006_simulation.js
       - name: Teacher PWA install entry 007
