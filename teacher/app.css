@@ -26,6 +26,14 @@ button{touch-action:manipulation}
 .section-title{font-size:13px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin:18px 2px 8px}
 .room-list{display:flex;flex-direction:column;gap:8px}.room{display:flex;justify-content:space-between;gap:12px;align-items:center}.room b{font-size:14px}.room small{color:var(--muted);display:block;margin-top:2px}.pill{font-size:10px;font-weight:800;border-radius:999px;padding:5px 8px;background:#edf2f7;color:#475569;white-space:nowrap}
 .form{display:flex;flex-direction:column;gap:10px}.field label{display:block;font-size:12px;font-weight:700;color:#475569;margin:0 0 5px}.field input,.field select{width:100%;height:46px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;background:#fff;color:var(--text)}
+.password-entry{position:relative}
+.password-entry input{padding-right:75px}
+.password-reveal{position:absolute;right:5px;top:5px;min-width:58px;height:36px;padding:0 8px;border:0;border-radius:8px;background:#edf2f8;color:#1e40af;font-size:13px;font-weight:800;touch-action:manipulation}
+.password-reveal:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.remember-row{display:flex;align-items:flex-start;gap:9px;font-size:13px;font-weight:650;line-height:1.4;color:#24364d;cursor:pointer}
+.remember-row input{margin:2px 0 0;width:18px;height:18px;flex:0 0 18px;accent-color:var(--blue)}
+.credential-note{color:#64748b;font-size:11px;line-height:1.45;margin-top:-4px}
+#savedPasswordBtn{align-self:flex-start;height:40px}
 .primary-btn,.secondary-btn,.danger-btn{height:46px;border:0;border-radius:10px;font-weight:800;padding:0 14px}
 .primary-btn{background:var(--blue);color:#fff}.secondary-btn{background:#e9eef5;color:#24364d}.danger-btn{background:#feeceb;color:var(--danger)}
 .toolbar{display:flex;gap:8px;align-items:end;flex-wrap:wrap}.toolbar .field{flex:1;min-width:180px}.toolbar button{flex:0 0 auto}
