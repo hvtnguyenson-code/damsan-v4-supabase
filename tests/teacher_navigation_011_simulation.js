@@ -121,7 +121,7 @@ async function run(){
   assert.strictEqual(history.state.view,'scores');
   assert.strictEqual(sessionStorage.getItem('damSan_StaffToken'),'in-memory-test-token');
   assert.strictEqual(sessionStorage.getItem('damSan_StaffExpiresAt'),'2099-01-01T00:00:00.000Z');
-  assert(!document.getElementById('loginScreen').hidden===false || true);
+  assert.strictEqual(values.size,2,'Back must not clear the login session');
   assert(omr.includes("backFrom?.('photo')"),'photo close must use Back');
   assert(omr.includes("backFrom?.('camera')"),'camera close must use Back');
   assert(omr.includes("root.DamSanTeacherNav?.enterOmrStage?.('result')"),
