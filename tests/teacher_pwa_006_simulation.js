@@ -26,7 +26,7 @@ assert.strictEqual(studentManifest.id,'./hoc_sinh.html','student PWA id must rem
 assert(studentSw.includes("'./hoc_sinh.html'"),'student service worker core remains student-only');
 assert(!studentSw.includes("teacher/index.html"),'teacher shell must not be added to student SW');
 
-assert(teacherHtml.includes('href="./manifest.json?v=20261107-teacher-pwa-020"'));
+assert(teacherHtml.includes('href="./manifest.json?v=20261107-teacher-pwa-021"'));
 assert(teacherHtml.includes('../omr/omr-teacher-module.js'));
 assert(teacherHtml.includes('../vendor/student/supabase-js-2.118.0.min.js'));
 assert(teacherHtml.includes('id="homeOmrBtn"'));
@@ -49,6 +49,11 @@ assert(teacherJs.includes("sessionStorage.setItem('damSan_StaffToken'"));
 assert(teacherJs.includes("navigator.mediaDevices")||teacherJs.includes('mediaDevices'));
 assert(teacherJs.includes("serviceWorker.register('./sw.js"));
 assert(!teacherJs.includes("localStorage.setItem('damSan_StaffToken'"),'staff bearer token must not move to localStorage');
+assert(teacherHtml.includes('id="toggleLoginPass"'),'show/hide password toggle missing');
+assert(teacherHtml.includes('id="rememberLogin"'),'opt-in remember-login checkbox missing');
+assert(teacherJs.includes('navigator.credentials.store(cred)'),'browser-managed password saving missing');
+assert(teacherJs.includes('REMEMBER_USERNAME_KEY'),'remembered account key missing');
+assert(!teacherJs.includes('localStorage.setItem(REMEMBER_USERNAME_KEY,')||teacherJs.includes('rememberAfterSuccessfulLogin'),'remembered username must be guarded');
 
 assert(teacherSw.includes("const CACHE='damsan-teacher-'"));
 assert(teacherSw.includes("../omr/omr-core.js"));
