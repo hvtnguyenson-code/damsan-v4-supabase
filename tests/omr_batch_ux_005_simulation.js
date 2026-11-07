@@ -32,7 +32,7 @@ assert(teacherModule.includes("SBD phiếu phải theo quy ước 00 + mã học
 assert(teacherModule.includes("q('omrSave').disabled=hasUncertain && !reviewed"));
 assert(teacherModule.includes('confirm(') && teacherModule.includes('Lưu điểm'));
 assert(teacherModule.includes("if(data.status==='conflict')"));
-assert(teacherModule.includes('await openCamera()'),'batch flow returns to camera after confirmed save');
+assert(teacherModule.includes("root.DamSanTeacherNav?.resumeCamera?.()"),'saved scan must resume camera via app history');
 assert(!/\.from\(['"]ket_qua['"]\).*?(insert|update|upsert)/s.test(teacherModule),'teacher module never writes result table directly');
 assert(!/\.from\(['"]de_thi['"]\).*?(insert|update|upsert|delete)/s.test(teacherModule),'teacher module never mutates exam table');
 
@@ -58,7 +58,10 @@ assert(teacherModule.includes('omrPhotoZoomCanvas'),'preview needs full-screen z
 assert(teacherModule.includes("q('omrPhotoExpand').onclick=openPhotoDetail"),'preview zoom action must be interactive');
 assert(teacherModule.includes("Chụp thủ công"),'manual capture fallback must remain');
 assert(teacherModule.includes("Tự động: Bật"),'auto scan toggle missing');
-assert(teacherModule.includes("await openCamera();"),'successful save must return to next scan automatically');
+assert(teacherModule.includes("await openCamera({navigation:'replace'})"),'fallback next scan must replace result history entry');
+assert(teacherModule.includes("restoreNavigationStage(stage)"),'OMR must restore camera, result and photo after Back');
+assert(teacherModule.includes("backFrom?.('camera')"),'camera Close must follow app Back');
+assert(teacherModule.includes("backFrom?.('photo')"),'photo Close must follow app Back');
 
 assert(core.includes("CALIBRATED_INK_V3"),'calibrated ink engine marker missing');
 assert(core.includes("warpTemplateGray"),'sheet must be rectified before recognition');
