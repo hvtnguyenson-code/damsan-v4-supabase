@@ -41,6 +41,14 @@ function setupRememberLogin(){
   $('rememberLogin').checked=preferred;
   if(preferred&&!$('loginUser').value)
     $('loginUser').value=rememberedPreference(REMEMBER_USERNAME_KEY)||'';
+  $('rememberLogin').addEventListener('change',()=>{
+    if(!$('rememberLogin').checked){
+      // Opt-out takes effect immediately; saved vault entries stay under
+      // the user's password manager control and cannot be deleted by the PWA.
+      setRememberedPreference(REMEMBER_USERNAME_KEY,null);
+      setRememberedPreference(REMEMBER_CONSENT_KEY,null);
+    }
+  });
   configurePasswordReveal('toggleLoginPass','loginPass');
   configurePasswordReveal('toggleNewPass1','newPass1');
   configurePasswordReveal('toggleNewPass2','newPass2');
@@ -56,6 +64,7 @@ function setupRememberLogin(){
         $('loginPass').type='password';
         $('toggleLoginPass').textContent='Hiện';
         $('toggleLoginPass').setAttribute('aria-pressed','false');
+        $('toggleLoginPass').setAttribute('aria-label','Hiện mật khẩu');
         $('loginMsg').textContent='Đã điền thông tin lưu trên điện thoại. Bấm Đăng nhập để tiếp tục.';
       }else{
         $('loginMsg').textContent='Chưa có mật khẩu đã lưu. Có thể nhập một lần rồi chọn ghi nhớ.';
@@ -151,6 +160,7 @@ function showLogin(message=''){
   $('loginMsg').textContent=message;
 }
 function showForcePass(){
+  $('loginPass').value='';
   $('loginScreen').hidden=true;
   $('appShell').hidden=true;
   $('forcePassScreen').hidden=false;
