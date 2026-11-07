@@ -1,4 +1,4 @@
-const VERSION='20261107-teacher-pwa-021';
+const VERSION='20261107-teacher-pwa-022';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -13,6 +13,7 @@ const CORE=[
   '../omr/omr-room-binding.js',
   '../omr/omr-scoring.js',
   '../omr/omr-result-write.js',
+  '../omr/omr-reliability-v6.js',
   '../omr/omr-teacher-module.js'
 ];
 self.addEventListener('install',event=>{

@@ -3,7 +3,7 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,lastV6:null};
   const q=id=>document.getElementById(id);
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -58,6 +58,7 @@
       #omrPhotoZoomCanvas{display:block;max-width:none;height:auto;margin:0 auto}
       .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
       .omr-score{font-size:30px;font-weight:800;color:#0f766e}.omr-progress{font-weight:700;color:#334155}
+      .omr-lab-details{white-space:pre-line;line-height:1.55;overflow-wrap:anywhere}.omr-lab-toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.omr-lab-toggle input{width:20px;height:20px;flex:0 0 20px;accent-color:#7c3aed}
       @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}}
     `;
     document.head.appendChild(style);
@@ -73,6 +74,10 @@
             <div class="omr-field"><div class="omr-muted">Tiến độ phiên này</div><div id="omrProgress" class="omr-progress">0 phiếu đã lưu</div></div>
           </div>
           <div id="omrRoomSummary" class="omr-muted" style="margin-top:8px">Chọn phòng để bắt đầu.</div>
+           <div class="omr-card omr-warn" id="omrV6LabWrap" style="display:none">
+             <label class="omr-lab-toggle"><input type="checkbox" id="omrV6Lab"><span><b>Thử nghiệm V6 – đối chiếu V5/V6</b> (không lưu điểm)</span></label>
+             <div class="omr-muted" style="margin-top:8px">Cùng một ảnh được đọc bằng V5 và V6. Khi thử nghiệm, nút lưu điểm bị khóa. Phần III vẫn dùng V5.</div>
+           </div>
         </div>
         <div class="omr-card">
           <div class="omr-actions">
@@ -86,7 +91,13 @@
             <div class="omr-photo-head"><span class="omr-muted" id="omrPhotoHint">Ảnh phiếu sau khi chụp</span><button type="button" id="omrPhotoExpand">Xem chi tiết</button></div>
             <canvas id="omrTeacherCanvas" aria-label="Ảnh phiếu để đối chiếu kết quả nhận dạng"></canvas>
           </div>
-          <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
+          <div id="omrV6Comparison" class="omr-card omr-warn" style="display:none" aria-live="polite">
+             <b>Đối chiếu V5/V6 – chỉ xem, không lưu điểm</b>
+             <div id="omrV6Summary" style="margin-top:8px"></div>
+             <div id="omrV6Scores" style="margin-top:8px;font-weight:700"></div>
+             <div id="omrV6Diffs" class="omr-lab-details" style="margin-top:8px"></div>
+           </div>
+           <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
             <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra đúng các vị trí được đánh dấu và xác nhận dữ liệu đang hiển thị là đúng.
           </label>
@@ -137,6 +148,10 @@
     document.body.appendChild(wrap);
     q('omrClose').onclick=()=>{if(!root.DamSanTeacherNav?.closeOmr?.())close();};
     q('omrRoomSelect').onchange=()=>loadRoom(q('omrRoomSelect').value);
+    q('omrV6Lab').onchange=()=>{
+      state.labEnabled=!!q('omrV6Lab').checked;
+      resetScan(); // A lab capture can never be converted to a writable result.
+    };
     q('omrOpenCamera').onclick=openCamera;
     q('omrPickFile').onchange=e=>e.target.files[0]&&loadImageFile(e.target.files[0]);
     q('omrCameraClose').onclick=()=>{if(!root.DamSanTeacherNav?.backFrom?.('camera'))closeCamera();};
@@ -168,6 +183,9 @@
 
   async function open(){
     ensureUi();
+    const labAvailable=!!root.DamSanTeacherNav&&!!root.DamSanOmrReliabilityV6;
+    q('omrV6LabWrap').style.display=labAvailable?'block':'none';
+    if(!labAvailable){state.labEnabled=false;q('omrV6Lab').checked=false;}
     q('omrTeacherOverlay').classList.add('show');
     q('omrRoomSelect').innerHTML='<option value="">Đang tải phòng...</option>';
     try{
@@ -372,7 +390,8 @@
   function analyzeCanvas(){
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true});
     try{
-      const scan=O.analyzeImageData(ctx.getImageData(0,0,c.width,c.height),T.template);
+      const pixels=ctx.getImageData(0,0,c.width,c.height);
+      const scan=O.analyzeImageData(pixels,T.template);
       if(!scan.ok){
         q('omrScanArea').style.display='block';
         const detail=scan.markerMatches!==undefined?` (${scan.markerMatches} mốc khớp)`:'';
@@ -380,7 +399,19 @@
         if(state.lastCaptureMode==='auto')setTimeout(()=>openCamera({navigation:'none'}).catch(()=>{}),700);
         return;
       }
-      scan.templateId=T.template.id;state.lastScan=scan;
+      scan.templateId=T.template.id;scan._labReadOnly=state.labEnabled===true;
+      state.lastV6=null;
+      if(scan._labReadOnly){
+        const begun=performance.now();
+        try{
+          const gray=O.grayscale(pixels.data,pixels.width,pixels.height);
+          const rect=O.warpTemplateGray(gray,pixels.width,pixels.height,
+            scan.homography,T.template,1800);
+          state.lastV6={candidate:root.DamSanOmrReliabilityV6.analyzeRectified(rect,T.template),
+            elapsedMs:Math.round(performance.now()-begun)};
+        }catch(e){state.lastV6={error:'Lỗi thử nghiệm V6: '+(e?.message||String(e))};}
+      }
+      state.lastScan=scan;
       // Presentation only: crop around validated four-corner markers after
       // recognition. Never send the cropped image back to the OMR engine.
       let cropped=false;
@@ -397,10 +428,64 @@
       if(scan.uncertain.length) showScanWarnings(scan);
       else {clearWarningHighlights();hideWarning();}
       reviewCurrent();
+      showV6Comparison();
       root.DamSanTeacherNav?.enterOmrStage?.('result');
     }catch(e){showWarning('Lỗi đọc ảnh: '+e.message);}
   }
 
+  // Comparison never mutates the V5 scan or the canonical answer key.
+  function compareV5V6(v5,v6){
+    const diffs=[];
+    for(let i=0;i<18;i++){
+      const old=v5.p1?.[i]||'?',now=v6.p1?.[i]||'?';
+      if(old!==now)diffs.push({key:'P1.'+(i+1),old,now});
+    }
+    const a=(v5.p2||[]).flatMap(row=>row.split('-'));
+    const b=(v6.p2||[]).flatMap(row=>row.split('-'));
+    for(let i=0;i<16;i++){
+      const old=a[i]||'?',now=b[i]||'?';
+      if(old!==now)diffs.push({key:'P2.'+(Math.floor(i/4)+1)+'abcd'[i%4],old,now});
+    }
+    return diffs;
+  }
+  function showV6Comparison(){
+    const panel=q('omrV6Comparison'),scan=state.lastScan;
+    if(!panel)return;
+    panel.style.display=scan?._labReadOnly?'block':'none';
+    if(!scan?._labReadOnly)return;
+    const data=state.lastV6||{},v6=data.candidate;
+    const summary=q('omrV6Summary'),scores=q('omrV6Scores'),diffs=q('omrV6Diffs');
+    scores.textContent='';
+    if(!v6){
+      summary.textContent=data.error||'Chưa có kết quả V6';
+      diffs.textContent='V5 vẫn hiển thị bình thường. Không thể lưu điểm khi thử nghiệm.';
+      return;
+    }
+    const changes=compareV5V6(scan,v6),geometry=v6.geometry||{};
+    summary.textContent=changes.length+' câu/ý khác nhau (P1/P2) • V6 thêm '+
+      data.elapsedMs+' ms • Mốc nội vùng: '+(geometry.status||'không rõ')+
+      ' ('+(geometry.matched||0)+'/'+(geometry.total||0)+').';
+    diffs.textContent=changes.length
+      ?changes.map(d=>d.key+': V5='+d.old+', V6='+d.now).join('\n')
+      :'Không có khác biệt Phần I/II trên ảnh này.';
+    if(v6.issues?.length)diffs.textContent+='\nV6 cảnh báo: '+v6.issues.map(x=>x.key).join(', ');
+    if(!state.lastPreview?.ok){
+      scores.textContent='Chưa có học sinh/mã đề hợp lệ để so điểm.';
+      return;
+    }
+    try{
+      // P3, student ID and exam code remain exclusively from the V5 result.
+      const alt={...scan,p1:v6.p1,p2:v6.p2,invalidMarks:v6.invalidMarks,
+        uncertain:(v6.issues||[]).map(x=>x.key)};
+      const binding={ok:true,room:state.lastPreview.room,
+        student:state.lastPreview.student,variant:state.lastPreview.variant};
+      const estimate=S.previewScan(alt,binding,{allowUncertain:true});
+      scores.textContent=estimate.ok
+        ?'V5: '+state.lastPreview.grade.score+
+          ' điểm • V6: '+estimate.grade.score+' điểm (Phần III vẫn dùng V5)'
+        :'V6 chưa thể tính điểm dự kiến.';
+    }catch(e){scores.textContent='Không so được điểm: '+(e.message||'lỗi');}
+  }
   function scanFromForm(){
     return {
       ...(state.lastScan||{}),
@@ -417,7 +502,9 @@
   }
   function selectedStudent(){return state.roomModel?.students.find(s=>String(s.id)===String(q('omrStudent').value));}
   function reviewCurrent(){
-    q('omrSave').disabled=true;q('omrGradeCard').style.display='none';state.lastPreview=null;
+    q('omrSave').disabled=true;
+    q('omrSave').hidden=!!state.lastScan?._labReadOnly;
+    q('omrGradeCard').style.display='none';state.lastPreview=null;
     if(!state.roomModel||!state.lastScan)return;
     const scan=S.enforceInvalidMarks(scanFromForm()),vr=B.resolveVariant(scan.maDe,state.roomModel.variants);
     if(scan.invalidMarks.length){
@@ -456,10 +543,15 @@
     q('omrGradeCard').style.display='block';
     if(scan.uncertain.length) showScanWarnings(scan);
     else {clearWarningHighlights();hideWarning();}
-    q('omrSave').disabled=hasUncertain && !reviewed;
+    q('omrSave').disabled=(hasUncertain && !reviewed)||!!state.lastScan?._labReadOnly;
+    if(state.lastScan?._labReadOnly)showV6Comparison();
   }
 
   async function saveCurrent(){
+    if(state.labEnabled||state.lastScan?._labReadOnly){
+      showWarning('Đang thử V6: không lưu điểm. Hãy tắt thử nghiệm và quét lại bằng V5.');
+      return;
+    }
     if(!state.lastPreview)return;
     const st=state.lastPreview.student;
     if(state.saved.has(String(st.id))){showWarning('Học sinh này đã được lưu trong phiên chấm hiện tại.');return;}
@@ -483,7 +575,9 @@
   }
   function resetScan(){
     closePhotoDetail();
-    state.lastScan=null;state.lastPreview=null;
+    state.lastScan=null;state.lastPreview=null;state.lastV6=null;
+    if(q('omrV6Comparison'))q('omrV6Comparison').style.display='none';
+    if(q('omrSave'))q('omrSave').hidden=false;
     if(q('omrScanArea'))q('omrScanArea').style.display='none';
     if(q('omrGradeCard'))q('omrGradeCard').style.display='none';
     if(q('omrSave'))q('omrSave').disabled=true;
@@ -524,5 +618,5 @@
   function showWarning(msg){const el=q('omrWarning');if(!el)return;clearWarningHighlights();el.style.display='block';el.textContent=msg;}
   function hideWarning(){const el=q('omrWarning');if(el){el.style.display='none';el.textContent='';}}
 
-  root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto};
+  root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto,_compareV5V6:compareV5V6};
 })(window);
