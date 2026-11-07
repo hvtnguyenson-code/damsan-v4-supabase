@@ -3,7 +3,7 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0};
   const q=id=>document.getElementById(id);
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -135,16 +135,16 @@
       </div><div id="omrPhotoPan"><canvas id="omrPhotoZoomCanvas"></canvas></div>
     </div>`;
     document.body.appendChild(wrap);
-    q('omrClose').onclick=close;
+    q('omrClose').onclick=()=>{if(!root.DamSanTeacherNav?.closeOmr?.())close();};
     q('omrRoomSelect').onchange=()=>loadRoom(q('omrRoomSelect').value);
     q('omrOpenCamera').onclick=openCamera;
     q('omrPickFile').onchange=e=>e.target.files[0]&&loadImageFile(e.target.files[0]);
-    q('omrCameraClose').onclick=closeCamera;
+    q('omrCameraClose').onclick=()=>{if(!root.DamSanTeacherNav?.backFrom?.('camera'))closeCamera();};
     q('omrCameraSwitch').onclick=()=>{state.facing=state.facing==='environment'?'user':'environment';openCamera();};
     q('omrCameraCapture').onclick=()=>capture('manual');
     q('omrPhotoExpand').onclick=openPhotoDetail;
     q('omrTeacherCanvas').onclick=openPhotoDetail;
-    q('omrPhotoClose').onclick=closePhotoDetail;
+    q('omrPhotoClose').onclick=()=>{if(!root.DamSanTeacherNav?.backFrom?.('photo'))closePhotoDetail();};
     q('omrPhotoPlus').onclick=()=>setPhotoZoom(state.photoZoom+.45);
     q('omrPhotoMinus').onclick=()=>setPhotoZoom(state.photoZoom-.45);
     document.addEventListener('keydown',e=>{if(e.key==='Escape')closePhotoDetail();});
@@ -157,7 +157,10 @@
       else if(!state.autoScanEnabled)stopAutoScanLoop();
     };
     q('omrRecheck').onclick=reviewCurrent;
-    q('omrNext').onclick=()=>{resetScan();openCamera();};
+    q('omrNext').onclick=()=>{
+      resetScan();
+      if(!root.DamSanTeacherNav?.resumeCamera?.())openCamera({navigation:'replace'});
+    };
     q('omrSave').onclick=saveCurrent;
     q('omrReviewUncertain').onchange=reviewCurrent;
     ['omrSbd','omrMaDe','omrStudent','omrP1','omrP2_1','omrP2_2','omrP2_3','omrP2_4','omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'].forEach(id=>q(id).addEventListener('change',reviewCurrent));
@@ -175,6 +178,23 @@
     }catch(e){q('omrRoomSummary').textContent='Không tải được danh sách phòng: '+e.message;}
   }
   function close(){closePhotoDetail();closeCamera();q('omrTeacherOverlay')?.classList.remove('show');}
+  function isOpen(){return !!q('omrTeacherOverlay')?.classList.contains('show');}
+  async function restoreNavigationStage(stage){
+    if(!isOpen())await open();
+    if(stage==='photo'){
+      closeCamera();
+      if(state.lastScan)openPhotoDetail({navigation:'none'});
+      else closePhotoDetail();
+    }else if(stage==='result'){
+      closePhotoDetail();closeCamera();
+      if(state.lastScan)q('omrScanArea').style.display='block';
+    }else if(stage==='camera'){
+      closePhotoDetail();
+      await openCamera({navigation:'none'});
+    }else{
+      closePhotoDetail();closeCamera();resetScan();
+    }
+  }
   async function loadRoom(id){
     resetScan();
     state.roomModel=null;
@@ -254,32 +274,44 @@
       }
     },240);
   }
-  async function openCamera(){
-    if(!state.roomModel?.valid1846){alert('Hãy chọn phòng 18–4–6 hợp lệ trước.');return;}
+  async function openCamera({navigation='push'}={}){
+    if(!state.roomModel?.valid1846){alert('Hãy chọn phòng 18–4–6 hợp lệ trước.');return false;}
     closeCamera();
+    const request=state.cameraRequestSerial;
     try{
-      state.stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:state.facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:state.facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
+      if(request!==state.cameraRequestSerial||!isOpen()){
+        stream.getTracks().forEach(t=>t.stop());
+        return false;
+      }
+      state.stream=stream;
       const v=q('omrTeacherVideo');
-      v.srcObject=state.stream;q('omrTeacherVideoWrap').classList.add('show');
+      v.srcObject=stream;q('omrTeacherVideoWrap').classList.add('show');
       q('omrAutoToggle').textContent='Tự động: '+(state.autoScanEnabled?'Bật':'Tắt');
       updateAutoHud(state.autoScanEnabled?'Đưa trọn phiếu vào khung':'Chế độ thủ công',false);
       try{await v.play();}catch(_){}
+      if(request!==state.cameraRequestSerial)return false;
       if(state.autoScanEnabled)startAutoScanLoop();
-    }catch(e){alert('Không mở được camera: '+e.message);}
+      if(navigation!=='none')root.DamSanTeacherNav?.enterOmrStage?.('camera',{replace:navigation==='replace'});
+      return true;
+    }catch(e){alert('Không mở được camera: '+e.message);return false;}
   }
   function closeCamera(){
+    ++state.cameraRequestSerial;
     stopAutoScanLoop();
     if(state.stream){state.stream.getTracks().forEach(t=>t.stop());state.stream=null;}
     q('omrTeacherVideoWrap')?.classList.remove('show');
   }
+
   function capture(mode='manual'){
-    const v=q('omrTeacherVideo');if(!v.videoWidth)return;
+    const v=q('omrTeacherVideo');if(!state.stream||!v.videoWidth)return;
     state.lastCaptureMode=mode;
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true}),max=2200,s=Math.min(1,max/Math.max(v.videoWidth,v.videoHeight));
     c.width=Math.round(v.videoWidth*s);c.height=Math.round(v.videoHeight*s);ctx.drawImage(v,0,0,c.width,c.height);closeCamera();analyzeCanvas();
   }
   function loadImageFile(file){
     if(!state.roomModel?.valid1846){alert('Hãy chọn phòng 18–4–6 hợp lệ trước.');return;}
+    state.lastCaptureMode='file';
     const img=new Image();img.onload=()=>{
       const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true}),max=1800,s=Math.min(1,max/Math.max(img.width,img.height));
       c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);ctx.drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(img.src);analyzeCanvas();
@@ -321,7 +353,7 @@
     const c=q('omrPhotoZoomCanvas');
     if(c)c.style.width=Math.round(state.photoZoom*100)+'%';
   }
-  function openPhotoDetail(){
+  function openPhotoDetail({navigation='push'}={}){
     const src=q('omrTeacherCanvas'),viewer=q('omrPhotoLightbox');
     if(!src?.width||!src?.height||!viewer)return;
     const zoom=q('omrPhotoZoomCanvas');
@@ -330,6 +362,7 @@
     viewer.classList.add('show');
     setPhotoZoom(1.65);
     const pan=q('omrPhotoPan');if(pan){pan.scrollLeft=0;pan.scrollTop=0;}
+    if(navigation!=='none')root.DamSanTeacherNav?.enterOmrStage?.('photo');
   }
   function closePhotoDetail(){
     q('omrPhotoLightbox')?.classList.remove('show');
@@ -344,7 +377,7 @@
         q('omrScanArea').style.display='block';
         const detail=scan.markerMatches!==undefined?` (${scan.markerMatches} mốc khớp)`:'';
         showWarning((scan.error||'Không đọc được phiếu')+detail);
-        if(state.lastCaptureMode==='auto')setTimeout(()=>openCamera().catch(()=>{}),700);
+        if(state.lastCaptureMode==='auto')setTimeout(()=>openCamera({navigation:'none'}).catch(()=>{}),700);
         return;
       }
       scan.templateId=T.template.id;state.lastScan=scan;
@@ -364,6 +397,7 @@
       if(scan.uncertain.length) showScanWarnings(scan);
       else {clearWarningHighlights();hideWarning();}
       reviewCurrent();
+      root.DamSanTeacherNav?.enterOmrStage?.('result');
     }catch(e){showWarning('Lỗi đọc ảnh: '+e.message);}
   }
 
@@ -439,7 +473,7 @@
       q('omrGradeCard').classList.add('omr-ok');
       alert(`Đã lưu: ${st.ho_ten} — ${data.score} điểm.`);
       resetScan();
-      await openCamera();
+      if(!root.DamSanTeacherNav?.resumeCamera?.())await openCamera({navigation:'replace'});
     }catch(e){showWarning('Lưu thất bại: '+e.message);}
     finally{btn.textContent=old;btn.disabled=!state.lastPreview;}
   }
@@ -490,5 +524,5 @@
   function showWarning(msg){const el=q('omrWarning');if(!el)return;clearWarningHighlights();el.style.display='block';el.textContent=msg;}
   function hideWarning(){const el=q('omrWarning');if(el){el.style.display='none';el.textContent='';}}
 
-  root.DamSanOmrTeacher={open,close,loadRoom,reviewCurrent,_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto};
+  root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto};
 })(window);
