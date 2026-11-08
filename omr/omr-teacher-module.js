@@ -40,6 +40,14 @@
       .omr-head{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid #e2e8f0;position:sticky;top:0;background:#fff;z-index:3}
       .omr-head h2{margin:0;font-size:18px}.omr-close{border:0;background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 11px;font-weight:700}
       .omr-body{padding:16px}.omr-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.omr-field{flex:1;min-width:180px}.omr-field label{font-size:12px;margin-bottom:4px}
+      /* Room selector must never share a flex row with template/progress data. */
+      #omrTeacherOverlay .omr-room-layout{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;min-width:0}
+      #omrTeacherOverlay .omr-room-picker{min-width:0}
+      #omrTeacherOverlay .omr-room-picker label{display:block;font-size:13px;font-weight:700;margin:0 0 6px}
+      #omrTeacherOverlay #omrRoomSelect{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;min-height:44px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;white-space:nowrap;text-overflow:ellipsis}
+      #omrTeacherOverlay .omr-room-info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;min-width:0}
+      #omrTeacherOverlay .omr-room-info-item{min-width:0;overflow-wrap:anywhere}
+      #omrTeacherOverlay .omr-room-info-item .omr-muted{display:block;margin-bottom:4px}
       .omr-card{border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin:12px 0;background:#fff}.omr-muted{color:#64748b;font-size:12px}.omr-warn{background:#fff7ed;border-color:#fdba74}.omr-ok{background:#f0fdf4;border-color:#86efac}.omr-alert-field input,.omr-alert-field select{border:2px solid #f59e0b!important;background:#fffbeb!important}.omr-warning-list{margin:8px 0 0 18px;padding:0}.omr-warning-list li{margin:5px 0;line-height:1.4}
       .omr-actions{display:flex;gap:8px;flex-wrap:wrap}.omr-actions button{border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}.omr-primary{background:#1769e0;color:#fff}.omr-green{background:#15803d;color:#fff}.omr-light{background:#eef2f7;color:#1f2937}
       #omrTeacherVideoWrap{display:none;position:fixed;inset:0;background:#000;z-index:4500;padding:calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom));flex-direction:column}#omrTeacherVideoWrap.show{display:flex}
@@ -59,7 +67,7 @@
       .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
       .omr-score{font-size:30px;font-weight:800;color:#0f766e}.omr-progress{font-weight:700;color:#334155}
       .omr-lab-details{white-space:pre-line;line-height:1.55;overflow-wrap:anywhere}.omr-lab-toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.omr-lab-toggle input{width:20px;height:20px;flex:0 0 20px;accent-color:#7c3aed}
-      @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}}
+      @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}#omrTeacherOverlay .omr-room-info{grid-template-columns:minmax(0,1fr)}}
     `;
     document.head.appendChild(style);
     const wrap=document.createElement('div');
@@ -68,10 +76,15 @@
       <div class="omr-head"><h2>📷 Chấm phiếu trắc nghiệm</h2><button class="omr-close" id="omrClose">Đóng</button></div>
       <div class="omr-body">
         <div class="omr-card">
-          <div class="omr-row">
-            <div class="omr-field"><label>Phòng thi</label><select id="omrRoomSelect"></select></div>
-            <div class="omr-field"><div class="omr-muted">Phiếu chuẩn</div><b>BGD 2025 • 18–4–6</b></div>
-            <div class="omr-field"><div class="omr-muted">Tiến độ phiên này</div><div id="omrProgress" class="omr-progress">0 phiếu đã lưu</div></div>
+          <div class="omr-room-layout">
+            <div class="omr-room-picker">
+              <label for="omrRoomSelect">Phòng thi</label>
+              <select id="omrRoomSelect" aria-label="Chọn phòng thi"></select>
+            </div>
+            <div class="omr-room-info">
+              <div class="omr-room-info-item"><span class="omr-muted">Phiếu chuẩn</span><strong>BGD 2025 • 18–4–6</strong></div>
+              <div class="omr-room-info-item"><span class="omr-muted">Tiến độ phiên này</span><div id="omrProgress" class="omr-progress">0 phiếu đã lưu</div></div>
+            </div>
           </div>
           <div id="omrRoomSummary" class="omr-muted" style="margin-top:8px">Chọn phòng để bắt đầu.</div>
            <div class="omr-card" id="omrEngineWrap">

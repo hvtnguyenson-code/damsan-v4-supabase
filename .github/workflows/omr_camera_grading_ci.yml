@@ -41,6 +41,8 @@ jobs:
         run: node tests/omr_v6_p3_017_simulation.js
       - name: OMR 018 official V6 through canonical scoring and write
         run: node tests/omr_v6_official_018_simulation.js
+      - name: OMR 019 mobile room header layout
+        run: node tests/omr_mobile_room_layout_019_simulation.js
       - name: OMR 010 teacher photo preview
         run: node tests/omr_photo_preview_010_simulation.js
       - name: OMR 002 room binding
