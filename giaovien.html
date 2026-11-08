@@ -136,6 +136,14 @@
         input:checked + .slider:before { transform: translateX(24px); }
         
         #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #2c3e50, #3498db); z-index: 99999; display: flex; align-items: center; justify-content: center; }
+        #loginOverlay .gv-password-entry{position:relative;display:flex;align-items:center}
+        #loginOverlay .gv-password-entry #gvPass{width:100%;padding-right:73px}
+        #loginOverlay .gv-password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);padding:8px 10px;background:#edf2f7;border:0;border-radius:6px;color:#1e293b;font-size:13px;font-weight:700;cursor:pointer}
+        #loginOverlay .gv-remember-row{display:flex;align-items:flex-start;gap:9px;text-align:left;cursor:pointer;font-size:13px;line-height:1.45;color:#334155;margin:-5px 0 8px}
+        #loginOverlay .gv-remember-row input{width:18px;height:18px;flex:0 0 18px;margin:1px 0 0}
+        #loginOverlay .gv-credential-note{font-size:12px;line-height:1.45;color:#64748b;text-align:left;margin:0 0 10px}
+        #loginOverlay .gv-saved-credential{display:block;width:100%;border:1px solid #dbe3ed;color:#1e293b;background:#f1f5f9;border-radius:7px;padding:10px;font-weight:700;cursor:pointer;margin:0 0 12px}
+        #loginOverlay .gv-saved-credential[hidden]{display:none}
         .login-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: 90%; max-width: 400px; text-align: center; }
 
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px; }
@@ -463,15 +471,26 @@
         <div class="login-box">
             <h2 style="color: #2c3e50; margin-top: 0;">CỔNG GIÁO VIÊN</h2>
             <p style="color: #7f8c8d; margin-bottom: 25px; font-size: 14px;">Hệ thống Đánh giá Đam San V4 (SaaS)</p>
-            <div style="margin-bottom: 15px; text-align: left;">
-                <label style="font-size: 13px; color: #555;">Tài khoản (Mã GV):</label>
-                <input type="text" id="gvUser" placeholder="Nhập mã giáo viên..." style="font-weight:bold; padding: 12px;" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-            </div>
-            <div style="margin-bottom: 25px; text-align: left;">
-                <label style="font-size: 13px; color: #555;">Mật khẩu:</label>
-                <input type="password" id="gvPass" placeholder="Nhập mật khẩu..." style="padding: 12px;">
-            </div>
-            <button onclick="thucHienDangNhapGV()" id="btnDangNhapGV" style="background: #2c3e50; color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;">🔐 QUẢN TRỊ HỆ THỐNG</button>
+            <form id="gvLoginForm" autocomplete="on" onsubmit="event.preventDefault(); thucHienDangNhapGV();">
+                <div style="margin-bottom: 15px; text-align: left;">
+                    <label for="gvUser" style="font-size: 13px; color: #555;">Tài khoản (Mã GV):</label>
+                    <input type="text" id="gvUser" name="username" placeholder="Nhập mã giáo viên..." style="font-weight:bold; padding: 12px;" autocomplete="username" autocorrect="off" autocapitalize="off" spellcheck="false" required>
+                </div>
+                <div style="margin-bottom: 16px; text-align: left;">
+                    <label for="gvPass" style="font-size: 13px; color: #555;">Mật khẩu:</label>
+                    <div class="gv-password-entry">
+                        <input type="password" id="gvPass" name="password" placeholder="Nhập mật khẩu..." style="padding: 12px;" autocomplete="current-password" required>
+                        <button type="button" id="gvTogglePass" class="gv-password-toggle" aria-controls="gvPass" aria-pressed="false" aria-label="Hiện mật khẩu">Hiện</button>
+                    </div>
+                </div>
+                <label class="gv-remember-row">
+                    <input type="checkbox" id="gvRememberLogin">
+                    <span>Ghi nhớ tài khoản và mật khẩu trên thiết bị này</span>
+                </label>
+                <p class="gv-credential-note">Trang chỉ ghi nhớ mã giáo viên. Mật khẩu được lưu trong trình quản lý mật khẩu của trình duyệt khi bạn đồng ý.</p>
+                <button type="button" id="gvSavedPasswordBtn" class="gv-saved-credential" hidden>Dùng mật khẩu đã lưu</button>
+                <button type="submit" id="btnDangNhapGV" style="background: #2c3e50; color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;">🔐 QUẢN TRỊ HỆ THỐNG</button>
+            </form>
             <p id="gvLoginMsg" style="color: #e74c3c; font-size: 13px; margin-top: 15px; font-weight: bold; height: 15px;"></p>
         </div>
     </div>
@@ -483,11 +502,11 @@
             <p style="color: #7f8c8d; margin-bottom: 25px; font-size: 14px;">Hệ thống phát hiện bạn đang sử dụng mật khẩu mặc định. <b style="color:#e74c3c;">BẮT BUỘC</b> phải đổi mật khẩu mới để tiếp tục.</p>
             <div style="margin-bottom: 15px; text-align: left;">
                 <label style="font-size: 13px; color: #555; font-weight:bold;">Mật khẩu mới (Tối thiểu 6 ký tự):</label>
-                <input type="password" id="newPassForce" placeholder="Nhập mật khẩu mới..." style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; margin-top:5px;">
+                <input type="password" id="newPassForce" autocomplete="new-password" placeholder="Nhập mật khẩu mới..." style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; margin-top:5px;">
             </div>
             <div style="margin-bottom: 25px; text-align: left;">
                 <label style="font-size: 13px; color: #555; font-weight:bold;">Xác nhận Mật khẩu mới:</label>
-                <input type="password" id="confirmNewPassForce" placeholder="Nhập lại mật khẩu mới..." style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; margin-top:5px;">
+                <input type="password" id="confirmNewPassForce" autocomplete="new-password" placeholder="Nhập lại mật khẩu mới..." style="width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 15px; margin-top:5px;">
             </div>
             <button onclick="xacNhanDoiMatKhauBatBuoc()" id="btnForceChange" style="background: #27ae60; color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s;">💾 LƯU VÀ VÀO HỆ THỐNG</button>
             <p id="forceChangeMsg" style="color: #e74c3c; font-size: 13px; margin-top: 15px; font-weight: bold; height: 15px;"></p>
@@ -1155,7 +1174,7 @@
         }
     </script>
     <script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080"></script>
-    <script src="giaovien.js?v=20261103-autoheight-multiroom-094"></script>
+    <script src="giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-096"></script>
     <script src="admin_system_status_083a.js?v=20261018-admin-system-status-083a"></script>
     <script src="admin_system_maintenance_083b.js?v=20261018-admin-maintenance-083b"></script>
     <script src="teacher_canonical_export_079.js?v=20261013-canonical-room-print-080"></script>
