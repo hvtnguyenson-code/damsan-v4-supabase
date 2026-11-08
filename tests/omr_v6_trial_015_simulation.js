@@ -12,7 +12,8 @@ assert(js.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
 assert(js.includes("q('omrSave').disabled=(hasUncertain && !reviewed)||!!state.lastScan?._labReadOnly"));
 assert(js.indexOf('const scan=O.analyzeImageData(pixels,T.template)')<
        js.indexOf('root.DamSanOmrReliabilityV6.analyzeRectified'));
-assert(js.includes('Phần III vẫn dùng V5'));
+assert(js.includes('V6 nhận dạng độc lập Phần III'));
+assert(js.includes('p3:v6.p3'),'comparison must score V6 P3 independently');
 const env={DamSanOmrTemplate:{},DamSanOmr:{},DamSanOmrRoomBinding:{},DamSanOmrScoring:{},DamSanOmrResultWrite:{}};
 new Function('window','document',js)(env,{});
 const cmp=env.DamSanOmrTeacher._compareV5V6;
@@ -23,4 +24,7 @@ assert.deepStrictEqual(diffs.map(x=>x.key),['P1.4','P2.1b']);
 assert.strictEqual(diffs[0].old,'D');
 assert.strictEqual(diffs[0].now,'A');
 assert.deepStrictEqual(cmp(v5,v5),[]);
+const whole={...v5,p3:['14,3','25,0','31,3','36,0','300','11,2']};
+const changed={...whole,p3:['14,3','25,0','31,3','36,0','3000','11,2']};
+assert.deepStrictEqual(cmp(whole,changed).map(x=>x.key),['P3.5']);
 console.log('PASS omr_v6_trial_015');
