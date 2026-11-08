@@ -83,8 +83,8 @@ async function run(){
   assert.strictEqual(credentialWrites.length,0,'failed login must not save password');
   authFails=false;
   assert.strictEqual(await actions.login('GV001','correct-password'),true);
-  actions.rememberAfterSuccessfulLogin('GV001','correct-password');
-  await Promise.resolve();
+  const result=await actions.rememberAfterSuccessfulLogin('GV001','correct-password');
+  assert.strictEqual(result,'requested');
   assert.strictEqual(store.get('damSan_TeacherRememberedUsername_v1'),'GV001');
   assert.strictEqual(store.get('damSan_TeacherRememberCredentials_v1'),'1');
   assert.strictEqual(credentialWrites.length,1);
@@ -101,7 +101,7 @@ async function run(){
   getElementById('rememberLogin').checked=false;
   getElementById('rememberLogin').handlers.change();
   assert.strictEqual(store.size,0,'opt out immediately clears PWA username and consent');
-  actions.rememberAfterSuccessfulLogin('GV001','another-password');
+  await actions.rememberAfterSuccessfulLogin('GV001','another-password');
   assert.strictEqual(credentialWrites.length,1,'opt out must not save passwords');
   assert.strictEqual(session.get('damSan_StaffToken'),'ephemeral-staff-token','remember preference does not revoke active login');
   assert(js.includes("rememberAfterSuccessfulLogin($('loginUser').value.trim()||gvData?.ma_gv,p1)"),'password rotation must store only the NEW password');

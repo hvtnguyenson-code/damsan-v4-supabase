@@ -136,6 +136,8 @@
         input:checked + .slider:before { transform: translateX(24px); }
         
         #loginOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #2c3e50, #3498db); z-index: 99999; display: flex; align-items: center; justify-content: center; }
+        #gvCredentialStatus{position:fixed;z-index:99998;top:16px;right:16px;max-width:min(480px,calc(100vw - 32px));background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.13);color:#334155;padding:12px 16px;font-size:13px;line-height:1.5}
+        #gvCredentialStatus[hidden]{display:none}
         #loginOverlay .gv-password-entry{position:relative;display:flex;align-items:center}
         #loginOverlay .gv-password-entry #gvPass{width:100%;padding-right:73px}
         #loginOverlay .gv-password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);padding:8px 10px;background:#edf2f7;border:0;border-radius:6px;color:#1e293b;font-size:13px;font-weight:700;cursor:pointer}
@@ -487,7 +489,7 @@
                     <input type="checkbox" id="gvRememberLogin">
                     <span>Ghi nhớ tài khoản và mật khẩu trên thiết bị này</span>
                 </label>
-                <p class="gv-credential-note">Trang chỉ ghi nhớ mã giáo viên. Mật khẩu được lưu trong trình quản lý mật khẩu của trình duyệt khi bạn đồng ý.</p>
+                <p class="gv-credential-note">Trang chỉ ghi nhớ mã giáo viên. Việc lưu mật khẩu phụ thuộc trình quản lý mật khẩu của trình duyệt; tích chọn không đảm bảo đã lưu.</p>
                 <button type="button" id="gvSavedPasswordBtn" class="gv-saved-credential" hidden>Dùng mật khẩu đã lưu</button>
                 <button type="submit" id="btnDangNhapGV" style="background: #2c3e50; color: white; border: none; padding: 14px; width: 100%; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;">🔐 QUẢN TRỊ HỆ THỐNG</button>
             </form>
@@ -495,6 +497,7 @@
         </div>
     </div>
 
+    <div id="gvCredentialStatus" role="status" aria-live="polite" hidden></div>
     <div id="forceChangePassOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(135deg, #c0392b, #8e44ad); z-index: 99999; align-items: center; justify-content: center;">
         <div class="login-box">
             <div style="font-size: 40px; margin-bottom: 10px;">🛡️</div>
@@ -1174,7 +1177,7 @@
         }
     </script>
     <script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080"></script>
-    <script src="giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-096"></script>
+    <script src="giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-097"></script>
     <script src="admin_system_status_083a.js?v=20261018-admin-system-status-083a"></script>
     <script src="admin_system_maintenance_083b.js?v=20261018-admin-maintenance-083b"></script>
     <script src="teacher_canonical_export_079.js?v=20261013-canonical-room-print-080"></script>

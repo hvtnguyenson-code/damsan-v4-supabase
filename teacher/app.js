@@ -58,7 +58,7 @@ function setupRememberLogin(){
   btn.addEventListener('click',async()=>{
     btn.disabled=true;
     try{
-      const credential=await navigator.credentials.get({password:true,mediation:'optional'});
+      const credential=await navigator.credentials.get({password:true,mediation:'required'});
       if(credential?.type==='password'&&credential.id&&typeof credential.password==='string'){
         $('loginUser').value=credential.id;
         $('loginPass').value=credential.password;
@@ -68,32 +68,40 @@ function setupRememberLogin(){
         $('toggleLoginPass').setAttribute('aria-label','Hiện mật khẩu');
         $('loginMsg').textContent='Đã điền thông tin lưu trên điện thoại. Bấm Đăng nhập để tiếp tục.';
       }else{
-        $('loginMsg').textContent='Chưa có mật khẩu đã lưu. Có thể nhập một lần rồi chọn ghi nhớ.';
+        $('loginMsg').textContent='Không tìm thấy mật khẩu đã lưu cho trang này. Kiểm tra Trình quản lý mật khẩu và danh sách không bao giờ lưu.';
       }
     }catch(_){
       $('loginMsg').textContent='Không lấy được mật khẩu đã lưu; có thể nhập thủ công hoặc dùng tự điền của điện thoại.';
     }finally{btn.disabled=false;}
   });
 }
-function rememberAfterSuccessfulLogin(username,password){
+async function rememberAfterSuccessfulLogin(username,password){
   if(!$('rememberLogin').checked){
     setRememberedPreference(REMEMBER_USERNAME_KEY,null);
     setRememberedPreference(REMEMBER_CONSENT_KEY,null);
-    return;
+    return 'off';
   }
-  setRememberedPreference(REMEMBER_USERNAME_KEY,String(username||'').trim());
+  const code=String(username||'').trim();
+  if(!code||!password)return 'missing';
+  setRememberedPreference(REMEMBER_USERNAME_KEY,code);
   setRememberedPreference(REMEMBER_CONSENT_KEY,'1');
-  // PasswordCredential is supported on Chromium-derived browsers, but not
-  // universally; native autocomplete is the fallback on unsupported devices.
-  if(typeof window.PasswordCredential!=='function'||typeof navigator.credentials?.store!=='function')return;
+  if(typeof window.PasswordCredential!=='function'||typeof navigator.credentials?.store!=='function')return 'unsupported';
   try{
-    const cred=new window.PasswordCredential({id:String(username).trim(),name:String(username).trim(),password});
-    Promise.resolve(navigator.credentials.store(cred)).catch(e=>{
-      console.warn('Teacher password manager save was declined/unavailable:',e?.name||'unavailable');
-    });
+    const cred=new window.PasswordCredential({id:code,name:code,password});
+    await navigator.credentials.store(cred);
+    return 'requested'; // Browser decides whether the password is actually retained.
   }catch(e){
-    console.warn('Teacher password manager is unavailable:',e?.name||'unavailable');
+    console.warn('Teacher password manager save failed:',e?.name||'unavailable');
+    return 'failed';
   }
+}
+function showTeacherCredentialFeedback(status){
+  const el=$('passwordVaultStatus');
+  if(!el||status==='off'||status==='missing')return;
+  el.textContent=status==='requested'
+    ? 'Đã gửi yêu cầu lưu mật khẩu. Hãy kiểm tra Trình quản lý mật khẩu nếu trình duyệt không hiển thị thông báo.'
+    : 'Trình duyệt chưa lưu được mật khẩu. Hãy bật đề xuất lưu mật khẩu trong cài đặt hoặc lưu thủ công bằng Trình quản lý mật khẩu.';
+  el.hidden=false;
 }
 
 const GV_SESSION_FIELDS=['id','ma_gv','ho_ten','quyen','truong_id','truong_ten','mon_id'];
@@ -523,7 +531,7 @@ function updatePwaStatus(){
 }
 async function registerServiceWorker(){
   if(!('serviceWorker' in navigator))return;
-  try{await navigator.serviceWorker.register('./sw.js?v=20261108-teacher-pwa-028',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
+  try{await navigator.serviceWorker.register('./sw.js?v=20261108-teacher-pwa-029',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
 }
 function setupInstall(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
@@ -589,7 +597,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
       const username=$('loginUser').value.trim(),password=$('loginPass').value;
       const ok=await login(username,password);
       if(ok){
-        rememberAfterSuccessfulLogin(username,password);
+        void rememberAfterSuccessfulLogin(username,password).then(showTeacherCredentialFeedback);
         $('loginPass').value='';
         await bootstrapApp();
       }
@@ -606,7 +614,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
     $('forcePassBtn').disabled=true;
     try{
       await forceChangePassword(p1);
-      rememberAfterSuccessfulLogin($('loginUser').value.trim()||gvData?.ma_gv,p1);
+      void rememberAfterSuccessfulLogin($('loginUser').value.trim()||gvData?.ma_gv,p1).then(showTeacherCredentialFeedback);
       $('newPass1').value='';$('newPass2').value='';
       $('loginPass').value='';
       await bootstrapApp();

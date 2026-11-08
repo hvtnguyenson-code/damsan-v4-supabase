@@ -65,6 +65,8 @@ jobs:
         run: node tests/teacher_password_012_simulation.js
       - name: Desktop teacher password vault 096
         run: node tests/desktop_teacher_password_vault_096_simulation.js
+      - name: Browser password vault feedback 097
+        run: node tests/teacher_password_vault_097_regression.js
       - name: Teacher PWA 006
         run: node tests/teacher_pwa_006_simulation.js
       - name: Teacher PWA install entry 007

@@ -60,3 +60,7 @@ button{touch-action:manipulation}
 }
 @media(max-width:390px){.grid{grid-template-columns:1fr}.action-card{min-height:105px}.user-mini span{max-width:100px}}
 @media(display-mode:standalone){.topbar{height:56px}.install-banner{display:none!important}}
+
+/* Browser-controlled password vault status after a successful teacher login. */
+.vault-status{margin:10px 14px;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc;color:#334155;font-size:12px;line-height:1.5}
+.vault-status[hidden]{display:none}
