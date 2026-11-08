@@ -14,7 +14,8 @@ assert(app.indexOf("  $('bootScreen').hidden=true;\n\n  // Optional workspace da
        app.indexOf('void loadRooms().then('),'room RPC must never block restoring screen');
 assert(app.includes("sessionStorage.removeItem(TEACHER_RESTORE_KEY)"));
 assert(app.includes("sessionStorage.removeItem('damSan_TeacherOmrReload_v1')"));
-assert(mod.includes('restoreOmrDraft(saved.draft)'));
+assert(mod.includes('if(resumeDraft&&state.roomModel?.valid1846)'),'only a real pending draft may be restored');
+assert(mod.includes('restoreOmrDraft(draft)'),'valid pending draft remains recoverable');
 assert(mod.includes('rememberOmr({withPhoto:true})'));
 assert(mod.includes("q('omrReviewUncertain').checked=false"));
 assert(mod.includes('reviewCurrent();'),'rebuild score from current room');
