@@ -43,6 +43,8 @@ jobs:
         run: node tests/omr_v6_official_018_simulation.js
       - name: OMR 019 mobile room header layout
         run: node tests/omr_mobile_room_layout_019_simulation.js
+      - name: OMR 021 desktop/PWA V6 parity and safe fallback
+        run: node tests/omr_desktop_pwa_v6_parity_021_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
