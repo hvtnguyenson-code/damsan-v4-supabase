@@ -1,4 +1,4 @@
-const VERSION='20261108-teacher-pwa-024';
+const VERSION='20261108-teacher-pwa-025';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -13,6 +13,7 @@ const CORE=[
   '../omr/omr-room-binding.js',
   '../omr/omr-scoring.js',
   '../omr/omr-result-write.js',
+  '../omr/omr-scan-adapter.js',
   '../omr/omr-reliability-v6.js',
   '../omr/omr-teacher-module.js'
 ];
