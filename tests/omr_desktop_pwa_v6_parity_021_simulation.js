@@ -23,7 +23,7 @@ for(const scripts of [d,m]){
   assert(order.every((v,i)=>i===0||v>order[i-1]),'OMR JS dependency order is not canonical');
 }
 const desktopOmr=d.filter(item=>item.path.startsWith('omr/'));
-const desktopVersion='20261108-omr-desktop-v6-021';
+const desktopVersion='20261108-omr-desktop-v6-022';
 assert(desktopOmr.every(item=>item.url.split('?v=')[1]===desktopVersion),
   'desktop OMR modules must use one cache-busting revision');
 assert(moduleSrc.includes("officialEngine:'v6'"),'V6 must remain fresh-session default');

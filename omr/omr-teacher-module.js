@@ -297,12 +297,26 @@
   async function open(){
     ensureUi();
     const saved=readOmrReload();
-    state.restoring=true;
-    if(saved){
-      state.officialEngine=saved.engine==='v5'?'v5':'v6';
-      state.labEnabled=saved.compare===true;
-    }
     const labAvailable=!!root.DamSanOmrReliabilityV6&&!!E;
+    const draft=saved?.draft;
+    // Opening a fresh grading session always defaults to V6. A previous V5
+    // preference must not silently override the first/official option.
+    // Only resume an actual unsaved, same-owner sheet when the photo and
+    // recognition engine are available; this avoids discarding graded work.
+    const resumeDraft=!!(typeof draft?.photo==='string'
+      && draft.photo.startsWith('data:image/jpeg;base64,')
+      && draft.scan?.ok===true
+      && draft.roomId===saved.roomId
+      && draft.engine===saved.engine
+      && draft.compare===saved.compare
+      && (saved.engine==='v5'||saved.engine==='v6')
+      && (saved.engine!=='v6'||labAvailable)
+      && (!saved.compare||labAvailable)
+      && draft.scan.recognitionEngine===
+        (saved.engine==='v6'&&!saved.compare?'V6':'V5'));
+    state.restoring=true;
+    state.officialEngine=resumeDraft?saved.engine:'v6';
+    state.labEnabled=resumeDraft&&saved.compare===true;
     q('omrV6LabWrap').style.display=labAvailable?'block':'none';
     q('omrEngineSelect').querySelector('option[value="v6"]').disabled=!labAvailable;
     if(!labAvailable){
@@ -321,13 +335,13 @@
       if(chosen){
         q('omrRoomSelect').value=chosen;
         await loadRoom(chosen);
-        if(saved?.draft&&state.roomModel?.valid1846){
-          const restored=await restoreOmrDraft(saved.draft);
+        if(resumeDraft&&state.roomModel?.valid1846){
+          const restored=await restoreOmrDraft(draft);
           if(!restored)q('omrRoomSummary').textContent+=' • Phiếu trước đó không khôi phục được, cần quét lại.';
         }
       }
     }catch(e){q('omrRoomSummary').textContent='Không tải được danh sách phòng: '+e.message;}
-    finally{state.restoring=false;rememberOmr();}
+    finally{state.restoring=false;rememberOmr({clearDraft:!resumeDraft});}
   }
   function close(){closePhotoDetail();closeCamera();q('omrTeacherOverlay')?.classList.remove('show');}
   function isOpen(){return !!q('omrTeacherOverlay')?.classList.contains('show');}
