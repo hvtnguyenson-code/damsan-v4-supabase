@@ -1087,12 +1087,10 @@ async function rememberDesktopTeacherAfterLogin(username,password) {
     }
 }
 function showDesktopCredentialFeedback(status) {
+    // Credential Manager outcomes are not persistent UI notifications.
+    // Keep the legacy status node hidden to avoid covering the workspace.
     const el=document.getElementById('gvCredentialStatus');
-    if (!el||status==='off'||status==='missing') return;
-    el.textContent=status==='requested'
-        ? 'Đã gửi yêu cầu lưu mật khẩu. Trình duyệt quyết định có lưu/hiện thông báo hay không; hãy kiểm tra Trình quản lý mật khẩu.'
-        : 'Trình duyệt chưa lưu được mật khẩu. Hãy bật chức năng đề xuất lưu mật khẩu trong cài đặt, hoặc lưu thủ công bằng Trình quản lý mật khẩu.';
-    el.hidden=false;
+    if (el) { el.hidden=true; el.textContent=''; }
 }
 
 window.onload = function() {
