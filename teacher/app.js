@@ -96,12 +96,9 @@ async function rememberAfterSuccessfulLogin(username,password){
   }
 }
 function showTeacherCredentialFeedback(status){
+  // Browser password-manager responses must not obstruct the teacher workspace.
   const el=$('passwordVaultStatus');
-  if(!el||status==='off'||status==='missing')return;
-  el.textContent=status==='requested'
-    ? 'Đã gửi yêu cầu lưu mật khẩu. Hãy kiểm tra Trình quản lý mật khẩu nếu trình duyệt không hiển thị thông báo.'
-    : 'Trình duyệt chưa lưu được mật khẩu. Hãy bật đề xuất lưu mật khẩu trong cài đặt hoặc lưu thủ công bằng Trình quản lý mật khẩu.';
-  el.hidden=false;
+  if(el){el.hidden=true;el.textContent='';}
 }
 
 const GV_SESSION_FIELDS=['id','ma_gv','ho_ten','quyen','truong_id','truong_ten','mon_id'];
