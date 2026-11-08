@@ -35,6 +35,8 @@ jobs:
         run: node tests/omr_geometry_014_simulation.js
       - name: OMR 015 opt-in field testing and no-write gate
         run: node tests/omr_v6_trial_015_simulation.js
+      - name: OMR 016 V6 false-review and eraser evidence
+        run: node tests/omr_v6_false_review_016_simulation.js
       - name: OMR 010 teacher photo preview
         run: node tests/omr_photo_preview_010_simulation.js
       - name: OMR 002 room binding
