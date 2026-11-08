@@ -26,7 +26,7 @@ assert.strictEqual(studentManifest.id,'./hoc_sinh.html','student PWA id must rem
 assert(studentSw.includes("'./hoc_sinh.html'"),'student service worker core remains student-only');
 assert(!studentSw.includes("teacher/index.html"),'teacher shell must not be added to student SW');
 
-assert(teacherHtml.includes('href="./manifest.json?v=20261108-teacher-pwa-026"'));
+assert(teacherHtml.includes('href="./manifest.json?v=20261108-teacher-pwa-027"'));
 assert(teacherHtml.includes('../omr/omr-teacher-module.js'));
 assert(teacherHtml.includes('../omr/omr-reliability-v6.js'),'V6 diagnostic is available to teacher PWA');
 assert(teacherHtml.includes('../omr/omr-scan-adapter.js'),'teacher must load V6-to-canonical data adapter');
@@ -64,7 +64,9 @@ assert(teacherSw.includes("../omr/omr-core.js"));
 assert(teacherSw.includes("./icons/teacher-gv-installable.svg"));
 assert(!teacherSw.includes("./icons/exam-installable.svg"));
 assert(teacherSw.includes("u.hostname.endsWith('.supabase.co')"));
-assert(teacherSw.includes("fetch(event.request,{cache:'no-store'})"));
+assert(teacherSw.includes("fetch(request,{cache:'no-store'})"),'Supabase and HTML must stay network-first');
+assert(teacherSw.includes("cache.match(request,{ignoreSearch:true})"),'static assets should use installed PWA cache');
+assert(teacherSw.includes("request.mode==='navigate'"),'navigation must preserve a network-first policy');
 assert(!teacherSw.includes("self.skipWaiting()"),'teacher SW must not force reload during an active scan');
 assert(!teacherSw.includes("'../hoc_sinh.html'"),'teacher SW must not own the student runtime');
 

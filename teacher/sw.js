@@ -1,4 +1,4 @@
-const VERSION='20261108-teacher-pwa-026';
+const VERSION='20261108-teacher-pwa-027';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -26,23 +26,38 @@ self.addEventListener('activate',event=>{
     self.clients.claim()
   ]));
 });
+const STATIC_PATHS=new Set(CORE.map(path=>new URL(path,self.registration.scope).pathname));
 self.addEventListener('fetch',event=>{
-  const u=new URL(event.request.url);
+  const request=event.request,u=new URL(request.url);
   if(u.hostname.endsWith('.supabase.co')){
-    event.respondWith(fetch(event.request,{cache:'no-store'}));
+    event.respondWith(fetch(request,{cache:'no-store'}));
     return;
   }
-  if(event.request.method!=='GET') return;
-  event.respondWith(
-    fetch(event.request,{cache:'no-store'}).then(res=>{
-      const clone=res.clone();
-      caches.open(CACHE).then(cache=>cache.put(event.request,clone)).catch(()=>{});
-      return res;
-    }).catch(async()=>{
-      const exact=await caches.match(event.request);
-      if(exact) return exact;
-      if(u.origin===self.location.origin) return caches.match(event.request,{ignoreSearch:true});
-      throw new Error('offline');
-    })
-  );
+  if(request.method!=='GET'||u.origin!==self.location.origin)return;
+  if(request.mode==='navigate'){
+    // Network-first HTML, with a fast offline/slow-network fallback. Do NOT
+    // block reload waiting indefinitely for a connection.
+    event.respondWith((async()=>{
+      const cache=await caches.open(CACHE);
+      const network=fetch(request,{cache:'no-store'}).then(async res=>{
+        if(res.ok)await cache.put('./index.html',res.clone()).catch(()=>{});
+        return res;
+      }).catch(()=>null);
+      const fast=await Promise.race([network,new Promise(resolve=>setTimeout(()=>resolve(null),1300))]);
+      return fast||await cache.match('./index.html')||await network||Response.error();
+    })());
+    return;
+  }
+  if(STATIC_PATHS.has(u.pathname)){
+    // Cache-first only for the pre-cached, version-scoped teacher assets.
+    // The worker install populates this cache when PWA version changes.
+    event.respondWith((async()=>{
+      const cache=await caches.open(CACHE);
+      const saved=await cache.match(request,{ignoreSearch:true});
+      if(saved)return saved;
+      const fresh=await fetch(request);
+      if(fresh.ok)await cache.put(request,fresh.clone()).catch(()=>{});
+      return fresh;
+    })());
+  }
 });

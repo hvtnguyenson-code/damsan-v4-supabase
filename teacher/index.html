@@ -8,14 +8,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Đam San GV">
-  <link rel="manifest" href="./manifest.json?v=20261108-teacher-pwa-026">
-  <link rel="icon" type="image/svg+xml" href="./icons/teacher-gv-installable.svg?v=20261108-teacher-pwa-026">
+  <link rel="manifest" href="./manifest.json?v=20261108-teacher-pwa-027">
+  <link rel="icon" type="image/svg+xml" href="./icons/teacher-gv-installable.svg?v=20261108-teacher-pwa-027">
 
-  <link rel="stylesheet" href="./app.css?v=20261108-teacher-pwa-026">
+  <link rel="stylesheet" href="./app.css?v=20261108-teacher-pwa-027">
   <title>Đam San V4 - Giáo viên</title>
 </head>
 <body>
-  <div id="loginScreen" class="login-screen">
+  <div id="bootScreen" class="boot-screen" role="status" aria-live="polite">
+    <div class="boot-mark">ĐS</div>
+    <div class="boot-title">Đam San V4 – Giáo viên</div>
+    <div class="boot-caption">Đang khôi phục phiên làm việc…</div>
+  </div>
+  <div id="loginScreen" class="login-screen" hidden>
     <div class="login-card">
       <div class="login-logo">ĐS</div>
       <h1>Đam San V4</h1>
@@ -133,14 +138,14 @@
   </div>
 
   <script src="../vendor/student/supabase-js-2.118.0.min.js"></script>
-  <script src="../omr/omr-template-moet-18-4-6.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-core.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-room-binding.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-scoring.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-result-write.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-scan-adapter.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-reliability-v6.js?v=20261108-teacher-pwa-026"></script>
-  <script src="../omr/omr-teacher-module.js?v=20261108-teacher-pwa-026"></script>
-  <script src="./app.js?v=20261108-teacher-pwa-026"></script>
+  <script src="../omr/omr-template-moet-18-4-6.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-core.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-room-binding.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-scoring.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-result-write.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-scan-adapter.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-reliability-v6.js?v=20261108-teacher-pwa-027"></script>
+  <script src="../omr/omr-teacher-module.js?v=20261108-teacher-pwa-027"></script>
+  <script src="./app.js?v=20261108-teacher-pwa-027"></script>
 </body>
 </html>

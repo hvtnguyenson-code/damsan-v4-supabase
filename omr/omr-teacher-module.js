@@ -30,6 +30,90 @@
     return allowedStudents(res.data||[],room);
   }
 
+
+  const OMR_RESTORE_KEY='damSan_TeacherOmrReload_v1';
+  function omrOwner(){
+    try{return String(JSON.parse(sessionStorage.getItem('damSan_GVSession')||'null')?.id||'');}
+    catch(_){return '';}
+  }
+  function readOmrReload(){
+    try{
+      const data=JSON.parse(sessionStorage.getItem(OMR_RESTORE_KEY)||'null');
+      if(!data||data.v!==1||!data.owner||data.owner!==omrOwner()||
+        Date.now()-data.at>6*60*60*1000)return null;
+      return data;
+    }catch(_){return null;}
+  }
+  function rememberOmr({clearDraft=false,withPhoto=false}={}){
+    const owner=omrOwner();if(!owner)return;
+    try{
+      const old=readOmrReload()||{},roomId=q('omrRoomSelect')?.value||'';
+      const data={v:1,owner,at:Date.now(),roomId,
+        engine:state.officialEngine,compare:state.labEnabled,
+        draft:clearDraft?null:(old.draft||null)};
+      if(withPhoto&&state.lastScan?.ok&&roomId){
+        const canvas=q('omrTeacherCanvas'),max=1250;
+        let photo='';
+        if(canvas?.width&&canvas?.height){
+          const scale=Math.min(1,max/canvas.width,max/canvas.height);
+          const preview=document.createElement('canvas');
+          preview.width=Math.max(1,Math.round(canvas.width*scale));
+          preview.height=Math.max(1,Math.round(canvas.height*scale));
+          preview.getContext('2d').drawImage(canvas,0,0,preview.width,preview.height);
+          photo=preview.toDataURL('image/jpeg',.78);
+          if(photo.length>1200000)photo='';
+        }
+        const ids=['omrSbd','omrMaDe','omrP1',
+          ...[1,2,3,4].map(i=>'omrP2_'+i),...[1,2,3,4,5,6].map(i=>'omrP3_'+i)];
+        data.draft={photo,scan:state.lastScan,comparison:state.lastV6,
+          values:Object.fromEntries(ids.map(id=>[id,q(id).value])),
+          roomId,engine:state.officialEngine,compare:state.labEnabled};
+      }
+      sessionStorage.setItem(OMR_RESTORE_KEY,JSON.stringify(data));
+    }catch(e){
+      // Session quota or disabled storage must never interrupt a camera scan.
+      console.warn('OMR session draft unavailable:',e?.name||'unavailable');
+    }
+  }
+  function clearOmrDraft(){rememberOmr({clearDraft:true});}
+  function restoreOmrDraft(draft){
+    return new Promise(resolve=>{
+      if(!draft?.photo||!draft.scan?.ok||!state.roomModel?.valid1846
+        ||draft.roomId!==String(q('omrRoomSelect').value)
+        ||draft.engine!==state.officialEngine||draft.compare!==state.labEnabled
+        ||!Array.isArray(draft.scan.p2)||!Array.isArray(draft.scan.p3)
+        ||draft.scan.recognitionEngine!==(state.officialEngine==='v6'&&!state.labEnabled?'V6':'V5')){
+        resolve(false);return;
+      }
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          const c=q('omrTeacherCanvas'),ctx=c.getContext('2d');
+          c.width=img.naturalWidth;c.height=img.naturalHeight;
+          ctx.drawImage(img,0,0);
+          state.lastScan=draft.scan;state.lastV6=draft.comparison||null;
+          const values=draft.values||{};
+          for(const [id,value] of Object.entries(values)){
+            const el=q(id);if(el&&typeof value==='string')el.value=value;
+          }
+          q('omrPhotoHint').textContent='Ảnh phiếu đã khôi phục sau tải lại • Chạm để xem lớn';
+          q('omrScanArea').style.display='block';
+          q('omrEngineResult').textContent=state.labEnabled
+            ?'ĐỐI CHIẾU V5/V6 – chỉ xem, không lưu điểm'
+            :'Đang chấm chính thức bằng '+(state.officialEngine==='v6'?'V6':'V5');
+          // Clear the previous manual acknowledgement. Revalidate answers
+          // and marks with the currently reloaded room/variant before saving.
+          q('omrReviewUncertain').checked=false;
+          reviewCurrent();
+          showV6Comparison();
+          resolve(!!state.lastPreview);
+        }catch(e){console.warn('OMR draft restore failed:',e);resolve(false);}
+      };
+      img.onerror=()=>resolve(false);
+      img.src=draft.photo;
+    });
+  }
+
   function ensureUi(){
     if(q('omrTeacherOverlay')) return;
     const style=document.createElement('style');
@@ -173,11 +257,13 @@
     q('omrV6Lab').onchange=()=>{
       state.labEnabled=!!q('omrV6Lab').checked;
       resetScan(); // Comparison captures can never become writable.
+      rememberOmr({clearDraft:true});
     };
     q('omrEngineSelect').onchange=()=>{
       state.officialEngine=q('omrEngineSelect').value==='v5'?'v5':'v6';
       state.labEnabled=false;q('omrV6Lab').checked=false;
       resetScan(); // A different engine requires a fresh capture.
+      rememberOmr({clearDraft:true});
     };
     q('omrOpenCamera').onclick=openCamera;
     q('omrPickFile').onchange=e=>e.target.files[0]&&loadImageFile(e.target.files[0]);
@@ -210,6 +296,12 @@
 
   async function open(){
     ensureUi();
+    const saved=readOmrReload();
+    state.restoring=true;
+    if(saved){
+      state.officialEngine=saved.engine==='v5'?'v5':'v6';
+      state.labEnabled=saved.compare===true;
+    }
     const labAvailable=!!root.DamSanOmrReliabilityV6&&!!E;
     q('omrV6LabWrap').style.display=labAvailable?'block':'none';
     q('omrEngineSelect').querySelector('option[value="v6"]').disabled=!labAvailable;
@@ -217,6 +309,7 @@
       state.labEnabled=false;q('omrV6Lab').checked=false;
       state.officialEngine='v5';
     }
+    q('omrV6Lab').checked=state.labEnabled;
     q('omrEngineSelect').value=state.officialEngine;
     q('omrTeacherOverlay').classList.add('show');
     q('omrRoomSelect').innerHTML='<option value="">Đang tải phòng...</option>';
@@ -224,8 +317,17 @@
       const rooms=(await rpcLayDanhSachPhongThi()).map(normalizeRoom);
       state.rooms=rooms;
       q('omrRoomSelect').innerHTML='<option value="">— Chọn phòng thi —</option>'+rooms.map(r=>`<option value="${esc(r.id)}">${esc(r.MaPhong)}${r.DoiTuong&&r.DoiTuong!=='TatCa'?' — '+esc(r.DoiTuong):''}</option>`).join('');
-      if(rooms.length===1){q('omrRoomSelect').value=rooms[0].id;await loadRoom(rooms[0].id);}
+      const chosen=rooms.find(r=>String(r.id)===String(saved?.roomId||''))?.id||(rooms.length===1?rooms[0].id:null);
+      if(chosen){
+        q('omrRoomSelect').value=chosen;
+        await loadRoom(chosen);
+        if(saved?.draft&&state.roomModel?.valid1846){
+          const restored=await restoreOmrDraft(saved.draft);
+          if(!restored)q('omrRoomSummary').textContent+=' • Phiếu trước đó không khôi phục được, cần quét lại.';
+        }
+      }
     }catch(e){q('omrRoomSummary').textContent='Không tải được danh sách phòng: '+e.message;}
+    finally{state.restoring=false;rememberOmr();}
   }
   function close(){closePhotoDetail();closeCamera();q('omrTeacherOverlay')?.classList.remove('show');}
   function isOpen(){return !!q('omrTeacherOverlay')?.classList.contains('show');}
@@ -260,6 +362,7 @@
       fillStudentSelect();
       q('omrRoomSummary').textContent=`${state.roomModel.students.length} học sinh • ${state.roomModel.codes.length} mã đề: ${state.roomModel.codes.join(', ')}`;
       updateProgress();
+      if(!state.restoring)rememberOmr({clearDraft:true});
     }catch(e){q('omrRoomSummary').textContent='Không tải được phòng: '+e.message;}
   }
   function fillStudentSelect(selected){
@@ -480,6 +583,7 @@
       else {clearWarningHighlights();hideWarning();}
       reviewCurrent();
       showV6Comparison();
+      rememberOmr({withPhoto:true});
       root.DamSanTeacherNav?.enterOmrStage?.('result');
     }catch(e){showWarning('Lỗi đọc ảnh: '+e.message);}
   }
@@ -612,6 +716,17 @@
     else {clearWarningHighlights();hideWarning();}
     q('omrSave').disabled=(hasUncertain && !reviewed)||!!state.lastScan?._labReadOnly||!!state.lastScan?._requiresRetake;
     if(state.lastScan?._labReadOnly)showV6Comparison();
+    // Keep edits of an unsaved answer in the current browsing session only.
+    if(state.lastScan?.ok&&!state.restoring){
+      const snapshot=readOmrReload();
+      if(snapshot?.draft){
+        const ids=['omrSbd','omrMaDe','omrP1',
+          ...[1,2,3,4].map(i=>'omrP2_'+i),...[1,2,3,4,5,6].map(i=>'omrP3_'+i)];
+        snapshot.draft.values=Object.fromEntries(ids.map(id=>[id,q(id).value]));
+        snapshot.at=Date.now();
+        try{sessionStorage.setItem(OMR_RESTORE_KEY,JSON.stringify(snapshot));}catch(_){}
+      }
+    }
   }
 
   async function saveCurrent(){
@@ -659,6 +774,7 @@
     if(q('omrSave'))q('omrSave').disabled=true;
     if(q('omrReviewUncertain'))q('omrReviewUncertain').checked=false;
     if(q('omrReviewUncertainWrap'))q('omrReviewUncertainWrap').style.display='none';
+    if(!state.restoring)clearOmrDraft();
     clearWarningHighlights();hideWarning();
   }
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
@@ -694,5 +810,6 @@
   function showWarning(msg){const el=q('omrWarning');if(!el)return;clearWarningHighlights();el.style.display='block';el.textContent=msg;}
   function hideWarning(){const el=q('omrWarning');if(el){el.style.display='none';el.textContent='';}}
 
-  root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto,_compareV5V6:compareV5V6};
+  root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,
+    persistForReload:()=>{if(isOpen())rememberOmr();},_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto,_compareV5V6:compareV5V6};
 })(window);
