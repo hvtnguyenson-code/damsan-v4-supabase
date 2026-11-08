@@ -95,3 +95,24 @@ The new OMR 016 regression tests the five false-review scenarios, strong erasure
 - Performance and accuracy must still be evaluated in real PWA camera sessions before replacing V5. Teacher PWA version 024 contains a cache-busting revision of the optional V6 module.
 
 Rollback: revert the single V6 P3 PR. Immediate baseline before P3 change: `e6a81f67a1046051d71d97bfb1f61b066c5664f7`. Do not roll back databases or reset main.
+
+
+## Phase 5 – Official V6 recognition via existing scorer/write (08/11/2026)
+
+### Three modes, one scoring and writing path
+
+The teacher PWA (cache revision **025**) defaults to **V6 – chấm và lưu điểm**. A per-session selector allows **V5 – chấm và lưu điểm (dự phòng)**. The separate existing checkbox **Đối chiếu V5/V6 (không lưu điểm)** remains read-only. Switching either selection always discards the current unsaved scan and requires a new capture; comparison cannot be converted into a writable result.
+
+V6 uses V5's validated four-corner homography and SBD/exam-code parsing only. The 18 P1, 16 P2 and 6 P3 answers are exclusively from V6. `omr-scan-adapter.js` normalizes V6 diagnostics to the existing `scan` contract: `uncertain`, Vietnamese `uncertainDetails`, `invalidMarks`, `recognitionEngine`, and a fail-closed `_requiresRetake` flag if calibration or inner geometry fails. A confirmed two-mark P1/P2 answer remains incorrect even after manual field edits. Ambiguous answers always require teacher confirmation; invalid calibration/geometry cannot be overridden by a checkbox.
+
+**No new grader or DB endpoint.** Both official engines call the existing `S.previewScan` and `W.submitConfirmed`, the latter calling only `rpc_staff_submit_omr` and the canonical server-side grader. JSON metadata `recognition_engine` is `V5` or `V6` for audit. Existing DB source_metadata JSONB supports the key. Existing staff auth, room/student/exam access, conflict checks and score calculations are unchanged.
+
+Both the UI and the common submit method reject comparison captures. They also refuse V6 scans with unreliable calibration/geometry, or a mismatch between the engine selected and the engine used to produce the preview. V5 remains a manual one-tap fallback rather than an invisible substitution when V6 fails.
+
+### Gate and rollback
+
+One branch, one commit, one PR. OMR 018 verifies V6 answers through preview, score, confirmed RPC arguments and metadata; ensures multi-marks, unchecked warnings, comparison and quality failures cannot save. All existing OMR/PWA regression tests continue unchanged except assertions updated for the new mode. Initial rollback commit `c67b242f8d7a3abe74814df6d328d3856be23a26`; immediate pre-release main `e51073899f096c57d5e8dbae02c20b464e2a3fe9`. Revert the official-mode PR (not the DB) to return to default V5 with V6 as read-only comparison. Existing Pages deployment and PWA update are used without introducing any new release mechanism.
+
+### Real acceptance
+
+With a trusted exam room, verify V6 grade and saved submission for a permitted test student, teacher review of P2.2d, multi-mark invalidity, duplicate-result conflict, V5 fallback and comparison read-only mode. Avoid using actual students' unverified answers to validate a new release. Classroom sample qualification is still required to establish accuracy, independently of the technical ability to save scores.

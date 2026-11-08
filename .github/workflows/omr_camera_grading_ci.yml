@@ -39,6 +39,8 @@ jobs:
         run: node tests/omr_v6_false_review_016_simulation.js
       - name: OMR 017 independent V6 P3 grammar and illumination
         run: node tests/omr_v6_p3_017_simulation.js
+      - name: OMR 018 official V6 through canonical scoring and write
+        run: node tests/omr_v6_official_018_simulation.js
       - name: OMR 010 teacher photo preview
         run: node tests/omr_photo_preview_010_simulation.js
       - name: OMR 002 room binding

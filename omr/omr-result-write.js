@@ -6,6 +6,9 @@
   'use strict';
   function assertConfirmed(preview){
     if(!preview?.ok) throw new Error('preview_required');
+    if(preview.scan?._labReadOnly||preview.scan?.captureMode==='compare')
+      throw new Error('comparison_mode_never_writes');
+    if(preview.scan?._requiresRetake)throw new Error('unreliable_omr_requires_retake');
     if((preview.scan?.uncertain||[]).length && preview.reviewedUncertain !== true) throw new Error('uncertain_scan_requires_review');
     if(!preview.student?.id) throw new Error('student_id_required');
     if(!preview.room?.id) throw new Error('room_id_required');
@@ -15,6 +18,7 @@
   function metadataFrom(preview){
     return {
       template_id:preview.scan?.templateId||'MOET_TLTN_2025_18_4_6_V1',
+      recognition_engine:preview.scan?.recognitionEngine==='V6'?'V6':'V5',
       reviewed:true,
       uncertain_reviewed: preview.reviewedUncertain === true,
       uncertain_count:(preview.scan?.uncertain||[]).length,
