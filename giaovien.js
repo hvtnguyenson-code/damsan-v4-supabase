@@ -1045,7 +1045,7 @@ function setupDesktopTeacherPasswordManager() {
     saved.addEventListener('click',async()=>{
         saved.disabled=true;
         try {
-            const credential=await navigator.credentials.get({password:true,mediation:'optional'});
+            const credential=await navigator.credentials.get({password:true,mediation:'required'});
             if (credential?.type==='password'&&credential.id&&typeof credential.password==='string') {
                 username.value=credential.id;
                 password.value=credential.password;
@@ -1055,34 +1055,44 @@ function setupDesktopTeacherPasswordManager() {
                 toggle.setAttribute('aria-label','Hiện mật khẩu');
                 document.getElementById('gvLoginMsg').textContent='Đã điền thông tin lưu trên thiết bị. Bấm đăng nhập để tiếp tục.';
             } else {
-                document.getElementById('gvLoginMsg').textContent='Chưa có mật khẩu đã lưu trong trình duyệt.';
+                document.getElementById('gvLoginMsg').textContent='Không tìm thấy mật khẩu đã lưu cho trang này. Kiểm tra Trình quản lý mật khẩu của trình duyệt và mục Không bao giờ lưu.';
             }
         } catch (_) {
             document.getElementById('gvLoginMsg').textContent='Không lấy được mật khẩu đã lưu; có thể nhập thủ công hoặc dùng tự điền của trình duyệt.';
         } finally { saved.disabled=false; }
     });
 }
-function rememberDesktopTeacherAfterLogin(username,password) {
+async function rememberDesktopTeacherAfterLogin(username,password) {
     const remember=document.getElementById('gvRememberLogin');
     if (!remember?.checked) {
         desktopRememberPreference(DESKTOP_REMEMBER_USERNAME_KEY,null);
         desktopRememberPreference(DESKTOP_REMEMBER_CONSENT_KEY,null);
-        return;
+        return 'off';
     }
     const code=String(username||'').trim();
-    if (!code||!password) return;
+    if (!code||!password) return 'missing';
     desktopRememberPreference(DESKTOP_REMEMBER_USERNAME_KEY,code);
     desktopRememberPreference(DESKTOP_REMEMBER_CONSENT_KEY,'1');
     if (typeof window.PasswordCredential!=='function'
-        ||typeof navigator.credentials?.store!=='function') return;
+        ||typeof navigator.credentials?.store!=='function') return 'unsupported';
     try {
         const credential=new window.PasswordCredential({id:code,name:code,password});
-        Promise.resolve(navigator.credentials.store(credential)).catch(e=>{
-            console.warn('Desktop browser vault save declined:',e?.name||'unavailable');
-        });
+        // Wait for the browser decision; do not treat the consent checkbox
+        // itself as proof that a credential was saved to the device vault.
+        await navigator.credentials.store(credential);
+        return 'requested';
     } catch (e) {
-        console.warn('Desktop browser vault unavailable:',e?.name||'unavailable');
+        console.warn('Desktop browser vault save failed:',e?.name||'unavailable');
+        return 'failed';
     }
+}
+function showDesktopCredentialFeedback(status) {
+    const el=document.getElementById('gvCredentialStatus');
+    if (!el||status==='off'||status==='missing') return;
+    el.textContent=status==='requested'
+        ? 'Đã gửi yêu cầu lưu mật khẩu. Trình duyệt quyết định có lưu/hiện thông báo hay không; hãy kiểm tra Trình quản lý mật khẩu.'
+        : 'Trình duyệt chưa lưu được mật khẩu. Hãy bật chức năng đề xuất lưu mật khẩu trong cài đặt, hoặc lưu thủ công bằng Trình quản lý mật khẩu.';
+    el.hidden=false;
 }
 
 window.onload = function() {
@@ -1166,7 +1176,7 @@ async function thucHienDangNhapGV() {
                 btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false; 
             } else {
                 hoanTatDangNhap(data);
-                rememberDesktopTeacherAfterLogin(user,pass);
+                void rememberDesktopTeacherAfterLogin(user,pass).then(showDesktopCredentialFeedback);
                 document.getElementById("gvPass").value="";
             }
         }
@@ -1233,7 +1243,7 @@ async function xacNhanDoiMatKhauBatBuoc() {
         const { data: loginData, error: loginError } = await sb.rpc('rpc_login_giao_vien', { p_ma_gv: window.tempGvData.ma_gv, p_mat_khau: hashedNewPass });
         if (loginError || loginData?.status !== 'success') throw loginError || new Error(loginData?.message || 'Không thể tạo phiên mới.');
         hoanTatDangNhap(loginData);
-        rememberDesktopTeacherAfterLogin(window.tempGvData.ma_gv,pass1);
+        void rememberDesktopTeacherAfterLogin(window.tempGvData.ma_gv,pass1).then(showDesktopCredentialFeedback);
         document.getElementById("gvPass").value="";
         window.tempGvCurrentPasswordHash = null;
         window.tempGvData = null;
@@ -1282,7 +1292,7 @@ async function thucHienDoiMatKhau() {
         const { data: loginData, error: loginError } = await sb.rpc('rpc_login_giao_vien', { p_ma_gv: gvData.ma_gv, p_mat_khau: hashedNew });
         if (loginError || loginData?.status !== 'success') throw loginError || new Error(loginData?.message || 'Không thể tạo phiên mới.');
         hoanTatDangNhap(loginData);
-        rememberDesktopTeacherAfterLogin(gvData.ma_gv,newPass);
+        void rememberDesktopTeacherAfterLogin(gvData.ma_gv,newPass).then(showDesktopCredentialFeedback);
         document.getElementById('gvPass').value='';
         document.getElementById('oldPassPro').value = '';
         document.getElementById('newPassPro').value = '';

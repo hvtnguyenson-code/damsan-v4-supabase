@@ -11,7 +11,7 @@ for(const term of [
   'id="btnDangNhapGV"','type="submit"'
 ])assert(html.includes(term),'desktop form missing: '+term);
 assert(html.includes('onsubmit="event.preventDefault(); thucHienDangNhapGV();"'));
-assert(html.includes('giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-096'));
+assert(html.includes('giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-097'));
 assert(js.includes("['gvUser', 'gvPass'].forEach"),'Enter should still work');
 assert(js.includes('rememberDesktopTeacherAfterLogin(user,pass)'),'normal login must save only after successful auth');
 assert(js.includes('rememberDesktopTeacherAfterLogin(window.tempGvData.ma_gv,pass1)'),'forced rotation must remember the NEW password');
@@ -64,8 +64,8 @@ const actions=vm.runInContext(
   assert.strictEqual(preferences.size,0);
   assert.strictEqual(vaultWrites.length,0);
   getElementById('gvRememberLogin').checked=true;
-  actions.rememberDesktopTeacherAfterLogin('GV001','verified-password');
-  await Promise.resolve();
+  const status=await actions.rememberDesktopTeacherAfterLogin('GV001','verified-password');
+  assert.strictEqual(status,'requested');
   assert.strictEqual(preferences.get('damSan_DesktopTeacherUsername_v1'),'GV001');
   assert.strictEqual(preferences.get('damSan_DesktopTeacherRemember_v1'),'1');
   assert.strictEqual(vaultWrites[0].password,'verified-password');
