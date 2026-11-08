@@ -1007,7 +1007,86 @@ function isLegacyPlainPassword(v) {
     return !isSha256Hex(s);
 }
 
-window.onload = function() { 
+const DESKTOP_REMEMBER_USERNAME_KEY='damSan_DesktopTeacherUsername_v1';
+const DESKTOP_REMEMBER_CONSENT_KEY='damSan_DesktopTeacherRemember_v1';
+// Passwords stay in the browser/OS credential vault; never save them in Web Storage.
+function desktopRememberPreference(key,value) {
+    try {
+        if (value === undefined) return localStorage.getItem(key);
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key,value);
+    } catch (_) { /* Storage may be disabled in privacy modes. */ }
+}
+function setupDesktopTeacherPasswordManager() {
+    const username=document.getElementById('gvUser');
+    const password=document.getElementById('gvPass');
+    const toggle=document.getElementById('gvTogglePass');
+    const remember=document.getElementById('gvRememberLogin');
+    const saved=document.getElementById('gvSavedPasswordBtn');
+    if (!username||!password||!toggle||!remember||!saved) return;
+    remember.checked=desktopRememberPreference(DESKTOP_REMEMBER_CONSENT_KEY)==='1';
+    if (remember.checked&&!username.value)
+        username.value=desktopRememberPreference(DESKTOP_REMEMBER_USERNAME_KEY)||'';
+    remember.addEventListener('change',()=>{
+        if (remember.checked) return;
+        desktopRememberPreference(DESKTOP_REMEMBER_USERNAME_KEY,null);
+        desktopRememberPreference(DESKTOP_REMEMBER_CONSENT_KEY,null);
+        // Browser vault entries are managed by the browser, not by the web app.
+    });
+    toggle.addEventListener('click',()=>{
+        const reveal=password.type==='password';
+        password.type=reveal?'text':'password';
+        toggle.textContent=reveal?'Ẩn':'Hiện';
+        toggle.setAttribute('aria-pressed',String(reveal));
+        toggle.setAttribute('aria-label',reveal?'Ẩn mật khẩu':'Hiện mật khẩu');
+    });
+    saved.hidden=!(typeof window.PasswordCredential==='function'
+        &&typeof navigator.credentials?.get==='function');
+    saved.addEventListener('click',async()=>{
+        saved.disabled=true;
+        try {
+            const credential=await navigator.credentials.get({password:true,mediation:'optional'});
+            if (credential?.type==='password'&&credential.id&&typeof credential.password==='string') {
+                username.value=credential.id;
+                password.value=credential.password;
+                password.type='password';
+                toggle.textContent='Hiện';
+                toggle.setAttribute('aria-pressed','false');
+                toggle.setAttribute('aria-label','Hiện mật khẩu');
+                document.getElementById('gvLoginMsg').textContent='Đã điền thông tin lưu trên thiết bị. Bấm đăng nhập để tiếp tục.';
+            } else {
+                document.getElementById('gvLoginMsg').textContent='Chưa có mật khẩu đã lưu trong trình duyệt.';
+            }
+        } catch (_) {
+            document.getElementById('gvLoginMsg').textContent='Không lấy được mật khẩu đã lưu; có thể nhập thủ công hoặc dùng tự điền của trình duyệt.';
+        } finally { saved.disabled=false; }
+    });
+}
+function rememberDesktopTeacherAfterLogin(username,password) {
+    const remember=document.getElementById('gvRememberLogin');
+    if (!remember?.checked) {
+        desktopRememberPreference(DESKTOP_REMEMBER_USERNAME_KEY,null);
+        desktopRememberPreference(DESKTOP_REMEMBER_CONSENT_KEY,null);
+        return;
+    }
+    const code=String(username||'').trim();
+    if (!code||!password) return;
+    desktopRememberPreference(DESKTOP_REMEMBER_USERNAME_KEY,code);
+    desktopRememberPreference(DESKTOP_REMEMBER_CONSENT_KEY,'1');
+    if (typeof window.PasswordCredential!=='function'
+        ||typeof navigator.credentials?.store!=='function') return;
+    try {
+        const credential=new window.PasswordCredential({id:code,name:code,password});
+        Promise.resolve(navigator.credentials.store(credential)).catch(e=>{
+            console.warn('Desktop browser vault save declined:',e?.name||'unavailable');
+        });
+    } catch (e) {
+        console.warn('Desktop browser vault unavailable:',e?.name||'unavailable');
+    }
+}
+
+window.onload = function() {
+    setupDesktopTeacherPasswordManager();
     const loginEnterHandler = (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
@@ -1087,6 +1166,8 @@ async function thucHienDangNhapGV() {
                 btn.innerText = "🔐 QUẢN TRỊ HỆ THỐNG"; btn.disabled = false; 
             } else {
                 hoanTatDangNhap(data);
+                rememberDesktopTeacherAfterLogin(user,pass);
+                document.getElementById("gvPass").value="";
             }
         }
     } catch (err) {
@@ -1152,6 +1233,8 @@ async function xacNhanDoiMatKhauBatBuoc() {
         const { data: loginData, error: loginError } = await sb.rpc('rpc_login_giao_vien', { p_ma_gv: window.tempGvData.ma_gv, p_mat_khau: hashedNewPass });
         if (loginError || loginData?.status !== 'success') throw loginError || new Error(loginData?.message || 'Không thể tạo phiên mới.');
         hoanTatDangNhap(loginData);
+        rememberDesktopTeacherAfterLogin(window.tempGvData.ma_gv,pass1);
+        document.getElementById("gvPass").value="";
         window.tempGvCurrentPasswordHash = null;
         window.tempGvData = null;
         alert("✅ Đổi mật khẩu thành công! Chào mừng bạn đến với hệ thống.");
@@ -1199,6 +1282,8 @@ async function thucHienDoiMatKhau() {
         const { data: loginData, error: loginError } = await sb.rpc('rpc_login_giao_vien', { p_ma_gv: gvData.ma_gv, p_mat_khau: hashedNew });
         if (loginError || loginData?.status !== 'success') throw loginError || new Error(loginData?.message || 'Không thể tạo phiên mới.');
         hoanTatDangNhap(loginData);
+        rememberDesktopTeacherAfterLogin(gvData.ma_gv,newPass);
+        document.getElementById('gvPass').value='';
         document.getElementById('oldPassPro').value = '';
         document.getElementById('newPassPro').value = '';
         document.getElementById('confirmNewPassPro').value = '';
