@@ -82,3 +82,16 @@ A real teacher-PWA comparison returned the correct V5 baseline 8.25 for the diff
 The new OMR 016 regression tests the five false-review scenarios, strong erasures, two genuinely marked circles, weak marks under uneven light, blank marks and failed sheet calibration. The teacher comparison UI now explains each unresolved item in Vietnamese. PWA version 023 invalidates caches for the experimental V6 file. V5 recognition, geometry, P3, camera, grade rules, write guards and database are unchanged.
 
 **Rollback:** revert this single PR and refresh teacher PWA cache to restore the prior V6 trial, with production V5 unaffected. The immediate pre-fix main SHA is `5a9be65d63a393403e01caa7dab4abebe8dfd860`; initial baseline `c67b242f8d7a3abe74814df6d328d3856be23a26`.
+
+
+## Phase 4 — Independent V6 Part III recognizer (08/11/2026)
+
+- V6 now extracts every mark in each of four P3 character columns using its own normalized, paper-relative pencil features; calibrates P3 separately using the six questions (24 columns); and decodes a numeric grammar with explicit minus, comma, digits and optional trailing blanks.
+- V5 supplies only the already validated outer-four-marker homography, student ID and exam code. V6 **does not call V5 P3 recognition** and returns independent `p3`, `p3Evidence`, `p3Calibration` and per-column warning keys `P3.q.c`.
+- Critical invariant: `300` is three selected characters and one trailing blank. `3000` and `3009` require an actual marked fourth column. A weak fourth mark produces an uncertain/question value, not an auto-appended digit. A gap between marked columns or malformed punctuation also causes review; no silent compaction.
+- A column may be blank; a *clearly blank* column is not a warning. Strongly competing marks in one column cause review. The model does not use the answer key to infer missing digits or choose a score.
+- Main V5 score/write operations are unchanged. Opt-in V6 comparison reports differences in all three sections and uses V6 P3 for its tentative score; it remains read-only, with the Save button guarded both visually and in the action handler.
+- Two **private** rectified reference sheets were used locally to verify complete six-answer arrays. Both passed under the source image and four simulated transforms (horizontal illumination gradient, lamp shadow, dimming, mild blur). These are *not 10 independent camera photos*; the original photos are not checked into the repository. See OMR 017 synthetic regression for negative values, decimal placement, blank-vs-zero, double marks, erasures and invalid grammar.
+- Performance and accuracy must still be evaluated in real PWA camera sessions before replacing V5. Teacher PWA version 024 contains a cache-busting revision of the optional V6 module.
+
+Rollback: revert the single V6 P3 PR. Immediate baseline before P3 change: `e6a81f67a1046051d71d97bfb1f61b066c5664f7`. Do not roll back databases or reset main.

@@ -37,6 +37,8 @@ jobs:
         run: node tests/omr_v6_trial_015_simulation.js
       - name: OMR 016 V6 false-review and eraser evidence
         run: node tests/omr_v6_false_review_016_simulation.js
+      - name: OMR 017 independent V6 P3 grammar and illumination
+        run: node tests/omr_v6_p3_017_simulation.js
       - name: OMR 010 teacher photo preview
         run: node tests/omr_photo_preview_010_simulation.js
       - name: OMR 002 room binding

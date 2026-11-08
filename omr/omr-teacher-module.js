@@ -76,7 +76,7 @@
           <div id="omrRoomSummary" class="omr-muted" style="margin-top:8px">Chọn phòng để bắt đầu.</div>
            <div class="omr-card omr-warn" id="omrV6LabWrap" style="display:none">
              <label class="omr-lab-toggle"><input type="checkbox" id="omrV6Lab"><span><b>Thử nghiệm V6 – đối chiếu V5/V6</b> (không lưu điểm)</span></label>
-             <div class="omr-muted" style="margin-top:8px">Cùng một ảnh được đọc bằng V5 và V6. Khi thử nghiệm, nút lưu điểm bị khóa. Phần III vẫn dùng V5.</div>
+             <div class="omr-muted" style="margin-top:8px">Cùng một ảnh được đọc bằng V5 và V6. Khi thử nghiệm, nút lưu điểm bị khóa. V6 nhận dạng độc lập cả Phần I, II và III.</div>
            </div>
         </div>
         <div class="omr-card">
@@ -446,6 +446,12 @@
       const old=a[i]||'?',now=b[i]||'?';
       if(old!==now)diffs.push({key:'P2.'+(Math.floor(i/4)+1)+'abcd'[i%4],old,now});
     }
+    if(Array.isArray(v5.p3)&&Array.isArray(v6.p3)){
+      for(let i=0;i<6;i++){
+        const old=v5.p3[i]??'?',now=v6.p3[i]??'?';
+        if(old!==now)diffs.push({key:'P3.'+(i+1),old,now});
+      }
+    }
     return diffs;
   }
   function showV6Comparison(){
@@ -462,12 +468,12 @@
       return;
     }
     const changes=compareV5V6(scan,v6),geometry=v6.geometry||{};
-    summary.textContent=changes.length+' câu/ý khác nhau (P1/P2) • V6 thêm '+
+    summary.textContent=changes.length+' câu/ý khác nhau (P1/P2/P3) • V6 thêm '+
       data.elapsedMs+' ms • Mốc nội vùng: '+(geometry.status||'không rõ')+
       ' ('+(geometry.matched||0)+'/'+(geometry.total||0)+').';
     diffs.textContent=changes.length
       ?changes.map(d=>d.key+': V5='+d.old+', V6='+d.now).join('\n')
-      :'Không có khác biệt Phần I/II trên ảnh này.';
+      :'Không có khác biệt Phần I/II/III trên ảnh này.';
     if(v6.issues?.length)diffs.textContent+='\nV6 cảnh báo: '+v6.issues
       .map(x=>x.key+' ('+x.reason+')').join('; ');
     if(!state.lastPreview?.ok){
@@ -475,15 +481,17 @@
       return;
     }
     try{
-      // P3, student ID and exam code remain exclusively from the V5 result.
-      const alt={...scan,p1:v6.p1,p2:v6.p2,invalidMarks:v6.invalidMarks,
+      // P3 answers now come from the independent V6 P3 decoder.
+      // Student identity and exam code still come from the V5 camera scan.
+      const alt={...scan,p1:v6.p1,p2:v6.p2,p3:v6.p3,
+        invalidMarks:v6.invalidMarks,
         uncertain:(v6.issues||[]).map(x=>x.key)};
       const binding={ok:true,room:state.lastPreview.room,
         student:state.lastPreview.student,variant:state.lastPreview.variant};
       const estimate=S.previewScan(alt,binding,{allowUncertain:true});
       scores.textContent=estimate.ok
         ?'V5: '+state.lastPreview.grade.score+
-          ' điểm • V6: '+estimate.grade.score+' điểm (Phần III vẫn dùng V5)'
+          ' điểm • V6: '+estimate.grade.score+' điểm (V6 nhận dạng độc lập Phần III)'
         :'V6 chưa thể tính điểm dự kiến.';
     }catch(e){scores.textContent='Không so được điểm: '+(e.message||'lỗi');}
   }

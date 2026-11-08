@@ -196,6 +196,102 @@
       affected,regions,markers:found};
   }
 
+
+  // P3 has its own measurement calibration and positional grammar: unlike P1/P2
+  // each of its four columns may be empty, '-' is only available at position 1,
+  // and ',' is available only in positions 2/3. Never append a guessed zero.
+  function measureP3Columns(rect,template){
+    return template.p3.map(question=>question.map(column=>
+      column.map(point=>point?measureBubble(rect,template,point):null)
+    ));
+  }
+  function calibrateP3(columns){
+    const positives=[],negatives=[];
+    for(const col of columns){
+      const ranked=col.filter(Boolean).slice().sort((a,b)=>b.score-a.score);
+      if(!ranked.length)continue;
+      const top=ranked[0],next=ranked[1]||{score:0};
+      for(const item of ranked.slice(1))negatives.push(item.score);
+      // Seed the model using CLEAR columns, including fully marked punctuation.
+      // A weak or erased second mark must not influence the positive reference.
+      if(top.score>=.20&&top.score-next.score>=.11
+        &&top.score/Math.max(.025,next.score)>=1.45&&top.fill>=.55)
+        positives.push(top.score);
+    }
+    const background=quantile(negatives,.78);
+    const markReference=quantile(positives,.50);
+    const span=markReference-background;
+    const reliable=positives.length>=8&&negatives.length>=20&&span>=.12;
+    return {
+      reliable,positiveSamples:positives.length,negativeSamples:negatives.length,
+      background,markReference,
+      blankGate:background+.18*span,markGate:background+.30*span,
+      separationGate:Math.max(.065,.20*span)
+    };
+  }
+  function classifyP3Column(column,labels,calibration){
+    const ranked=column.map((m,i)=>m?{...m,index:i,token:labels[i]}:null)
+      .filter(Boolean).sort((a,b)=>b.score-a.score);
+    const top=ranked[0],second=ranked[1]||{score:0,fill:0};
+    if(!top||!calibration.reliable)
+      return {state:'review',token:'?',index:-1,
+        reason:'Không đủ dữ liệu rõ để hiệu chuẩn Phần III'};
+    const margin=top.score-second.score,relative=second.score/Math.max(.01,top.score);
+    const evidence={top:top.score,second:second.score,margin,relative,
+      topFill:top.fill,secondFill:second.fill};
+    // A clean blank has neither a marked center nor separation from printed
+    // outlines. A faint isolated stroke is *review*, not quietly discarded.
+    if(top.score<=calibration.blankGate&&top.fill<.57
+      &&margin<calibration.separationGate)
+      return {...evidence,state:'blank',token:'',index:-1,reason:'Cột không tô'};
+    // Two substantial marks in one numeric column must not silently form
+    // a legal number. This is a review, not an arbitrary chosen digit.
+    if(second.score>=calibration.markGate&&relative>=.72&&second.fill>=.55)
+      return {...evidence,state:'multiple',token:'?',index:-1,
+        reason:'Cùng một cột có từ hai dấu tô đáng kể'};
+    if(top.score<calibration.markGate||top.fill<.57
+      ||margin<calibration.separationGate)
+      return {...evidence,state:'review',token:'?',index:-1,
+        reason:'Không đủ bằng chứng phân biệt nét tô và vết tẩy'};
+    return {...evidence,state:'single',token:top.token,index:top.index,reason:''};
+  }
+  function decodeP3Positions(columns){
+    if(columns.length!==4)return {value:'?',reason:'Phiếu không đủ bốn vị trí Phần III'};
+    if(columns.some(col=>col.state==='review'||col.state==='multiple'))
+      return {value:'?',reason:'Ít nhất một vị trí chưa xác định chắc chắn'};
+    const tokens=columns.map(col=>col.token||'');
+    const last=tokens.reduce((m,v,i)=>v?i:m,-1);
+    if(last<0)return {value:'',reason:''}; // legitimate unanswered P3 question
+    if(tokens.slice(0,last+1).some(v=>!v))
+      return {value:'?',reason:'Có vị trí bỏ trống giữa các ký tự được tô'};
+    const encoded=tokens.slice(0,last+1).join('');
+    if(!/^-?\d+(,\d+)?$/.test(encoded))
+      return {value:'?',reason:'Vị trí dấu âm, dấu phẩy hoặc chữ số không hợp lệ'};
+    return {value:encoded,reason:''};
+  }
+  function readP3Section(rect,template){
+    const metrics=measureP3Columns(rect,template);
+    const calibration=calibrateP3(metrics.flat());
+    const issues=[],questions=[];
+    for(let i=0;i<metrics.length;i++){
+      const columns=metrics[i].map((column,j)=>
+        classifyP3Column(column,template.p3Labels,calibration));
+      const decoded=decodeP3Positions(columns);
+      columns.forEach((c,j)=>{
+        if(c.state==='review'||c.state==='multiple')issues.push({
+          key:'P3.'+(i+1)+'.'+(j+1),state:c.state,
+          reason:c.reason,question:i+1,column:j+1
+        });
+      });
+      if(decoded.reason&&!columns.some(c=>['review','multiple'].includes(c.state)))
+        issues.push({key:'P3.'+(i+1),state:'review',
+          reason:decoded.reason,question:i+1});
+      questions.push({value:decoded.value,raw:columns.map(c=>c.token),
+        columns,uncertain:!!decoded.reason,reason:decoded.reason});
+    }
+    return {p3:questions.map(q=>q.value),questions,calibration,issues};
+  }
+
   function analyzeRectified(rect,template){
     if(!rect||!rect.gray||rect.width<1||rect.height<1)throw Error('Rectified gray image required');
     const p1metrics=measureGroups(rect,template,template.p1);
@@ -214,13 +310,18 @@
       if(p2raw[i].state==='multiple')invalidMarks.push(key);
     }
     const choices=p2raw.map(row=>row.value||'?');
+    const p3Section=readP3Section(rect,template);
+    issues.push(...p3Section.issues);
     return {engine:'SHEET_NORMALIZED_V6_EXPERIMENTAL',calibration,
       p1:p1raw.map(row=>row.value||'?').join(''),
       p2:Array.from({length:4},(_,i)=>choices.slice(i*4,i*4+4).join('-')),
-      p1Evidence:p1raw,p2Evidence:p2raw,issues,invalidMarks,
+      p1Evidence:p1raw,p2Evidence:p2raw,
+      p3:p3Section.p3,p3Evidence:p3Section.questions,
+      p3Calibration:p3Section.calibration,issues,invalidMarks,
       lighting:inspectLighting([...p1metrics,...p2metrics]),
       geometry:inspectMarkerGeometry(rect,template)};
   }
   return {quantile,samplePaper,measureBubble,calibrateSheet,classifyRow,inspectLighting,
-    measureControlMarker,inspectMarkerGeometry,analyzeRectified};
+    measureControlMarker,inspectMarkerGeometry,analyzeRectified,
+    measureP3Columns,calibrateP3,classifyP3Column,decodeP3Positions,readP3Section};
 });
