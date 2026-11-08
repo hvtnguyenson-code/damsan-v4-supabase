@@ -4,8 +4,8 @@
   else root.DamSanOmrReliabilityV6=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  // Experimental, offline-only recognition policy. This file is NOT loaded
-  // by the teacher PWA until a separate real-paper qualification is approved.
+  // Opt-in experimental classifier loaded only for V5/V6 read-only comparison.
+  // It never replaces the canonical V5 scoring or writes any result.
   function quantile(values,p){
     if(!values.length)return 0;
     const a=values.slice().sort((x,y)=>x-y),k=(a.length-1)*p,i=Math.floor(k);
@@ -72,8 +72,14 @@
     const topRelative=(top.score-calibration.blankReference)/denominator;
     const secondRelative=(second.score-calibration.blankReference)/denominator;
     const ratio=second.score/Math.max(.01,top.score);
+    // A four-probe brightness spread is NOT by itself a poor-quality mark:
+    // one probe can cross the form's printed frame, numeral, or gray panel.
+    // The sheet-normalized separation is independent evidence of a clear mark.
+    const separation=(top.score-second.score)/denominator;
+    const decisiveSingle=topRelative>=.40&&top.fill>=.55&&separation>=.20;
     const evidence={top:top.score,second:second.score,ratio,
       topRelative,secondRelative,topFill:top.fill,secondFill:second.fill,
+      separation,decisiveSingle,
       maxLightingGradient:Math.max(...metrics.map(m=>m.gradient))};
     if(!calibration.reliable)return {...evidence,state:'review',value:'?',index:-1,
       reason:'Không đủ dấu tô chắc chắn để hiệu chuẩn phiếu'};
@@ -86,8 +92,11 @@
     if(secondRelative>=.32&&ratio>=.58&&second.fill>=.22)
       return {...evidence,state:'review',value:'?',index:-1,
         reason:'Dấu tô thứ hai đáng kể; cần kiểm tra vết tẩy'};
-    if(top.gradient>.35)return {...evidence,state:'review',value:'?',index:-1,
-      reason:'Bóng đổ biến thiên ngay tại ô tô'};
+    // Only escalate background variation if mark evidence is inconclusive.
+    // Confirmed double marks and meaningful second marks were handled above.
+    if(top.gradient>.35&&!decisiveSingle)
+      return {...evidence,state:'review',value:'?',index:-1,
+        reason:'Nền sáng không đều và dấu tô chưa đủ tách biệt'};
     return {...evidence,state:'single',index:top.i,value:labels[top.i],reason:''};
   }
   function inspectLighting(metrics){

@@ -69,3 +69,16 @@ The residual is normalized to one answer-circle radius rather than raw pixels. I
 These values come from two photographs and are not population confidence bounds. \`P3\` on 9002 crosses the **tentative 0.80 R diagnostic flag**. This is evidence of local image/template displacement, not proof that any particular answer was misread. Systematic registration/template errors may also contribute.
 
 Experiment 014 covers centered controls, simulated night illumination, displaced P3, absent P2 controls and thin outlined lookalikes; all must pass. Treat missing/undetectable markers as *insufficient*, never as good geometry. No production feature or camera flow depends on this experimental diagnostic. A deployment gate requires multiple held-out physical sheets, not merely synthetic geometric shifts.
+
+
+## Phase 3 — V6 evidence-first correction (2026-11-08)
+
+A real teacher-PWA comparison returned the correct V5 baseline 8.25 for the difficult 9002 sheet but V6 produced 5 extra '?' answers and a hypothetical 7.00. The V5 result never changed and was never replaced by V6.
+
+**Root cause:** the old V6 classifier rejected every marked circle where the spread of four nearby brightness probes exceeded 0.35, even when one circle was decisively darker than all others. Paper probe locations can coincide with printed text, frame lines or gray-to-white transitions. The spread cannot be interpreted as a direct test of mark certainty. The corrected decision order remains: check missing marks, confirmed multiple marks and substantial second marks; then use normalized top-vs-second evidence separation to decide if the first mark is clearly isolated; only when evidence is not decisive does anomalous surrounding brightness call for review. No new OMR pipeline, ML model or external dependencies were added.
+
+**Local reference-image replay (not camera acceptance):** on two existing private rectified reference images, original V6 auto-recognized 18/34 and 24/34 P1/P2 answers. The evidence-first version auto-recognized 34/34 and 33/34; the remaining P2.2d still requests review. Original photos stay private and are not committed. A single snapshot cannot establish production accuracy.
+
+The new OMR 016 regression tests the five false-review scenarios, strong erasures, two genuinely marked circles, weak marks under uneven light, blank marks and failed sheet calibration. The teacher comparison UI now explains each unresolved item in Vietnamese. PWA version 023 invalidates caches for the experimental V6 file. V5 recognition, geometry, P3, camera, grade rules, write guards and database are unchanged.
+
+**Rollback:** revert this single PR and refresh teacher PWA cache to restore the prior V6 trial, with production V5 unaffected. The immediate pre-fix main SHA is `5a9be65d63a393403e01caa7dab4abebe8dfd860`; initial baseline `c67b242f8d7a3abe74814df6d328d3856be23a26`.

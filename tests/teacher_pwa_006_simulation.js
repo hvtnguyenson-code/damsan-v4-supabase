@@ -26,7 +26,7 @@ assert.strictEqual(studentManifest.id,'./hoc_sinh.html','student PWA id must rem
 assert(studentSw.includes("'./hoc_sinh.html'"),'student service worker core remains student-only');
 assert(!studentSw.includes("teacher/index.html"),'teacher shell must not be added to student SW');
 
-assert(teacherHtml.includes('href="./manifest.json?v=20261107-teacher-pwa-022"'));
+assert(teacherHtml.includes('href="./manifest.json?v=20261108-teacher-pwa-023"'));
 assert(teacherHtml.includes('../omr/omr-teacher-module.js'));
 assert(teacherHtml.includes('../omr/omr-reliability-v6.js'),'V6 diagnostic is available to teacher PWA');
 assert(teacherSw.includes('../omr/omr-reliability-v6.js'),'V6 lab is cached by existing teacher service worker');

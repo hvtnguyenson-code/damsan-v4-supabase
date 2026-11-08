@@ -468,7 +468,8 @@
     diffs.textContent=changes.length
       ?changes.map(d=>d.key+': V5='+d.old+', V6='+d.now).join('\n')
       :'Không có khác biệt Phần I/II trên ảnh này.';
-    if(v6.issues?.length)diffs.textContent+='\nV6 cảnh báo: '+v6.issues.map(x=>x.key).join(', ');
+    if(v6.issues?.length)diffs.textContent+='\nV6 cảnh báo: '+v6.issues
+      .map(x=>x.key+' ('+x.reason+')').join('; ');
     if(!state.lastPreview?.ok){
       scores.textContent='Chưa có học sinh/mã đề hợp lệ để so điểm.';
       return;
