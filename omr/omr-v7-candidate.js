@@ -171,6 +171,15 @@
     }
     const scan=analyzeRectified(rect,T,{geometryModel:geometry,
       geometryRequired:opts.requireInternalGeometry===true});
+    // Fail closed when the official inner control-marker diagnostic is not
+    // acceptable. The corrected coordinates may still be inspected, but no
+    // research output can be treated as validated or written to DB.
+    if(geometryDiagnostic&&geometryDiagnostic.status!=='ok'){
+      scan.requiresRetake=true;
+      scan.ok=false;
+      scan.retakeReasons=[...scan.retakeReasons,
+        'Mốc khống chế bên trong chưa đạt ('+geometryDiagnostic.status+')'];
+    }
     return {...scan,markerCorners:markers.corners,
       markerMatches:reg.matches,markerRmse:reg.rmse,
       geometryDiagnostic:geometryDiagnostic?.status||'not_available',

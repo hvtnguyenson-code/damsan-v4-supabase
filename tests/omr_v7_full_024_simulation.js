@@ -62,3 +62,21 @@ for(const file of ['teacher/index.html','giaovien.html','teacher/sw.js','omr/omr
   file+' must never import V7 research');
 }
 console.log('PASS OMR V7 full 18-4-6 isolated synthetic checks');
+
+// Full-image adapter must fail closed if inner printed controls are unreliable.
+{
+  const rect=render(answers);
+  const stubCore={
+    grayscale:()=>new Uint8Array(100),
+    detectCornerMarkers:()=>({ok:true,corners:[[0,0],[9,0],[9,9],[0,9]]}),
+    fastTemplateRegistration:()=>({ok:true,H:[1,0,0,0,1,0,0,0,1],matches:4,rmse:0}),
+    warpTemplateGray:()=>rect
+  };
+  const mock={data:new Uint8ClampedArray(10*10*4),width:10,height:10};
+  const unsafe=V.analyzeImageData(mock,T,stubCore,
+    {inspectMarkerGeometry:()=>({status:'insufficient',markers:[]})});
+  assert(unsafe.requiresRetake,'Missing interior controls must require recapture');
+  assert.strictEqual(unsafe.ok,false);
+  assert.strictEqual(unsafe.validForSave,false);
+  assert(unsafe.retakeReasons.some(s=>s.includes('Mốc khống chế')));
+}

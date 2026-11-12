@@ -1,7 +1,7 @@
 (function(){
 'use strict';
 const O=window.DamSanOmr,V6=window.DamSanOmrReliabilityV6,V7=window.DamSanOmrV7Candidate,R=window.DamSanOmrV7Research,T=window.DamSanOmrTemplate?.template;
-const $=id=>document.getElementById(id);let stream=null,busy=false;
+const $=id=>document.getElementById(id);let stream=null,busy=false,lastReport=null;
 function status(s,bad=false){$('status').textContent=s;$('status').classList.toggle('error',bad);}
 if(!O||!V6||!V7||!R||!T){status('Thiếu mô-đun nhận dạng V7 hoặc mẫu phiếu.',true);return;}
 function draw(image,canvas){
@@ -23,11 +23,55 @@ if(v.error)return v.error;
 return 'Phần I: '+(v.p1||'—')+'\nPhần II:\n'+(v.p2||[]).map((s,i)=>(i+1)+'. '+s).join('\n')+
 '\nPhần III: '+(v.p3||[]).map((s,i)=>(i+1)+': '+(s||'(trống)')).join(' | ');
 }
+
+function highlightIssues(canvas,scan){
+  if(!scan?.issues?.length)return;
+  const ctx=canvas.getContext('2d');
+  const sx=(canvas.width-1)/T.widthCm,sy=(canvas.height-1)/T.heightCm;
+  ctx.save();ctx.strokeStyle='#d13b27';ctx.lineWidth=Math.max(2,canvas.width*.0028);
+  for(const issue of scan.issues){
+    let points=null,match=null;
+    if((match=/^P1\.(\d+)$/.exec(issue.key))){
+      points=T.p1[Number(match[1])-1];
+    }else if((match=/^P2\.(\d+)([abcd])$/.exec(issue.key))){
+      const index=(Number(match[1])-1)*4+'abcd'.indexOf(match[2]);
+      points=T.p2[index];
+    }else if((match=/^P3\.(\d+)(?:\.(\d+))?$/.exec(issue.key))){
+      const q=T.p3[Number(match[1])-1];
+      points=match[2]?q?.[Number(match[2])-1]:q?.flat();
+    }
+    const xy=(points||[]).filter(Boolean).map(p=>[p[0]*sx,p[1]*sy]);
+    if(!xy.length)continue;
+    const m=Math.max(5,T.bubbleRadiusCm*sx*1.6);
+    const xs=xy.map(p=>p[0]),ys=xy.map(p=>p[1]);
+    const x0=Math.min(...xs)-m,y0=Math.min(...ys)-m;
+    ctx.strokeRect(x0,y0,Math.max(...xs)-x0+m,Math.max(...ys)-y0+m);
+  }
+  ctx.restore();
+}
+function exportReport(){
+ if(!lastReport)return;
+ const text=JSON.stringify(lastReport,null,2);
+ const url=URL.createObjectURL(new Blob([text],{type:'application/json;charset=utf-8'}));
+ const a=document.createElement('a');a.href=url;a.download='damsan-omr-v7-local-report.json';
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
 function render(v6,v7,image,rect,note){
 $('results').hidden=false;draw(image,$('sourceImage'));
-const target=$('rectifiedImage');if(rect)draw(rect,target);else{target.width=1;target.height=1;}
+const target=$('rectifiedImage');if(rect){draw(rect,target);highlightIssues(target,v7);}else{target.width=1;target.height=1;}
 $('photoNote').textContent=note;$('warpNote').textContent=rect?'Ảnh nắn để đối chiếu vị trí tô':'Chưa nắn được ảnh theo mốc';
 $('v6Text').textContent=fmt(v6);$('v7Text').textContent=fmt(v7);
+ lastReport={labVersion:'OMR_V7_INDEPENDENT',createdAt:new Date().toISOString(),
+   note,sourceType:image.data?'photo':'synthetic',
+   v6:{p1:v6?.p1||null,p2:v6?.p2||null,p3:v6?.p3||null,error:v6?.error||null},
+   v7:v7?{p1:v7.p1,p2:v7.p2,p3:v7.p3,issues:v7.issues||[],
+     invalidMarks:v7.invalidMarks||[],calibration:v7.calibration||null,
+     p3Calibration:v7.p3Calibration||null,quality:v7.quality||null,
+     requiresRetake:!!v7.requiresRetake,retakeReasons:v7.retakeReasons||[],
+     geometryDiagnostic:v7.geometryDiagnostic||null,geometryModel:v7.geometryModel||null}:null};
+ $('downloadReport').disabled=false;
 if(!v7||v7.error){$('summary').textContent=v7?.error||'Lỗi nhận dạng';rows('issues',[],['key','state','reason']);rows('differences',[],['key','v6','v7']);return;}
 const summary=['I/II: '+(v7.calibration?.reliable?'đã hiệu chuẩn':'chưa hiệu chuẩn'),
 'III: '+(v7.p3Calibration?.reliable?'đã hiệu chuẩn':'chưa hiệu chuẩn'),
@@ -131,6 +175,7 @@ status('Đã đọc ảnh, so sánh V6/V7. Không có thao tác lưu điểm.');
 async function guarded(fn){try{await fn();}catch(e){status('Lỗi: '+String(e?.message||e),true);console.error(e);}}
 $('photoFile').addEventListener('change',e=>guarded(()=>upload(e.target.files?.[0])));
 $('runDemo').addEventListener('click',()=>guarded(demo));
+$('downloadReport').addEventListener('click',exportReport);
 $('startCamera').addEventListener('click',()=>guarded(openCam));
 $('stopCamera').addEventListener('click',stop);
 $('captureCamera').addEventListener('click',()=>guarded(capture));

@@ -36,3 +36,8 @@
 - Điều chỉnh kiểm tra ảnh sáng: không xem giấy trắng bão hòa là phản chiếu than chì; dấu hiệu phản sáng được phân tích cục bộ tại ô tô.
 - Thêm regression test 024, 025 vào OMR Camera Grading CI hiện có; không tạo deploy và không thay đổi `main`.
 - Đây là candidate đủ chức năng để thử nghiệm, KHÔNG phải nghiệm thu chính xác ngoài thực tế: chưa có bộ ảnh thật độc lập, chưa đo thời gian trên điện thoại Android cũ; biến dạng giấy gấp lớn và vết tẩy khó chưa chứng minh giải quyết.
+
+## Rà soát cuối
+- Mốc khống chế bên trong không đạt hoặc không đủ: V7 buộc yêu cầu chụp lại, ngay cả khi V7 vẫn hiển thị kết quả đọc thử. Giữ invariant `validForSave:false`.
+- Trên ảnh nắn phối cảnh, các vị trí nghi vấn được viền khung đỏ theo mẫu tọa độ chuẩn; không phải bằng chứng đáp án.
+- Có thể xuất báo cáo JSON không chứa ảnh gốc, tài khoản, token hay dữ liệu phòng thi để phục vụ đánh giá sau này.
