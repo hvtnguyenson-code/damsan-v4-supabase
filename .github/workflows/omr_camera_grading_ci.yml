@@ -47,6 +47,8 @@ jobs:
         run: node tests/omr_desktop_pwa_v6_parity_021_simulation.js
       - name: OMR 022 V6 default on open and valid pending V5 draft
         run: node tests/omr_default_v6_022_simulation.js
+      - name: OMR 023 isolated V7 research candidate
+        run: node tests/omr_v7_candidate_023_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
