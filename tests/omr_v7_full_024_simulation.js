@@ -56,10 +56,14 @@ assert.strictEqual(V.decodeP3([{state:'single',token:'3'},{state:'single',token:
  {state:'single',token:'0'},{state:'blank',token:''}]).value,'300');
 assert.strictEqual(V.decodeP3([{state:'single',token:'3'},{state:'single',token:'0'},
  {state:'single',token:'0'},{state:'single',token:'0'}]).value,'3000');
-for(const file of ['teacher/index.html','giaovien.html','teacher/sw.js','omr/omr-result-write.js']){
+for(const file of ['teacher/index.html','teacher/sw.js']){
  const content=fs.readFileSync(file,'utf8');
- assert(!content.includes('omr-v7-candidate.js')&&!content.includes('v7-lab.js'),
-  file+' must never import V7 research');
+ assert(content.includes('omr-v7-candidate.js'),file+' should load V7 into teacher PWA');
+ assert(!content.includes('v7-lab.js'),'No separate laboratory URL');
+}
+for(const file of ['giaovien.html','omr/omr-result-write.js']){
+ assert(!fs.readFileSync(file,'utf8').includes('omr-v7-candidate.js'),
+  file+' should not introduce a separate V7 write path');
 }
 console.log('PASS OMR V7 full 18-4-6 isolated synthetic checks');
 

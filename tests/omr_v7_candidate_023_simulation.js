@@ -4,10 +4,12 @@ const V7=require('../omr/omr-v7-research.js');
 const V6=require('../omr/omr-reliability-v6.js');
 const T=require('../omr/omr-template-moet-18-4-6.js').template;
 console.log('=== OMR V7 research candidate: isolated synthetic tests ===');
-// V7 may exist in research source/tests/docs but never in production entrypoints.
-for(const path of ['teacher/index.html','giaovien.html','teacher/app.js',
-  'omr/omr-teacher-module.js','omr/omr-result-write.js','teacher/sw.js']){
+// V7 is available only inside the teacher PWA; desktop retains V6/V5.
+for(const path of ['giaovien.html','omr/omr-result-write.js']){
   assert(!fs.readFileSync(path,'utf8').includes('omr-v7-research'),path+' must not load V7');
+}
+for(const path of ['teacher/index.html','teacher/sw.js']){
+  assert(fs.readFileSync(path,'utf8').includes('omr-v7-research'),path+' must load V7');
 }
 const cal={reliable:true,mark:.72,blank:.035,span:.685};
 const m=(score,fill,gradient=0,clipped=0)=>({score,fill,gradient,clipped});
