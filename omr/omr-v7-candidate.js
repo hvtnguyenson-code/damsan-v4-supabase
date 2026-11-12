@@ -141,6 +141,29 @@
       requiresRetake:blocking.length>0,retakeReasons:blocking,
       requiresReview:issues.length>0};
   }
+  // Reuse V5's validated four-corner image rather than detecting/warping it
+  // twice. V7 alone classifies all answer rows; V6 only inspects printed
+  // internal controls and never supplies P1/P2/P3 answers.
+  function analyzeValidatedRectified(rect,T,v6){
+    checkTemplate(T);
+    if(typeof v6?.inspectMarkerGeometry!=='function')
+      throw Error('V7 cần kiểm tra mốc khống chế nội bộ');
+    const diagnostic=v6.inspectMarkerGeometry(rect,T);
+    const r=T.bubbleRadiusCm*
+      ((rect.width-1)/T.widthCm+(rect.height-1)/T.heightCm)/2;
+    const model=Array.isArray(diagnostic?.markers)
+      ?R.fitLocalGeometry(diagnostic.markers.map(m=>({
+        region:m.region,predicted:m.predicted,observed:m.observed
+      })),r):null;
+    const scan=analyzeRectified(rect,T,{geometryModel:model});
+    const status=diagnostic?.status||'not_available';
+    const blocking=[...scan.retakeReasons];
+    if(status!=='ok')blocking.push('Mốc khống chế bên trong chưa đạt ('+status+')');
+    return {...scan,ok:blocking.length===0,requiresRetake:blocking.length>0,
+      retakeReasons:blocking,geometryDiagnostic:status,
+      geometryModel:model?{reliable:model.reliable,matched:model.matched,
+        rejected:model.rejected,p90DisplacementR:model.p90DisplacementR}:null};
+  }
   // Use the validated existing outer-corner registration for apples-to-apples
   // V6/V7 comparison; no student RPC and no database access whatsoever.
   function analyzeImageData(imageData,T,core,v6,opts={}){
@@ -200,5 +223,5 @@
     return {available:true,differences,count:differences.length};
   }
   return {measureP3,calibrateP3,decideP3Column,decodeP3,readP3,inspectQuality,
-    analyzeRectified,analyzeImageData,compare};
+    analyzeRectified,analyzeValidatedRectified,analyzeImageData,compare};
 });

@@ -18,7 +18,8 @@
   function metadataFrom(preview){
     return {
       template_id:preview.scan?.templateId||'MOET_TLTN_2025_18_4_6_V1',
-      recognition_engine:preview.scan?.recognitionEngine==='V6'?'V6':'V5',
+      recognition_engine:['V5','V6','V7'].includes(preview.scan?.recognitionEngine)
+        ?preview.scan.recognitionEngine:'V5',
       reviewed:true,
       uncertain_reviewed: preview.reviewedUncertain === true,
       uncertain_count:(preview.scan?.uncertain||[]).length,

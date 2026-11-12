@@ -1,10 +1,12 @@
 (function(root){
   'use strict';
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite, E=root.DamSanOmrScanAdapter;
+  const V7=root.DamSanOmrV7Candidate;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
   const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v6',lastV6:null};
   const q=id=>document.getElementById(id);
+  const expectedEngineLabel=(engine,compare=false)=>compare?'V5':engine==='v7'?'V7':engine==='v6'?'V6':'V5';
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   function normalizeRoom(r){
@@ -82,7 +84,7 @@
         ||draft.roomId!==String(q('omrRoomSelect').value)
         ||draft.engine!==state.officialEngine||draft.compare!==state.labEnabled
         ||!Array.isArray(draft.scan.p2)||!Array.isArray(draft.scan.p3)
-        ||draft.scan.recognitionEngine!==(state.officialEngine==='v6'&&!state.labEnabled?'V6':'V5')){
+        ||draft.scan.recognitionEngine!==expectedEngineLabel(state.officialEngine,state.labEnabled)){
         resolve(false);return;
       }
       const img=new Image();
@@ -100,7 +102,7 @@
           q('omrScanArea').style.display='block';
           q('omrEngineResult').textContent=state.labEnabled
             ?'ĐỐI CHIẾU V5/V6 – chỉ xem, không lưu điểm'
-            :'Đang chấm chính thức bằng '+(state.officialEngine==='v6'?'V6':'V5');
+            :'Đang chấm bằng '+expectedEngineLabel(state.officialEngine);
           // Clear the previous manual acknowledgement. Revalidate answers
           // and marks with the currently reloaded room/variant before saving.
           q('omrReviewUncertain').checked=false;
@@ -175,6 +177,7 @@
              <label for="omrEngineSelect"><b>Thuật toán chấm và lưu điểm</b></label>
              <select id="omrEngineSelect" style="width:100%;margin-top:6px">
                <option value="v6" selected>V6 – chấm và lưu điểm (mặc định)</option>
+               <option value="v7">V7 – chấm và lưu điểm (thử nghiệm)</option>
                <option value="v5">V5 – chấm và lưu điểm (dự phòng)</option>
              </select>
              <div class="omr-muted" style="margin-top:6px">Đổi thuật toán sẽ xóa kết quả chưa lưu; cần quét lại phiếu.</div>
@@ -260,7 +263,8 @@
       rememberOmr({clearDraft:true});
     };
     q('omrEngineSelect').onchange=()=>{
-      state.officialEngine=q('omrEngineSelect').value==='v5'?'v5':'v6';
+      state.officialEngine=['v5','v6','v7'].includes(q('omrEngineSelect').value)
+        ?q('omrEngineSelect').value:'v6';
       state.labEnabled=false;q('omrV6Lab').checked=false;
       resetScan(); // A different engine requires a fresh capture.
       rememberOmr({clearDraft:true});
@@ -298,6 +302,7 @@
     ensureUi();
     const saved=readOmrReload();
     const labAvailable=!!root.DamSanOmrReliabilityV6&&!!E;
+    const v7Available=!!V7?.analyzeValidatedRectified&&!!E?.fromV7;
     const draft=saved?.draft;
     // Opening a fresh grading session always defaults to V6. A previous V5
     // preference must not silently override the first/official option.
@@ -309,16 +314,20 @@
       && draft.roomId===saved.roomId
       && draft.engine===saved.engine
       && draft.compare===saved.compare
-      && (saved.engine==='v5'||saved.engine==='v6')
+      && (saved.engine==='v5'||saved.engine==='v6'||saved.engine==='v7')
       && (saved.engine!=='v6'||labAvailable)
+      && (saved.engine!=='v7'||v7Available)
       && (!saved.compare||labAvailable)
       && draft.scan.recognitionEngine===
-        (saved.engine==='v6'&&!saved.compare?'V6':'V5'));
+        expectedEngineLabel(saved.engine,saved.compare));
     state.restoring=true;
     state.officialEngine=resumeDraft?saved.engine:'v6';
     state.labEnabled=resumeDraft&&saved.compare===true;
     q('omrV6LabWrap').style.display=labAvailable?'block':'none';
     q('omrEngineSelect').querySelector('option[value="v6"]').disabled=!labAvailable;
+    const v7Option=q('omrEngineSelect').querySelector('option[value="v7"]');
+    v7Option.disabled=!v7Available;
+    v7Option.hidden=!v7Available; // Desktop continues with V6/V5 only.
     if(!labAvailable){
       state.labEnabled=false;q('omrV6Lab').checked=false;
       state.officialEngine='v5';
@@ -556,18 +565,28 @@
       if(mode!=='v5'){
         const begun=performance.now();
         try{
-          if(!root.DamSanOmrReliabilityV6||!E)throw Error('Thiếu mô-đun nhận dạng V6');
+          if(!root.DamSanOmrReliabilityV6||!E)throw Error('Thiếu mô-đun nhận dạng V6/V7');
           const gray=O.grayscale(pixels.data,pixels.width,pixels.height);
           const rect=O.warpTemplateGray(gray,pixels.width,pixels.height,
             v5.homography,T.template,1800);
-          const candidate=root.DamSanOmrReliabilityV6.analyzeRectified(rect,T.template);
-          state.lastV6={candidate,elapsedMs:Math.round(performance.now()-begun)};
-          if(mode==='v6')scan=E.fromV6(v5,candidate);
+          if(mode==='v7'){
+            if(!V7?.analyzeValidatedRectified||!E.fromV7)
+              throw Error('Thiếu thuật toán V7 trên PWA');
+            const candidate=V7.analyzeValidatedRectified(
+              rect,T.template,root.DamSanOmrReliabilityV6);
+            scan=E.fromV7(v5,candidate);
+          }else{
+            const candidate=root.DamSanOmrReliabilityV6.analyzeRectified(rect,T.template);
+            state.lastV6={candidate,elapsedMs:Math.round(performance.now()-begun)};
+            if(mode==='v6')scan=E.fromV6(v5,candidate);
+          }
         }catch(e){
-          state.lastV6={error:'V6 không xử lý được: '+(e?.message||String(e))};
-          if(mode==='v6'){
+          if(mode==='compare'){
+            state.lastV6={error:'Không đối chiếu được: '+(e?.message||String(e))};
+          }else{
             q('omrScanArea').style.display='block';
-            showWarning(state.lastV6.error+'. Quét lại hoặc chọn V5 dự phòng; không lưu kết quả từ ảnh này.');
+            showWarning('Không xử lý được bằng '+expectedEngineLabel(mode)+': '+
+              (e?.message||String(e))+'. Hãy quét lại hoặc chọn thuật toán dự phòng; không lưu từ ảnh này.');
             return;
           }
         }
@@ -575,7 +594,7 @@
       scan.templateId=T.template.id;
       scan._labReadOnly=mode==='compare';
       scan.captureMode=mode;
-      if(mode!=='v6')scan.recognitionEngine='V5';
+      if(mode==='compare'||mode==='v5')scan.recognitionEngine='V5';
       state.lastScan=scan;
       // Presentation only: crop around validated four-corner markers after
       // recognition. Never send the cropped image back to the OMR engine.
@@ -585,7 +604,7 @@
       q('omrScanArea').style.display='block';
       q('omrEngineResult').textContent=mode==='compare'
         ?'ĐỐI CHIẾU V5/V6 – chỉ xem, không lưu điểm'
-        :'Đang chấm chính thức bằng '+(mode==='v6'?'V6':'V5');
+        :'Đang chấm bằng '+expectedEngineLabel(mode);
       q('omrSbd').value=scan.sbd;
       q('omrMaDe').value=scan.maDe;
       q('omrP1').value=scan.p1;
@@ -686,8 +705,8 @@
     if(!state.roomModel||!state.lastScan)return;
     if(state.lastScan._requiresRetake){
       q('omrReviewUncertainWrap').style.display='none';
-      showWarning('V6 chưa đủ điều kiện nhận dạng: '+state.lastScan._retakeReason+
-        '. Quét lại hoặc chuyển V5; không thể lưu phiếu này.');
+      showWarning(expectedEngineLabel(state.officialEngine)+' chưa đủ điều kiện nhận dạng: '+
+        state.lastScan._retakeReason+'. Quét lại hoặc chuyển thuật toán khác; không thể lưu phiếu này.');
       return;
     }
     const scan=S.enforceInvalidMarks(scanFromForm()),vr=B.resolveVariant(scan.maDe,state.roomModel.variants);
@@ -749,10 +768,10 @@
       return;
     }
     if(state.lastScan?._requiresRetake){
-      showWarning('V6 cần quét lại: '+state.lastScan._retakeReason);return;
+      showWarning(expectedEngineLabel(state.officialEngine)+' cần quét lại: '+state.lastScan._retakeReason);return;
     }
     if(!state.lastPreview)return;
-    const expectedEngine=state.officialEngine==='v6'?'V6':'V5';
+    const expectedEngine=expectedEngineLabel(state.officialEngine);
     if(state.lastScan?.recognitionEngine!==expectedEngine||
        state.lastPreview.scan?.recognitionEngine!==expectedEngine){
       showWarning('Đã thay đổi thuật toán chấm; cần quét lại để bảo đảm kết quả.');return;
