@@ -51,14 +51,18 @@
       &&m.predicted.length===2&&m.observed.length===2
       &&[...m.predicted,...m.observed].every(Number.isFinite))
       .map(m=>({...m,dx:m.observed[0]-m.predicted[0],dy:m.observed[1]-m.predicted[1]}));
-    const regions=new Set(points.map(m=>m.region));
-    const deviation=points.map(m=>Math.hypot(m.dx,m.dy));
-    const spread=quantile(points.map(m=>m.dx),.9)-quantile(points.map(m=>m.dx),.1)
-      +quantile(points.map(m=>m.dy),.9)-quantile(points.map(m=>m.dy),.1);
-    const reliable=points.length>=9&&['P1','P2','P3'].every(s=>regions.has(s))
+    // Never allow one bad landmark to pull a neighbouring answer coordinate.
+    const valid=points.filter(m=>Math.hypot(m.dx,m.dy)<=.9*r);
+    const counts=Object.fromEntries(['P1','P2','P3'].map(region=>
+      [region,valid.filter(m=>m.region===region).length]));
+    const deviation=valid.map(m=>Math.hypot(m.dx,m.dy));
+    const spread=quantile(valid.map(m=>m.dx),.9)-quantile(valid.map(m=>m.dx),.1)
+      +quantile(valid.map(m=>m.dy),.9)-quantile(valid.map(m=>m.dy),.1);
+    const reliable=valid.length>=9&&Object.values(counts).every(n=>n>=3)
       &&quantile(deviation,.9)<=.9*r&&spread<=1.2*r;
     return {reliable,reason:reliable?'':'inconsistent_landmarks',
-      radiusPx:r,points:reliable?points:[],matched:points.length,
+      radiusPx:r,points:reliable?valid:[],matched:valid.length,
+      rejected:points.length-valid.length,regionCounts:counts,
       p90DisplacementR:quantile(deviation,.9)/r};
   }
   function correctedPoint(x,y,model){
