@@ -22,7 +22,7 @@
   }
   // The independent numeric model is calibrated on 24 four-position columns,
   // NOT the V6 P3 threshold logic. A column may be intentionally blank.
-  function calibrateP3(matrix){
+  function calibrateP3(matrix,p1Calibration){
     const positives=[],negative=[],blankCandidates=[];
     for(const col of matrix.flat()){
       const ranked=col.filter(Boolean).slice().sort((a,b)=>b.score-a.score);
@@ -33,10 +33,13 @@
         &&top.score/Math.max(.025,second.score)>=1.45)positives.push(top.score);
       if(top.score<.16)blankCandidates.push(top.score);
     }
-    const background=q(negative,.80),mark=q(positives,.5),span=mark-background;
-    return {reliable:positives.length>=7&&negative.length>=20&&span>=.13,
-      background,mark,span,positiveSamples:positives.length,
-      negativeSamples:negative.length,blankSamples:blankCandidates.length};
+    const background=q(negative,.80),native=positives.length>=7;
+    const transferred=!native&&p1Calibration?.reliable===true;
+    const mark=transferred?p1Calibration.mark:q(positives,.5),span=mark-background;
+    return {reliable:negative.length>=20&&span>=.13&&(native||transferred),
+      background,mark,span,source:transferred?'P1_TRANSFER':'P3_SELF',
+      positiveSamples:positives.length,negativeSamples:negative.length,
+      blankSamples:blankCandidates.length};
   }
   function decideP3Column(metrics,labels,cal){
     const ordered=metrics.map((m,index)=>m?{...m,index,token:labels[index]}:null)
@@ -52,10 +55,7 @@
       secondFill:second.fill,strength,secondStrength,margin};
     if(ordered.some(m=>m.clipped>.28))
       return {...ev,state:'review',token:'?',reason:'Phản sáng tại cột số'};
-    if(strength<.16&&top.fill<.16)
-      return {...ev,state:'blank',token:'',reason:'Cột bỏ trống'};
-    if(top.score<=cal.background+.18*span&&top.fill<.40
-      &&margin<.20)
+    if(top.score<=cal.background+.10*span&&top.fill<.13)
       return {...ev,state:'blank',token:'',reason:'Cột bỏ trống'};
     // Two independently substantial pencil regions: never choose a winner.
     if(secondStrength>=.55&&second.fill>=.47
@@ -83,9 +83,9 @@
       return {value:'?',reason:'Dấu âm, dấu phẩy hoặc chữ số không hợp lệ'};
     return {value,reason:''};
   }
-  function readP3(rect,T,geometry){
+  function readP3(rect,T,geometry,p1Calibration){
     const metrics=measureP3(rect,T,geometry);
-    const calibration=calibrateP3(metrics);
+    const calibration=calibrateP3(metrics,p1Calibration);
     const questions=[],issues=[];
     metrics.forEach((question,i)=>{
       const columns=question.map(col=>decideP3Column(col,T.p3Labels,calibration));
@@ -111,16 +111,18 @@
       if((x+y)%(step*5)===0)backgrounds.push(gray[y*w+x]);
     }
     const spread=q(backgrounds,.90)-q(backgrounds,.10);
-    return {...stats,paperSpread:spread,warning:stats.clippedFraction>.33
-      ?'Ảnh bị cháy sáng trên diện rộng':stats.darkFraction>.53
-      ?'Ảnh quá tối':'',relativeOnly:true};
+    // Correctly exposed white paper often reaches maximum brightness.
+    // Do not call its saturation proof of missing graphite evidence.
+    return {...stats,paperSpread:spread,suspectedHighlights:stats.clippedFraction>.35,
+      warning:stats.darkFraction>.70?'Ảnh quá tối để chấm tin cậy':'',
+      relativeOnly:true};
   }
   function analyzeRectified(rect,T,opts={}){
     checkTemplate(T);
     const quality=inspectQuality(rect,T);
     const geometry=opts.geometryModel?.reliable?opts.geometryModel:null;
     const part12=R.analyzeRectified(rect,T,{geometryModel:geometry});
-    const third=readP3(rect,T,geometry);
+    const third=readP3(rect,T,geometry,part12.calibration);
     const issues=[...part12.issues,...third.issues];
     const blocking=[];
     if(!part12.calibration.reliable)blocking.push('Không hiệu chuẩn được Phần I/II');

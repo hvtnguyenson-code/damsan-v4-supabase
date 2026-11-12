@@ -28,3 +28,11 @@
 - Thêm phép đo chất lượng ảnh theo ROI từng cụm, chuẩn hóa phân bố phơi sáng bằng nhiều khung và bộ từ chối ảnh thiếu thông tin.
 - Kiểm thử V5/V6/V7 trên ảnh giấy thật, chia dữ liệu theo PHIẾU VẬT LÝ để tránh leakage.
 - Chỉ xin phê duyệt tích hợp sau khi chứng minh không tăng lỗi chấm âm thầm và tốc độ đáp ứng.
+
+## Phòng thử nghiệm độc lập V7 — 12/11/2026
+- Bổ sung `omr/omr-v7-candidate.js`: tự đo Phần III, tự giải mã 4 vị trí, ngữ pháp số; không gọi bộ đọc P3 V6. Có hiệu chuẩn tham chiếu từ P1 cho phiếu P3 toàn bỏ trống hoặc chỉ vài vị trí tô.
+- Trang `omr/v7-lab.html`: thử ngay 8 điều kiện mô phỏng; chọn ảnh từ tệp; lấy 3 khung hình camera và ưu tiên khung nét hơn; so sánh V6/V7 cùng ảnh; chỉ rõ vị trí cần kiểm tra, hoàn toàn không gửi ảnh, không đọc ghi DB, không lưu điểm.
+- Mở từ checkout nhánh PR #180: chạy `python -m http.server 8769` tại gốc repo rồi vào `http://localhost:8769/omr/v7-lab.html`. Camera có thể đòi HTTPS/localhost và quyền thiết bị.
+- Điều chỉnh kiểm tra ảnh sáng: không xem giấy trắng bão hòa là phản chiếu than chì; dấu hiệu phản sáng được phân tích cục bộ tại ô tô.
+- Thêm regression test 024, 025 vào OMR Camera Grading CI hiện có; không tạo deploy và không thay đổi `main`.
+- Đây là candidate đủ chức năng để thử nghiệm, KHÔNG phải nghiệm thu chính xác ngoài thực tế: chưa có bộ ảnh thật độc lập, chưa đo thời gian trên điện thoại Android cũ; biến dạng giấy gấp lớn và vết tẩy khó chưa chứng minh giải quyết.

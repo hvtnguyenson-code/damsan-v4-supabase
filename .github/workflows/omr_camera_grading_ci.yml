@@ -49,6 +49,10 @@ jobs:
         run: node tests/omr_default_v6_022_simulation.js
       - name: OMR 023 isolated V7 research candidate
         run: node tests/omr_v7_candidate_023_simulation.js
+      - name: OMR 024 V7 full P1 P2 P3 offline
+        run: node tests/omr_v7_full_024_simulation.js
+      - name: OMR 025 V7 lab isolation
+        run: node tests/omr_v7_lab_025_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
