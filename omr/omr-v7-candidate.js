@@ -29,14 +29,14 @@
       if(!ranked.length)continue;
       const top=ranked[0],second=ranked[1]||{score:0};
       for(const m of ranked.slice(1))negative.push(m.score);
-      if(top.score>=.17&&top.fill>=.48&&top.score-second.score>=.11
-        &&top.score/Math.max(.025,second.score)>=1.45)positives.push(top.score);
+      if(top.score>=.15&&top.fill>=.33&&top.score-second.score>=.075
+        &&top.score/Math.max(.025,second.score)>=1.35)positives.push(top.score);
       if(top.score<.16)blankCandidates.push(top.score);
     }
-    const background=q(negative,.80),native=positives.length>=7;
+    const background=q(negative,.78),native=positives.length>=7;
     const transferred=!native&&p1Calibration?.reliable===true;
     const mark=transferred?p1Calibration.mark:q(positives,.5),span=mark-background;
-    return {reliable:negative.length>=20&&span>=.13&&(native||transferred),
+    return {reliable:negative.length>=20&&span>=.10&&(native||transferred),
       background,mark,span,source:transferred?'P1_TRANSFER':'P3_SELF',
       positiveSamples:positives.length,negativeSamples:negative.length,
       blankSamples:blankCandidates.length};
@@ -55,7 +55,14 @@
       secondFill:second.fill,strength,secondStrength,margin};
     if(ordered.some(m=>m.clipped>.28))
       return {...ev,state:'review',token:'?',reason:'Phản sáng tại cột số'};
-    if(top.score<=cal.background+.10*span&&top.fill<.13)
+    // Empty columns still contain printed rings and low-frequency noise.
+    // Near-tied low scores are blanks; a stronger isolated erased trace
+    // above the blank gate is still uncertain, never silently assumed zero.
+    const absoluteMargin=top.score-second.score;
+    if(top.score<=cal.background+.08*span&&top.fill<.22)
+      return {...ev,state:'blank',token:'',reason:'Cột bỏ trống'};
+    if(top.score<=cal.background+.18*span&&top.fill<.40
+      &&absoluteMargin<Math.max(.065,.20*span))
       return {...ev,state:'blank',token:'',reason:'Cột bỏ trống'};
     // Two independently substantial pencil regions: never choose a winner.
     if(secondStrength>=.55&&second.fill>=.47
@@ -63,7 +70,8 @@
       return {...ev,state:'multiple',token:'?',reason:'Tô nhiều ô tại cùng vị trí số'};
     if(secondStrength>=.26&&second.fill>=.21)
       return {...ev,state:'review',token:'?',reason:'Vết tẩy hoặc nét tô thứ hai tại cột số'};
-    if(strength<.34||top.fill<.45||margin<.20||top.gradient>.58)
+    if(strength<.28||top.fill<.28||margin<.18
+      ||(top.gradient>.58&&strength<.55))
       return {...ev,state:'review',token:'?',reason:'Nét số hoặc điều kiện sáng chưa rõ'};
     return {...ev,state:'single',token:top.token,index:top.index,reason:''};
   }

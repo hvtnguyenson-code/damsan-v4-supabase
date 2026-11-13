@@ -59,6 +59,8 @@ jobs:
         run: node tests/omr_v7_pwa_cache_028_simulation.js
       - name: OMR 029 legacy installed PWA V7 runtime recovery
         run: node tests/omr_v7_legacy_bridge_029_simulation.js
+      - name: OMR 030 V7 pencil and blank numeric evidence
+        run: node tests/omr_v7_evidence_030_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

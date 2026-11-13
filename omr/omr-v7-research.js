@@ -115,11 +115,11 @@
     const positive=[],negative=[];
     for(const row of rows){
       const s=row.slice().sort((a,b)=>b.score-a.score);
-      if(s[0]&&s[0].score>=.19&&s[0].fill>=.43)positive.push(s[0].score);
+      if(s[0]&&s[0].score>=.12&&s[0].fill>=.30)positive.push(s[0].score);
       for(const m of s.slice(1))negative.push(m.score);
     }
-    const mark=quantile(positive,.5),blank=quantile(negative,.65);
-    return {reliable:positive.length>=6&&negative.length>=12&&mark>blank+.13,
+    const mark=quantile(positive,.5),blank=quantile(negative,.67);
+    return {reliable:positive.length>=6&&negative.length>=12&&mark>blank+.09,
       mark,blank,span:mark-blank,positiveSamples:positive.length};
   }
   // Each bubble contributes independent mark evidence. Second filled choices
@@ -133,16 +133,20 @@
     const evidence={top:top.score,second:second.score,topFill:top.fill,secondFill:second.fill};
     if(metrics.some(m=>m.clipped>.28))
       return {...evidence,state:'review',value:'?',reason:'Vùng ô tô bị phản sáng'};
-    if(strength<.18&&top.fill<.18)
+    // Camera images of real pencil marks often have incomplete centre
+    // coverage; use within-row separation, not a hard 45% filled-core gate.
+    if(strength<.21&&top.fill<.20)
       return {...evidence,state:'blank',value:'',reason:'Không tô'};
-    if(strength<.39||top.fill<.45)
+    if(strength<.32||top.fill<.28)
       return {...evidence,state:'review',value:'?',reason:'Nét tô mờ'};
     if(secondStrength>=.58&&second.fill>=.52
       &&second.score/Math.max(.05,top.score)>=.52)
       return {...evidence,state:'multiple',value:'?',reason:'Tô từ hai ô'};
     if(secondStrength>=.30&&second.fill>=.20)
       return {...evidence,state:'review',value:'?',reason:'Dấu thứ hai hoặc vết tẩy'};
-    if((top.score-second.score)/span<.19||top.gradient>.55)
+    const separation=(top.score-second.score)/span;
+    const decisive=strength>=.42&&top.fill>=.30&&separation>=.20;
+    if(separation<.16||(top.gradient>.50&&!decisive))
       return {...evidence,state:'review',value:'?',reason:'Tương phản không đủ tin cậy'};
     return {...evidence,state:'single',value:labels[top.index],index:top.index,reason:''};
   }
