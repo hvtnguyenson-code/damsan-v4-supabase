@@ -8,10 +8,11 @@
   const plugin=name=>typeof module==='object'&&module.exports
     ?require('./omr-v7-'+name+'.js')
     :root['DamSanOmrV7'+({quality:'Quality',geometry:'Geometry',
-      lighting:'Lighting',marks:'Marks',numeric:'Numeric'}[name])];
+      lighting:'Lighting',marks:'Marks',numeric:'Numeric',sparse:'SparseP3'}[name])];
   const api=factory(copied,local,{
     quality:plugin('quality'),geometry:plugin('geometry'),
-    lighting:plugin('lighting'),marks:plugin('marks'),numeric:plugin('numeric')
+    lighting:plugin('lighting'),marks:plugin('marks'),numeric:plugin('numeric'),
+    sparse:plugin('sparse')
   });
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.DamSanOmrV7Candidate=api;
@@ -58,8 +59,13 @@
     if(experiment){
       const lighting=applyLighting(rect,T,B,result,geo);
       result=lighting.scan;applied.push(...lighting.applied);
-      const numeric=Ext.numeric.apply(rect,T,B,result);
-      result=numeric.scan;applied.push(...numeric.applied);
+      // Do not stack two unvalidated numeric corrections.
+      const sparse=Ext.sparse.apply(rect,T,B,result);
+      result=sparse.scan;applied.push(...sparse.applied);
+      if(!sparse.activated){
+        const numeric=Ext.numeric.apply(rect,T,B,result);
+        result=numeric.scan;applied.push(...numeric.applied);
+      }
     }
     const problems=[];
     if(result.calibration?.reliable!==true)

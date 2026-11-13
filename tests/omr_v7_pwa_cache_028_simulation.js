@@ -9,7 +9,7 @@ const scripts=['omr-scan-adapter.js','omr-reliability-v6.js',
 'omr-v7-research.js','omr-reliability-v7-baseline.js',
 'omr-v7-local-refinement.js','omr-v7-quality.js','omr-v7-geometry.js',
 'omr-v7-lighting.js','omr-v7-marks.js','omr-v7-numeric.js',
-'omr-v7-candidate.js','omr-teacher-module.js'];
+'omr-v7-sparse-p3.js','omr-v7-candidate.js','omr-teacher-module.js'];
 let last=-1;
 for(const name of scripts){
   const i=html.indexOf('src="../omr/'+name);
@@ -20,7 +20,8 @@ const root={console};vm.createContext(root);
 for(const name of ['omr-scan-adapter.js','omr-v7-research.js',
   'omr-reliability-v7-baseline.js','omr-v7-local-refinement.js',
  'omr-v7-quality.js','omr-v7-geometry.js','omr-v7-lighting.js',
- 'omr-v7-marks.js','omr-v7-numeric.js','omr-v7-candidate.js'])
+ 'omr-v7-marks.js','omr-v7-numeric.js','omr-v7-sparse-p3.js',
+ 'omr-v7-candidate.js'])
   vm.runInContext(fs.readFileSync('omr/'+name,'utf8'),root,{filename:name});
 assert.strictEqual(typeof root.DamSanOmrV7Candidate.analyzeValidatedRectified,'function');
 assert.strictEqual(typeof root.DamSanOmrScanAdapter.fromV7,'function');

@@ -23,6 +23,7 @@ const CORE=[
   '../omr/omr-v7-lighting.js',
   '../omr/omr-v7-marks.js',
   '../omr/omr-v7-numeric.js',
+  '../omr/omr-v7-sparse-p3.js',
   '../omr/omr-v7-candidate.js',
   '../omr/omr-teacher-module.js',
   './omr-v7-runtime-20261113-034.js'

@@ -69,6 +69,8 @@ jobs:
         run: node tests/omr_v7_p3_blank_034_simulation.js
       - name: OMR 035 PWA V7 release parity and read-only
         run: node tests/omr_v7_pwa_release_035_simulation.js
+      - name: OMR 036 V7 P3 0-to-6 sparse independent calibration
+        run: node tests/omr_v7_p3_sparse_036_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
