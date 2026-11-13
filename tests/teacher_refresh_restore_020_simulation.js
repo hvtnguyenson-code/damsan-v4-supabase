@@ -27,7 +27,9 @@ assert(app.includes("activeWorkspaceTruongId=gvData.truong_id||'ALL'"),'Admin fi
 assert(sw.includes("request.mode==='navigate'"));
 assert(sw.includes("cache.match(request,{ignoreSearch:true})"));
 assert(sw.includes("u.hostname.endsWith('.supabase.co')"));
-assert(!sw.includes('self.skipWaiting()'),'must not force reload during grading');
+assert(sw.includes('self.skipWaiting()'),'recovery must activate an installed waiting worker');
+assert(!sw.includes('self.clients.claim()'),'must leave existing grading pages under their current controller');
+assert(!sw.includes('location.reload('),'must not reload an active grading page');
 // Reload route: preserve a real route and never manufacture an unsafe Back depth.
 const views=new Map();
 const get=id=>{

@@ -3,7 +3,7 @@ const html=fs.readFileSync('teacher/index.html','utf8');
 const sw=fs.readFileSync('teacher/sw.js','utf8');
 const app=fs.readFileSync('teacher/app.js','utf8');
 const mod=fs.readFileSync('omr/omr-teacher-module.js','utf8');
-const revision='20261113-teacher-pwa-032';
+const revision='20261113-teacher-pwa-033';
 for(const text of [html,sw,app])assert(text.includes(revision));
 const scripts=['omr-scan-adapter.js','omr-reliability-v6.js',
 'omr-v7-research.js','omr-v7-candidate.js','omr-teacher-module.js'];
@@ -23,7 +23,8 @@ assert(mod.includes("v7Option.disabled=!v7Available"));
 assert(mod.includes("const isPwaShell=!!q('appShell')"));
 assert(mod.includes('omrV7LoadStatus'));
 assert(mod.includes("officialEngine:'v6'"));
-assert(!sw.includes('self.skipWaiting()'),'never force-reload active teacher PWA');
+assert(sw.includes('self.skipWaiting()'),'new release should activate from WAITING state');
+assert(!sw.includes('self.clients.claim()'),'must not commandeer a live grading page');
 // Test real fetch handler: stale installed cache must not mask new JS online,
 // while the last-known-good cache remains usable offline.
 const origin='https://example.org',base='/damsan-v4-supabase';
