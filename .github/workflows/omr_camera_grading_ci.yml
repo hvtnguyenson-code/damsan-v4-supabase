@@ -59,6 +59,12 @@ jobs:
         run: node tests/omr_v7_pwa_cache_028_simulation.js
       - name: OMR 029 legacy installed PWA V7 runtime recovery
         run: node tests/omr_v7_legacy_bridge_029_simulation.js
+      - name: OMR 031 V7 equals copied V6 baseline
+        run: node tests/omr_v7_baseline_031_simulation.js
+      - name: OMR 032 V7 opt-in conservative local refinement
+        run: node tests/omr_v7_local_refinement_032_simulation.js
+      - name: OMR 033 V7 combined multi-module regression
+        run: node tests/omr_v7_complete_033_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

@@ -115,7 +115,8 @@ const binding={ok:true,room:{id:'room',assessment_type:'TOT_NGHIEP'},
  assert(module.includes("const expectedEngine=expectedEngineLabel(state.officialEngine);"));
  assert(module.includes("state.officialEngine='v5'"),'V5 fallback retained');
  assert(module.includes("officialEngine:'v6'"),'V6 remains default');
- for(const filename of ['omr-v7-research.js','omr-v7-candidate.js']){
+ for(const filename of ['omr-v7-research.js',
+   'omr-reliability-v7-baseline.js','omr-v7-candidate.js']){
    assert(html.includes(filename),'PWA script missing '+filename);
    assert(sw.includes(filename),'PWA cache missing '+filename);
  }
