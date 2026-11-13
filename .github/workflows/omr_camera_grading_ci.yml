@@ -65,6 +65,8 @@ jobs:
         run: node tests/omr_v7_local_refinement_032_simulation.js
       - name: OMR 033 V7 combined multi-module regression
         run: node tests/omr_v7_complete_033_simulation.js
+      - name: OMR 034 V7 P3 empty-question conservative recovery
+        run: node tests/omr_v7_p3_blank_034_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
