@@ -14,6 +14,14 @@ assert(src.includes("state.labEnabled?'compare':state.officialEngine"));
 assert(src.includes("if(mode==='compare'&&hasV7Comparison())"));
 assert(src.includes('info.candidate=root.DamSanOmrReliabilityV6.analyzeRectified(rect,T.template)'));
 assert(src.includes('info.candidateV7=V7.analyzeValidatedRectified('));
+assert(src.includes('rect,T.template,root.DamSanOmrReliabilityV6,\n                {experimentalRefinement:true}'),
+ 'V7 comparison must expose experimental improvements in read-only mode');
+assert(src.includes("scan._labReadOnly=mode==='compare'"),
+ 'No compare writes are permitted');
+const saveBranch=src.slice(src.indexOf("}else if(mode==='v7'){"),
+ src.indexOf("}else{",src.indexOf("}else if(mode==='v7'){")));
+assert(!saveBranch.includes('experimentalRefinement:true'),
+ 'Save-enabled V7 must remain exact V6 until field validation');
 assert(src.includes('scan=E.fromV6(v5,info.candidate)'));
 assert(src.includes("scan._labReadOnly=mode==='compare'"));
 assert(src.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"));

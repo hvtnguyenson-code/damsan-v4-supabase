@@ -14,3 +14,8 @@
 - Không thay đổi PWA ghi điểm, RPC, cơ sở dữ liệu, CI pipeline hay trang chấm hiện hành. Không merge PR #184 trước nghiệm thu trên ảnh thật.
 - Test 033 bao phủ các module mới, các test 024/031 giữ parity V6 khi chế độ thử nghiệm tắt.
 - Không tuyên bố cải tiến chính xác trên ảnh thực khi chưa có bộ ảnh camera gốc được kiểm chứng thủ công.
+
+## Kết nối thử nghiệm trong PWA (chỉ chế độ so sánh)
+- Khi chọn đối chiếu V6/V7 (không lưu điểm), nhánh này gọi V7 với `experimentalRefinement:true`, so trực tiếp toàn bộ các cải tiến với V6 trên cùng ảnh.
+- Khi chọn V7 để chấm và lưu, vẫn gọi V7 ở chế độ chuẩn không bật cải tiến, tiếp tục kết quả V6-copy. Không có nút/URL thử riêng; so sánh chỉ đọc.
+- Nhánh chưa merge; muốn thử trên điện thoại thật cần xem xét phát hành có kiểm soát sau nghiệm thu bổ sung.
