@@ -27,3 +27,10 @@
 - Không có phiếu thật mới để chứng minh V7 chính xác hơn V6 trên bóng đèn, than chì phản xạ, giấy gấp, Android cũ.
 - Chưa đo tốc độ P95 trên điện thoại thật.
 - **Chỉ merge khi đã đủ kiểm thử và có quyết định cho phép phát hành**. Tuy đã tích hợp thử vào PWA của nhánh, PWA đang chạy thật vẫn dùng V6/V5.
+
+## Đối chiếu V6/V7 ngay trong PWA — 13/11/2026
+- Checkbox đối chiếu ngay dưới bộ chọn thuật toán: khi PWA có V7, hai engine V6/V7 nhận đúng **một** ảnh đã căn phối cảnh; desktop không tải V7 tiếp tục đối chiếu V5/V6 như trước.
+- Hiển thị sai khác từng vị trí (18 P1, 16 ý P2 và 6 câu P3), thời gian nhận dạng riêng, số vị trí cảnh báo, điểm dự kiến của từng engine nếu học sinh/mã đề hợp lệ. Không ghi điểm đối chiếu vào phòng, không có URL hoặc service riêng.
+- Đối chiếu luôn đánh dấu `_labReadOnly=true`, `captureMode=compare`. Nút lưu ẩn và các lớp xác nhận/lưu điểm hiện hữu vẫn từ chối thao tác. Tắt đối chiếu hoặc chuyển engine bắt buộc xóa kết quả và quét lại.
+- V6 vẫn mặc định, V7 chỉ tự chọn để chấm/lưu theo RPC gốc, V5 dự phòng. PWA cache phiên bản 031 để điện thoại nhận mã mới.
+- Bổ sung bài test 027 vào CI OMR đang có. PR #180 **chưa merge**, chưa thay đổi hệ thống đang chạy.
