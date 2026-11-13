@@ -4,7 +4,7 @@ const oldAdapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 const officialModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');
 const bundlePath='teacher/omr-v7-runtime-20261113-033.js';
 const bundle=fs.readFileSync(bundlePath,'utf8');
-assert.strictEqual(bundle,oldAdapter+'\n;\n'+officialModule+'\n',
+assert.strictEqual(bundle,(oldAdapter+'\n;\n'+officialModule).replace(/\n+$/,'\n'),
  'Recovery bundle must match canonical source byte-for-byte, not diverge');
 const html=fs.readFileSync('teacher/index.html','utf8'),
  sw=fs.readFileSync('teacher/sw.js','utf8'),

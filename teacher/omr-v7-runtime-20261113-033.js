@@ -1088,4 +1088,3 @@
   root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,
     persistForReload:()=>{if(isOpen())rememberOmr();},_state:state,_photoCropBounds:photoCropBounds,_renderReviewPhoto:renderReviewPhoto,_compareV5V6:compareV5V6};
 })(window);
-
