@@ -71,6 +71,8 @@ jobs:
         run: node tests/omr_v7_pwa_release_035_simulation.js
       - name: OMR 036 V7 P3 0-to-6 sparse independent calibration
         run: node tests/omr_v7_p3_sparse_036_simulation.js
+      - name: OMR 037 V7 photographed sparse P3 evidence
+        run: node tests/omr_v7_p3_photo_evidence_037_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
