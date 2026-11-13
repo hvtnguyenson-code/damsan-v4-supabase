@@ -26,7 +26,8 @@ for(const name of ['omr-v7-research.js','omr-v7-candidate.js']){
  assert(pwa.includes(name),'PWA missing V7 script');
  assert(sw.includes(name),'PWA service-worker missing V7 cache');
 }
-const cacheRev='20261113-teacher-pwa-031';
+const cacheRev=(sw.match(/const VERSION='([^']+)'/)||[])[1];
+assert(cacheRev,'teacher service worker version missing');
 assert(pwa.includes(cacheRev)&&sw.includes(cacheRev)&&app.includes(cacheRev));
 assert(!fs.readFileSync('giaovien.html','utf8').includes('omr-v7-candidate.js'));
 // Only the selected V7 mode may write; a comparison scan must be rejected

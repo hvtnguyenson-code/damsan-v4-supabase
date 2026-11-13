@@ -1,4 +1,4 @@
-const VERSION='20261113-teacher-pwa-031';
+const VERSION='20261113-teacher-pwa-032';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -51,10 +51,22 @@ self.addEventListener('fetch',event=>{
     return;
   }
   if(STATIC_PATHS.has(u.pathname)){
-    // Cache-first only for the pre-cached, version-scoped teacher assets.
-    // The worker install populates this cache when PWA version changes.
     event.respondWith((async()=>{
       const cache=await caches.open(CACHE);
+      // Previously cache-first plus ignoreSearch:true mixed new HTML with
+      // stale OMR code on installed PWAs. Fetch JS from network when online;
+      // retain the last-known-good cached script for offline use.
+      // Never force activation/reload during an active scan.
+      if(u.pathname.endsWith('.js')){
+        try{
+          const fresh=await fetch(request,{cache:'no-store'});
+          if(fresh.ok){
+            await cache.put(u.origin+u.pathname,fresh.clone()).catch(()=>{});
+            return fresh;
+          }
+        }catch(_err){ /* offline: fall back to installed script */ }
+        return await cache.match(request,{ignoreSearch:true})||Response.error();
+      }
       const saved=await cache.match(request,{ignoreSearch:true});
       if(saved)return saved;
       const fresh=await fetch(request);
