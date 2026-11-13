@@ -611,6 +611,38 @@
             const candidate=V7.analyzeValidatedRectified(
               rect,T.template,root.DamSanOmrReliabilityV6);
             scan=E.fromV7(v5,candidate);
+            const roomCode=String(state.roomModel?.room?.MaPhong||
+              state.roomModel?.room?.ma_phong||'').trim();
+            if(roomCode==='OMR_V7_TEST'){
+              // Research evidence is collected ONLY in the explicitly
+              // designated test room and only after teacher confirmation.
+              // The same rectified image is used; no image upload, new RPC,
+              // new database table, or extra UI step is introduced.
+              const evidence={schema:1,room:'OMR_V7_TEST',
+                v7:{p1:candidate.p1,p2:[...candidate.p2],p3:[...candidate.p3],
+                  warningCount:candidate.issues.length,
+                  invalidMarks:[...candidate.invalidMarks]},
+                v7Ms:Math.round(performance.now()-begun),
+                v6:null,v6Ms:null,comparison:null,v6Error:null};
+              try{
+                const t6=performance.now();
+                const baseline=root.DamSanOmrReliabilityV6.analyzeRectified(
+                  rect,T.template);
+                evidence.v6Ms=Math.round(performance.now()-t6);
+                evidence.v6={p1:baseline.p1,p2:[...baseline.p2],
+                  p3:[...baseline.p3],
+                  warningCount:(baseline.issues||[]).length,
+                  invalidMarks:[...(baseline.invalidMarks||[])]};
+                const difference=V7.compare(baseline,candidate);
+                evidence.comparison={count:difference.count,
+                  differences:difference.differences};
+              }catch(err){
+                // V6 reference failure is recorded as diagnostic evidence.
+                // It must not change V7 grading or bypass any V7 safety gate.
+                evidence.v6Error=String(err?.message||err).slice(0,180);
+              }
+              scan.omrV7TestEvidence=evidence;
+            }
           }else{
             const candidate=root.DamSanOmrReliabilityV6.analyzeRectified(rect,T.template);
             state.lastV6={candidate,elapsedMs:Math.round(performance.now()-begun)};

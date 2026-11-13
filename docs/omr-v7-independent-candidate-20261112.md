@@ -34,3 +34,11 @@
 - Đối chiếu luôn đánh dấu `_labReadOnly=true`, `captureMode=compare`. Nút lưu ẩn và các lớp xác nhận/lưu điểm hiện hữu vẫn từ chối thao tác. Tắt đối chiếu hoặc chuyển engine bắt buộc xóa kết quả và quét lại.
 - V6 vẫn mặc định, V7 chỉ tự chọn để chấm/lưu theo RPC gốc, V5 dự phòng. PWA cache phiên bản 031 để điện thoại nhận mã mới.
 - Bổ sung bài test 027 vào CI OMR đang có. PR #180 **chưa merge**, chưa thay đổi hệ thống đang chạy.
+
+## Phòng OMR_V7_TEST — 13/11/2026
+- Đã tạo phòng tại Supabase `xcervjnwlchwfqvbeahy`, room id `7383cc9a-7817-48d4-b819-65c2c676ec31`, môn Địa lí lớp 10, đối tượng `10A4,10A5,10A6`, trạng thái `CHO_THI`, assessment `TOT_NGHIEP`.
+- 8 mã `101…108` x 28 câu; đáp án được trích từ hai tệp đáp án chính thức người dùng cung cấp, gồm 18 câu P1 + 4 câu P2 + 6 câu P3; chưa có nội dung câu hỏi, vì vậy mỗi dòng có mô tả rõ "chỉ có đáp án".
+- Khi giáo viên chọn **V7** và chấm/lưu trong `OMR_V7_TEST`, hai engine đọc **cùng ảnh chuẩn hóa**; V6 là đối chứng. Cùng RPC `rpc_staff_submit_omr`, không tạo bảng hay endpoint mới.
+- `exam_submissions.source_metadata.omr_v7_test` chỉ được ghi sau khi giáo viên xác nhận lưu thành công, chứa kết quả dấu tô V6/V7, sai khác theo câu/ý, số cảnh báo, thời gian đọc riêng và lỗi V6 nếu có. Không chứa ảnh, tên học sinh, SBD, đáp án chuẩn hoặc token.
+- Phòng khác, hoặc khi chọn V5/V6, không ghi metadata nghiên cứu. Chế độ checkbox đối chiếu V6/V7 vẫn hoàn toàn **không lưu**, do đó để gom hơn 30 mẫu trong DB hãy chọn **V7** và xác nhận lưu điểm vào `OMR_V7_TEST`.
+- Độ đúng của engine cần đối chiếu các vết tô thật: V6/V7 thống nhất chưa chứng minh cả hai đều đúng; khóa đáp án chỉ cho phép kiểm tra điểm, không phải ground truth nhận dạng.

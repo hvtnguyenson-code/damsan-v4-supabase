@@ -77,6 +77,36 @@ const binding={ok:true,room:{id:'room',assessment_type:'TOT_NGHIEP'},
    {p3:['3000']}
  ])assert.throws(()=>A.fromV7(v5,candidate(bad)),/V7|18–4–6/);
  assert.strictEqual(calls,2,'unsafe V7 never writes');
+ // The 30+ field-test sheets must preserve paired V6/V7 readouts when a
+ // teacher selects V7 and confirms saving to the special test room.
+ const evidence={schema:1,room:'OMR_V7_TEST',v7:{
+    p1:scan.p1,p2:scan.p2,p3:scan.p3,warningCount:0,invalidMarks:[]},
+    v6:{p1:'B'.repeat(18),p2:Array(4).fill('Đ-S-Đ-S'),
+      p3:scan.p3,warningCount:1,invalidMarks:[]},
+    v7Ms:82,v6Ms:95,comparison:{count:18,differences:[
+      {key:'P1.1',v6:'B',v7:'A'}]},v6Error:null};
+ const labPreview={...preview,
+    room:{...preview.room,MaPhong:'OMR_V7_TEST'},
+    scan:{...scan,omrV7TestEvidence:evidence}};
+ const trialMetadata=W.metadataFrom(labPreview);
+ assert.strictEqual(trialMetadata.recognition_engine,'V7');
+ assert.strictEqual(trialMetadata.omr_v7_test.version,1);
+ assert.strictEqual(trialMetadata.omr_v7_test.v7_ms,82);
+ assert.strictEqual(trialMetadata.omr_v7_test.v6_ms,95);
+ assert.strictEqual(trialMetadata.omr_v7_test.comparison.count,18);
+ assert(!('omr_v7_test' in W.metadataFrom({
+   ...labPreview,room:{...labPreview.room,MaPhong:'10A4_GK1'}})),
+   'Non-test rooms must not accumulate OMR research metadata');
+ assert(!('omr_v7_test' in W.metadataFrom({
+   ...labPreview,scan:{...labPreview.scan,recognitionEngine:'V6'}})),
+   'Only deliberately selected V7 scans are recorded');
+ assert(moduleHasEvidenceGuard(),'Only the special test room records a paired V6 scan');
+ function moduleHasEvidenceGuard(){
+   const m=fs.readFileSync('omr/omr-teacher-module.js','utf8');
+   return m.includes("if(roomCode==='OMR_V7_TEST')") &&
+     m.includes('scan.omrV7TestEvidence=evidence') &&
+     m.includes('V7.compare(baseline,candidate)');
+ }
  const html=fs.readFileSync('teacher/index.html','utf8');
  const module=fs.readFileSync('omr/omr-teacher-module.js','utf8');
  const sw=fs.readFileSync('teacher/sw.js','utf8');
