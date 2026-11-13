@@ -2,10 +2,13 @@
   const copied=typeof module==='object'&&module.exports
     ?require('./omr-reliability-v7-baseline.js')
     :root.DamSanOmrReliabilityV7Baseline;
-  const api=factory(copied);
+  const local=typeof module==='object'&&module.exports
+    ?require('./omr-v7-local-refinement.js')
+    :root.DamSanOmrV7LocalRefinement;
+  const api=factory(copied,local);
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.DamSanOmrV7Candidate=api;
-})(typeof globalThis!=='undefined'?globalThis:this,function(B){
+})(typeof globalThis!=='undefined'?globalThis:this,function(B,Refine){
   'use strict';
   if(typeof B?.analyzeRectified!=='function')throw Error('V7_V6_COPY_NOT_LOADED');
   function checkTemplate(T){
@@ -30,38 +33,48 @@
       darkFraction:dark/Math.max(1,n),samples:n,
       diagnosticOnly:true,changesAnswers:false};
   }
-  function analyzeRectified(rect,T){
+  function analyzeRectified(rect,T,opts={}){
     checkTemplate(T);
     // ALL THREE SECTIONS AND INTERNAL MARKERS: exact independent V6 copy.
     const baseline=B.analyzeRectified(rect,T);
+    // Experimental only: explicitly opt in, and let the additive module
+    // operate solely on existing V6 lighting-review rows with valid markers.
+    // The normal PWA path stays exact-V6 until validated on real photos.
+    if(opts.experimentalRefinement===true&&typeof Refine?.apply!=='function')
+      throw Error('V7_REFINEMENT_MODULE_MISSING');
+    const trial=opts.experimentalRefinement===true
+      ?Refine.apply(rect,T,B,baseline):{scan:baseline,applied:[]};
+    const result=trial.scan;
     const problems=[];
-    if(baseline.calibration?.reliable!==true)
+    if(result.calibration?.reliable!==true)
       problems.push('Phần I/II chưa hiệu chuẩn được mực tô');
-    if(baseline.p3Calibration?.reliable!==true)
+    if(result.p3Calibration?.reliable!==true)
       problems.push('Phần III chưa hiệu chuẩn được mực tô');
-    const geometryDiagnostic=baseline.geometry?.status||'not_available';
+    const geometryDiagnostic=result.geometry?.status||'not_available';
     if(geometryDiagnostic!=='ok')
       problems.push('Mốc khống chế bên trong phiếu chưa đạt chất lượng');
     const byPart={P1:0,P2:0,P3:0};
-    for(const issue of baseline.issues||[]){
+    for(const issue of result.issues||[]){
       const section=String(issue.key).slice(0,2);
       if(Object.prototype.hasOwnProperty.call(byPart,section))byPart[section]++;
     }
-    return {...baseline,
+    return {...result,
       engine:'V7_COMPLETE_CANDIDATE',
       baselineEngine:'V6_EXACT_COPY',
       readOnly:true,validForSave:false,
       ok:problems.length===0,requiresRetake:problems.length>0,
-      retakeReasons:problems,requiresReview:baseline.issues.length>0,
+      retakeReasons:problems,requiresReview:result.issues.length>0,
       geometryDiagnostic,geometryApplied:false,
       quality:inspectQuality(rect),
-      enhancements:{mode:'observe_only',applied:[],answerChanges:0,
+      enhancements:{mode:opts.experimentalRefinement===true
+          ?'experimental_local_refinement':'observe_only',
+        applied:trial.applied,answerChanges:trial.applied.length,
         issueCounts:byPart}};
   }
   // The old signature is retained for compatibility. The V6 argument is
   // deliberately unused: V7 owns and runs its own copied V6 engine.
-  function analyzeValidatedRectified(rect,T,_v6){
-    return analyzeRectified(rect,T);
+  function analyzeValidatedRectified(rect,T,_v6,opts={}){
+    return analyzeRectified(rect,T,opts);
   }
   function analyzeImageData(imageData,T,core,_v6,opts={}){
     checkTemplate(T);
@@ -80,7 +93,7 @@
       requiresRetake:true,retakeReasons:['Nắn phối cảnh không đạt'],
       error:'Nắn phối cảnh không đạt',stage:'registration'};
     const rect=core.warpTemplateGray(gray,w,h,registration.H,T,opts.longSide||1800);
-    return {...analyzeRectified(rect,T),markerCorners:markers.corners,
+    return {...analyzeRectified(rect,T,opts),markerCorners:markers.corners,
       markerMatches:registration.matches,markerRmse:registration.rmse,
       rectifiedSize:[rect.width,rect.height],registrationOk:true};
   }
