@@ -22,7 +22,8 @@ assert(src.includes('showV7Comparison()'),'same PWA panel must show V6/V7');
 assert(src.includes('Thời gian đọc: V6 '));
 assert(src.includes('Điểm dự kiến: V6 '));
 assert(!src.includes('v7-lab.html'),'no separate URL');
-for(const name of ['omr-v7-research.js','omr-v7-candidate.js']){
+for(const name of ['omr-v7-research.js',
+ 'omr-reliability-v7-baseline.js','omr-v7-candidate.js']){
  assert(pwa.includes(name),'PWA missing V7 script');
  assert(sw.includes(name),'PWA service-worker missing V7 cache');
 }

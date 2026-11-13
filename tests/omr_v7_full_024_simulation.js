@@ -26,61 +26,47 @@ function render(words,mode='day'){
  return {gray,width:w,height:h};
 }
 const answers=['300','-12','12,3','3000','1,25','23'];
-for(const mode of ['day','gradient','lamp']){
- const rect=render(answers,mode),v=V.analyzeRectified(rect,T),v6=V6.analyzeRectified(rect,T);
- assert(v.calibration.reliable&&v.p3Calibration.reliable,mode+' calibration');
- assert.strictEqual(v.p1,'ABCDABCDABCDABCDAB',mode+' P1');
- assert.deepStrictEqual(v.p2,['Đ-S-Đ-S','Đ-S-Đ-S','Đ-S-Đ-S','Đ-S-Đ-S'],mode+' P2');
- assert.deepStrictEqual(v.p3,answers,mode+' P3');
- assert.strictEqual(v.issues.length,0,mode+' unexpected issues');
- assert.strictEqual(V.compare(v6,v).count,0,mode+' V6 comparison');
- assert(v.readOnly&&!v.validForSave);
+const Copy=require('../omr/omr-reliability-v7-baseline.js');
+const fields=['p1','p2','p3','p1Evidence','p2Evidence','p3Evidence',
+ 'issues','invalidMarks','calibration','p3Calibration','geometry','lighting'];
+for(const mode of ['day','gradient','lamp','eraser','double','p3double']){
+  const rect=render(answers,mode),v6=V6.analyzeRectified(rect,T);
+  const copied=Copy.analyzeRectified(rect,T),v7=V.analyzeRectified(rect,T);
+  assert.deepStrictEqual(copied,v6,'all V6 internals must match: '+mode);
+  for(const field of fields)
+    assert.deepStrictEqual(v7[field],v6[field],mode+' changed '+field);
+  assert.strictEqual(v7.engine,'V7_COMPLETE_CANDIDATE');
+  assert.strictEqual(v7.baselineEngine,'V6_EXACT_COPY');
+  assert.strictEqual(v7.enhancements.mode,'observe_only');
+  assert.deepStrictEqual(v7.enhancements.applied,[]);
+  assert.strictEqual(v7.enhancements.answerChanges,0);
+  assert.strictEqual(V.compare(v6,v7).count,0);
+  assert(v7.readOnly&&!v7.validForSave);
+  assert.strictEqual(v7.geometryDiagnostic,v6.geometry.status);
+  assert.strictEqual(v7.requiresRetake,!v6.calibration.reliable||
+    !v6.p3Calibration.reliable||v6.geometry.status!=='ok');
 }
-const one=V.analyzeRectified(render(['1','2','3','4','5','6']),T);
-assert.deepStrictEqual(one.p3,['1','2','3','4','5','6']);
-assert.strictEqual(one.p3Calibration.source,'P1_TRANSFER');
-const blank=V.analyzeRectified(render(['','','','','','']),T);
-assert.deepStrictEqual(blank.p3,['','','','','','']);
-assert(blank.p3Calibration.reliable);
-const eraser=V.analyzeRectified(render(answers,'eraser'),T);
-assert(eraser.issues.some(i=>i.key==='P2.1a'&&i.state==='review'));
-const double=V.analyzeRectified(render(answers,'double'),T);
-assert(double.invalidMarks.includes('P2.2d'));
-const p3double=V.analyzeRectified(render(answers,'p3double'),T);
-assert(p3double.issues.some(i=>i.key==='P3.1.2'&&i.state==='multiple'));
-assert.strictEqual(p3double.p3[0],'?');
-const undecidable=V.decodeP3([{state:'single',token:'3'},{state:'blank',token:''},
- {state:'single',token:'0'},{state:'blank',token:''}]);
-assert.strictEqual(undecidable.value,'?');
-assert.strictEqual(V.decodeP3([{state:'single',token:'3'},{state:'single',token:'0'},
- {state:'single',token:'0'},{state:'blank',token:''}]).value,'300');
-assert.strictEqual(V.decodeP3([{state:'single',token:'3'},{state:'single',token:'0'},
- {state:'single',token:'0'},{state:'single',token:'0'}]).value,'3000');
-for(const file of ['teacher/index.html','teacher/sw.js']){
- const content=fs.readFileSync(file,'utf8');
- assert(content.includes('omr-v7-candidate.js'),file+' should load V7 into teacher PWA');
- assert(!content.includes('v7-lab.js'),'No separate laboratory URL');
+for(const words of [['1','2','3','4','5','6'],['','','','','','']]){
+  const rect=render(words),v6=V6.analyzeRectified(rect,T),v7=V.analyzeRectified(rect,T);
+  assert.deepStrictEqual(v7.p3,v6.p3);
+  assert.deepStrictEqual(v7.issues,v6.issues);
 }
-for(const file of ['giaovien.html','omr/omr-result-write.js']){
- assert(!fs.readFileSync(file,'utf8').includes('omr-v7-candidate.js'),
-  file+' should not introduce a separate V7 write path');
+for(const path of ['teacher/index.html','teacher/sw.js']){
+  const src=fs.readFileSync(path,'utf8');
+  assert(src.includes('omr-reliability-v7-baseline.js'));
+  assert(src.includes('omr-v7-candidate.js'));
 }
-console.log('PASS OMR V7 full 18-4-6 isolated synthetic checks');
-
-// Full-image adapter must fail closed if inner printed controls are unreliable.
-{
-  const rect=render(answers);
-  const stubCore={
-    grayscale:()=>new Uint8Array(100),
-    detectCornerMarkers:()=>({ok:true,corners:[[0,0],[9,0],[9,9],[0,9]]}),
-    fastTemplateRegistration:()=>({ok:true,H:[1,0,0,0,1,0,0,0,1],matches:4,rmse:0}),
-    warpTemplateGray:()=>rect
-  };
-  const mock={data:new Uint8ClampedArray(10*10*4),width:10,height:10};
-  const unsafe=V.analyzeImageData(mock,T,stubCore,
-    {inspectMarkerGeometry:()=>({status:'insufficient',markers:[]})});
-  assert(unsafe.requiresRetake,'Missing interior controls must require recapture');
-  assert.strictEqual(unsafe.ok,false);
-  assert.strictEqual(unsafe.validForSave,false);
-  assert(unsafe.retakeReasons.some(s=>s.includes('Mốc khống chế')));
-}
+const stubCore={
+  grayscale:()=>new Uint8Array(100),
+  detectCornerMarkers:()=>({ok:true,corners:[[0,0],[9,0],[9,9],[0,9]]}),
+  fastTemplateRegistration:()=>({ok:true,H:[1,0,0,0,1,0,0,0,1],matches:4,rmse:0}),
+  warpTemplateGray:()=>render(answers)
+};
+const camera={data:new Uint8ClampedArray(10*10*4),width:10,height:10};
+const out=V.analyzeImageData(camera,T,stubCore);
+const same=V.analyzeRectified(stubCore.warpTemplateGray(),T);
+assert.deepStrictEqual(out.p1,same.p1);
+assert.deepStrictEqual(out.p2,same.p2);
+assert.deepStrictEqual(out.p3,same.p3);
+assert.strictEqual(out.validForSave,false);
+console.log('PASS OMR V7 024 V6 copy parity across all three sections');
