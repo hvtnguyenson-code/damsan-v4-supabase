@@ -35,6 +35,7 @@ const root={console,
  DamSanOmrTemplate:{},DamSanOmr:{},DamSanOmrRoomBinding:{},
  DamSanOmrScoring:{},DamSanOmrResultWrite:{},
  DamSanOmrV7Candidate:{analyzeValidatedRectified:()=>({})}};
+root.window=root; // Browser IIFE deliberately attaches to window, not Node global.
 vm.createContext(root);
 vm.runInContext(bundle,root,{filename:bundlePath});
 assert.strictEqual(typeof root.DamSanOmrScanAdapter.fromV7,'function');
