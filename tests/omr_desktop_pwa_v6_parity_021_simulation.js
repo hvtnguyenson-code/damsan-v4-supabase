@@ -31,8 +31,12 @@ assert(moduleSrc.includes('const labAvailable=!!root.DamSanOmrReliabilityV6&&!!E
   'fallback to V5 must require missing V6 modules');
 assert(moduleSrc.includes("state.officialEngine='v5'"),'V5 fallback must remain available');
 assert(moduleSrc.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"),'comparison must stay read-only');
-assert(moduleSrc.includes("const expectedEngine=state.officialEngine==='v6'?'V6':'V5'"),
-  'saving must verify the scan algorithm');
+assert(moduleSrc.includes("const expectedEngine=expectedEngineLabel(state.officialEngine);"),
+  'saving must verify V5/V6/V7 identity');
+assert(m.filter(x=>x.path==='omr/omr-v7-candidate.js').length===1);
+assert(m.filter(x=>x.path==='omr/omr-v7-research.js').length===1);
+assert(d.every(x=>x.path!=='omr/omr-v7-candidate.js'&&x.path!=='omr/omr-v7-research.js'),
+  'V7 is a PWA-only option');
 const roots={};
 const load=(file)=>vm.runInNewContext(fs.readFileSync(file,'utf8'),{
   window:roots,globalThis:roots,console,document:{},setTimeout,clearTimeout

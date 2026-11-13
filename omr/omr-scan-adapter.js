@@ -4,7 +4,7 @@
   else root.DamSanOmrScanAdapter=api;
 })(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const MODES=['v6','v5','compare'];
+  const MODES=['v6','v5','v7','compare'];
   function safeMode(mode){
     if(!MODES.includes(mode))throw Error('unknown_omr_mode');
     return mode;
@@ -79,5 +79,28 @@
       _requiresRetake:blocking.length>0,_retakeReason:blocking.join('; '),
       v6Diagnostics:{geometry:candidate.geometry?.status||'unknown',issues:uncertain.length}};
   }
-  return {safeMode,issueLabel,validateCandidate,fromV6};
+  // Only the selected PWA V7 branch may promote an independently validated
+  // offline candidate into the existing canonical scan/write contract.
+  // Candidate modules themselves never contain a submission function.
+  function fromV7(v5,candidate){
+    if(!v5?.ok)throw Error('V7 cần xác định bốn góc và SBD/mã đề trước');
+    validateCandidate(candidate);
+    if(candidate.engine!=='V7_COMPLETE_CANDIDATE'
+      ||candidate.readOnly!==true||candidate.validForSave!==false
+      ||candidate.ok!==true||candidate.requiresRetake!==false
+      ||candidate.geometryDiagnostic!=='ok'
+      ||candidate.calibration?.reliable!==true
+      ||candidate.p3Calibration?.reliable!==true
+      ||!Array.isArray(candidate.retakeReasons)
+      ||candidate.retakeReasons.length)
+      throw Error('V7 chưa đạt điều kiện nhận dạng; quét lại hoặc chọn V6 dự phòng');
+    const normalized=fromV6(v5,{...candidate,geometry:{status:'ok'}});
+    if(normalized._requiresRetake)
+      throw Error('V7 chưa đủ an toàn để lưu kết quả');
+    return {...normalized,recognitionEngine:'V7',captureMode:'v7',
+      v7Diagnostics:{geometry:candidate.geometryDiagnostic,
+        geometryApplied:!!candidate.geometryApplied,
+        issues:normalized.uncertain.length}};
+  }
+  return {safeMode,issueLabel,validateCandidate,fromV6,fromV7};
 });

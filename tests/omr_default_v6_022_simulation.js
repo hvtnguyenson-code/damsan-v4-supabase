@@ -3,7 +3,7 @@ const fs=require('fs');
 const vm=require('vm');
 
 const source=fs.readFileSync('omr/omr-teacher-module.js','utf8');
-function harness(saved=null,{v6Available=true}={}){
+function harness(saved=null,{v6Available=true,v7Available=false}={}){
   const session=new Map([
     ['damSan_GVSession',JSON.stringify({id:'teacher-1'})]
   ]);
@@ -29,8 +29,9 @@ function harness(saved=null,{v6Available=true}={}){
   // Pretend that the reusable overlay was already constructed by ensureUi.
   get('omrTeacherOverlay');
   const win={DamSanOmrTemplate:{},DamSanOmr:{},DamSanOmrRoomBinding:{},
-    DamSanOmrScoring:{},DamSanOmrResultWrite:{},DamSanOmrScanAdapter:{},
-    ...(v6Available?{DamSanOmrReliabilityV6:{}}:{})};
+    DamSanOmrScoring:{},DamSanOmrResultWrite:{},DamSanOmrScanAdapter:{fromV7:()=>{}},
+    ...(v6Available?{DamSanOmrReliabilityV6:{}}:{}),
+    ...(v7Available?{DamSanOmrV7Candidate:{analyzeValidatedRectified(){}}}:{})};
   const ctx={window:win,document:{getElementById:get,querySelectorAll:()=>[]},
     sessionStorage:storage,console,Date,
     rpcLayDanhSachPhongThi:async()=>[]};
@@ -78,8 +79,19 @@ function harness(saved=null,{v6Available=true}={}){
   await fallback.api.open();
   assert.strictEqual(fallback.get('omrEngineSelect').value,'v5');
   assert.strictEqual(fallback.api._state.officialEngine,'v5');
-  // No script may silently change the V6/V5 official write guards.
-  assert(source.includes("const expectedEngine=state.officialEngine==='v6'?'V6':'V5'"));
+  // All three selected write modes must verify their scan identity.
+  assert(source.includes("const expectedEngine=expectedEngineLabel(state.officialEngine);"));
+  assert(source.includes("engine==='v7'?'V7'"));
+  const v7Draft={photo:'data:image/jpeg;base64,YQ==',
+    scan:{ok:true,recognitionEngine:'V7'},
+    roomId:'room-1',engine:'v7',compare:false};
+  const recovered=harness({engine:'v7',compare:false,draft:v7Draft},{v7Available:true});
+  await recovered.api.open();
+  assert.strictEqual(recovered.api._state.officialEngine,'v7');
+  assert.strictEqual(recovered.get('omrEngineSelect').value,'v7');
+  const unsupported=harness({engine:'v7',draft:v7Draft},{v7Available:false});
+  await unsupported.api.open();
+  assert.strictEqual(unsupported.get('omrEngineSelect').value,'v6');
   assert(source.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"));
   console.log('PASS omr_default_v6_022');
 })().catch(e=>{console.error(e);process.exitCode=1});

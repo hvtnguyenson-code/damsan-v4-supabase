@@ -47,6 +47,14 @@ jobs:
         run: node tests/omr_desktop_pwa_v6_parity_021_simulation.js
       - name: OMR 022 V6 default on open and valid pending V5 draft
         run: node tests/omr_default_v6_022_simulation.js
+      - name: OMR 023 isolated V7 research candidate
+        run: node tests/omr_v7_candidate_023_simulation.js
+      - name: OMR 024 V7 full P1 P2 P3 offline
+        run: node tests/omr_v7_full_024_simulation.js
+      - name: OMR 026 V7 PWA canonical write path and guards
+        run: node tests/omr_v7_pwa_026_simulation.js
+      - name: OMR 027 V6/V7 read-only same-image PWA comparison
+        run: node tests/omr_v7_compare_027_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

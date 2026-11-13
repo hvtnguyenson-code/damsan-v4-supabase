@@ -16,9 +16,10 @@
     if(!Array.isArray(preview.rawAnswers)||!preview.rawAnswers.length) throw new Error('raw_answers_required');
   }
   function metadataFrom(preview){
-    return {
+    const metadata={
       template_id:preview.scan?.templateId||'MOET_TLTN_2025_18_4_6_V1',
-      recognition_engine:preview.scan?.recognitionEngine==='V6'?'V6':'V5',
+      recognition_engine:['V5','V6','V7'].includes(preview.scan?.recognitionEngine)
+        ?preview.scan.recognitionEngine:'V5',
       reviewed:true,
       uncertain_reviewed: preview.reviewedUncertain === true,
       uncertain_count:(preview.scan?.uncertain||[]).length,
@@ -34,6 +35,25 @@
       })),
       client_preview_score:preview.grade?.score??null
     };
+    // Comparative evidence stays inside the existing, access-controlled
+    // OMR submission metadata, only for the designated research room.
+    // No image, student identity, token, or answer-key contents are copied.
+    const roomCode=String(preview.room?.MaPhong||preview.room?.ma_phong||'').trim();
+    const evidence=preview.scan?.omrV7TestEvidence;
+    if(roomCode==='OMR_V7_TEST'&&preview.scan?.recognitionEngine==='V7'
+      &&evidence?.schema===1&&evidence.room==='OMR_V7_TEST'
+      &&Array.isArray(evidence.v7?.p2)&&Array.isArray(evidence.v7?.p3)){
+      metadata.omr_v7_test={
+        version:1,
+        v6:evidence.v6||null,
+        v7:evidence.v7,
+        v6_ms:Number.isFinite(evidence.v6Ms)?evidence.v6Ms:null,
+        v7_ms:Number.isFinite(evidence.v7Ms)?evidence.v7Ms:null,
+        comparison:evidence.comparison||null,
+        v6_error:evidence.v6Error||null
+      };
+    }
+    return metadata;
   }
   async function submitConfirmed(preview,staffRpc){
     assertConfirmed(preview);
