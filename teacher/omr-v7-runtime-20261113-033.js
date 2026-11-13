@@ -717,8 +717,11 @@
             }catch(err){info.error='V6: '+(err?.message||String(err));}
             try{
               const t7=performance.now();
+              // A/B experiment is ALWAYS read-only; expose the full
+              // V7 candidate here, never in the save-enabled V7 path.
               info.candidateV7=V7.analyzeValidatedRectified(
-                rect,T.template,root.DamSanOmrReliabilityV6);
+                rect,T.template,root.DamSanOmrReliabilityV6,
+                {experimentalRefinement:true});
               info.v7ElapsedMs=Math.round(performance.now()-t7);
               if(!info.candidateV7.ok)
                 info.v7Error=(info.candidateV7.retakeReasons||[]).join('; ')||
