@@ -26,7 +26,7 @@ assert.strictEqual(studentManifest.id,'./hoc_sinh.html','student PWA id must rem
 assert(studentSw.includes("'./hoc_sinh.html'"),'student service worker core remains student-only');
 assert(!studentSw.includes("teacher/index.html"),'teacher shell must not be added to student SW');
 
-assert(teacherHtml.includes('href="./manifest.json?v=20261113-teacher-pwa-032"'));
+assert(teacherHtml.includes('href="./manifest.json?v=20261113-teacher-pwa-033"'));
 assert(teacherHtml.includes('../omr/omr-teacher-module.js'));
 assert(teacherHtml.includes('../omr/omr-reliability-v6.js'),'V6 diagnostic is available to teacher PWA');
 assert(teacherHtml.includes('../omr/omr-scan-adapter.js'),'teacher must load V6/V7 canonical adapter');
@@ -69,7 +69,11 @@ assert(teacherSw.includes("u.hostname.endsWith('.supabase.co')"));
 assert(teacherSw.includes("fetch(request,{cache:'no-store'})"),'Supabase and HTML must stay network-first');
 assert(teacherSw.includes("cache.match(request,{ignoreSearch:true})"),'static assets should use installed PWA cache');
 assert(teacherSw.includes("request.mode==='navigate'"),'navigation must preserve a network-first policy');
-assert(!teacherSw.includes("self.skipWaiting()"),'teacher SW must not force reload during an active scan');
+assert(teacherSw.includes("self.skipWaiting()"),'updated release must activate even if legacy clients stay open');
+assert(!teacherSw.includes("self.clients.claim()"),'never take over an active grading page');
+assert(!teacherSw.includes("location.reload("),'SW must never force a page reload');
+assert(teacherHtml.includes('./omr-v7-runtime-20261113-033.js'),'new PWA boot bridge must bypass legacy SW precache');
+assert(teacherSw.includes("'./omr-v7-runtime-20261113-033.js'"),'new PWA worker must precache recovery bridge');
 assert(!teacherSw.includes("'../hoc_sinh.html'"),'teacher SW must not own the student runtime');
 
 child.execFileSync(process.execPath,['--check','teacher/app.js'],{stdio:'inherit'});

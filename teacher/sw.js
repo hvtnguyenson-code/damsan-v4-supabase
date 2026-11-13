@@ -1,4 +1,4 @@
-const VERSION='20261113-teacher-pwa-032';
+const VERSION='20261113-teacher-pwa-033';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -17,16 +17,28 @@ const CORE=[
   '../omr/omr-reliability-v6.js',
   '../omr/omr-v7-research.js',
   '../omr/omr-v7-candidate.js',
-  '../omr/omr-teacher-module.js'
+  '../omr/omr-teacher-module.js',
+  './omr-v7-runtime-20261113-033.js'
 ];
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)));
+  // One-time recovery for clients whose previous SW remains WAITING. Activate
+  // only AFTER all release assets are successfully precached. skipWaiting
+  // does not reload a page, and activate deliberately does NOT clients.claim:
+  // an open grading session keeps its existing runtime/controller.
+  event.waitUntil(caches.open(CACHE)
+    .then(cache=>cache.addAll(CORE))
+    .then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
-  event.waitUntil(Promise.all([
-    caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('damsan-teacher-')&&k!==CACHE).map(k=>caches.delete(k)))),
-    self.clients.claim()
-  ]));
+  event.waitUntil((async()=>{
+    // If another installed PWA page is still open, preserve its old cache
+    // until it closes. Never delete assets needed by an ongoing scan.
+    const active=await self.clients.matchAll({type:'window',includeUncontrolled:true});
+    if(active.length)return;
+    const keys=await caches.keys();
+    await Promise.all(keys.filter(k=>k.startsWith('damsan-teacher-')&&k!==CACHE)
+      .map(k=>caches.delete(k)));
+  })());
 });
 const STATIC_PATHS=new Set(CORE.map(path=>new URL(path,self.registration.scope).pathname));
 self.addEventListener('fetch',event=>{
@@ -45,7 +57,7 @@ self.addEventListener('fetch',event=>{
         if(res.ok)await cache.put('./index.html',res.clone()).catch(()=>{});
         return res;
       }).catch(()=>null);
-      const fast=await Promise.race([network,new Promise(resolve=>setTimeout(()=>resolve(null),1300))]);
+      const fast=await Promise.race([network,new Promise(resolve=>setTimeout(()=>resolve(null),5000))]);
       return fast||await cache.match('./index.html')||await network||Response.error();
     })());
     return;
