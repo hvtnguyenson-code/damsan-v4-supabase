@@ -8,11 +8,11 @@
   const plugin=name=>typeof module==='object'&&module.exports
     ?require('./omr-v7-'+name+'.js')
     :root['DamSanOmrV7'+({quality:'Quality',geometry:'Geometry',
-      lighting:'Lighting',marks:'Marks',numeric:'Numeric',sparse:'SparseP3'}[name])];
+      lighting:'Lighting',marks:'Marks',numeric:'Numeric','sparse-p3':'SparseP3'}[name])];
   const api=factory(copied,local,{
     quality:plugin('quality'),geometry:plugin('geometry'),
     lighting:plugin('lighting'),marks:plugin('marks'),numeric:plugin('numeric'),
-    sparse:plugin('sparse')
+    sparse:plugin('sparse-p3')
   });
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.DamSanOmrV7Candidate=api;
