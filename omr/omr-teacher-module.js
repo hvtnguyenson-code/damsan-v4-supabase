@@ -186,6 +186,7 @@
                <option value="v5">V5 – chấm và lưu điểm (dự phòng)</option>
              </select>
              <div class="omr-muted" style="margin-top:6px">Đổi thuật toán sẽ xóa kết quả chưa lưu; cần quét lại phiếu.</div>
+             <div class="omr-muted" id="omrV7LoadStatus" style="display:none;margin-top:6px" role="status"></div>
            </div>
            <div class="omr-card omr-warn" id="omrV6LabWrap" style="display:none">
              <label class="omr-lab-toggle"><input type="checkbox" id="omrV6Lab"><span id="omrCompareLabel"><b>Đối chiếu V5/V6</b> (không lưu điểm)</span></label>
@@ -340,7 +341,18 @@
     q('omrEngineSelect').querySelector('option[value="v6"]').disabled=!labAvailable;
     const v7Option=q('omrEngineSelect').querySelector('option[value="v7"]');
     v7Option.disabled=!v7Available;
-    v7Option.hidden=!v7Available; // Desktop continues with V6/V5 only.
+    // V7 must not disappear silently from installed teacher PWAs when
+    // old cache assets have not been replaced yet.
+    const isPwaShell=!!q('appShell');
+    v7Option.hidden=!v7Available&&!isPwaShell;
+    v7Option.textContent=v7Available
+      ?'V7 – chấm và lưu điểm (thử nghiệm)'
+      :'V7 – đang chờ cập nhật PWA';
+    const v7Status=q('omrV7LoadStatus');
+    v7Status.style.display=isPwaShell&&!v7Available?'block':'none';
+    v7Status.textContent=isPwaShell&&!v7Available
+      ?'V7 chưa tải đủ mô-đun. Hãy đóng hẳn PWA rồi mở lại để cập nhật; tạm thời chỉ chấm bằng V6 hoặc V5.'
+      :'';
     if(!labAvailable){
       state.labEnabled=false;q('omrV6Lab').checked=false;
       state.officialEngine='v5';
