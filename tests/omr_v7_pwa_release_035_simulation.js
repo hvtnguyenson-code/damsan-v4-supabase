@@ -1,7 +1,7 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 console.log('=== OMR 035 PWA V7 field-test release and read-only guard ===');
-const rev='20261113-teacher-pwa-034';
-const bridge='omr-v7-runtime-20261113-034.js';
+const rev='20261114-teacher-pwa-035';
+const bridge='omr-v7-runtime-20261114-035.js';
 const bundle=fs.readFileSync('teacher/'+bridge,'utf8');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 const teacherModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');
@@ -23,10 +23,15 @@ assert(!html.includes('src="./omr-v7-runtime-20261113-033.js'));
 assert(!sw.includes("'./omr-v7-runtime-20261113-033.js'"));
 // Keep older recovery bundle for old installed clients, without loading two.
 assert(fs.existsSync('teacher/omr-v7-runtime-20261113-033.js'));
+assert(fs.existsSync('teacher/omr-v7-runtime-20261113-034.js'));
+assert(html.includes('omr-v7-sparse-p3.js'));
+assert(sw.includes("'../omr/omr-v7-sparse-p3.js'"));
 assert(sw.includes("fetch(request,{cache:'no-store'})"));
 assert(sw.includes('self.skipWaiting()')&&!sw.includes('self.clients.claim()'));
 assert(!sw.includes('location.reload('));
 assert(numerical.includes('tryRecoverUniformBlank'));
+assert(fs.readFileSync('omr/omr-v7-sparse-p3.js','utf8').includes('globalCountRequirement:0'));
+assert(candidate.includes("sparse:plugin('sparse-p3')"));
 assert(candidate.includes('Ext.numeric.apply(rect,T,B,result)'));
 assert(teacherModule.includes('info.candidateV7=V7.analyzeValidatedRectified('));
 assert(teacherModule.includes('rect,T.template,root.DamSanOmrReliabilityV6,\n                {experimentalRefinement:true}'));

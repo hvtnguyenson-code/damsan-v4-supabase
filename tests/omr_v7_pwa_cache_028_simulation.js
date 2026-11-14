@@ -3,7 +3,7 @@ const html=fs.readFileSync('teacher/index.html','utf8');
 const sw=fs.readFileSync('teacher/sw.js','utf8');
 const app=fs.readFileSync('teacher/app.js','utf8');
 const mod=fs.readFileSync('omr/omr-teacher-module.js','utf8');
-const revision='20261113-teacher-pwa-034';
+const revision='20261114-teacher-pwa-035';
 for(const text of [html,sw,app])assert(text.includes(revision));
 const scripts=['omr-scan-adapter.js','omr-reliability-v6.js',
 'omr-v7-research.js','omr-reliability-v7-baseline.js',
