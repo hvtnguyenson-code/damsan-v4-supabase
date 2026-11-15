@@ -31,6 +31,10 @@ assert(css.includes('.omr-identity-grid>.omr-field{min-width:0;max-width:100%;wi
 assert(css.includes('.omr-identity-grid>.omr-field-student{grid-column:1/-1}'));
 assert(css.includes('.omr-identity-grid input,#omrTeacherOverlay .omr-identity-grid select{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box'));
 assert(css.includes('@media(max-width:340px){#omrTeacherOverlay .omr-identity-grid{grid-template-columns:minmax(0,1fr)}'));
+assert(css.includes('#omrTeacherOverlay .omr-grid>.omr-answer{min-width:0;max-width:100%}'),
+ 'answer grid intrinsic widths must not produce horizontal overflow');
+assert(css.includes('#omrTeacherOverlay .omr-grid>.omr-answer input{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box'),
+ 'P1/P2/P3 inputs must obey their mobile grid track');
 assert(js.includes("officialEngine:'v7'"),'V7 official must stay unchanged');
 assert(js.includes("scan=E.fromV7(v5,candidate);"),'V7 normalization must stay unchanged');
 assert(js.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"),'No comparison writes');

@@ -157,7 +157,10 @@
       .omr-photo-controls button{border:0;border-radius:8px;background:#334155;color:#fff;font-weight:700;padding:10px 14px;cursor:pointer}
       #omrPhotoPan{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y}
       #omrPhotoZoomCanvas{display:block;max-width:none;height:auto;margin:0 auto}
-      .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
+      #omrTeacherOverlay .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;min-width:0;max-width:100%}
+      #omrTeacherOverlay .omr-grid>.omr-answer{min-width:0;max-width:100%}
+      #omrTeacherOverlay .omr-grid>.omr-answer input{display:block;width:100%;min-width:0;max-width:100%;box-sizing:border-box;font-family:ui-monospace,monospace}
+      #omrTeacherOverlay #omrStudentName{overflow-wrap:anywhere}
       .omr-score{font-size:30px;font-weight:800;color:#0f766e}.omr-progress{font-weight:700;color:#334155}
       /* Fixed V7 map: no collapsed details and no responsive overflow. */
       #omrTeacherOverlay .omr-shell,#omrTeacherOverlay .omr-body,#omrTeacherOverlay .omr-card{box-sizing:border-box;min-width:0;max-width:100%}

@@ -17,3 +17,6 @@ Hai ảnh chụp PWA giáo viên: (1) bản đồ mốc nội bộ và vị trí
 - `tests/run_teacher_omr_mobile_layout_probe_043.mjs`: kiểm tra giao diện Chromium bằng máy giả lập Android ở 320, 360, 390, 430, 768 px, bảo đảm không tràn ngang và đúng số cột.
 - Các kiểm thử OMR 001–042 và Submission Safety CI tiếp tục được thực hiện.
 - Không có migration, RPC, thay đổi quyền hay dữ liệu điểm. Triển khai GitHub Pages theo pipeline hiện hữu.
+
+### Phát hiện trong kiểm thử Chromium
+Tại viewport 390px, SBD/Mã đề đã khớp khung nhưng input trong grid Phần I/II/III có kích thước nội tại lớn hơn track, gây `scrollWidth` của shell 417px dù viewport chỉ 390px. Đã bổ sung CSS giới hạn `omr-answer input` theo track, kiểm chứng lại bằng cùng bài kiểm thử Chromium.
