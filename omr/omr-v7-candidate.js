@@ -60,7 +60,7 @@
       const lighting=applyLighting(rect,T,B,result,geo);
       result=lighting.scan;applied.push(...lighting.applied);
       // Do not stack two unvalidated numeric corrections.
-      const sparse=Ext.sparse.apply(rect,T,B,result);
+      const sparse=Ext.sparse.apply(rect,T,B,result,Ext.numeric);
       result=sparse.scan;applied.push(...sparse.applied);
       if(!sparse.activated){
         const numeric=Ext.numeric.apply(rect,T,B,result);

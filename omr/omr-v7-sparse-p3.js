@@ -55,7 +55,7 @@ function classify(col,T,B,cal){
    reason:'Cột không tô (V7 nền riêng)',refinement:'weak_ring_blank'};
  return old;
 }
-function apply(rect,T,B,base){
+function apply(rect,T,B,base,numeric){
  if(base?.geometry?.status!=='ok'||base.p3Calibration?.reliable===true)
   return {scan:base,applied:[],activated:false};
  const metrics=B.measureP3Columns(rect,T);
@@ -66,7 +66,32 @@ function apply(rect,T,B,base){
  const p3=[],evidence=[],issues=[],applied=[];
  for(let i=0;i<6;i++){
   const columns=metrics[i].map(c=>classify(c,T,B,cal));
-  const decoded=B.decodeP3Positions(columns);
+  let decoded=B.decodeP3Positions(columns);
+  // After sparse calibration, reuse the existing strict four-column blank
+  // consensus for one isolated REVIEW inside an otherwise blank question.
+  // Never override a SINGLE/MULTIPLE mark, erased graphite or a numeric gap.
+  if(decoded.value==='?'&&typeof numeric?.tryRecoverUniformBlank==='function'){
+   const eligible=columns.filter(c=>c.state==='review').length===1
+     &&columns.every(c=>c.state==='review'||c.state==='blank');
+   if(eligible){
+    const evidence=numeric.tryRecoverUniformBlank(
+      {value:decoded.value,columns},metrics[i],cal);
+    if(evidence){
+     const j=evidence.reviewIndex;
+     const proposed=columns.map((c,k)=>k===j?{...c,
+       state:'blank',token:'',index:-1,
+       reason:'Cột không tô (V7 đồng thuận toàn câu)',
+       refinement:evidence.method}:c);
+     const confirmation=B.decodeP3Positions(proposed);
+     if(confirmation.value===''&&!confirmation.reason){
+      columns[j]=proposed[j];
+      decoded=confirmation;
+      applied.push({key:'P3.'+(i+1)+'.'+(j+1),
+        from:'?',to:'',method:'sparse_p3_blank_consensus'});
+     }
+    }
+   }
+  }
   p3.push(decoded.value);
   evidence.push({value:decoded.value,raw:columns.map(c=>c.token),
     columns,uncertain:!!decoded.reason,reason:decoded.reason});
