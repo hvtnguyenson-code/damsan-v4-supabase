@@ -13,6 +13,7 @@
   const expectedEngineLabel=(engine,compare=false)=>compare
     ?(hasV7Comparison()?'V6':'V5')
     :engine==='v7'?'V7':engine==='v6'?'V6':'V5';
+  const formatScore=value=>{const n=Number(value);return value===null||value===undefined||value===''||!Number.isFinite(n)?'—':n.toFixed(2).replace('.',',');};
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   function normalizeRoom(r){
@@ -234,7 +235,7 @@
           <div class="omr-card omr-ok" id="omrGradeCard" style="display:none">
             <div id="omrStudentName" style="font-weight:800"></div>
             <div>Mã đề: <b id="omrGradeCode"></b></div>
-            <div>Điểm dự kiến (<span id="omrGradeEngine">V6</span>): <span class="omr-score" id="omrScore">-</span></div>
+            <div>Điểm dự kiến (<span id="omrGradeEngine">V7</span>): <span class="omr-score" id="omrScore">-</span></div>
             <div id="omrPartScores" class="omr-muted"></div>
           </div>
           <div class="omr-actions">
@@ -791,8 +792,8 @@
         student:state.lastPreview.student,variant:state.lastPreview.variant};
       const estimate=S.previewScan(alt,binding,{allowUncertain:true});
       scores.textContent=estimate.ok
-        ?'V5: '+state.lastPreview.grade.score+
-          ' điểm • V6: '+estimate.grade.score+' điểm (V6 nhận dạng độc lập Phần III)'
+        ?'V5: '+formatScore(state.lastPreview.grade.score)+
+          ' điểm • V6: '+formatScore(estimate.grade.score)+' điểm (V6 nhận dạng độc lập Phần III)'
         :'V6 chưa thể tính điểm dự kiến.';
     }catch(e){scores.textContent='Không so được điểm: '+(e.message||'lỗi');}
   }
@@ -858,9 +859,9 @@
     state.lastPreview=preview;
     q('omrStudentName').textContent=`${st.ma_hs} — ${st.ho_ten} (${st.lop})`;
     q('omrGradeCode').textContent=vr.variant.code;
-    q('omrScore').textContent=String(preview.grade.score);
+    q('omrScore').textContent=formatScore(preview.grade.score);
     q('omrGradeEngine').textContent=scan.recognitionEngine||'V5';
-    q('omrPartScores').textContent=`P1: ${preview.grade.parts.p1} • P2: ${preview.grade.parts.p2} • P3: ${preview.grade.parts.p3}`;
+    q('omrPartScores').textContent=`P1: ${formatScore(preview.grade.parts.p1)} • P2: ${formatScore(preview.grade.parts.p2)} • P3: ${formatScore(preview.grade.parts.p3)}`;
     q('omrGradeCard').style.display='block';
     if(scan.uncertain.length) showScanWarnings(scan);
     else {clearWarningHighlights();hideWarning();}
@@ -898,7 +899,7 @@
     }
     const st=state.lastPreview.student;
     if(state.saved.has(String(st.id))){showWarning('Học sinh này đã được lưu trong phiên chấm hiện tại.');return;}
-    if(!confirm(`Lưu điểm ${state.lastPreview.grade.score} cho ${st.ho_ten} — mã đề ${state.lastPreview.variant.code}?`))return;
+    if(!confirm(`Lưu điểm ${formatScore(state.lastPreview.grade.score)} cho ${st.ho_ten} — mã đề ${state.lastPreview.variant.code}?`))return;
     const btn=q('omrSave'),old=btn.textContent;btn.disabled=true;btn.textContent='Đang lưu...';
     try{
       const data=await W.submitConfirmed(state.lastPreview,staffRpc);
@@ -906,7 +907,7 @@
       if(data.status!=='success') throw new Error(data.message||'Không lưu được kết quả.');
       state.saved.add(String(st.id));updateProgress();
       q('omrGradeCard').classList.add('omr-ok');
-      alert(`Đã lưu: ${st.ho_ten} — ${data.score} điểm.`);
+      alert(`Đã lưu: ${st.ho_ten} — ${formatScore(data.score)} điểm.`);
       resetScan();
       if(!root.DamSanTeacherNav?.resumeCamera?.())await openCamera({navigation:'replace'});
     }catch(e){showWarning('Lưu thất bại: '+e.message);}

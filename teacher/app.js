@@ -103,6 +103,7 @@ function showTeacherCredentialFeedback(status){
 
 const GV_SESSION_FIELDS=['id','ma_gv','ho_ten','quyen','truong_id','truong_ten','mon_id'];
 const $=id=>document.getElementById(id);
+const formatScore=value=>{const n=Number(value);return value===null||value===undefined||value===''||!Number.isFinite(n)?'—':n.toFixed(2).replace('.',',');};
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function safeGvProfile(source){
@@ -328,7 +329,7 @@ async function loadScores(roomId){
   if(!data||data.status!=='success')throw new Error(data?.message||'Không tải được bảng điểm.');
   const rows=data.results||[];
   const numeric=rows.map(x=>Number(x.diem)).filter(Number.isFinite);
-  const avg=numeric.length?(numeric.reduce((a,b)=>a+b,0)/numeric.length).toFixed(2):'—';
+  const avg=numeric.length?formatScore(numeric.reduce((a,b)=>a+b,0)/numeric.length):'—';
   $('scoreSummary').textContent=`${rows.length} kết quả • Điểm TB: ${avg}`;
   if(!rows.length){
     $('scoreList').innerHTML='<div class="card empty">Phòng chưa có kết quả.</div>';
@@ -339,7 +340,7 @@ async function loadScores(roomId){
     <div class="card score-row">
       <div><b>${esc(r.hoc_sinh?.ma_hs||'—')} — ${esc(r.hoc_sinh?.ho_ten||'Không rõ')}</b>
       <small>${esc(r.hoc_sinh?.lop||'')} • Mã đề ${esc(r.ma_de||'—')}</small></div>
-      <div class="score">${esc(r.diem??'—')}</div>
+      <div class="score">${esc(formatScore(r.diem))}</div>
     </div>`).join('');
 }
 
@@ -528,7 +529,7 @@ function updatePwaStatus(){
 }
 async function registerServiceWorker(){
   if(!('serviceWorker' in navigator))return;
-  try{await navigator.serviceWorker.register('./sw.js?v=20261115-teacher-pwa-039',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
+  try{await navigator.serviceWorker.register('./sw.js?v=20261115-teacher-pwa-040',{scope:'./',updateViaCache:'none'});}catch(e){console.warn('Teacher SW:',e);}
 }
 function setupInstall(){
   const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;

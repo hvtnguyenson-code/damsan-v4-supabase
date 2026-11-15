@@ -7,7 +7,7 @@ const desktop=fs.readFileSync('giaovien.html','utf8');
 const html=fs.readFileSync('teacher/index.html','utf8');
 const sw=fs.readFileSync('teacher/sw.js','utf8');
 const candidate=fs.readFileSync('omr/omr-v7-candidate.js','utf8');
-const bridge=fs.readFileSync('teacher/omr-v7-runtime-20261115-039.js','utf8');
+const bridge=fs.readFileSync('teacher/omr-v7-runtime-20261115-040.js','utf8');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 assert.strictEqual(bridge,(adapter+'\n;\n'+moduleSrc).replace(/\n+$/,'\n'),'runtime bridge must match V7 canonical code');
 assert(moduleSrc.includes("officialEngine:'v7'"));
@@ -34,10 +34,10 @@ assert(candidate.includes("opts.experimentalRefinement===true"));
 assert(candidate.includes('Ext.sparse.apply(rect,T,B,result,Ext.numeric)'));
 assert(candidate.includes('geometryDiagnostic'));
 assert(desktop.includes('omr-v7-candidate.js'));
-assert(html.includes('20261115-teacher-pwa-039'));
-assert(sw.includes("const VERSION='20261115-teacher-pwa-039'"));
-assert(html.includes('omr-v7-runtime-20261115-039.js'));
-assert(sw.includes("'./omr-v7-runtime-20261115-039.js'"));
+assert(html.includes('20261115-teacher-pwa-040'));
+assert(sw.includes("const VERSION='20261115-teacher-pwa-040'"));
+assert(html.includes('omr-v7-runtime-20261115-040.js'));
+assert(sw.includes("'./omr-v7-runtime-20261115-040.js'"));
 const scan0={ok:true,sbd:'00100434',maDe:'103',p1:'A'.repeat(18),
  p2:Array(4).fill('Đ-S-Đ-S'),p3:['','175','15','','',''],
  uncertain:[],uncertainDetails:[],invalidMarks:[]};

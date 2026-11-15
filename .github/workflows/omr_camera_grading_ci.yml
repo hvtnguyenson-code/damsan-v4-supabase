@@ -81,6 +81,8 @@ jobs:
         run: node tests/omr_v7_lab_independent_score_040_simulation.js
       - name: OMR 041 V7 sole official writer full refinement and safety
         run: node tests/omr_v7_official_041_simulation.js
+      - name: OMR 042 two-decimal score display (V7)
+        run: node tests/omr_v7_score_display_042_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
