@@ -58,7 +58,8 @@ assert.strictEqual(fs.readFileSync('omr/omr-reliability-v7-baseline.js','utf8'),
 const html=fs.readFileSync('teacher/index.html','utf8'),sw=fs.readFileSync('teacher/sw.js','utf8');
 assert(html.includes('omr-v7-sparse-p3.js')&&sw.includes("'../omr/omr-v7-sparse-p3.js'"));
 const v7=fs.readFileSync('omr/omr-v7-candidate.js','utf8');
-assert(v7.includes('Ext.sparse.apply(rect,T,B,result)'));
+assert(v7.includes('Ext.sparse.apply(rect,T,B,result,Ext.numeric)'),
+ 'sparse calibration must receive the existing strict numeric consensus module');
 const w=420,h=Math.round(w*T.heightCm/T.widthCm);
 const rect={gray:new Uint8Array(w*h).fill(220),width:w,height:h};
 assert.deepStrictEqual(V7.analyzeRectified(rect,T).p3,V6.analyzeRectified(rect,T).p3);
