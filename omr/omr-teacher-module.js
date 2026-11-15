@@ -5,7 +5,7 @@
   const LabScore=root.DamSanOmrV7LabScore;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v6',lastV6:null};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
   // loaded with V7 modules, compares V6/V7 without any second route or RPC.
@@ -181,19 +181,10 @@
           </div>
           <div id="omrRoomSummary" class="omr-muted" style="margin-top:8px">Chọn phòng để bắt đầu.</div>
            <div class="omr-card" id="omrEngineWrap">
-             <label for="omrEngineSelect"><b>Thuật toán chấm và lưu điểm</b></label>
-             <select id="omrEngineSelect" style="width:100%;margin-top:6px">
-               <option value="v6" selected>V6 – chấm và lưu điểm (mặc định)</option>
-               <option value="v7">V7 – chấm và lưu điểm (thử nghiệm)</option>
-               <option value="v5">V5 – chấm và lưu điểm (dự phòng)</option>
-             </select>
-             <div class="omr-muted" style="margin-top:6px">Đổi thuật toán sẽ xóa kết quả chưa lưu; cần quét lại phiếu.</div>
-             <div class="omr-muted" id="omrV7LoadStatus" style="display:none;margin-top:6px" role="status"></div>
-           </div>
-           <div class="omr-card omr-warn" id="omrV6LabWrap" style="display:none">
-             <label class="omr-lab-toggle"><input type="checkbox" id="omrV6Lab"><span id="omrCompareLabel"><b>Đối chiếu V5/V6</b> (không lưu điểm)</span></label>
-             <div class="omr-muted" id="omrCompareHint" style="margin-top:8px">Cùng một ảnh được đọc bằng V5 và V6. Khi thử nghiệm, nút lưu điểm bị khóa. V6 nhận dạng độc lập Phần III.</div>
-           </div>
+              <strong>OMR V7 — chấm và lưu điểm chính thức</strong>
+              <div class="omr-muted" style="margin-top:6px">Một bộ chấm duy nhất. Kiểm tra SBD, mã đề và các vị trí được đánh dấu trước khi xác nhận.</div>
+              <div class="omr-muted" id="omrV7LoadStatus" style="display:none;margin-top:6px" role="status"></div>
+            </div>
         </div>
         <div class="omr-card">
           <div class="omr-actions">
@@ -207,15 +198,9 @@
             <div class="omr-photo-head"><span class="omr-muted" id="omrPhotoHint">Ảnh phiếu sau khi chụp</span><button type="button" id="omrPhotoExpand">Xem chi tiết</button></div>
             <canvas id="omrTeacherCanvas" aria-label="Ảnh phiếu để đối chiếu kết quả nhận dạng"></canvas>
           </div>
-          <div id="omrV6Comparison" class="omr-card omr-warn" style="display:none" aria-live="polite">
-             <b id="omrComparisonHeading">Đối chiếu V5/V6 – chỉ xem, không lưu điểm</b>
-             <div id="omrV6Summary" style="margin-top:8px"></div>
-             <div id="omrV6Scores" style="margin-top:8px;font-weight:700"></div>
-             <div id="omrV6Diffs" class="omr-lab-details" style="margin-top:8px"></div>
-           </div>
-           <details id="omrV7OverlayPanel" class="omr-card" style="display:none">
-             <summary>Bản đồ định vị V7 — đối chiếu nét tô và mốc nội bộ</summary>
-             <div id="omrV7OverlayLegend">Xanh lá: nhận một ô; vàng: cần kiểm tra; đỏ: nhiều dấu tô; xanh dương: mốc. Đây là kết quả nhận dạng, chưa xác nhận đúng/sai.</div>
+          <details id="omrV7OverlayPanel" class="omr-card" style="display:none">
+             <summary>Bản đồ định vị V7 — mốc nội bộ và vị trí tô</summary>
+             <div id="omrV7OverlayLegend">Xanh lá: nhận một ô; vàng: cần kiểm tra; đỏ: nhiều dấu tô; xanh dương: mốc. Xem lại các cảnh báo trước khi xác nhận lưu điểm.</div>
              <canvas id="omrV7OverlayCanvas" role="img" aria-label="Bản đồ vị trí nhận dạng V7, chỉ xem"></canvas>
              <div class="omr-muted" id="omrV7OverlayStatus"></div>
            </details>
@@ -271,18 +256,6 @@
     document.body.appendChild(wrap);
     q('omrClose').onclick=()=>{if(!root.DamSanTeacherNav?.closeOmr?.())close();};
     q('omrRoomSelect').onchange=()=>loadRoom(q('omrRoomSelect').value);
-    q('omrV6Lab').onchange=()=>{
-      state.labEnabled=!!q('omrV6Lab').checked;
-      resetScan(); // Comparison captures can never become writable.
-      rememberOmr({clearDraft:true});
-    };
-    q('omrEngineSelect').onchange=()=>{
-      state.officialEngine=['v5','v6','v7'].includes(q('omrEngineSelect').value)
-        ?q('omrEngineSelect').value:'v6';
-      state.labEnabled=false;q('omrV6Lab').checked=false;
-      resetScan(); // A different engine requires a fresh capture.
-      rememberOmr({clearDraft:true});
-    };
     q('omrOpenCamera').onclick=openCamera;
     q('omrPickFile').onchange=e=>e.target.files[0]&&loadImageFile(e.target.files[0]);
     q('omrCameraClose').onclick=()=>{if(!root.DamSanTeacherNav?.backFrom?.('camera'))closeCamera();};
@@ -315,58 +288,29 @@
   async function open(){
     ensureUi();
     const saved=readOmrReload();
-    const labAvailable=!!root.DamSanOmrReliabilityV6&&!!E;
     const v7Available=hasV7Comparison();
     const draft=saved?.draft;
-    // Opening a fresh grading session always defaults to V6. A previous V5
-    // preference must not silently override the first/official option.
-    // Only resume an actual unsaved, same-owner sheet when the photo and
-    // recognition engine are available; this avoids discarding graded work.
-    const resumeDraft=!!(typeof draft?.photo==='string'
-      && draft.photo.startsWith('data:image/jpeg;base64,')
-      && draft.scan?.ok===true
-      && draft.roomId===saved.roomId
-      && draft.engine===saved.engine
-      && draft.compare===saved.compare
-      && (saved.engine==='v5'||saved.engine==='v6'||saved.engine==='v7')
-      && (saved.engine!=='v6'||labAvailable)
-      && (saved.engine!=='v7'||v7Available)
-      && (!saved.compare||labAvailable)
-      && draft.scan.recognitionEngine===
-        expectedEngineLabel(saved.engine,saved.compare));
+    // Never restore a V5/V6 or comparison scan into an official V7 session.
+    const resumeDraft=!!(v7Available
+      &&typeof draft?.photo==='string'
+      &&draft.photo.startsWith('data:image/jpeg;base64,')
+      &&draft.scan?.ok===true
+      &&draft.roomId===saved.roomId
+      &&saved.engine==='v7'&&saved.compare===false
+      &&draft.engine==='v7'&&draft.compare===false
+      &&draft.scan.recognitionEngine==='V7'
+      &&draft.scan.captureMode==='v7'
+      &&draft.scan._labReadOnly===false
+      &&draft.scan._requiresRetake===false);
     state.restoring=true;
-    state.officialEngine=resumeDraft?saved.engine:'v6';
-    state.labEnabled=resumeDraft&&saved.compare===true;
-    q('omrV6LabWrap').style.display=labAvailable?'block':'none';
-    q('omrCompareLabel').textContent=v7Available
-      ?'Đối chiếu V6/V7 (không lưu điểm)'
-      :'Đối chiếu V5/V6 (không lưu điểm)';
-    q('omrCompareHint').textContent=v7Available
-      ?'V6 và V7 đọc cùng một ảnh, so sai khác và điểm dự kiến. Không ghi vào phòng thi.'
-      :'Cùng một ảnh được đọc bằng V5 và V6; không lưu điểm.';
-    q('omrComparisonHeading').textContent='Đối chiếu '+
-      (v7Available?'V6/V7':'V5/V6')+' – chỉ xem, không lưu điểm';
-    q('omrEngineSelect').querySelector('option[value="v6"]').disabled=!labAvailable;
-    const v7Option=q('omrEngineSelect').querySelector('option[value="v7"]');
-    v7Option.disabled=!v7Available;
-    // V7 must not disappear silently from installed teacher PWAs when
-    // old cache assets have not been replaced yet.
-    const isPwaShell=!!q('appShell');
-    v7Option.hidden=!v7Available&&!isPwaShell;
-    v7Option.textContent=v7Available
-      ?'V7 – chấm và lưu điểm (thử nghiệm)'
-      :'V7 – đang chờ cập nhật PWA';
+    state.officialEngine='v7';
+    state.labEnabled=false;
     const v7Status=q('omrV7LoadStatus');
-    v7Status.style.display=isPwaShell&&!v7Available?'block':'none';
-    v7Status.textContent=isPwaShell&&!v7Available
-      ?'V7 chưa tải đủ mô-đun. Hãy đóng hẳn PWA rồi mở lại để cập nhật; tạm thời chỉ chấm bằng V6 hoặc V5.'
-      :'';
-    if(!labAvailable){
-      state.labEnabled=false;q('omrV6Lab').checked=false;
-      state.officialEngine='v5';
-    }
-    q('omrV6Lab').checked=state.labEnabled;
-    q('omrEngineSelect').value=state.officialEngine;
+    v7Status.style.display=v7Available?'none':'block';
+    v7Status.textContent=v7Available?''
+      :'Không tải được đầy đủ thuật toán V7. Hãy đóng và mở lại PWA. Chấm điểm tạm khóa; không tự chuyển sang V5/V6.';
+    q('omrOpenCamera').disabled=!v7Available;
+    q('omrPickFile').disabled=!v7Available;
     q('omrTeacherOverlay').classList.add('show');
     q('omrRoomSelect').innerHTML='<option value="">Đang tải phòng...</option>';
     try{
@@ -585,7 +529,7 @@
     try{
       const pixels=ctx.getImageData(0,0,c.width,c.height);
       const v5=O.analyzeImageData(pixels,T.template);
-      const mode=state.labEnabled?'compare':state.officialEngine;
+      const mode='v7'; // The only official capture/write engine.
       let scan=v5;
       if(!v5.ok){
         q('omrScanArea').style.display='block';
@@ -598,7 +542,7 @@
       if(mode!=='v5'){
         const begun=performance.now();
         try{
-          if(!root.DamSanOmrReliabilityV6||!E)throw Error('Thiếu mô-đun nhận dạng V6/V7');
+          if(!E)throw Error('Thiếu mô-đun chuẩn hóa kết quả V7');
           const gray=O.grayscale(pixels.data,pixels.width,pixels.height);
           const rect=O.warpTemplateGray(gray,pixels.width,pixels.height,
             v5.homography,T.template,1800);
@@ -647,9 +591,23 @@
           }else if(mode==='v7'){
             if(!V7?.analyzeValidatedRectified||!E.fromV7)
               throw Error('Thiếu thuật toán V7 trên PWA');
+            // Official writer uses the same refined candidate tested in comparison.
             const candidate=V7.analyzeValidatedRectified(
-              rect,T.template,root.DamSanOmrReliabilityV6);
+              rect,T.template,null,{experimentalRefinement:true});
             scan=E.fromV7(v5,candidate);
+            if(root.DamSanOmrV7Overlay?.draw){
+              try{
+                const panel=q('omrV7OverlayPanel');
+                const image=root.DamSanOmrV7Overlay.draw(
+                  q('omrV7OverlayCanvas'),rect,T.template,candidate);
+                panel.style.display='block';
+                q('omrV7OverlayStatus').textContent=
+                  'Dấu nhận một ô: '+image.counts.single+
+                  ' • Cần xem lại: '+image.counts.review+
+                  ' • Nhiều dấu: '+image.counts.multiple+
+                  ' • Mốc nội bộ: '+image.controls.length;
+              }catch(err){console.warn('V7 overlay:',err);}
+            }
             const roomCode=String(state.roomModel?.room?.MaPhong||
               state.roomModel?.room?.ma_phong||'').trim();
             if(roomCode==='OMR_V7_TEST'){
@@ -693,7 +651,7 @@
           }else{
             q('omrScanArea').style.display='block';
             showWarning('Không xử lý được bằng '+expectedEngineLabel(mode)+': '+
-              (e?.message||String(e))+'. Hãy quét lại hoặc chọn thuật toán dự phòng; không lưu từ ảnh này.');
+              (e?.message||String(e))+'. Hãy quét lại ảnh đạt yêu cầu; không lưu từ ảnh này.');
             return;
           }
         }
@@ -861,8 +819,12 @@
     if(state.lastScan._requiresRetake){
       q('omrReviewUncertainWrap').style.display='none';
       showWarning(expectedEngineLabel(state.officialEngine)+' chưa đủ điều kiện nhận dạng: '+
-        state.lastScan._retakeReason+'. Quét lại hoặc chuyển thuật toán khác; không thể lưu phiếu này.');
+        state.lastScan._retakeReason+'. Quét lại phiếu này; không thể lưu khi nhận dạng chưa tin cậy.');
       return;
+    }
+    if(state.lastScan.recognitionEngine!=='V7'||
+      state.lastScan.captureMode!=='v7'||state.lastScan._labReadOnly!==false){
+      showWarning('Chỉ nhận kết quả chụp bằng V7 chính thức. Hãy quét lại phiếu.');return;
     }
     const scan=S.enforceInvalidMarks(scanFromForm()),vr=B.resolveVariant(scan.maDe,state.roomModel.variants);
     if(scan.invalidMarks.length){
@@ -929,7 +891,9 @@
     if(!state.lastPreview)return;
     const expectedEngine=expectedEngineLabel(state.officialEngine);
     if(state.lastScan?.recognitionEngine!==expectedEngine||
-       state.lastPreview.scan?.recognitionEngine!==expectedEngine){
+       state.lastPreview.scan?.recognitionEngine!==expectedEngine||
+       state.lastScan?.captureMode!=='v7'||
+       state.lastPreview.scan?.captureMode!=='v7'){
       showWarning('Đã thay đổi thuật toán chấm; cần quét lại để bảo đảm kết quả.');return;
     }
     const st=state.lastPreview.student;

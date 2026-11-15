@@ -25,7 +25,7 @@ assert(css.includes('.omr-room-layout{display:grid;grid-template-columns:minmax(
 assert(css.includes('.omr-room-info{grid-template-columns:minmax(0,1fr)'),
  'mobile template/progress should stack to prevent overlap');
 assert(css.includes('overflow-wrap:anywhere'),'long template data must not overflow');
-assert(html.includes('id="omrEngineSelect"'),'V5/V6 official selection must remain untouched');
-assert(html.includes('id="omrV6Lab"'),'read-only comparison switch must remain untouched');
+assert(html.includes('OMR V7 — chấm và lưu điểm chính thức'),'V7 must be the sole official engine');
+assert(!html.includes('id="omrV6Lab"')&&!html.includes('id="omrEngineSelect"'),'No V5/V6 fallback or comparison controls');
 assert(js.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"),'write safety must remain');
 console.log('PASS omr_mobile_room_layout_019');

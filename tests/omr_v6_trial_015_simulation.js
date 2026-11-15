@@ -5,17 +5,19 @@ const sw=fs.readFileSync('teacher/sw.js','utf8');
 console.log('=== OMR 015 V6 field trial ===');
 assert(html.includes('../omr/omr-reliability-v6.js'));
 assert(sw.includes('../omr/omr-reliability-v6.js'));
-assert(js.includes('id="omrV6Lab"'));
-assert(js.includes("scan._labReadOnly=mode==='compare'"));
-assert(js.includes("if(mode==='v6')scan=E.fromV6(v5,candidate)"));
-assert(js.includes("const mode=state.labEnabled?'compare':state.officialEngine"));
-assert(js.includes('if(state.labEnabled||state.lastScan?._labReadOnly)'));
+assert(!js.includes('id="omrV6Lab"'),'V5/V6 comparison control must be removed from official UI');
+assert(!js.includes('id="omrEngineSelect"'),'V5/V6 fallback selector must be removed');
+assert(js.includes("const mode='v7'"),'V7 must be the only runtime capture mode');
+assert(js.includes("officialEngine:'v7'"),'fresh sessions use V7');
+assert(js.includes("rect,T.template,null,{experimentalRefinement:true}"),
+  'official V7 must use the same refined recognition as research');
+assert(js.includes("scan._labReadOnly=mode==='compare'"),'old compare never writes');
+assert(js.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"));
 assert(js.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
 assert(js.includes("q('omrSave').disabled=(hasUncertain && !reviewed)||!!state.lastScan?._labReadOnly||!!state.lastScan?._requiresRetake"));
 assert(js.indexOf('const v5=O.analyzeImageData(pixels,T.template)')<
-       js.indexOf('root.DamSanOmrReliabilityV6.analyzeRectified'));
-assert(js.includes('V6 nhận dạng độc lập Phần III'));
-assert(js.includes('p3:v6.p3'),'comparison must score V6 P3 independently');
+       js.indexOf('scan=E.fromV7(v5,candidate);'));
+assert(js.includes('p3:v6.p3'),'historical diagnostics retain independent P3');
 const env={DamSanOmrTemplate:{},DamSanOmr:{},DamSanOmrRoomBinding:{},DamSanOmrScoring:{},DamSanOmrResultWrite:{}};
 new Function('window','document',js)(env,{});
 const cmp=env.DamSanOmrTeacher._compareV5V6;

@@ -110,11 +110,11 @@ const binding={ok:true,room:{id:'room',assessment_type:'TOT_NGHIEP'},
  const html=fs.readFileSync('teacher/index.html','utf8');
  const module=fs.readFileSync('omr/omr-teacher-module.js','utf8');
  const sw=fs.readFileSync('teacher/sw.js','utf8');
- assert(module.includes('<option value="v7">V7 – chấm và lưu điểm (thử nghiệm)</option>'));
+ assert(module.includes('OMR V7 — chấm và lưu điểm chính thức'));
  assert(module.includes('scan=E.fromV7(v5,candidate);'));
  assert(module.includes("const expectedEngine=expectedEngineLabel(state.officialEngine);"));
- assert(module.includes("state.officialEngine='v5'"),'V5 fallback retained');
- assert(module.includes("officialEngine:'v6'"),'V6 remains default');
+ assert(!module.includes('id="omrEngineSelect"'),'No fallback selection');
+ assert(module.includes("officialEngine:'v7'"),'V7 is official default');
  for(const filename of ['omr-v7-research.js',
    'omr-reliability-v7-baseline.js','omr-v7-candidate.js']){
    assert(html.includes(filename),'PWA script missing '+filename);
@@ -123,8 +123,8 @@ const binding={ok:true,room:{id:'room',assessment_type:'TOT_NGHIEP'},
  const core=fs.readFileSync('omr/omr-v7-candidate.js','utf8');
  assert(core.includes('analyzeValidatedRectified'));
  assert(!core.includes('rpc_staff_submit_omr')&&!core.includes('staffRpc('));
- assert(!fs.readFileSync('giaovien.html','utf8').includes('omr-v7-candidate.js'),
-  'desktop still stays on V6/V5');
+ assert(fs.readFileSync('giaovien.html','utf8').includes('omr-v7-candidate.js'),
+  'desktop must also use official V7');
  assert(!fs.existsSync('omr/v7-lab.html'),'no standalone URL required');
  console.log('PASS OMR V7 PWA selected mode + canonical scoring/write and guards');
 })().catch(err=>{console.error(err);process.exitCode=1;});
