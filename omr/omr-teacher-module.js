@@ -157,6 +157,7 @@
       #omrPhotoZoomCanvas{display:block;max-width:none;height:auto;margin:0 auto}
       .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
       .omr-score{font-size:30px;font-weight:800;color:#0f766e}.omr-progress{font-weight:700;color:#334155}
+      #omrV7OverlayCanvas{display:block;width:100%;max-height:75dvh;object-fit:contain;border-radius:8px;background:#f1f5f9}#omrV7OverlayPanel summary{cursor:pointer;font-weight:700}#omrV7OverlayLegend{font-size:12px;line-height:1.6;margin:8px 0;color:#334155}
       .omr-lab-details{white-space:pre-line;line-height:1.55;overflow-wrap:anywhere}.omr-lab-toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.omr-lab-toggle input{width:20px;height:20px;flex:0 0 20px;accent-color:#7c3aed}
       @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}#omrTeacherOverlay .omr-room-info{grid-template-columns:minmax(0,1fr)}}
     `;
@@ -211,6 +212,12 @@
              <div id="omrV6Scores" style="margin-top:8px;font-weight:700"></div>
              <div id="omrV6Diffs" class="omr-lab-details" style="margin-top:8px"></div>
            </div>
+           <details id="omrV7OverlayPanel" class="omr-card" style="display:none">
+             <summary>Bản đồ định vị V7 — đối chiếu nét tô và mốc nội bộ</summary>
+             <div id="omrV7OverlayLegend">Xanh lá: nhận một ô; vàng: cần kiểm tra; đỏ: nhiều dấu tô; xanh dương: mốc. Đây là kết quả nhận dạng, chưa xác nhận đúng/sai.</div>
+             <canvas id="omrV7OverlayCanvas" role="img" aria-label="Bản đồ vị trí nhận dạng V7, chỉ xem"></canvas>
+             <div class="omr-muted" id="omrV7OverlayStatus"></div>
+           </details>
            <div id="omrEngineResult" class="omr-muted" style="margin:8px 0;font-weight:700"></div>
            <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
@@ -619,6 +626,22 @@
               if(!info.candidateV7.ok)
                 info.v7Error=(info.candidateV7.retakeReasons||[]).join('; ')||
                   'V7 yêu cầu kiểm tra lại ảnh';
+              // Show the same rectified pixels used for V6/V7 decisions.
+              // The overlay never changes a score or enables saving.
+              const overlayPanel=q('omrV7OverlayPanel');
+              if(overlayPanel&&root.DamSanOmrV7Overlay?.draw){
+                try{
+                  const image=root.DamSanOmrV7Overlay.draw(
+                    q('omrV7OverlayCanvas'),rect,T.template,info.candidateV7);
+                  overlayPanel.style.display='block';
+                  q('omrV7OverlayStatus').textContent=
+                    'Dấu nhận một ô: '+image.counts.single+
+                    ' • Cần xem lại: '+image.counts.review+
+                    ' • Nhiều dấu: '+image.counts.multiple+
+                    ' • Mốc nội bộ: '+image.controls.length+
+                    ' (chỉ quan sát, không lưu điểm)';
+                }catch(e){console.warn('V7 overlay:',e);}
+              }
             }catch(err){info.v7Error='V7: '+(err?.message||String(err));}
           }else if(mode==='v7'){
             if(!V7?.analyzeValidatedRectified||!E.fromV7)
@@ -937,6 +960,7 @@
   function resetScan(){
     closePhotoDetail();
     state.lastScan=null;state.lastPreview=null;state.lastV6=null;
+    if(q('omrV7OverlayPanel'))q('omrV7OverlayPanel').style.display='none';
     if(q('omrV6Comparison'))q('omrV6Comparison').style.display='none';
     if(q('omrEngineResult'))q('omrEngineResult').textContent='';
     if(q('omrSave'))q('omrSave').hidden=false;
