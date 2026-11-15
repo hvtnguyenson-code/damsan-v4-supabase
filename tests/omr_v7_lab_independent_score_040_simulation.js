@@ -4,7 +4,7 @@ const B=require('../omr/omr-room-binding.js');
 const S=require('../omr/omr-scoring.js');
 const E=require('../omr/omr-scan-adapter.js');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
-const module=fs.readFileSync('omr/omr-teacher-module.js','utf8');
+const teacherModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');
 const html=fs.readFileSync('teacher/index.html','utf8');
 const sw=fs.readFileSync('teacher/sw.js','utf8');
 const rev='20261115-teacher-pwa-038';
@@ -17,16 +17,16 @@ assert(html.includes('src="./'+bridge+'?v='+rev+'"'));
 assert(sw.includes("'./"+bridge+"'"));
 const bundled=fs.readFileSync('teacher/'+bridge,'utf8');
 assert.strictEqual(bundled,(adapter+'\n;\n'+module).replace(/\n+$/,'\n'));
-assert(module.includes('const LabScore=root.DamSanOmrV7LabScore;'));
-assert(module.includes('LabScore.estimate(scan,v6,state.roomModel,B,S,E)'));
-assert(module.includes('LabScore.estimate(scan,v7,state.roomModel,B,S,E)'));
-const block=module.slice(module.indexOf('  function showV7Comparison(){'),
- module.indexOf('  function showV6Comparison(){'));
+assert(teacherModule.includes('const LabScore=root.DamSanOmrV7LabScore;'));
+assert(teacherModule.includes('LabScore.estimate(scan,v6,state.roomModel,B,S,E)'));
+assert(teacherModule.includes('LabScore.estimate(scan,v7,state.roomModel,B,S,E)'));
+const block=teacherModule.slice(teacherModule.indexOf('  function showV7Comparison(){'),
+ teacherModule.indexOf('  function showV6Comparison(){'));
 assert(!block.includes('state.lastPreview?.ok'),
  'V7 lab points must not require a successful V6 reviewCurrent');
-assert(module.includes('scan._labReadOnly=mode===\'compare\''));
-assert(module.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
-assert(module.includes('if(state.labEnabled||state.lastScan?._labReadOnly)'));
+assert(teacherModule.includes('scan._labReadOnly=mode===\'compare\''));
+assert(teacherModule.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
+assert(teacherModule.includes('if(state.labEnabled||state.lastScan?._labReadOnly)'));
 assert(fs.readFileSync('omr/omr-result-write.js','utf8').includes(
  "preview.scan?._labReadOnly||preview.scan?.captureMode==='compare'"));
 const items=[
