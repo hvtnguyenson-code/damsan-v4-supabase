@@ -83,6 +83,8 @@ jobs:
         run: node tests/omr_v7_official_041_simulation.js
       - name: OMR 042 two-decimal score display (V7)
         run: node tests/omr_v7_score_display_042_simulation.js
+      - name: OMR 043 V7 fixed overlay and mobile identity layout
+        run: node tests/omr_v7_mobile_ui_043_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
@@ -130,6 +132,10 @@ jobs:
           set +e
           timeout 100s node tests/run_teacher_pwa_installability_probe_008.mjs
           PROBE_EXIT=$?
+          if [ "$PROBE_EXIT" -eq 0 ]; then
+            timeout 50s node tests/run_teacher_omr_mobile_layout_probe_043.mjs
+            PROBE_EXIT=$?
+          fi
           set -e
           echo "=== Teacher PWA Chrome diagnostics ==="
           tail -n 120 /tmp/teacher-pwa-chrome.log || true

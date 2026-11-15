@@ -25,10 +25,20 @@ let nextId = 1;
 const pending = new Map();
 const consoleLines = [];
 
-function send(method, params = {}) {
+// Each CDP request is bounded: a suspended SW/diagnostic promise must not
+// pin the entire CI job until the outer shell timeout.
+function send(method, params = {}, timeoutMs = 12000) {
   const id = nextId++;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject, method });
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error(method + ' timed out after ' + timeoutMs + ' ms'));
+    }, timeoutMs);
+    pending.set(id, {
+      method,
+      resolve: (result) => { clearTimeout(timer); resolve(result); },
+      reject: (error) => { clearTimeout(timer); reject(error); }
+    });
     ws.send(JSON.stringify({ id, method, params }));
   });
 }
@@ -65,10 +75,14 @@ await send('Network.setUserAgentOverride', {
   platform: 'Android'
 });
 await send('Page.navigate', { url: targetUrl });
+await sleep(800);
 
 let snapshot = null;
+let retries = 0;
 while (Date.now() < deadline) {
-  const evaluated = await send('Runtime.evaluate', {
+  let evaluated;
+  try {
+    evaluated = await send('Runtime.evaluate', {
     expression: `(async()=> {
       if (typeof capNhatChanDoanPWA !== 'function' || typeof checkAndShowInstallButton !== 'function') return JSON.stringify({ready:false});
       if (typeof showSection === 'function') showSection('pwa-install-section');
@@ -92,7 +106,21 @@ while (Date.now() < deadline) {
     })()`,
     awaitPromise: true,
     returnByValue: true
-  });
+    }, 9000);
+    retries = 0;
+  } catch (error) {
+    consoleLines.push('[probe retry] ' + (error?.message || String(error)));
+    // Reload only after two consecutive failures, preserving all assertions.
+    if (++retries >= 2 && Date.now() + 3000 < deadline) {
+      retries = 0;
+      try { await send('Page.reload', { ignoreCache: true }, 8000); }
+      catch (reloadError) {
+        consoleLines.push('[reload retry] ' + (reloadError?.message || String(reloadError)));
+      }
+      await sleep(1000);
+    } else await sleep(500);
+    continue;
+  }
   const value = evaluated?.result?.value;
   if (typeof value === 'string') {
     snapshot = JSON.parse(value);
@@ -103,8 +131,22 @@ while (Date.now() < deadline) {
   await sleep(500);
 }
 
-const manifestInfo = await send('Page.getAppManifest');
-const installabilityErrors = await send('Page.getInstallabilityErrors');
+// Chrome can finish JS startup before Page.getAppManifest attaches to the
+// navigated document. Retry attachment failures; do not suppress manifest errors.
+async function retryPageCommand(method, predicate = () => true) {
+  let lastError;
+  for (let attempt = 0; attempt < 12; attempt++) {
+    try {
+      const out = await send(method, {}, 8000);
+      if (predicate(out)) return out;
+      lastError = new Error(method + ': empty/unattached page result');
+    } catch (error) { lastError = error; }
+    await sleep(450);
+  }
+  throw lastError || new Error(method + ' failed');
+}
+const manifestInfo = await retryPageCommand('Page.getAppManifest', value => !!value?.url);
+const installabilityErrors = await retryPageCommand('Page.getInstallabilityErrors');
 
 await send('Network.setUserAgentOverride', {
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
@@ -112,7 +154,7 @@ await send('Network.setUserAgentOverride', {
 });
 await send('Page.reload', { ignoreCache: true });
 await sleep(1200);
-const desktopInstallabilityErrors = await send('Page.getInstallabilityErrors');
+const desktopInstallabilityErrors = await retryPageCommand('Page.getInstallabilityErrors');
 process.stdout.write('=== PWA browser probe console ===\n');
 for (const line of consoleLines.slice(-80)) process.stdout.write(line + '\n');
 process.stdout.write('=== PWA browser probe result ===\n' + JSON.stringify({ snapshot, manifestInfo, installabilityErrors, desktopInstallabilityErrors }, null, 2) + '\n');
