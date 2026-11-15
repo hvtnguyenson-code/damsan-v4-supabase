@@ -159,7 +159,20 @@
       #omrPhotoZoomCanvas{display:block;max-width:none;height:auto;margin:0 auto}
       .omr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}.omr-answer input{font-family:ui-monospace,monospace}
       .omr-score{font-size:30px;font-weight:800;color:#0f766e}.omr-progress{font-weight:700;color:#334155}
-      #omrV7OverlayCanvas{display:block;width:100%;max-height:75dvh;object-fit:contain;border-radius:8px;background:#f1f5f9}#omrV7OverlayPanel summary{cursor:pointer;font-weight:700}#omrV7OverlayLegend{font-size:12px;line-height:1.6;margin:8px 0;color:#334155}
+      /* Fixed V7 map: no collapsed details and no responsive overflow. */
+      #omrTeacherOverlay .omr-shell,#omrTeacherOverlay .omr-body,#omrTeacherOverlay .omr-card{box-sizing:border-box;min-width:0;max-width:100%}
+      #omrTeacherOverlay #omrV7OverlayPanel{width:100%;min-width:0}
+      #omrTeacherOverlay .omr-overlay-title{font-size:16px;line-height:1.4;margin:0;font-weight:800;color:#0f172a}
+      #omrTeacherOverlay #omrV7OverlayCanvas{display:block;width:100%;max-width:100%;height:auto;max-height:75dvh;object-fit:contain;border-radius:8px;background:#f1f5f9}
+      #omrTeacherOverlay #omrV7OverlayLegend{font-size:12px;line-height:1.6;margin:8px 0;color:#334155}
+      #omrTeacherOverlay #omrV7OverlayStatus{overflow-wrap:anywhere;margin-top:6px}
+      #omrTeacherOverlay .omr-identity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end;min-width:0;width:100%}
+      #omrTeacherOverlay .omr-identity-grid>.omr-field{min-width:0;max-width:100%;width:100%;box-sizing:border-box}
+      #omrTeacherOverlay .omr-identity-grid>.omr-field-student{grid-column:1/-1}
+      #omrTeacherOverlay .omr-identity-grid label{display:block;margin:0 0 6px;font-size:13px;line-height:1.4;font-weight:600;overflow-wrap:anywhere}
+      #omrTeacherOverlay .omr-identity-grid input,#omrTeacherOverlay .omr-identity-grid select{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;min-height:44px;padding:8px 10px;border:1px solid #94a3b8;border-radius:8px;background:#fff;color:#0f172a;font-size:16px;text-overflow:ellipsis}
+      #omrTeacherOverlay .omr-identity-grid select{white-space:nowrap;overflow:hidden}
+      @media(max-width:340px){#omrTeacherOverlay .omr-identity-grid{grid-template-columns:minmax(0,1fr)}}
       .omr-lab-details{white-space:pre-line;line-height:1.55;overflow-wrap:anywhere}.omr-lab-toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.omr-lab-toggle input{width:20px;height:20px;flex:0 0 20px;accent-color:#7c3aed}
       @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}#omrTeacherOverlay .omr-room-info{grid-template-columns:minmax(0,1fr)}}
     `;
@@ -199,22 +212,22 @@
             <div class="omr-photo-head"><span class="omr-muted" id="omrPhotoHint">Ảnh phiếu sau khi chụp</span><button type="button" id="omrPhotoExpand">Xem chi tiết</button></div>
             <canvas id="omrTeacherCanvas" aria-label="Ảnh phiếu để đối chiếu kết quả nhận dạng"></canvas>
           </div>
-          <details id="omrV7OverlayPanel" class="omr-card" style="display:none">
-             <summary>Bản đồ định vị V7 — mốc nội bộ và vị trí tô</summary>
+          <section id="omrV7OverlayPanel" class="omr-card" style="display:none" aria-labelledby="omrV7OverlayTitle">
+             <h3 class="omr-overlay-title" id="omrV7OverlayTitle">Bản đồ định vị V7 — mốc nội bộ và vị trí tô</h3>
              <div id="omrV7OverlayLegend">Xanh lá: nhận một ô; vàng: cần kiểm tra; đỏ: nhiều dấu tô; xanh dương: mốc. Xem lại các cảnh báo trước khi xác nhận lưu điểm.</div>
              <canvas id="omrV7OverlayCanvas" role="img" aria-label="Bản đồ vị trí nhận dạng V7, chỉ xem"></canvas>
-             <div class="omr-muted" id="omrV7OverlayStatus"></div>
-           </details>
+             <div class="omr-muted" id="omrV7OverlayStatus" role="status"></div>
+          </section>
            <div id="omrEngineResult" class="omr-muted" style="margin:8px 0;font-weight:700"></div>
            <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
             <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra đúng các vị trí được đánh dấu và xác nhận dữ liệu đang hiển thị là đúng.
           </label>
           <div class="omr-card">
-            <div class="omr-row">
-              <div class="omr-field"><label>SBD / mã học sinh</label><input id="omrSbd" type="text"></div>
-              <div class="omr-field"><label>Mã đề</label><input id="omrMaDe" type="text"></div>
-              <div class="omr-field"><label>Học sinh</label><select id="omrStudent"></select></div>
+            <div class="omr-identity-grid">
+              <div class="omr-field"><label for="omrSbd">SBD / mã học sinh</label><input id="omrSbd" type="text" inputmode="numeric" autocomplete="off"></div>
+              <div class="omr-field"><label for="omrMaDe">Mã đề</label><input id="omrMaDe" type="text" autocomplete="off"></div>
+              <div class="omr-field omr-field-student"><label for="omrStudent">Học sinh</label><select id="omrStudent"></select></div>
             </div>
           </div>
           <details class="omr-card" open><summary><b>Đáp án đọc được</b> — có thể sửa trước khi chấm</summary>
@@ -599,6 +612,7 @@
             if(root.DamSanOmrV7Overlay?.draw){
               try{
                 const panel=q('omrV7OverlayPanel');
+                panel.style.display='block';
                 const image=root.DamSanOmrV7Overlay.draw(
                   q('omrV7OverlayCanvas'),rect,T.template,candidate);
                 panel.style.display='block';
@@ -607,7 +621,10 @@
                   ' • Cần xem lại: '+image.counts.review+
                   ' • Nhiều dấu: '+image.counts.multiple+
                   ' • Mốc nội bộ: '+image.controls.length;
-              }catch(err){console.warn('V7 overlay:',err);}
+              }catch(err){
+                q('omrV7OverlayStatus').textContent='Không hiển thị được bản đồ V7: '+(err?.message||'lỗi vẽ');
+                console.warn('V7 overlay:',err);
+              }
             }
             const roomCode=String(state.roomModel?.room?.MaPhong||
               state.roomModel?.room?.ma_phong||'').trim();
