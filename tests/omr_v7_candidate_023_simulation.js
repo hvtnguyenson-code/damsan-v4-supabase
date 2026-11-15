@@ -4,10 +4,11 @@ const V7=require('../omr/omr-v7-research.js');
 const V6=require('../omr/omr-reliability-v6.js');
 const T=require('../omr/omr-template-moet-18-4-6.js').template;
 console.log('=== OMR V7 research candidate: isolated synthetic tests ===');
-// V7 is available only inside the teacher PWA; desktop retains V6/V5.
-for(const path of ['giaovien.html','omr/omr-result-write.js']){
-  assert(!fs.readFileSync(path,'utf8').includes('omr-v7-research'),path+' must not load V7');
-}
+// V7 official runtime must load on both desktop and teacher PWA.
+assert(fs.readFileSync('giaovien.html','utf8').includes('omr-v7-research'),
+  'desktop must load the same V7 pipeline as PWA');
+assert(!fs.readFileSync('omr/omr-result-write.js','utf8').includes('omr-v7-research'),
+  'canonical writer must not invoke research modules directly');
 for(const path of ['teacher/index.html','teacher/sw.js']){
   assert(fs.readFileSync(path,'utf8').includes('omr-v7-research'),path+' must load V7');
 }
