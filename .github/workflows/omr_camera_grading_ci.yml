@@ -77,6 +77,8 @@ jobs:
         run: node tests/omr_v7_p3_consensus_038_simulation.js
       - name: OMR 039 V7 local multi-marker geometry and read-only overlay
         run: node tests/omr_v7_geometry_overlay_039_simulation.js
+      - name: OMR 040 V7 independent read-only score when V6 P3 fails
+        run: node tests/omr_v7_lab_independent_score_040_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

@@ -2,6 +2,7 @@
   'use strict';
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite, E=root.DamSanOmrScanAdapter;
   const V7=root.DamSanOmrV7Candidate;
+  const LabScore=root.DamSanOmrV7LabScore;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
   const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v6',lastV6:null};
@@ -777,29 +778,23 @@
     if(!v6)lines.push('Không đọc được V6 trên ảnh này.');
     if(!v7)lines.push('Không đọc được V7 trên ảnh này.');
     diffs.textContent=lines.join('\n');
-    if(!state.lastPreview?.ok){
-      scores.textContent='Chưa có học sinh/mã đề hợp lệ hoặc mốc không đạt; '+
-        'chưa thể tính điểm so sánh.';
+    // Scoring remains possible for V7 when ONLY the V6 P3 calibration
+    // failed. Bind the ORIGINAL scanned SBD/exam code against the loaded
+    // room; never depend on reviewCurrent()/lastPreview (which V6 may block).
+    // The lab flag stays set and the submission RPC still rejects this scan.
+    if(!LabScore?.estimate){
+      scores.textContent='Không tải được mô-đun điểm đối chiếu; đóng và mở lại PWA.';
       return;
     }
-    try{
-      const binding={ok:true,room:state.lastPreview.room,
-        student:state.lastPreview.student,variant:state.lastPreview.variant};
-      const estimate=candidate=>{
-        if(!candidate)return null;
-        const alt={...scan,p1:candidate.p1,p2:[...candidate.p2],
-          p3:[...candidate.p3],invalidMarks:[...(candidate.invalidMarks||[])],
-          uncertain:(candidate.issues||[]).map(item=>item.key)};
-        const result=S.previewScan(alt,binding,{allowUncertain:true});
-        return result.ok?result.grade.score:null;
-      };
-      const a=estimate(v6),b=estimate(v7);
-      scores.textContent='Điểm dự kiến: V6 '+(a??'chưa tính được')+
-        ' • V7 '+(b??'chưa tính được')+
-        ' (chỉ so sánh, không ghi điểm).';
-    }catch(err){
-      scores.textContent='Không so được điểm dự kiến: '+(err?.message||'lỗi');
-    }
+    const v6Estimate=LabScore.estimate(scan,v6,state.roomModel,B,S,E);
+    const v7Estimate=LabScore.estimate(scan,v7,state.roomModel,B,S,E);
+    const display=(out,name)=>out.ok
+      ?String(out.score)+(out.requiresReview?' (còn '+out.warningCount+
+        ' vị trí cần kiểm tra)':'')+(name==='V7'?' [thử nghiệm]':'')
+      :'chưa tính được ('+out.reason+')';
+    scores.textContent='Điểm dự kiến: V6 '+display(v6Estimate,'V6')+
+      ' • V7 '+display(v7Estimate,'V7')+
+      ' (chỉ so sánh, không ghi điểm).';
   }
   function showV6Comparison(){
     if(hasV7Comparison()){showV7Comparison();return;}
