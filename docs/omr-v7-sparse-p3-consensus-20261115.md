@@ -17,3 +17,9 @@
 - Các test 036–037 trên dữ liệu phiếu mã 103 tiếp tục bắt buộc xanh.
 - Kiểm thử trên số liệu mô phỏng KHÔNG chứng minh tỷ lệ chính xác trên ảnh mới; cần thử trên ảnh camera gốc và xác minh thủ công trước khi phát hành rộng.
 - PR chỉ là nhánh nghiên cứu, không merge/triển khai tự động từ nhánh.
+
+## Phát hành cho thử nghiệm di động (15/11/2026)
+
+- Sau khi PR được merge và hai CI xanh, cập nhật PWA sang `20261115-teacher-pwa-036`, tệp phục hồi mới `teacher/omr-v7-runtime-20261115-036.js` để tránh tải module cũ trong các service worker đã cài. Tệp `035` cũ vẫn tồn tại cho ứng dụng đã tải trước đó.
+- Phiên bản mới chỉ bật cải tiến ở **Đối chiếu V6/V7 (chỉ xem, không lưu điểm)**. Chế độ chấm và lưu V6 tiếp tục mặc định; V7 dùng để lưu không chạy `experimentalRefinement`.
+- Thử bằng camera hoặc chọn JPG/PNG **ảnh tờ phiếu**, không chọn ảnh chụp màn hình ứng dụng. Chụp kết quả đối chiếu + ảnh giấy riêng và đối chiếu từng ô; không xem ít cảnh báo hơn là bằng chứng chính xác hơn.
