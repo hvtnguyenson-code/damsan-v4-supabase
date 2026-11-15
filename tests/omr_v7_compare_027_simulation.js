@@ -6,39 +6,20 @@ const src=fs.readFileSync('omr/omr-teacher-module.js','utf8');
 const pwa=fs.readFileSync('teacher/index.html','utf8');
 const sw=fs.readFileSync('teacher/sw.js','utf8');
 const app=fs.readFileSync('teacher/app.js','utf8');
-assert(src.includes("officialEngine:'v6'"),'V6 remains the default');
-assert(src.includes('<option value="v7">V7 – chấm và lưu điểm (thử nghiệm)</option>'));
-assert(src.includes('<option value="v5">V5 – chấm và lưu điểm (dự phòng)</option>'));
-assert(src.includes("q('omrCompareLabel').textContent=v7Available"));
-assert(src.includes("state.labEnabled?'compare':state.officialEngine"));
-assert(src.includes("if(mode==='compare'&&hasV7Comparison())"));
-assert(src.includes('info.candidate=root.DamSanOmrReliabilityV6.analyzeRectified(rect,T.template)'));
-assert(src.includes('info.candidateV7=V7.analyzeValidatedRectified('));
-assert(src.includes('rect,T.template,root.DamSanOmrReliabilityV6,\n                {experimentalRefinement:true}'),
- 'V7 comparison must expose experimental improvements in read-only mode');
-assert(src.includes("scan._labReadOnly=mode==='compare'"),
- 'No compare writes are permitted');
-const saveBranch=src.slice(src.indexOf("}else if(mode==='v7'){"),
- src.indexOf("}else{",src.indexOf("}else if(mode==='v7'){")));
-assert(!saveBranch.includes('experimentalRefinement:true'),
- 'Save-enabled V7 must remain exact V6 until field validation');
-assert(src.includes('scan=E.fromV6(v5,info.candidate)'));
-assert(src.includes("scan._labReadOnly=mode==='compare'"));
+assert(src.includes("officialEngine:'v7'"));
+assert(src.includes("const mode='v7'"));
+assert(src.includes("rect,T.template,null,{experimentalRefinement:true}"),
+  'V7 official must use the same enhanced candidate tested read-only');
+assert(!src.includes('id="omrEngineSelect"')&&!src.includes('id="omrV6Lab"'));
+assert(src.includes("scan._labReadOnly=mode==='compare'"),'Old comparison scans are never writable');
 assert(src.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"));
-assert(src.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
-assert(src.includes('showV7Comparison()'),'same PWA panel must show V6/V7');
-assert(src.includes('Thời gian đọc: V6 '));
-assert(src.includes('Điểm dự kiến: V6 '));
-assert(!src.includes('v7-lab.html'),'no separate URL');
-for(const name of ['omr-v7-research.js',
- 'omr-reliability-v7-baseline.js','omr-v7-candidate.js']){
- assert(pwa.includes(name),'PWA missing V7 script');
- assert(sw.includes(name),'PWA service-worker missing V7 cache');
+assert(!src.includes('v7-lab.html'));
+for(const name of ['omr-v7-research.js','omr-reliability-v7-baseline.js','omr-v7-candidate.js']){
+ assert(pwa.includes(name)&&sw.includes(name));
+ assert(fs.readFileSync('giaovien.html','utf8').includes(name));
 }
 const cacheRev=(sw.match(/const VERSION='([^']+)'/)||[])[1];
-assert(cacheRev,'teacher service worker version missing');
-assert(pwa.includes(cacheRev)&&sw.includes(cacheRev)&&app.includes(cacheRev));
-assert(!fs.readFileSync('giaovien.html','utf8').includes('omr-v7-candidate.js'));
+assert(cacheRev&&pwa.includes(cacheRev)&&app.includes(cacheRev));
 // Only the selected V7 mode may write; a comparison scan must be rejected
 // even if all answers, room data and user acknowledgements are correct.
 const base={ok:true,sbd:'00120601',maDe:'9001',p1:'A'.repeat(18),
@@ -96,9 +77,8 @@ mock.DamSanOmrReliabilityV6={analyzeRectified:()=>({})};
 vm.runInNewContext(src,context);
 (async()=>{
  await mock.DamSanOmrTeacher.open();
- assert.strictEqual(get('omrEngineSelect').value,'v6');
- assert.strictEqual(get('omrCompareLabel').textContent,'Đối chiếu V6/V7 (không lưu điểm)');
- assert(get('omrCompareHint').textContent.includes('V6 và V7 đọc cùng một ảnh'));
- assert.strictEqual(get('omrComparisonHeading').textContent,'Đối chiếu V6/V7 – chỉ xem, không lưu điểm');
+ assert.strictEqual(mock.DamSanOmrTeacher._state.officialEngine,'v7');
+ assert.strictEqual(get('omrOpenCamera').disabled,false);
+ assert.strictEqual(get('omrV7LoadStatus').style.display,'none');
  console.log('PASS OMR 027 V6/V7 PWA read-only compare');
 })().catch(e=>{console.error(e);process.exitCode=1});

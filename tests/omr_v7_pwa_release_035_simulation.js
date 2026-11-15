@@ -1,7 +1,7 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 console.log('=== OMR 035 PWA V7 field-test release and read-only guard ===');
-const rev='20261115-teacher-pwa-038';
-const bridge='omr-v7-runtime-20261115-038.js';
+const rev='20261115-teacher-pwa-039';
+const bridge='omr-v7-runtime-20261115-039.js';
 const bundle=fs.readFileSync('teacher/'+bridge,'utf8');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 const teacherModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');
@@ -49,9 +49,9 @@ assert(teacherModule.includes("scan._labReadOnly=mode==='compare'"));
 assert(teacherModule.includes("q('omrSave').hidden=!!state.lastScan?._labReadOnly"));
 const v7Branch=teacherModule.slice(teacherModule.indexOf("}else if(mode==='v7'){"),
  teacherModule.indexOf("}else{",teacherModule.indexOf("}else if(mode==='v7'){")));
-assert(!v7Branch.includes('experimentalRefinement:true'),
- 'V7 saving mode must NOT apply unverified candidate modifications');
-assert(teacherModule.includes("officialEngine:'v6'"));
+assert(v7Branch.includes('experimentalRefinement:true'),
+ 'Official V7 saving must use the same fully refined candidate as field testing');
+assert(teacherModule.includes("officialEngine:'v7'"));
 const root={console,
  DamSanOmrTemplate:{},DamSanOmr:{},DamSanOmrRoomBinding:{},
  DamSanOmrScoring:{},DamSanOmrResultWrite:{},
@@ -61,4 +61,4 @@ vm.createContext(root);
 vm.runInContext(bundle,root,{filename:'teacher/'+bridge});
 assert.strictEqual(typeof root.DamSanOmrTeacher.open,'function');
 assert.strictEqual(typeof root.DamSanOmrScanAdapter.fromV7,'function');
-console.log('PASS OMR 035 new PWA assets, exact bridge, experiment read-only, canonical saving');
+console.log('PASS OMR 035 new PWA assets, exact V7 refined candidate, guarded official write');
