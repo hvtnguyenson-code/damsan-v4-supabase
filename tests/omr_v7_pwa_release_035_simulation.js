@@ -1,7 +1,7 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 console.log('=== OMR 035 PWA V7 field-test release and read-only guard ===');
-const rev='20261115-teacher-pwa-036';
-const bridge='omr-v7-runtime-20261115-036.js';
+const rev='20261115-teacher-pwa-037';
+const bridge='omr-v7-runtime-20261115-037.js';
 const bundle=fs.readFileSync('teacher/'+bridge,'utf8');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 const teacherModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');
@@ -27,6 +27,8 @@ assert(fs.existsSync('teacher/omr-v7-runtime-20261113-034.js'));
 assert(fs.existsSync('teacher/omr-v7-runtime-20261114-035.js'));
 assert(!html.includes('src="./omr-v7-runtime-20261114-035.js'));
 assert(html.includes('omr-v7-sparse-p3.js'));
+assert(html.includes('omr-v7-overlay.js'));
+assert(sw.includes("'../omr/omr-v7-overlay.js'"));
 assert(sw.includes("'../omr/omr-v7-sparse-p3.js'"));
 assert(sw.includes("fetch(request,{cache:'no-store'})"));
 assert(sw.includes('self.skipWaiting()')&&!sw.includes('self.clients.claim()'));

@@ -117,7 +117,7 @@
           .sort((a,b)=>b.score-a.score);
         const best=ranked[0];
         if(!best||best.score-(ranked[1]?.score||0)<.08)return;
-        const geom=Ext.geometry.offset(geometry,section,rect,T);
+        const geom=Ext.geometry.offsetAt(geometry,section,row[best.j],rect,T);
         const center=Ext.lighting.inspect(rect,T,B,row,
           baseline.calibration,labels,geom);
         if(center.glare||center.choice.state!=='single'
