@@ -37,10 +37,37 @@ async function browserTest(){
  const workbook=await X.xlsx([{status:'TEST',filename:'sheets/001-synthetic.webp',
   record:{scan_id:'synthetic',evidence}}],await X.ensureExcelJS());
  const zip=X.zip([{name:'thong-ke-omr.xlsx',data:workbook}]);
+ // Real browser end-to-end export path, with mock private signed URL and image bytes.
+ const previousFetch=window.fetch;
+ let downloads=0,linkValid=false,batchBytes=0;
+ try{
+  window.fetch=async (url,opts)=>{
+   if(String(url).includes('example.supabase.co')){
+    if(opts?.credentials!=='omit')throw Error('invalid signed file credentials');
+    return new Response(new Uint8Array([82,73,70,70,9,8,7,6,87,69,66,80]),{
+     status:200,headers:{'content-type':'image/webp'}});
+   }
+   return previousFetch(url,opts);
+  };
+  const fake={signed:async()=>({url:'https://example.supabase.co/storage/v1/object/sign/sample/a?token=synthetic',
+   record:{scan_id:'synthetic',evidence}}),
+   downloadBlob:()=>{downloads++;}};
+  const bundle=await X.exportBatch([{id:'12345678-1234-4234-8234-123456789abc',
+   exam_code:'105',scan_id:'synthetic'}],fake,null,null,{download:false,part:1});
+  batchBytes=bundle.archive.size;
+  const anchor=document.createElement('a');
+  document.body.appendChild(anchor);
+  const offered=C.prepareDownload(bundle.archive,bundle.filename,anchor);
+  const blob=await previousFetch(offered.href).then(r=>r.arrayBuffer());
+  linkValid=!!offered.href.startsWith('blob:')&&
+    anchor.download.endsWith('.zip')&&new Uint8Array(blob).length===batchBytes;
+  C.clearPreparedDownload(anchor);anchor.remove();
+ }finally{window.fetch=previousFetch;}
  return {width:out.canvas.width,height:out.canvas.height,preview:preview.grade.score,
   diff:out.report.edits.length,ring:out.report.marks.find(m=>m.key==='P2.1b')?.kind,
   encoded:png.startsWith('data:image/png;base64,'),photoBytes:png.length,serial:evidence.version,
-  xlsxBytes:workbook.length,zipBytes:zip.size,imageEncoded:C.imageUrl(out.canvas).startsWith('data:image/')};
+  xlsxBytes:workbook.length,zipBytes:zip.size,imageEncoded:C.imageUrl(out.canvas).startsWith('data:image/'),
+  downloadLinkValid:linkValid,exportedBatchBytes:batchBytes,automaticDownloads:downloads};
 }
 try{
  await call('Runtime.enable');
@@ -61,7 +88,8 @@ try{
  const result=out.result?.value;
  if(!result?.encoded||result.width!==180||result.height!==448||
     result.diff!==1||result.ring!=='wrong'||result.serial!=='OMR_EVIDENCE_01'||
-    !result.imageEncoded||result.xlsxBytes<1000||result.zipBytes<1000)
+    !result.imageEncoded||result.xlsxBytes<1000||result.zipBytes<1000||
+    !result.downloadLinkValid||result.exportedBatchBytes<1000||result.automaticDownloads!==0)
   throw Error('OMR 046 invalid evidence canvas: '+JSON.stringify(result));
  console.log('PASS OMR 046 Chromium: composite annotated sheet, manual edit, PNG encoding',JSON.stringify(result));
 }finally{ws.close();}
