@@ -58,7 +58,9 @@ async function browserTest(){
   const anchor=document.createElement('a');
   document.body.appendChild(anchor);
   const offered=C.prepareDownload(bundle.archive,bundle.filename,anchor);
-  const blob=await previousFetch(offered.href).then(r=>r.arrayBuffer());
+  // Inspect the exact archive bytes backing the prepared link. Fetching blob:
+  // again can be blocked by the isolated Chromium CI download context.
+  const blob=await bundle.archive.arrayBuffer();
   linkValid=!!offered.href.startsWith('blob:')&&
     anchor.download.endsWith('.zip')&&new Uint8Array(blob).length===batchBytes;
   C.clearPreparedDownload(anchor);anchor.remove();
