@@ -38,3 +38,8 @@
 - Chặn tạo thêm hồ sơ thử mới khi có 200 minh chứng TEST (lượt sửa tính là bản ghi riêng), tương đương tối đa lý thuyết 600MB ảnh (2 ảnh x 1,5MB).
 - Bản ghi đã tồn tại cùng scan_id/revision và checksum được trả về idempotent, không nhân bản.
 - Ảnh nguồn tạm trên điện thoại được giảm cạnh dài xuống tối đa 1900px, tránh giữ bản 12MP trong RAM. Ảnh nguồn gốc vẫn được giữ nguyên trên canvas chụp đến khi chuyển phiếu.
+
+## Bổ sung ràng buộc bằng chứng chính thức
+- Edge khi bật mode official phải đối chiếu học sinh, trường, phòng, mã đề, 28 đáp án đã xác nhận và điểm với exam_submissions trên máy chủ. Không chấp nhận điểm trùng nhưng nội dung đáp án khác.
+- Chế độ chính thức vẫn OFF ở giai đoạn A; chưa có hành động tự lưu ảnh chính thức lên production.
+- Ảnh do trình duyệt tạo là bằng chứng trình bày, không phải chữ ký hình học xác thực độc lập. Chỉ dùng kèm raw_answers, metadata, checksum và bản ghi chấm có thẩm quyền.

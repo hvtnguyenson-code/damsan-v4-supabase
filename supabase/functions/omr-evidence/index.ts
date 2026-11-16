@@ -134,14 +134,30 @@ async function save(req:Request,body:Json,actor:Actor) {
  if(mode==="official"){
   if(!student||!uuid(body.submission_id))throw Error("official_submission_required");
   const {data:s,error:e}=await db.from("exam_submissions")
-   .select("id,source,phong_id,hs_id,status,score,submitted_by_staff_id")
+   .select("id,source,truong_id,phong_id,hs_id,ma_de,raw_answers,status,score,submitted_by_staff_id")
    .eq("id",body.submission_id).maybeSingle();
   if(e||!s||s.source!=="OMR"||s.status!=="graded"||
-    s.phong_id!==room.id||s.hs_id!==student.id||
+    s.truong_id!==actor.school||s.phong_id!==room.id||
+    s.hs_id!==student.id||s.ma_de!==safe(body.exam_code)||
+    s.ma_de!==meta.exam_code||
     (!adminRole(actor.role)&&s.submitted_by_staff_id!==actor.id))
     throw Error("official_submission_forbidden");
-  if(Math.abs(previewScore-Number(s.score))>.001)
+  if(!Number.isFinite(Number(s.score))||Math.abs(previewScore-Number(s.score))>.001)
     throw Error("official_score_mismatch");
+  // Evidence is always derived from the confirmed answers actually submitted
+  // to the canonical server writer, not merely a coincidentally equal score.
+  const confirmed=meta.confirmed as Json|undefined;
+  const p1=typeof confirmed?.p1==="string"?confirmed.p1:[];
+  const p2=Array.isArray(confirmed?.p2)?confirmed.p2:[];
+  const p3=Array.isArray(confirmed?.p3)?confirmed.p3:[];
+  const submitted=Array.isArray(s.raw_answers)
+    ?s.raw_answers.map((entry:{chon?:unknown})=>String(entry?.chon??""))
+    :null;
+  const answers=[...(typeof p1==="string"?Array.from(p1):[]),...p2,...p3]
+    .map(value=>String(value??""));
+  if(!submitted||submitted.length!==28||answers.length!==28||
+     JSON.stringify(submitted)!==JSON.stringify(answers))
+    throw Error("official_answers_mismatch");
   submission=s;
  }
  const prefix=(mode==="test"?"test":"official")+"/"+actor.school+"/"+room.id+"/"+scanId+"/"+revision;
