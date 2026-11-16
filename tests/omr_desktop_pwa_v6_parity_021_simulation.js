@@ -19,7 +19,7 @@ for(const list of [d,m]){
  });
  assert(indexes.every((x,i)=>i===0||x>indexes[i-1]),'V7 dependency order');
 }
-assert(d.filter(x=>x.path.startsWith('omr/')).every(x=>x.url.split('?v=')[1]==='20261116-omr-desktop-v7-048'));
+assert(d.filter(x=>x.path.startsWith('omr/')).every(x=>x.url.split('?v=')[1]==='20261116-omr-desktop-v7-049'));
 assert(moduleSrc.includes("officialEngine:'v7'"));
 assert(moduleSrc.includes("const mode='v7'"));
 assert(!moduleSrc.includes('id="omrEngineSelect"')&&!moduleSrc.includes('id="omrV6Lab"'));
