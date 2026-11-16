@@ -1056,21 +1056,22 @@
       if(q('omrEvidenceExport'))q('omrEvidenceExport').style.display=trial?'':'none';
       q('omrEvidenceStatus').textContent='Đã tạo ảnh minh chứng • '+
         result.report.summary.manual+' vị trí GV sửa'+
-        (evidenceRoomCode()==='OMR_V7_TEST'?' • đang lưu bản thử...':' • chỉ lưu ảnh chính thức sau khi bật tính năng');
+        (evidenceRoomCode()==='OMR_V7_TEST'
+          ?' • chỉ lưu một phiếu cuối cùng khi bấm Xác nhận & Lưu'
+          :' • chỉ lưu ảnh chính thức sau khi bật tính năng');
       q('omrEvidenceRetry').style.display='none';
-      if(evidenceRoomCode()==='OMR_V7_TEST'){
-        if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
-        state.evidenceTimer=setTimeout(()=>saveTestEvidence(false),1000);
-      }
+      // NEVER upload a preview or an intermediate correction to Storage.
+      // Only saveCurrent(), after a successful canonical score write, can
+      // persist the final annotated sheet for this student.
     }catch(e){
       q('omrEvidenceStatus').textContent='Không tạo được ảnh minh chứng: '+(e.message||e);
     }
   }
   async function saveTestEvidence(force){
     const info=state.evidenceData;
-    if(!info||evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceClient)return;
-    if(!force&&state.evidenceSave===info.signature)return;
-    if(info.signature!==state.evidenceData?.signature)return;
+    if(!info||evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceClient)return {status:'skipped'};
+    if(!force&&state.evidenceSave===info.signature)return {status:'success',idempotent:true};
+    if(info.signature!==state.evidenceData?.signature)return {status:'stale'};
     try{
       const result=await EvidenceClient.save(sb,
         sessionStorage.getItem('damSan_StaffToken'),{
@@ -1080,12 +1081,14 @@
           capture:info.capture,mode:'test'});
       state.evidenceSave=info.signature;
       if(state.evidenceData?.signature===info.signature)
-        q('omrEvidenceStatus').textContent='Minh chứng thử nghiệm đã lưu an toàn • mã '+result.artifact_id;
+        q('omrEvidenceStatus').textContent='Phiếu cuối cùng đã lưu an toàn • mã '+result.artifact_id;
+      return {status:'success',artifact_id:result.artifact_id};
     }catch(err){
       if(state.evidenceData?.signature===info.signature){
         q('omrEvidenceStatus').textContent='Ảnh minh chứng đã tạo; chưa lưu lên Storage ('+(err.message||err)+'). Có thể tải về hoặc thử lại.';
         q('omrEvidenceRetry').style.display='inline-block';
       }
+      return {status:'error',message:err?.message||String(err)};
     }
   }
   async function showEvidenceArchive(){
@@ -1192,6 +1195,19 @@
       if(data.status!=='success') throw new Error(data.message||'Không lưu được kết quả.');
       state.saved.add(String(st.id));updateProgress();
       q('omrGradeCard').classList.add('omr-ok');
+      if(evidenceRoomCode()==='OMR_V7_TEST'){
+        // Final snapshot only: render from exactly the answers the canonical
+        // score writer has already accepted. Keep the scan for explicit retry
+        // if the evidence upload fails after the grade was committed.
+        if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
+        renderEvidence();
+        const savedEvidence=await saveTestEvidence(true);
+        if(savedEvidence?.status!=='success'){
+          showWarning('Điểm của '+st.ho_ten+' đã lưu thành công ('+
+            formatScore(data.score)+'). Ảnh phiếu chưa lưu; nhấn Thử lại lưu minh chứng. KHÔNG quét lại học sinh này.');
+          return;
+        }
+      }
       alert(`Đã lưu: ${st.ho_ten} — ${formatScore(data.score)} điểm.`);
       resetScan();
       if(!root.DamSanTeacherNav?.resumeCamera?.())await openCamera({navigation:'replace'});
