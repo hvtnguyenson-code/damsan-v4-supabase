@@ -110,6 +110,9 @@ async function save(req:Request,body:Json,actor:Actor) {
    (student?.id||null)!==(meta.student_id||null)||meta.revision!==revision)
    throw Error("evidence_link_mismatch");
  if(meta.version!=="OMR_EVIDENCE_01")throw Error("evidence_version_invalid");
+ const previewScore=Number((meta.grade as Json|undefined)?.total);
+ if(!Number.isFinite(previewScore)||previewScore<0||previewScore>10)
+   throw Error("evidence_score_invalid");
  const annotated=image(body.annotated_image),capture=image(body.capture_image);
  const digest=await sha256(annotated.bytes);
  const {data:old,error:oldError}=await db.from("omr_artifacts")
@@ -129,37 +132,49 @@ async function save(req:Request,body:Json,actor:Actor) {
     s.phong_id!==room.id||s.hs_id!==student.id||
     (!adminRole(actor.role)&&s.submitted_by_staff_id!==actor.id))
     throw Error("official_submission_forbidden");
-  if(Math.abs(Number((meta.grade as Json|undefined)?.total)-Number(s.score))>.001)
+  if(Math.abs(previewScore-Number(s.score))>.001)
     throw Error("official_score_mismatch");
   submission=s;
  }
  const prefix=(mode==="test"?"test":"official")+"/"+actor.school+"/"+room.id+"/"+scanId+"/"+revision;
  const capturePath=prefix+"/capture."+capture.ext;
  const annotatedPath=prefix+"/annotated."+annotated.ext;
- let justUploaded:string[]=[];
- try {
-  for(const f of [{path:capturePath,body:capture},{path:annotatedPath,body:annotated}]){
-   const {error:e}=await db.storage.from(BUCKET).upload(f.path,f.body.bytes,
-     {contentType:f.body.mime,cacheControl:"3600",upsert:false});
-   if(e)throw Error("storage_upload_failed");
-   justUploaded.push(f.path);
+ // Immutable paths: a retry may encounter an already-uploaded object if the
+ // network failed between Storage upload and DB registration. Verify SHA-256
+ // rather than overwriting another request's image or deleting shared paths.
+ for(const f of [{path:capturePath,body:capture},{path:annotatedPath,body:annotated}]){
+  const {error:e}=await db.storage.from(BUCKET).upload(f.path,f.body.bytes,
+    {contentType:f.body.mime,cacheControl:"3600",upsert:false});
+  if(e){
+   const msg=String(e.message||"")+" "+String(e.statusCode||"");
+   if(!/exists|duplicate|409/i.test(msg))throw Error("storage_upload_failed");
+   const {data:existing,error:downloadError}=await db.storage.from(BUCKET).download(f.path);
+   if(downloadError||!existing)throw Error("storage_retry_unavailable");
+   const prior=new Uint8Array(await existing.arrayBuffer());
+   if(await sha256(prior)!==await sha256(f.body.bytes))
+      throw Error("storage_revision_content_conflict");
   }
-  const row={scan_id:scanId,revision,room_id:room.id,student_id:student?.id||null,
-   school_id:actor.school,created_by_staff_id:actor.id,submission_id:submission?.id||null,
-   exam_code:safe(body.exam_code),mode,status:submission?"COMPLETE":"TEST",
-   capture_path:capturePath,annotated_path:annotatedPath,
-   sha256:digest,file_bytes:annotated.bytes.byteLength,engine_version:meta.version,
-   preview_score:Number((meta.grade as Json|undefined)?.total)||0,final_score:submission?.score??null,
-   evidence:meta};
-  const {data:inserted,error:ie}=await db.from("omr_artifacts")
-    .insert(row).select("id,status").single();
-  if(ie)throw Error("artifact_registration_failed");
-  return respond(req,200,{status:"success",artifact_id:inserted.id,phase:inserted.status,
-    idempotent:false});
- }catch(e){
-  if(justUploaded.length)await db.storage.from(BUCKET).remove(justUploaded);
-  throw e;
  }
+ const row={scan_id:scanId,revision,room_id:room.id,student_id:student?.id||null,
+  school_id:actor.school,created_by_staff_id:actor.id,submission_id:submission?.id||null,
+  exam_code:safe(body.exam_code),mode,status:submission?"COMPLETE":"TEST",
+  capture_path:capturePath,annotated_path:annotatedPath,
+  sha256:digest,file_bytes:annotated.bytes.byteLength,engine_version:meta.version,
+  preview_score:previewScore,final_score:submission?.score??null,
+  evidence:meta};
+ const {data:inserted,error:ie}=await db.from("omr_artifacts")
+   .insert(row).select("id,status").single();
+ if(ie){
+  // A concurrent, byte-identical request may have registered first.
+  const {data:existing}=await db.from("omr_artifacts")
+    .select("id,sha256,status").eq("scan_id",scanId).eq("revision",revision).maybeSingle();
+  if(existing&&existing.sha256===digest)
+   return respond(req,200,{status:"success",artifact_id:existing.id,
+     phase:existing.status,idempotent:true});
+  throw Error("artifact_registration_failed");
+ }
+ return respond(req,200,{status:"success",artifact_id:inserted.id,phase:inserted.status,
+   idempotent:false});
 }
 async function list(req:Request,body:Json,actor:Actor){
  const room=await roomFor(actor,body.room_id);
