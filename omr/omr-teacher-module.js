@@ -1020,8 +1020,9 @@
       for(const item of list.slice(0,100)){
         const row=document.createElement('div'),btn=document.createElement('button');
         btn.type='button';btn.className='omr-light';
-        btn.textContent=(item.exam_code||'?')+' • '+(item.student_id||'Chưa xác định')+
-          ' • '+formatScore(item.preview_score)+' • '+new Date(item.created_at).toLocaleString('vi-VN');
+        btn.textContent=(item.student_code||'Chưa rõ SBD')+' — '+(item.student_name||'Chưa xác định')+
+          ' • Mã đề '+(item.exam_code||'?')+' • '+formatScore(item.preview_score)+
+          ' • '+new Date(item.created_at).toLocaleString('vi-VN');
         btn.onclick=async()=>{
           btn.disabled=true;
           try{

@@ -194,7 +194,20 @@ async function list(req:Request,body:Json,actor:Actor){
    .order("created_at",{ascending:false}).order("id",{ascending:false})
    .range(offset,offset+199);
  if(e)throw Error("artifact_list_failed");
- return respond(req,200,{status:"success",items:data||[],next_offset:(data||[]).length===200?offset+200:null});
+ const ids=[...new Set((data||[]).map(item=>item.student_id).filter(uuid))];
+ const names=new Map<string,{ma_hs:string;ho_ten:string;lop:string}>();
+ if(ids.length){
+  const {data:students,error:se}=await db.from("hoc_sinh")
+   .select("id,ma_hs,ho_ten,lop").eq("truong_id",actor.school).in("id",ids);
+  if(se)throw Error("artifact_student_lookup_failed");
+  for(const student of students||[])names.set(student.id,student);
+ }
+ const items=(data||[]).map(item=>{
+  const student=names.get(item.student_id);
+  return {...item,student_code:student?.ma_hs||"",
+   student_name:student?.ho_ten||"",class_name:student?.lop||""};
+ });
+ return respond(req,200,{status:"success",items,next_offset:(data||[]).length===200?offset+200:null});
 }
 async function get(req:Request,body:Json,actor:Actor){
  if(!uuid(body.artifact_id))throw Error("artifact_invalid");

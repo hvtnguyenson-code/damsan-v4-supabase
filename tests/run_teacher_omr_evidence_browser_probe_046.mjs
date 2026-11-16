@@ -34,7 +34,8 @@ async function browserTest(){
  const png=out.canvas.toDataURL('image/png');
  const evidence=E.record(preview,original,out.report,{scanId:'synthetic',mode:'test'});
  const X=window.DamSanOmrEvidenceExport,C=window.DamSanOmrEvidenceClient;
- const workbook=await X.xlsx([{status:'TEST',record:{scan_id:'synthetic',evidence}}],await X.ensureExcelJS());
+ const workbook=await X.xlsx([{status:'TEST',filename:'sheets/001-synthetic.webp',
+  record:{scan_id:'synthetic',evidence}}],await X.ensureExcelJS());
  const zip=X.zip([{name:'thong-ke-omr.xlsx',data:workbook}]);
  return {width:out.canvas.width,height:out.canvas.height,preview:preview.grade.score,
   diff:out.report.edits.length,ring:out.report.marks.find(m=>m.key==='P2.1b')?.kind,

@@ -50,7 +50,9 @@ function rowsFrom(records){
   const base=[data.student_code||'',data.student_name||'',data.class_name||'',
     data.exam_code||r.exam_code||'',parts.p1??'',parts.p2??'',
     parts.p3??'',grade.total??r.preview_score??'',r.status||'',
-    r.record?.scan_id||r.scan_id||''];
+    r.record?.scan_id||r.scan_id||'',r.filename||'',
+    (data.uncertain_details||[]).length,(data.edits||[]).length,
+    data.version||''];
   overview.push(base);
   (grade.details||[]).forEach(q=>details.push([data.student_code||'',
     q.phan||'',q.q||'',q.chon||'',q.dung||'',q.diem??0]));
@@ -64,13 +66,21 @@ async function xlsx(records,ExcelJS){
  const wb=new ExcelJS.Workbook();wb.creator='Đam San OMR V7';
  const data=rowsFrom(records);
  const defs=[
-  ['Tổng hợp',['SBD','Họ tên','Lớp','Mã đề','P1','P2','P3','Tổng','Trạng thái','Scan ID'],data.overview],
+  ['Tổng hợp',['SBD','Họ tên','Lớp','Mã đề','P1','P2','P3','Tổng','Trạng thái','Scan ID','Tệp phiếu','Cảnh báo V7','Số vị trí sửa','Phiên bản'],data.overview],
   ['Chi tiết',['SBD','Phần','Câu','Học sinh chọn','Đáp án đúng','Điểm'],data.details],
   ['Đối chiếu',['SBD','Vị trí sửa','Trước','Sau','Scan ID'],data.audit]
  ];
  for(const [sheet,headers,rows] of defs){
   const ws=wb.addWorksheet(sheet);
-  ws.addRow(headers);for(const r of rows)ws.addRow(r);
+  ws.addRow(headers);
+  for(const r of rows){
+   const row=ws.addRow(r);
+   // Stable ZIP-relative links; never expose short-lived signed URLs in Excel.
+   if(sheet==='Tổng hợp'&&r[10]){
+    row.getCell(11).value={text:r[10],hyperlink:r[10]};
+    row.getCell(11).font={color:{argb:'FF1565C0'},underline:true};
+   }
+  }
   ws.getRow(1).font={bold:true};
   ws.columns=headers.map(h=>({width:Math.max(14,Math.min(32,h.length+8))}));
   if(ws.autoFilter===undefined){}else ws.autoFilter={from:'A1',to:ws.getRow(1).getCell(headers.length).address};
@@ -111,7 +121,7 @@ async function exportBatch(list,client,sb,token,{download,status,part=1}={}){
   if(!bytes.length||bytes.length>2000000)throw Error('evidence_download_size_invalid');
   const filename='sheets/'+String(i+1).padStart(3,'0')+'-'+item.id.slice(0,8)+
     (response.headers.get('content-type')?.includes('webp')?'.webp':'.jpg');
-  records.push({...item,record:signed.record});
+  records.push({...item,filename,record:signed.record});
   files.push({name:filename,data:bytes});
   manifest.items.push({id:item.id,filename,scan_id:item.scan_id,exam_code:item.exam_code});
  }
