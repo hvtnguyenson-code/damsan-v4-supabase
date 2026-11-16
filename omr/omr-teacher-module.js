@@ -3,7 +3,8 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite, E=root.DamSanOmrScanAdapter;
   const V7=root.DamSanOmrV7Candidate;
   const LabScore=root.DamSanOmrV7LabScore;
-  const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport, Naming=root.DamSanOmrEvidenceNaming;
+  const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport, Naming=root.DamSanOmrEvidenceNaming,
+    EvidencePrint=root.DamSanOmrEvidencePrint;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
   const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null};
@@ -242,7 +243,8 @@
             <details id="omrEvidenceToolsDetails" class="omr-evidence-extra">
            <summary>Công cụ minh chứng và xuất file</summary>
            <div class="omr-evidence-tools">
-              <button type="button" class="omr-light" id="omrEvidenceDownload">Tải ảnh minh chứng</button>
+              <button type="button" class="omr-light" id="omrEvidenceDownload">Tải ảnh JPG</button>
+               <button type="button" class="omr-light" id="omrEvidencePdf">Tải phiếu PDF</button>
               <button type="button" class="omr-light" id="omrEvidenceJson">Tải JSON đối chiếu</button>
               <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu thử đã lưu</button>
               <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + ZIP</button>
@@ -345,24 +347,34 @@
       else if(!state.autoScanEnabled)stopAutoScanLoop();
     };
     q('omrRecheck').onclick=reviewCurrent;
+    const evidenceFileStem=()=>{
+      if(!state.evidenceData)return '';
+      return Naming.stem({...state.evidenceData.record,
+        exam_code:state.evidenceData.preview.variant.code,
+        student_code:state.evidenceData.preview.student.ma_hs,
+        student_name:state.evidenceData.preview.student.ho_ten,
+        class_name:state.evidenceData.preview.student.lop});
+    };
     q('omrEvidenceDownload').onclick=()=>{
       if(state.evidenceData&&EvidenceClient)
-        EvidenceClient.canvasDownload(q('omrEvidenceCanvas'),Naming.stem({
-          ...state.evidenceData.record,
-          exam_code:state.evidenceData.preview.variant.code,
-          student_code:state.evidenceData.preview.student.ma_hs,
-          student_name:state.evidenceData.preview.student.ho_ten,
-          class_name:state.evidenceData.preview.student.lop
-        }));
+        EvidenceClient.canvasDownload(q('omrEvidenceCanvas'),evidenceFileStem());
+    };
+    q('omrEvidencePdf').onclick=async()=>{
+      const btn=q('omrEvidencePdf');
+      if(!state.evidenceData||!EvidencePrint||btn.disabled)return;
+      btn.disabled=true;
+      try{
+        const pdf=await EvidencePrint.pdfFromCanvas(q('omrEvidenceCanvas'));
+        EvidenceClient.downloadBlob(new Blob([pdf],{type:'application/pdf'}),
+          evidenceFileStem()+'.pdf');
+      }catch(err){
+        q('omrEvidenceStatus').textContent='Không tạo được PDF: '+(err?.message||err);
+      }finally{btn.disabled=false;}
     };
     q('omrEvidenceJson').onclick=()=>{
       if(state.evidenceData&&EvidenceClient)
         EvidenceClient.downloadBlob(new Blob([JSON.stringify(state.evidenceData.record,null,2)],{type:'application/json'}),
-         Naming.stem({...state.evidenceData.record,
-          exam_code:state.evidenceData.preview.variant.code,
-          student_code:state.evidenceData.preview.student.ma_hs,
-          student_name:state.evidenceData.preview.student.ho_ten,
-          class_name:state.evidenceData.preview.student.lop})+'.json');
+          evidenceFileStem()+'.json');
     };
     q('omrEvidenceHistory').onclick=showEvidenceArchive;
     // A keyboard-accessible reader can expand the optional tools when needed.

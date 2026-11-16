@@ -19,10 +19,13 @@ const sample=[
     edits:[{key:'P2.1b',before:'?',after:'S'}]}}}
 ];
 const name=Naming.filename(sample[0]);
-assert(name.includes('100412 - H Hồng Niê - 10A4 - MD105 - R01 - '));
-assert(name.endsWith('.webp'));
-assert(Naming.filename({...sample[0],revision:1,scan_id:'zzzzzzzz-aaaa-4aaa-8aaa-aaaaaaaaaaaa'})!==name,
- 'different scans at revision 1 must not collide');
+assert.strictEqual(name,'100412 - H Hồng Niê - 10A4 - MD105 - L01.jpg');
+assert(!/[0-9a-f]{8}\.jpg$/.test(name),'File names must not show opaque scan IDs');
+const seen=new Set();
+assert.strictEqual(Naming.uniqueStem(sample[0],seen),Naming.stem(sample[0]));
+assert.strictEqual(Naming.uniqueStem({...sample[0],scan_id:'zzzzzzzz-aaaa-4aaa-8aaa-aaaaaaaaaaaa'},seen),
+ Naming.stem(sample[0])+' - Ban02','duplicate scans get a human-readable collision index');
+assert.strictEqual(Naming.pdfPath(sample[0]),'phieu-minh-chung/'+Naming.stem(sample[0])+'.pdf');
 assert(!Naming.filename({...sample[0],student_name:'Cô/Trò:<Tên>|?'})
  .includes('/'),'Windows-invalid characters must not leak');
 const history=[...sample,{...sample[0],id:'dddddddd-dddd-4ddd-8ddd-dddddddddddd',

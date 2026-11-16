@@ -49,20 +49,40 @@ function stem(item){
  const lop=clean(item?.class_name||evidence.class_name,'Không-lớp');
  const code=clean(item?.exam_code||evidence.exam_code,'Không-mã-đề');
  const revision=String(Math.max(1,Math.min(9999,Number(item?.revision||item?.record?.revision||1)||1))).padStart(2,'0');
- const uid=String(item?.scan_id||item?.record?.scan_id||item?.id||'').replace(/[^0-9a-z]/gi,'').slice(0,8)||'noscan';
- // Preserve the student's actual Vietnamese name, while scan ID guarantees
- // uniqueness when the same student is rescanned at revision 1.
- const suffix=' - '+lop+' - MD'+code+' - R'+revision+' - '+uid;
- const prefix=sbd+' - ';
- const encoder=new TextEncoder();
- let safeName=name;
- while(encoder.encode(prefix+safeName+suffix+'.webp').length>188&&safeName.length>1){
+ const suffix=' - '+lop+' - MD'+code+' - L'+revision;
+ const prefix=sbd+' - ',encoder=new TextEncoder();let safeName=name;
+ // A human-readable base name; the scan UUID remains in the JSON/manifest,
+ // never in the ordinary filename. Leave room for a collision counter.
+ while(encoder.encode(prefix+safeName+suffix+' - Ban999.pdf').length>190&&safeName.length>1)
   safeName=Array.from(safeName).slice(0,-1).join('');
- }
  return prefix+safeName.trim()+suffix;
 }
-function filename(item,ext='webp'){return stem(item)+'.'+(String(ext).toLowerCase()==='jpg'?'jpg':'webp');}
-function imagePath(item,ext='webp'){return 'phieu-minh-chung/'+filename(item,ext);}
-function jsonPath(item){return 'doi-chieu-json/'+stem(item)+'.json';}
-return {clean,normalizedCode,evidenceKey,latestByStudent,findByStudent,codeSort,stem,filename,imagePath,jsonPath};
+function uniqueStem(item,seen){
+ const base=stem(item);
+ if(!seen)return base;
+ let candidate=base,counter=2;
+ while(seen.has(candidate)){
+  if(counter>999)throw Error('omr_filename_collision_limit');
+  candidate=base+' - Ban'+String(counter++).padStart(2,'0');
+ }
+ seen.add(candidate);
+ return candidate;
+}
+function filename(item,ext='jpg'){
+ const suffix=String(ext).toLowerCase();
+ if(!['jpg','jpeg','pdf','webp'].includes(suffix))throw Error('omr_filename_extension_invalid');
+ return stem(item)+'.'+(suffix==='jpeg'?'jpg':suffix);
+}
+function pathFromStem(base,ext){
+ const type=String(ext).toLowerCase();
+ if(type==='pdf')return 'phieu-minh-chung/'+base+'.pdf';
+ if(type==='jpg')return 'anh-jpg/'+base+'.jpg';
+ if(type==='json')return 'doi-chieu-json/'+base+'.json';
+ throw Error('omr_export_format_invalid');
+}
+function imagePath(item){return pathFromStem(stem(item),'jpg');}
+function pdfPath(item){return pathFromStem(stem(item),'pdf');}
+function jsonPath(item){return pathFromStem(stem(item),'json');}
+return {clean,normalizedCode,evidenceKey,latestByStudent,findByStudent,codeSort,
+ stem,uniqueStem,filename,pathFromStem,imagePath,pdfPath,jsonPath};
 });

@@ -1,7 +1,7 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 console.log('=== OMR 035 PWA V7 field-test release and read-only guard ===');
-const rev='20261116-teacher-pwa-045';
-const bridge='omr-v7-runtime-20261116-045.js';
+const rev='20261116-teacher-pwa-046';
+const bridge='omr-v7-runtime-20261116-046.js';
 const bundle=fs.readFileSync('teacher/'+bridge,'utf8');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 const teacherModule=fs.readFileSync('omr/omr-teacher-module.js','utf8');

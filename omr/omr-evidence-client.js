@@ -92,10 +92,11 @@ function prepareDownload(blob,filename,anchor){
 }
 function canvasDownload(canvas,name){
  if(!canvas)throw Error('evidence_canvas_empty');
+ // The cloud keeps compressed WebP; human-facing downloads use JPG.
  canvas.toBlob(blob=>{
   if(!blob)return;
-  downloadBlob(blob,name+(blob.type==='image/webp'?'.webp':'.jpg'));
- },'image/webp',.72);
+  downloadBlob(blob,name+'.jpg');
+ },'image/jpeg',.88);
 }
 return {FUNCTION,MAX_IMAGE_BYTES,imageUrl,call,save,list,signed,downloadBlob,canvasDownload,
  prepareDownload,clearPreparedDownload};

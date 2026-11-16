@@ -42,7 +42,11 @@ const client={
 };
 (async()=>{
  const out=await Export.exportBatch(records,client,null,null,{
-  roster,roomLabel:'OMR_V7_TEST',maxItems:60,download:false,part:1});
+  roster,roomLabel:'OMR_V7_TEST',maxItems:60,download:false,part:1,
+  printEngine:{
+   bytesToJpeg:async()=>({bytes:new Uint8Array([255,216,0,255,217]),width:4,height:6}),
+   pdfFromJpeg:()=>new TextEncoder().encode('%PDF-1.4\n%%EOF')
+  }});
  assert(out.filename.includes('OMR_V7_TEST')&&out.filename.endsWith('.zip'));
  const buffer=Buffer.from(await out.archive.arrayBuffer());
  const python=[
@@ -54,9 +58,13 @@ const client={
   '  print(json.dumps({"names":names,"items":manifest["items"]},ensure_ascii=False))'
  ].join('\n');
  const r=JSON.parse(execFileSync('python3',['-c',python],{input:buffer,encoding:'utf8'}));
- assert(r.names.some(x=>x.includes('100412 - H Hồng Niê - 10A4 - MD105')));
- assert(!r.names.some(x=>x.includes('WRONG_UNTRUSTED_NAME')));
+ assert(r.names.some(x=>x==='phieu-minh-chung/100412 - H Hồng Niê - 10A4 - MD105 - L01.pdf'));
+ assert(r.names.some(x=>x==='anh-jpg/100412 - H Hồng Niê - 10A4 - MD105 - L01.jpg'));
+ assert(!r.names.some(x=>x.endsWith('.webp')||x.includes('WRONG_UNTRUSTED_NAME')));
+ assert(!r.names.some(x=>/ - [0-9a-f]{8}\\.(pdf|jpg|json)$/.test(x)));
  assert(r.names.some(x=>x.endsWith('.json')&&x.includes('H Hồng Niê')));
+ assert.equal(r.items[0].pdf,r.items[0].filename);
+ assert(r.items[0].image.endsWith('.jpg'));
  assert(r.names.some(x=>x==='thong-ke-omr.xlsx'));
  assert.equal(r.items[0].student_name,'H Hồng Niê');
  assert(books[0].sheets.some(s=>s.name==='Điểm phòng thi'));
