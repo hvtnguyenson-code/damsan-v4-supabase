@@ -1,0 +1,6 @@
+# OMR evidence uses the school's opaque, revocable staff_session token,
+# not Supabase Auth JWT. This disables only the gateway JWT check for this
+# function; the function itself MUST validate staff_token and room permissions
+# before any database or private Storage operation.
+[functions.omr-evidence]
+verify_jwt = false

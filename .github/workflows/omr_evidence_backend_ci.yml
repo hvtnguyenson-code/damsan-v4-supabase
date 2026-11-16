@@ -5,13 +5,26 @@ on:
     paths:
       - 'supabase/functions/omr-evidence/**'
       - 'docs/omr-evidence-ddl-proposal.sql'
+      - 'supabase/config.toml'
+      - 'tests/sql/omr_evidence_*.sql'
+      - 'tests/omr_evidence_free_auth_guard.js'
       - '.github/workflows/omr_evidence_backend_ci.yml'
   workflow_dispatch:
 
 jobs:
   deno-typecheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: omr_evidence_test_only
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
@@ -19,3 +32,17 @@ jobs:
           deno-version: v2.x
       - name: Check OMR Evidence Edge Function
         run: deno check supabase/functions/omr-evidence/index.ts
+      - name: Assert custom staff session configuration (Free-only)
+        run: node tests/omr_evidence_free_auth_guard.js
+      - name: Test evidence DDL on disposable PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          PG_CONTAINER="${{ job.services.postgres.id }}"
+          test -n "$PG_CONTAINER"
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/omr_evidence_fixture.sql
+          # Twice ensures schema/bucket migration can be retried safely.
+          for attempt in 1 2; do
+            docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < docs/omr-evidence-ddl-proposal.sql
+          done
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/omr_evidence_assertions.sql
