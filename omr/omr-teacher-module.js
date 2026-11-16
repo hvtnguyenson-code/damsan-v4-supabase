@@ -3,9 +3,10 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite, E=root.DamSanOmrScanAdapter;
   const V7=root.DamSanOmrV7Candidate;
   const LabScore=root.DamSanOmrV7LabScore;
+  const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
   // loaded with V7 modules, compares V6/V7 without any second route or RPC.
@@ -175,6 +176,10 @@
       #omrTeacherOverlay .omr-identity-grid label{display:block;margin:0 0 6px;font-size:13px;line-height:1.4;font-weight:600;overflow-wrap:anywhere}
       #omrTeacherOverlay .omr-identity-grid input,#omrTeacherOverlay .omr-identity-grid select{display:block;width:100%;max-width:100%;min-width:0;box-sizing:border-box;min-height:44px;padding:8px 10px;border:1px solid #94a3b8;border-radius:8px;background:#fff;color:#0f172a;font-size:16px;text-overflow:ellipsis}
       #omrTeacherOverlay .omr-identity-grid select{white-space:nowrap;overflow:hidden}
+      #omrTeacherOverlay #omrEvidenceCanvas{display:block;width:100%;max-width:100%;height:auto;max-height:72dvh;object-fit:contain;background:white;border:1px solid #dbe3ed;border-radius:8px}
+      #omrTeacherOverlay #omrEvidenceStatus{font-size:12px;margin-top:8px;overflow-wrap:anywhere}
+      #omrTeacherOverlay #omrEvidenceArchiveList{font-size:13px;line-height:1.5;max-height:250px;overflow:auto}
+      #omrTeacherOverlay .omr-evidence-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
       @media(max-width:340px){#omrTeacherOverlay .omr-identity-grid{grid-template-columns:minmax(0,1fr)}}
       .omr-lab-details{white-space:pre-line;line-height:1.55;overflow-wrap:anywhere}.omr-lab-toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.omr-lab-toggle input{width:20px;height:20px;flex:0 0 20px;accent-color:#7c3aed}
       @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}#omrTeacherOverlay .omr-room-info{grid-template-columns:minmax(0,1fr)}}
@@ -254,6 +259,20 @@
             <div>Điểm dự kiến (<span id="omrGradeEngine">V7</span>): <span class="omr-score" id="omrScore">-</span></div>
             <div id="omrPartScores" class="omr-muted"></div>
           </div>
+          <section id="omrEvidenceCard" class="omr-card" style="display:none" aria-label="Phiếu minh chứng đã đánh dấu đúng sai">
+            <strong>Phiếu có đánh dấu đúng/sai</strong>
+            <div class="omr-muted">Xanh: đúng • Đỏ: lựa chọn sai • Vàng: đáp án đúng • Cam: chưa rõ • Tím: GV sửa. Phiếu minh chứng không thay đổi điểm chính thức.</div>
+            <canvas id="omrEvidenceCanvas" role="img" aria-label="Ảnh phiếu trắc nghiệm đã đánh dấu đáp án đúng sai"></canvas>
+            <div id="omrEvidenceStatus" role="status"></div>
+            <div class="omr-evidence-tools">
+              <button type="button" class="omr-light" id="omrEvidenceDownload">Tải ảnh minh chứng</button>
+              <button type="button" class="omr-light" id="omrEvidenceJson">Tải JSON đối chiếu</button>
+              <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu thử đã lưu</button>
+              <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + ZIP</button>
+              <button type="button" class="omr-light" id="omrEvidenceRetry" style="display:none">Lưu lại minh chứng</button>
+            </div>
+            <div id="omrEvidenceArchiveList" style="display:none"></div>
+          </section>
           <div class="omr-actions">
             <button class="omr-light" id="omrRecheck">Kiểm tra lại</button>
             <button class="omr-green" id="omrSave" disabled>Xác nhận & Lưu</button>
@@ -293,13 +312,38 @@
       else if(!state.autoScanEnabled)stopAutoScanLoop();
     };
     q('omrRecheck').onclick=reviewCurrent;
+    q('omrEvidenceDownload').onclick=()=>{
+      if(state.evidenceData&&EvidenceClient)
+        EvidenceClient.canvasDownload(q('omrEvidenceCanvas'),'omr-'+state.evidenceData.record.scan_id+'-v'+state.evidenceData.record.revision);
+    };
+    q('omrEvidenceJson').onclick=()=>{
+      if(state.evidenceData&&EvidenceClient)
+        EvidenceClient.downloadBlob(new Blob([JSON.stringify(state.evidenceData.record,null,2)],{type:'application/json'}),'omr-'+state.evidenceData.record.scan_id+'.json');
+    };
+    q('omrEvidenceHistory').onclick=showEvidenceArchive;
+    q('omrEvidenceExport').onclick=exportEvidenceRoom;
+    q('omrEvidenceRetry').onclick=()=>saveTestEvidence(true);
     q('omrNext').onclick=()=>{
       resetScan();
       if(!root.DamSanTeacherNav?.resumeCamera?.())openCamera({navigation:'replace'});
     };
     q('omrSave').onclick=saveCurrent;
     q('omrReviewUncertain').onchange=reviewCurrent;
-    ['omrSbd','omrMaDe','omrStudent','omrP1','omrP2_1','omrP2_2','omrP2_3','omrP2_4','omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'].forEach(id=>q(id).addEventListener('change',reviewCurrent));
+    const gradeInputs=['omrSbd','omrMaDe','omrStudent','omrP1',
+      'omrP2_1','omrP2_2','omrP2_3','omrP2_4',
+      'omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'];
+    let gradeDebounce=null;
+    for(const id of gradeInputs){
+      q(id).addEventListener('change',()=>{
+        if(gradeDebounce)clearTimeout(gradeDebounce);
+        reviewCurrent();
+      });
+      if(id==='omrStudent')continue;
+      q(id).addEventListener('input',()=>{
+        if(gradeDebounce)clearTimeout(gradeDebounce);
+        gradeDebounce=setTimeout(reviewCurrent,300);
+      });
+    }
   }
 
   async function open(){
@@ -542,6 +586,8 @@
   function analyzeCanvas(){
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true});
     state.lastScan=null;state.lastPreview=null;
+    state.evidenceCtx=null;state.evidenceData=null;
+    if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
     q('omrSave').disabled=true;
     try{
       const pixels=ctx.getImageData(0,0,c.width,c.height);
@@ -612,6 +658,10 @@
             const candidate=V7.analyzeValidatedRectified(
               rect,T.template,null,{experimentalRefinement:true});
             scan=E.fromV7(v5,candidate);
+            if(Evidence){
+              state.evidenceCtx={rect,candidate,original:null,scanId:crypto.randomUUID(),
+                revision:0,signature:null};
+            }
             if(root.DamSanOmrV7Overlay?.draw){
               try{
                 const panel=q('omrV7OverlayPanel');
@@ -683,6 +733,10 @@
       if(mode==='v5'||(mode==='compare'&&!hasV7Comparison()))
         scan.recognitionEngine='V5';
       state.lastScan=scan;
+      if(state.evidenceCtx){
+        state.evidenceCtx.original={p1:scan.p1,p2:[...(scan.p2||[])],
+          p3:[...(scan.p3||[])]};
+      }
       // Presentation only: crop around validated four-corner markers after
       // recognition. Never send the cropped image back to the OMR engine.
       let cropped=false;
@@ -833,6 +887,10 @@
   }
   function selectedStudent(){return state.roomModel?.students.find(s=>String(s.id)===String(q('omrStudent').value));}
   function reviewCurrent(){
+    // Never show the previous student's evidence when a changed identity or
+    // exam code temporarily fails validation.
+    if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
+    if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
     q('omrSave').disabled=true;
     q('omrSave').hidden=!!state.lastScan?._labReadOnly;
     q('omrGradeCard').style.display='none';state.lastPreview=null;
@@ -877,6 +935,7 @@
     preview.reviewedUncertain=reviewed;
     q('omrReviewUncertainWrap').style.display=hasUncertain?'block':'none';
     state.lastPreview=preview;
+    scheduleEvidence();
     q('omrStudentName').textContent=`${st.ma_hs} — ${st.ho_ten} (${st.lop})`;
     q('omrGradeCode').textContent=vr.variant.code;
     q('omrScore').textContent=formatScore(preview.grade.score);
@@ -900,6 +959,131 @@
     }
   }
 
+  function evidenceRoomCode(){
+    return String(state.roomModel?.room?.MaPhong||
+      state.roomModel?.room?.ma_phong||'').trim();
+  }
+  function scheduleEvidence(){
+    if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
+    // Phase A is a strictly isolated experiment: do not allocate warped
+    // evidence canvases or change UI timing in any real examination room.
+    if(evidenceRoomCode()!=='OMR_V7_TEST'){
+      if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
+      return;
+    }
+    if(!Evidence||!state.evidenceCtx||!state.lastPreview?.ok)return;
+    state.evidenceTimer=setTimeout(renderEvidence,420);
+  }
+  function renderEvidence(){
+    const ctx=state.evidenceCtx,preview=state.lastPreview;
+    if(!ctx||!preview?.ok||!Evidence)return;
+    try{
+      const confirmed=JSON.stringify([preview.scan.p1,preview.scan.p2,
+        preview.scan.p3,preview.variant.code,preview.student.id]);
+      if(ctx.signature===confirmed){
+        if(state.evidenceData)q('omrEvidenceCard').style.display='block';
+        return;
+      }
+      ctx.signature=confirmed;ctx.revision++;
+      const meta={studentName:preview.student.ho_ten,studentCode:preview.student.ma_hs,
+        roomName:preview.room?.ten_dot||preview.room?.TenDot||'',
+        status:'test',timestamp:new Date().toISOString(),
+        scanId:ctx.scanId,revision:ctx.revision,mode:'test'};
+      const result=Evidence.compose(q('omrEvidenceCanvas'),ctx.rect,T.template,
+        preview,ctx.original,meta);
+      const record=Evidence.record(preview,ctx.original,result.report,meta);
+      const source=q('omrTeacherCanvas');
+      const capture=document.createElement('canvas');
+      const scale=Math.min(1,1900/Math.max(source.width,source.height));
+      capture.width=Math.max(1,Math.round(source.width*scale));
+      capture.height=Math.max(1,Math.round(source.height*scale));
+      capture.getContext('2d').drawImage(source,0,0,capture.width,capture.height);
+      state.evidenceData={record,preview,result,capture,signature:confirmed};
+      q('omrEvidenceCard').style.display='block';
+      q('omrEvidenceStatus').textContent='Đã tạo ảnh minh chứng • '+
+        result.report.summary.manual+' vị trí GV sửa'+
+        (evidenceRoomCode()==='OMR_V7_TEST'?' • đang lưu bản thử...':' • chỉ lưu ảnh chính thức sau khi bật tính năng');
+      q('omrEvidenceRetry').style.display='none';
+      if(evidenceRoomCode()==='OMR_V7_TEST'){
+        if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
+        state.evidenceTimer=setTimeout(()=>saveTestEvidence(false),1000);
+      }
+    }catch(e){
+      q('omrEvidenceStatus').textContent='Không tạo được ảnh minh chứng: '+(e.message||e);
+    }
+  }
+  async function saveTestEvidence(force){
+    const info=state.evidenceData;
+    if(!info||evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceClient)return;
+    if(!force&&state.evidenceSave===info.signature)return;
+    if(info.signature!==state.evidenceData?.signature)return;
+    try{
+      const result=await EvidenceClient.save(sb,
+        sessionStorage.getItem('damSan_StaffToken'),{
+          scanId:info.record.scan_id,revision:info.record.revision,
+          preview:info.preview,original:state.evidenceCtx?.original,
+          report:info.record,canvas:q('omrEvidenceCanvas'),
+          capture:info.capture,mode:'test'});
+      state.evidenceSave=info.signature;
+      if(state.evidenceData?.signature===info.signature)
+        q('omrEvidenceStatus').textContent='Minh chứng thử nghiệm đã lưu an toàn • mã '+result.artifact_id;
+    }catch(err){
+      if(state.evidenceData?.signature===info.signature){
+        q('omrEvidenceStatus').textContent='Ảnh minh chứng đã tạo; chưa lưu lên Storage ('+(err.message||err)+'). Có thể tải về hoặc thử lại.';
+        q('omrEvidenceRetry').style.display='inline-block';
+      }
+    }
+  }
+  async function showEvidenceArchive(){
+    const panel=q('omrEvidenceArchiveList');
+    panel.style.display='block';
+    panel.textContent='Đang đọc danh sách minh chứng thử...';
+    if(evidenceRoomCode()!=='OMR_V7_TEST'){panel.textContent='Danh sách thử chỉ dùng trong phòng OMR_V7_TEST.';return;}
+    try{
+      const token=sessionStorage.getItem('damSan_StaffToken');
+      const list=await EvidenceClient.list(sb,token,state.roomModel.room.id);
+      if(!list.length){panel.textContent='Chưa có minh chứng đã lưu.';return;}
+      panel.textContent='';
+      for(const item of list.slice(0,100)){
+        const row=document.createElement('div'),btn=document.createElement('button');
+        btn.type='button';btn.className='omr-light';
+        btn.textContent=(item.student_code||'Chưa rõ SBD')+' — '+(item.student_name||'Chưa xác định')+
+          ' • Mã đề '+(item.exam_code||'?')+' • '+formatScore(item.preview_score)+
+          ' • '+new Date(item.created_at).toLocaleString('vi-VN');
+        btn.onclick=async()=>{
+          btn.disabled=true;
+          try{
+            const signed=await EvidenceClient.signed(sb,token,item.id);
+            const a=document.createElement('a');
+            a.href=signed.url;a.target='_blank';a.rel='noopener noreferrer';
+            a.textContent='Mở phiếu đã đánh dấu';row.appendChild(a);
+          }catch(e){row.append(' Không mở được: '+(e.message||e));}
+          finally{btn.disabled=false;}
+        };
+        row.appendChild(btn);panel.appendChild(row);
+      }
+    }catch(e){panel.textContent='Không đọc được minh chứng: '+(e.message||e);}
+  }
+  async function exportEvidenceRoom(){
+    const status=q('omrEvidenceStatus');
+    if(evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceExport){
+      status.textContent='Chỉ xuất minh chứng thử nghiệm của OMR_V7_TEST ở giai đoạn này.';return;
+    }
+    const btn=q('omrEvidenceExport');btn.disabled=true;
+    try{
+      const token=sessionStorage.getItem('damSan_StaffToken');
+      const entries=await EvidenceClient.list(sb,token,state.roomModel.room.id);
+      if(!entries.length)throw Error('Phòng chưa có minh chứng đã lưu');
+      for(let i=0;i<entries.length;i+=20){
+        const slice=entries.slice(i,i+20);
+        await EvidenceExport.exportBatch(slice,EvidenceClient,sb,token,{
+          part:Math.floor(i/20)+1,
+          status:message=>{status.textContent=message;}
+        });
+      }
+    }catch(e){status.textContent='Xuất minh chứng thất bại: '+(e.message||e);}
+    finally{btn.disabled=false;}
+  }
   async function saveCurrent(){
     if(state.labEnabled||state.lastScan?._labReadOnly){
       showWarning('Đang đối chiếu '+(hasV7Comparison()?'V6/V7':'V5/V6')+
@@ -909,6 +1093,9 @@
     if(state.lastScan?._requiresRetake){
       showWarning(expectedEngineLabel(state.officialEngine)+' cần quét lại: '+state.lastScan._retakeReason);return;
     }
+    if(!state.lastPreview)return;
+    // Revalidate text fields before the irreversible submission step.
+    reviewCurrent();
     if(!state.lastPreview)return;
     const expectedEngine=expectedEngineLabel(state.officialEngine);
     if(state.lastScan?.recognitionEngine!==expectedEngine||
@@ -940,6 +1127,10 @@
   function resetScan(){
     closePhotoDetail();
     state.lastScan=null;state.lastPreview=null;state.lastV6=null;
+    state.evidenceCtx=null;state.evidenceData=null;state.evidenceSave=null;
+    if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
+    if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
+    if(q('omrEvidenceArchiveList'))q('omrEvidenceArchiveList').style.display='none';
     if(q('omrV7OverlayPanel'))q('omrV7OverlayPanel').style.display='none';
     if(q('omrV6Comparison'))q('omrV6Comparison').style.display='none';
     if(q('omrEngineResult'))q('omrEngineResult').textContent='';
