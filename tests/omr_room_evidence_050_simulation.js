@@ -52,7 +52,7 @@ const pwa=fs.readFileSync('teacher/index.html','utf8');
 const desktop=fs.readFileSync('giaovien.html','utf8');
 const desktopJs=fs.readFileSync('giaovien.js','utf8');
 const edge=fs.readFileSync('supabase/functions/omr-evidence/index.ts','utf8');
-assert(moduleJs.indexOf('id="omrEvidenceCanvas"')<module.indexOf('id="omrTeacherCanvas"'));
+assert(moduleJs.indexOf('id="omrEvidenceCanvas"')<moduleJs.indexOf('id="omrTeacherCanvas"'));
 assert(moduleJs.includes('id="omrTechnicalDetails"'));
 assert(moduleJs.includes('id="omrReviewDetails"'));
 assert(moduleJs.includes('id="omrEvidenceToolsDetails"'));

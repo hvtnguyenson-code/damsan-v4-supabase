@@ -297,7 +297,7 @@
             <div>Điểm dự kiến (<span id="omrGradeEngine">V7</span>): <span class="omr-score" id="omrScore">-</span></div>
             <div id="omrPartScores" class="omr-muted"></div>
           </div>
-          
+
           <div class="omr-actions">
             <button type="button" class="omr-light" id="omrEditAnswers">Kiểm tra / sửa</button>
             <button class="omr-green" id="omrSave" disabled>Xác nhận & Lưu</button>
