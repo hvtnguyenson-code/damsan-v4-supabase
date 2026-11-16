@@ -11,6 +11,8 @@ on:
       - 'supabase/migrations/20261116195000_omr_room_storage_cleanup_054.sql'
       - 'supabase/migrations/20261116223000_omr_room_reset_storage_cleanup_055.sql'
       - 'tests/sql/omr_room_reset_055_*.sql'
+      - 'supabase/migrations/20261116233000_omr_one_final_student_evidence_056.sql'
+      - 'tests/sql/omr_one_final_evidence_056_assertions.sql'
       - 'tests/omr_evidence_free_auth_guard.js'
       - 'tests/omr_evidence_live_deny_047.mjs'
       - '.github/workflows/omr_evidence_backend_ci.yml'
@@ -62,5 +64,9 @@ jobs:
             docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261116223000_omr_room_reset_storage_cleanup_055.sql
           done
           docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/omr_room_reset_055_assertions.sql
+          for attempt in 1 2; do
+            docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/migrations/20261116233000_omr_one_final_student_evidence_056.sql
+          done
+          docker exec -i "$PG_CONTAINER" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < tests/sql/omr_one_final_evidence_056_assertions.sql
       - name: OMR 047 live unauthorized Edge access (no credentials, no writes)
         run: node tests/omr_evidence_live_deny_047.mjs
