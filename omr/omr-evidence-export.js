@@ -79,6 +79,7 @@ function rowsFrom(records){
     data.version||''];
   overview.push(base);
   (grade.details||[]).forEach(q=>details.push([data.student_code||'',
+    data.student_name||'',data.class_name||'',data.exam_code||r.exam_code||'',
     q.phan||'',q.q||'',q.chon||'',q.dung||'',q.diem??0]));
   (data.edits||[]).forEach(change=>audit.push([data.student_code||'',
     change.key||'',change.before||'',change.after||'',r.record?.scan_id||'']));
@@ -122,11 +123,11 @@ async function xlsx(records,ExcelJS,{roster=null}={}){
  const defs=roster?[
   ['Điểm phòng thi',['SBD','Họ tên','Lớp','Mã đề','Điểm chính thức','P1','P2','P3',
    'Điểm dự kiến V7','Trạng thái','Tệp phiếu','Scan ID','Cảnh báo V7','Số vị trí sửa','Revision'],roomRows(roster,records)],
-  ['Chi tiết OMR',['SBD','Phần','Câu','Học sinh chọn','Đáp án đúng','Điểm'],data.details],
+  ['Chi tiết OMR',['SBD','Họ tên','Lớp','Mã đề','Phần','Câu','Học sinh chọn','Đáp án đúng','Điểm'],data.details],
   ['Đối chiếu',['SBD','Vị trí sửa','Trước','Sau','Scan ID'],data.audit]
  ]:[
   ['Tổng hợp',['SBD','Họ tên','Lớp','Mã đề','P1','P2','P3','Tổng','Trạng thái','Scan ID','Tệp phiếu','Cảnh báo V7','Số vị trí sửa','Phiên bản'],data.overview],
-  ['Chi tiết',['SBD','Phần','Câu','Học sinh chọn','Đáp án đúng','Điểm'],data.details],
+  ['Chi tiết',['SBD','Họ tên','Lớp','Mã đề','Phần','Câu','Học sinh chọn','Đáp án đúng','Điểm'],data.details],
   ['Đối chiếu',['SBD','Vị trí sửa','Trước','Sau','Scan ID'],data.audit]
  ];
  for(const [sheet,headers,rows] of defs){
