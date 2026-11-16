@@ -42,3 +42,10 @@ Ngày: 16/11/2026 · PR #193 · Không có chi phí trả phí.
 - Đã triển khai phiên bản 1 của Edge Function `omr-evidence`, `verify_jwt=false` vì dùng xác thực `staff_token` riêng; `OMR_EVIDENCE_OFFICIAL_ENABLED` mặc định false.
 - Cổng bảo mật mới OMR 047 kiểm tra endpoint thật từ bên ngoài với token giả, không ghi dữ liệu. Cổng này không chứng minh quyền truy cập của giáo viên hợp lệ; bước đó cần thử trên PWA test.
 - 200 bản ghi thử là **ngưỡng dừng**, không phải cam kết lưu trữ vĩnh viễn. Không tự xóa dữ liệu, không tự nâng cấp hoặc chuyển gói phí.
+
+## Lưu ý sửa nút xuất Excel + ZIP trên PWA 043 (16/11/2026)
+- Triệu chứng: Android PWA có thể không nhận download khởi tạo tự động sau các bước async ký URL, tải ảnh, dựng Excel/ZIP; bản cũ thu hồi blob URL sau 1,5 giây.
+- PWA 043 vẫn thử tải tự động, **đồng thời** hiển thị thẻ liên kết tải ZIP có thuộc tính download và blob URL giữ tới khi tạo gói mới; giáo viên có thể chạm trực tiếp để tải mà không cần làm lại bài quét.
+- Tiến độ và lỗi được hiển thị rõ ràng; nút tạo ZIP tạm vô hiệu hóa trong khi đang xử lý; nếu nhiều ảnh, xuất tối đa 20 phiếu/gói, nút tạo gói tiếp để tránh tải nhiều tệp bất đồng bộ gây nghẽn Android.
+- Excel vẫn nằm trong ZIP, không thay đổi dữ liệu chấm hay quy tắc ghi điểm. Thêm OMR 048 và mở rộng kiểm thử Chromium OMR 046 xác minh đường có ảnh ký URL giả lập -> Excel/ZIP -> liên kết blob có thể chạm tải.
+- Không thay đổi DB, Storage, Edge Function hoặc dữ liệu OMR.

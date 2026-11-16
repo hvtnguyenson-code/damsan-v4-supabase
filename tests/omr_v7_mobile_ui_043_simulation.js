@@ -1,6 +1,6 @@
 const assert=require('assert'),fs=require('fs'),vm=require('vm');
 const js=fs.readFileSync('omr/omr-teacher-module.js','utf8');
-const bridge=fs.readFileSync('teacher/omr-v7-runtime-20261116-042.js','utf8');
+const bridge=fs.readFileSync('teacher/omr-v7-runtime-20261116-043.js','utf8');
 const adapter=fs.readFileSync('omr/omr-scan-adapter.js','utf8');
 const html=js.match(/wrap\.innerHTML=`([\s\S]*?)`;/)?.[1]||'';
 const css=js.match(/style\.textContent=`([\s\S]*?)`;/)?.[1]||'';
@@ -40,9 +40,9 @@ assert(js.includes("scan=E.fromV7(v5,candidate);"),'V7 normalization must stay u
 assert(js.includes("if(state.labEnabled||state.lastScan?._labReadOnly)"),'No comparison writes');
 const teacher=fs.readFileSync('teacher/index.html','utf8'),
  sw=fs.readFileSync('teacher/sw.js','utf8'),desktop=fs.readFileSync('giaovien.html','utf8');
-assert(teacher.includes('20261116-teacher-pwa-042'));
-assert(teacher.includes('omr-v7-runtime-20261116-042.js'));
-assert(sw.includes("const VERSION='20261116-teacher-pwa-042'"));
-assert(sw.includes("'./omr-v7-runtime-20261116-042.js'"));
-assert(desktop.includes('20261116-omr-desktop-v7-044'));
+assert(teacher.includes('20261116-teacher-pwa-043'));
+assert(teacher.includes('omr-v7-runtime-20261116-043.js'));
+assert(sw.includes("const VERSION='20261116-teacher-pwa-043'"));
+assert(sw.includes("'./omr-v7-runtime-20261116-043.js'"));
+assert(desktop.includes('20261116-omr-desktop-v7-045'));
 console.log('PASS OMR 043: fixed V7 overlay and bounded mobile identity fields');

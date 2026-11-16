@@ -62,7 +62,31 @@ function downloadBlob(blob,filename){
  const href=URL.createObjectURL(blob),a=document.createElement('a');
  a.href=href;a.download=filename.replace(/[^a-zA-Z0-9._-]/g,'-').slice(0,100);
  document.body.appendChild(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(href),1500);
+ // Keep the blob alive while Android's download manager accepts it.
+ setTimeout(()=>URL.revokeObjectURL(href),60000);
+}
+// Durable download link: Android PWAs may reject an automatic blob download
+// after awaited network operations have exhausted the user's tap activation.
+// A real visible anchor lets the user initiate that download explicitly.
+const preparedLinks=new WeakMap();
+function clearPreparedDownload(anchor){
+ if(!anchor)return;
+ const old=preparedLinks.get(anchor);
+ if(old){URL.revokeObjectURL(old);preparedLinks.delete(anchor);}
+ anchor.removeAttribute('href');
+ anchor.removeAttribute('download');
+ anchor.style.display='none';
+}
+function prepareDownload(blob,filename,anchor){
+ if(!(blob instanceof Blob)||!blob.size||!anchor||anchor.tagName!=='A')
+   throw Error('evidence_download_prepare_invalid');
+ const safeName=String(filename||'minh-chung.zip').replace(/[^a-zA-Z0-9._-]/g,'-').slice(0,100);
+ clearPreparedDownload(anchor);
+ const href=URL.createObjectURL(blob);
+ preparedLinks.set(anchor,href);
+ anchor.href=href;anchor.download=safeName;anchor.style.display='block';
+ anchor.textContent='Tải tệp '+safeName+' ('+(blob.size/1024/1024).toFixed(2)+' MB)';
+ return {href,filename:safeName,bytes:blob.size};
 }
 function canvasDownload(canvas,name){
  if(!canvas)throw Error('evidence_canvas_empty');
@@ -71,5 +95,6 @@ function canvasDownload(canvas,name){
   downloadBlob(blob,name+(blob.type==='image/webp'?'.webp':'.jpg'));
  },'image/webp',.72);
 }
-return {FUNCTION,MAX_IMAGE_BYTES,imageUrl,call,save,list,signed,downloadBlob,canvasDownload};
+return {FUNCTION,MAX_IMAGE_BYTES,imageUrl,call,save,list,signed,downloadBlob,canvasDownload,
+ prepareDownload,clearPreparedDownload};
 });

@@ -6,7 +6,7 @@
   const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
   // loaded with V7 modules, compares V6/V7 without any second route or RPC.
@@ -180,6 +180,10 @@
       #omrTeacherOverlay #omrEvidenceStatus{font-size:12px;margin-top:8px;overflow-wrap:anywhere}
       #omrTeacherOverlay #omrEvidenceArchiveList{font-size:13px;line-height:1.5;max-height:250px;overflow:auto}
       #omrTeacherOverlay .omr-evidence-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+      #omrTeacherOverlay #omrEvidenceReady{display:none;box-sizing:border-box;width:100%;margin-top:10px;
+        padding:12px;background:#047857;color:white;border-radius:9px;text-align:center;
+        text-decoration:none;font-weight:750;font-size:15px;line-height:1.5;
+        overflow-wrap:anywhere;min-height:48px}
       @media(max-width:340px){#omrTeacherOverlay .omr-identity-grid{grid-template-columns:minmax(0,1fr)}}
       .omr-lab-details{white-space:pre-line;line-height:1.55;overflow-wrap:anywhere}.omr-lab-toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}.omr-lab-toggle input{width:20px;height:20px;flex:0 0 20px;accent-color:#7c3aed}
       @media(max-width:700px){#omrTeacherOverlay{padding:0}.omr-shell{border-radius:0;max-height:100dvh;height:100dvh;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}.omr-body{padding:12px}.omr-field{min-width:145px}#omrTeacherOverlay .omr-room-info{grid-template-columns:minmax(0,1fr)}}
@@ -271,6 +275,7 @@
               <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + ZIP</button>
               <button type="button" class="omr-light" id="omrEvidenceRetry" style="display:none">Lưu lại minh chứng</button>
             </div>
+            <a id="omrEvidenceReady" href="#" download style="display:none">Tải gói ZIP đã tạo</a>
             <div id="omrEvidenceArchiveList" style="display:none"></div>
           </section>
           <div class="omr-actions">
@@ -1065,24 +1070,48 @@
     }catch(e){panel.textContent='Không đọc được minh chứng: '+(e.message||e);}
   }
   async function exportEvidenceRoom(){
-    const status=q('omrEvidenceStatus');
-    if(evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceExport){
+    const status=q('omrEvidenceStatus'),btn=q('omrEvidenceExport'),link=q('omrEvidenceReady');
+    if(evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceExport||!EvidenceClient){
       status.textContent='Chỉ xuất minh chứng thử nghiệm của OMR_V7_TEST ở giai đoạn này.';return;
     }
-    const btn=q('omrEvidenceExport');btn.disabled=true;
+    if(btn.disabled)return;
+    btn.disabled=true;btn.setAttribute('aria-busy','true');
+    btn.textContent='Đang tạo Excel + ZIP...';
+    EvidenceClient.clearPreparedDownload(link);
+    status.textContent='Đang đọc danh sách minh chứng của phòng...';
     try{
-      const token=sessionStorage.getItem('damSan_StaffToken');
-      const entries=await EvidenceClient.list(sb,token,state.roomModel.room.id);
+      const token=sessionStorage.getItem('damSan_StaffToken'),roomId=state.roomModel.room.id;
+      const entries=await EvidenceClient.list(sb,token,roomId);
       if(!entries.length)throw Error('Phòng chưa có minh chứng đã lưu');
-      for(let i=0;i<entries.length;i+=20){
-        const slice=entries.slice(i,i+20);
-        await EvidenceExport.exportBatch(slice,EvidenceClient,sb,token,{
-          part:Math.floor(i/20)+1,
-          status:message=>{status.textContent=message;}
-        });
+      if(state.evidenceExportRoom!==roomId){
+        state.evidenceExportRoom=roomId;state.evidenceExportNext=0;
       }
-    }catch(e){status.textContent='Xuất minh chứng thất bại: '+(e.message||e);}
-    finally{btn.disabled=false;}
+      const start=state.evidenceExportNext>=entries.length?0:state.evidenceExportNext;
+      const slice=entries.slice(start,start+20);
+      const output=await EvidenceExport.exportBatch(slice,EvidenceClient,sb,token,{
+        part:Math.floor(start/20)+1,download:false,
+        status:message=>{status.textContent=message;}
+      });
+      const prepared=EvidenceClient.prepareDownload(output.archive,output.filename,link);
+      state.evidenceExportNext=start+slice.length;
+      const left=entries.length-state.evidenceExportNext;
+      status.textContent='Đã chuẩn bị '+output.records+' phiếu ('+
+        (prepared.bytes/1024/1024).toFixed(2)+' MB). Excel nằm trong ZIP. '+
+        'Nếu điện thoại chưa tải tự động, chạm nút xanh “Tải tệp” bên dưới.'+
+        (left>0?' Còn '+left+' phiếu chưa xuất.':'');
+      btn.textContent=left>0?'Tạo ZIP tiếp ('+left+' phiếu)':'Xuất Excel + ZIP';
+      // Best effort for desktop browsers. The visible anchor is the reliable
+      // mobile fallback and preserves a real user gesture on the second tap.
+      try{link.click();}catch(_){/* manual anchor stays available */}
+      link.scrollIntoView?.({block:'center',behavior:'smooth'});
+    }catch(e){
+      status.textContent='Xuất Excel + ZIP chưa thành công: '+(e?.message||String(e))+
+        '. Chưa thay đổi điểm hoặc ảnh đã lưu.';
+      status.scrollIntoView?.({block:'center',behavior:'smooth'});
+    }finally{
+      btn.disabled=false;btn.removeAttribute('aria-busy');
+      if(btn.textContent==='Đang tạo Excel + ZIP...')btn.textContent='Xuất Excel + ZIP';
+    }
   }
   async function saveCurrent(){
     if(state.labEnabled||state.lastScan?._labReadOnly){

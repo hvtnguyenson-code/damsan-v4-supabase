@@ -26,8 +26,8 @@ for(const asset of ['omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-
  assert(sw.includes(asset),'worker missing '+asset);
  assert(desktop.includes(asset),'desktop missing '+asset);
 }
-assert(html.includes('20261116-teacher-pwa-042'));
-assert(sw.includes("const VERSION='20261116-teacher-pwa-042'"));
+assert(html.includes('20261116-teacher-pwa-043'));
+assert(sw.includes("const VERSION='20261116-teacher-pwa-043'"));
 assert(backend.includes('const OFFICIAL_ENABLED = Deno.env.get("OMR_EVIDENCE_OFFICIAL_ENABLED") === "true"'));
 assert(backend.includes('if(mode==="test"&&room.ma_phong!=="OMR_V7_TEST")'));
 assert(backend.includes('if(mode==="official"&&!OFFICIAL_ENABLED)'));

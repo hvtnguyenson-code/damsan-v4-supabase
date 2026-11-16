@@ -132,7 +132,7 @@ async function exportBatch(list,client,sb,token,{download,status,part=1}={}){
  const archive=zip(files),name='omr-minh-chung-'+new Date().toISOString().slice(0,10)+'-phan-'+String(part).padStart(2,'0')+'.zip';
  if(download!==false)client.downloadBlob(archive,name);
  if(status)status('Đã tạo ZIP: '+records.length+' phiếu, '+(archive.size/1024/1024).toFixed(1)+' MB');
- return {archive,records:records.length,bytes:archive.size};
+ return {archive,filename:name,records:records.length,bytes:archive.size};
 }
 return {crc32,zip,rowsFrom,xlsx,ensureExcelJS,exportBatch};
 });
