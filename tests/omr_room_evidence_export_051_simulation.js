@@ -54,14 +54,14 @@ const client={
   'with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as z:',
   '  assert z.testzip() is None',
   '  print(json.dumps(z.namelist(),ensure_ascii=False))'
- ].join('\\n');
+ ].join('\n');
  const names=JSON.parse(execFileSync('python3',['-c',python],{input:buffer,encoding:'utf8'}));
  assert.equal(names.length,2,'one XLSX and one PDF for this student');
  const expected='phieu-minh-chung/100412 - H Hồng Niê - 10A4 - MD105 - L01.pdf';
  assert(names.includes(expected));
  assert(names.includes('thong-ke-omr.xlsx'));
  assert(names.every(n=>n.endsWith('.pdf')||n.endsWith('.xlsx')),'no JPG, JSON or manifest');
- assert(!names.some(n=>n.includes('WRONG_UNTRUSTED_NAME')||/ - [0-9a-f]{8}\\.(pdf|jpg|json)$/.test(n)));
+ assert(!names.some(n=>n.includes('WRONG_UNTRUSTED_NAME')||/ - [0-9a-f]{8}\.(pdf|jpg|json)$/.test(n)));
   assert(books[0].sheets.some(s=>s.name==='Điểm phòng thi'));
  const sheet=books[0].sheets.find(s=>s.name==='Điểm phòng thi');
  assert.equal(sheet.rows.length,3,'header and BOTH students, including one without score');
