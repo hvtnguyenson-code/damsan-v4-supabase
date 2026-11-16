@@ -42,7 +42,7 @@ async function browserTest(){
  const sampleWebp=await new Promise((resolve,reject)=>out.canvas.toBlob(
   b=>b?resolve(b):reject(Error('sample_webp_encode_failed')),'image/webp',.75));
  const sampleBytes=new Uint8Array(await sampleWebp.arrayBuffer());
- let downloads=0,linkValid=false,batchBytes=0,validPdf=false,validJpg=false,noOpaqueId=false;
+ let downloads=0,linkValid=false,batchBytes=0,validPdf=false,onlyTwoFormats=false,noOpaqueId=false;
  try{
   window.fetch=async (url,opts)=>{
    if(String(url).includes('example.supabase.co')){
@@ -74,9 +74,11 @@ async function browserTest(){
    const content=bytes.subarray(start,start+fileSize);
    names.push(name);
    if(name.endsWith('.pdf'))validPdf=new TextDecoder().decode(content.subarray(0,8)).startsWith('%PDF-1.4');
-   if(name.endsWith('.jpg'))validJpg=content[0]===255&&content[1]===216;
+   if(name.endsWith('.xlsx')&&content.length<1000)throw Error('invalid XLSX payload');
    pos=start+fileSize;
   }
+  onlyTwoFormats=names.length===2&&names.some(n=>n.endsWith('.xlsx'))&&
+   names.every(n=>n.endsWith('.pdf')||n.endsWith('.xlsx'));
   noOpaqueId=names.some(n=>n.endsWith(' - L01.pdf'))&&
    !names.some(n=>n.endsWith('.webp')||/ - [a-f0-9]{8}\\.(jpg|pdf)$/.test(n));
   C.clearPreparedDownload(anchor);anchor.remove();
@@ -86,7 +88,7 @@ async function browserTest(){
   encoded:png.startsWith('data:image/png;base64,'),photoBytes:png.length,serial:evidence.version,
   xlsxBytes:workbook.length,zipBytes:zip.size,imageEncoded:C.imageUrl(out.canvas).startsWith('data:image/'),
   downloadLinkValid:linkValid,exportedBatchBytes:batchBytes,automaticDownloads:downloads,
-  validPdf,validJpg,noOpaqueId};
+  validPdf,onlyTwoFormats,noOpaqueId};
 }
 try{
  await call('Runtime.enable');
@@ -109,7 +111,7 @@ try{
     result.diff!==1||result.ring!=='wrong'||result.serial!=='OMR_EVIDENCE_01'||
     !result.imageEncoded||result.xlsxBytes<1000||result.zipBytes<1000||
     !result.downloadLinkValid||result.exportedBatchBytes<1000||result.automaticDownloads!==0||
-    !result.validPdf||!result.validJpg||!result.noOpaqueId)
+    !result.validPdf||!result.onlyTwoFormats||!result.noOpaqueId)
   throw Error('OMR 046 invalid evidence canvas: '+JSON.stringify(result));
  console.log('PASS OMR 046 Chromium: composite annotated sheet, manual edit, PNG encoding',JSON.stringify(result));
 }finally{ws.close();}

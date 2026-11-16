@@ -9,7 +9,7 @@ const Client=root.DamSanOmrEvidenceClient;
 const Export=root.DamSanOmrEvidenceExport;
 const Naming=root.DamSanOmrEvidenceNaming;
 const state={room:null,items:[],index:null,lastLoad:0,loading:null,exportOffset:0,
- exportedRoom:null,drawerId:null,initialized:false};
+ exportedRoom:null,drawerId:null,viewerObjectUrl:null,initialized:false};
 const text=v=>String(v??'');
 function accessToken(){return root.sessionStorage?.getItem('damSan_StaffToken')||'';}
 function roomCode(room){return text(room?.MaPhong||room?.ma_phong||'');}
@@ -17,6 +17,7 @@ function status(message){if($('omrRoomExportStatus'))$('omrRoomExportStatus').te
 function hideDrawer(){
  const drawer=$('omrRoomEvidenceDrawer');if(drawer)drawer.hidden=true;
  const image=$('omrRoomEvidenceImage');if(image)image.removeAttribute('src');
+ if(state.viewerObjectUrl){URL.revokeObjectURL(state.viewerObjectUrl);state.viewerObjectUrl=null;}
  state.drawerId=null;
 }
 function init(){
@@ -71,11 +72,11 @@ async function refreshForRoom(room,{force=false}={}){
    if(String(state.room?.id)!==String(room.id))return;
    state.items=items;state.index=Naming.latestByStudent(items);state.lastLoad=Date.now();
    const count=state.index.byCode.size;
-   status(count+' học sinh có ảnh minh chứng • '+items.length+' phiên bản ảnh.');
+   status(count+' học sinh có phiếu minh chứng • '+items.length+' phiên bản phiếu.');
    decorateTable();
   }catch(e){
    if(String(state.room?.id)===String(room.id))
-    status('Chưa tải được danh sách ảnh OMR: '+text(e?.message||e)+'. Điểm phòng thi không bị ảnh hưởng.');
+    status('Chưa tải được danh sách phiếu OMR: '+text(e?.message||e)+'. Điểm phòng thi không bị ảnh hưởng.');
   }finally{state.loading=null;}
  })();
  return state.loading;
@@ -91,6 +92,7 @@ async function openBySbd(sbd){
  const roomId=state.room.id;
  info.textContent='Đang mở phiếu '+item.student_code+' — '+item.student_name+'...';
  img.removeAttribute('src');
+ if(state.viewerObjectUrl){URL.revokeObjectURL(state.viewerObjectUrl);state.viewerObjectUrl=null;}
  try{
   const signed=await Client.signed(root.DamSanOmrEvidenceRuntime?.getClient?.(),accessToken(),item.id);
   if(state.drawerId!==item.id||state.room?.id!==roomId)return;
@@ -99,8 +101,29 @@ async function openBySbd(sbd){
     ' ('+(item.class_name||'')+') • Mã đề '+(item.exam_code||'—')+
     ' • Điểm dự kiến V7: '+(Number.isFinite(Number(preview))?Number(preview).toFixed(2).replace('.',','):'—')+
     ' • '+(item.mode==='test'?'Minh chứng thử nghiệm':'Minh chứng chính thức');
-  img.referrerPolicy='no-referrer';img.alt='Phiếu OMR '+item.student_code+' của '+item.student_name;
-  img.src=signed.url;img.onerror=()=>{info.textContent='Không mở được ảnh. Chọn Xem phiếu để tải URL mới.';};
+  // connect-src permits Supabase, but img-src only permits same-origin and blob:.
+  // Retrieve the private photo and show a revocable blob URL.
+  const url=new URL(signed.url);
+  if(url.protocol!=='https:'||!url.hostname.endsWith('.supabase.co'))
+   throw Error('evidence_signed_url_untrusted');
+  const response=await fetch(url.toString(),{cache:'no-store',credentials:'omit'});
+  if(!response.ok)throw Error('evidence_image_fetch_'+response.status);
+  const mime=(response.headers.get('content-type')||'').split(';')[0].trim().toLowerCase();
+  if(!['image/webp','image/jpeg','image/png'].includes(mime))throw Error('evidence_image_type_invalid');
+  const blob=await response.blob();
+  if(!blob.size||blob.size>2000000)throw Error('evidence_image_size_invalid');
+  if(state.drawerId!==item.id||state.room?.id!==roomId)return;
+  if(state.viewerObjectUrl)URL.revokeObjectURL(state.viewerObjectUrl);
+  const objectUrl=URL.createObjectURL(blob);
+  state.viewerObjectUrl=objectUrl;
+  img.alt='Phiếu OMR '+item.student_code+' của '+item.student_name;
+  img.onerror=()=>{
+   if(state.drawerId===item.id){
+    info.textContent='Không hiển thị được phiếu. Có thể mở lại hoặc tải gói PDF.';
+    if(state.viewerObjectUrl===objectUrl){URL.revokeObjectURL(objectUrl);state.viewerObjectUrl=null;}
+   }
+  };
+  img.src=objectUrl;
  }catch(e){
   if(state.drawerId===item.id)info.textContent='Lỗi mở phiếu: '+text(e?.message||e);
  }
@@ -109,7 +132,7 @@ async function exportRoom(){
  init();
  const room=state.room,button=$('omrRoomEvidenceExport'),anchor=$('omrRoomEvidenceDownload');
  if(!room||!button||button.disabled)return;
- button.disabled=true;button.textContent='Đang tạo Excel + ảnh...';
+ button.disabled=true;button.textContent='Đang tạo Excel + PDF...';
  Client.clearPreparedDownload(anchor);
  try{
   await refreshForRoom(room,{force:true});
@@ -134,8 +157,7 @@ async function exportRoom(){
    archive=result.archive;filename=result.filename;
   }else{
    const excel=await Export.xlsx([],await Export.ensureExcelJS(),{roster:sorted});
-   archive=Export.zip([{name:'thong-ke-omr.xlsx',data:excel},
-    {name:'manifest.json',data:JSON.stringify({room:roomCode(room),count:0})}]);
+   archive=Export.zip([{name:'thong-ke-omr.xlsx',data:excel}]);
    filename='OMR-'+roomCode(room).replace(/[^a-z0-9_-]/gi,'-')+'-diem-phong.xlsx.zip';
   }
   const prepared=Client.prepareDownload(archive,filename,anchor);
@@ -150,7 +172,7 @@ async function exportRoom(){
   status('Không xuất được gói điểm + phiếu: '+text(e?.message||e)+'. Không thay đổi kết quả đã lưu.');
  }finally{
   button.disabled=false;
-  if(button.textContent==='Đang tạo Excel + ảnh...')button.textContent='Xuất điểm + phiếu OMR';
+  if(button.textContent==='Đang tạo Excel + PDF...')button.textContent='Xuất điểm + phiếu OMR';
  }
 }
 return {init,refreshForRoom,decorateTable,openBySbd,exportRoom,hideDrawer};

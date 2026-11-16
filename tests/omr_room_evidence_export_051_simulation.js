@@ -53,27 +53,22 @@ const client={
   'import sys,io,json,zipfile',
   'with zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read())) as z:',
   '  assert z.testzip() is None',
-  '  names=z.namelist()',
-  '  manifest=json.loads(z.read("manifest.json").decode("utf-8"))',
-  '  print(json.dumps({"names":names,"items":manifest["items"]},ensure_ascii=False))'
+  '  print(json.dumps(z.namelist(),ensure_ascii=False))'
  ].join('\n');
- const r=JSON.parse(execFileSync('python3',['-c',python],{input:buffer,encoding:'utf8'}));
- assert(r.names.some(x=>x==='phieu-minh-chung/100412 - H Hồng Niê - 10A4 - MD105 - L01.pdf'));
- assert(r.names.some(x=>x==='anh-jpg/100412 - H Hồng Niê - 10A4 - MD105 - L01.jpg'));
- assert(!r.names.some(x=>x.endsWith('.webp')||x.includes('WRONG_UNTRUSTED_NAME')));
- assert(!r.names.some(x=>/ - [0-9a-f]{8}\\.(pdf|jpg|json)$/.test(x)));
- assert(r.names.some(x=>x.endsWith('.json')&&x.includes('H Hồng Niê')));
- assert.equal(r.items[0].pdf,r.items[0].filename);
- assert(r.items[0].image.endsWith('.jpg'));
- assert(r.names.some(x=>x==='thong-ke-omr.xlsx'));
- assert.equal(r.items[0].student_name,'H Hồng Niê');
- assert(books[0].sheets.some(s=>s.name==='Điểm phòng thi'));
+ const names=JSON.parse(execFileSync('python3',['-c',python],{input:buffer,encoding:'utf8'}));
+ assert.equal(names.length,2,'one XLSX and one PDF for this student');
+ const expected='phieu-minh-chung/100412 - H Hồng Niê - 10A4 - MD105 - L01.pdf';
+ assert(names.includes(expected));
+ assert(names.includes('thong-ke-omr.xlsx'));
+ assert(names.every(n=>n.endsWith('.pdf')||n.endsWith('.xlsx')),'no JPG, JSON or manifest');
+ assert(!names.some(n=>n.includes('WRONG_UNTRUSTED_NAME')||/ - [0-9a-f]{8}\.(pdf|jpg|json)$/.test(n)));
+  assert(books[0].sheets.some(s=>s.name==='Điểm phòng thi'));
  const sheet=books[0].sheets.find(s=>s.name==='Điểm phòng thi');
  assert.equal(sheet.rows.length,3,'header and BOTH students, including one without score');
  assert.equal(sheet.rows[2].values[0],'100413');
  assert.equal(sheet.rows[2].values[4],'','unsubmitted score must stay blank');
- assert.equal(sheet.rows[1].values[10],r.items[0].filename);
- console.log('PASS OMR 051: one ZIP with authentic student names, roster, Excel and matching JSON/images');
+ assert.equal(sheet.rows[1].values[10],expected);
+ console.log('PASS OMR 051: one XLSX and one PDF, full roster, readable names, no extra files');
 })().catch(err=>{console.error(err);process.exitCode=1;}).finally(()=>{
  global.fetch=origFetch;delete global.window;
 });

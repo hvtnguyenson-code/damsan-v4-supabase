@@ -78,7 +78,9 @@ assert(fs.readFileSync('omr/omr-evidence-export.js','utf8').includes("padStart(2
   }}}
  ]);
  assert.strictEqual(result.overview[0][7],7.35);
- assert.strictEqual(result.details[0][5],0.5);
+ assert.strictEqual(result.details[0][1],'Example');
+ assert.strictEqual(result.details[0][4],'2');
+ assert.strictEqual(result.details[0][8],0.5);
  assert.strictEqual(result.audit[0][1],'P2.1b');
  assert.strictEqual(E.VERSION,'OMR_EVIDENCE_01');
  console.log('PASS OMR 045: evidence UI/export ZIP/Excel rows, sandbox-only cloud writes and private storage');

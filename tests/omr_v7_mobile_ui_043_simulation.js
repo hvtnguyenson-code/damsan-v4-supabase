@@ -44,5 +44,5 @@ assert(teacher.includes('20261116-teacher-pwa-046'));
 assert(teacher.includes('omr-v7-runtime-20261116-046.js'));
 assert(sw.includes("const VERSION='20261116-teacher-pwa-046'"));
 assert(sw.includes("'./omr-v7-runtime-20261116-046.js'"));
-assert(desktop.includes('20261116-omr-desktop-v7-048'));
+assert(desktop.includes('20261116-omr-desktop-v7-049'));
 console.log('PASS OMR 043: fixed V7 overlay and bounded mobile identity fields');
