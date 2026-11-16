@@ -189,6 +189,9 @@
          padding:10px 5px;background:#fff;border-top:1px solid #e2e8f0;justify-content:center}
       #omrTeacherOverlay #omrScanArea>.omr-actions button{min-height:43px}
       #omrTeacherOverlay #omrTechnicalDetails:not([open]){padding:9px 12px;font-size:12px}
+      /* Explicit display:grid/block rules on child canvases used to override
+         the browser's native closed-details styles. Guarantee one visible image. */
+      #omrTeacherOverlay details:not([open]) > :not(summary){display:none!important}
       #omrTeacherOverlay #omrEvidenceArchiveList{font-size:13px;line-height:1.5;max-height:250px;overflow:auto}
       #omrTeacherOverlay .omr-evidence-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
       #omrTeacherOverlay #omrEvidenceReady{display:none;box-sizing:border-box;width:100%;margin-top:10px;
