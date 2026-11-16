@@ -240,6 +240,45 @@ async function get(req:Request,body:Json,actor:Actor){
    record:{id:record.id,scan_id:record.scan_id,revision:record.revision,
      evidence:record.evidence,mode:record.mode,status:record.status}});
 }
+// Remove private Storage objects for ONE authorized room. SQL deletion is a
+// separate transaction guarded by a storage-empty check, preventing orphaning.
+async function cleanupRoom(req:Request,body:Json,actor:Actor){
+ if(!uuid(body.room_id)||!uuid(body.school_id)||!safe(body.teacher_code))
+  throw Error("cleanup_room_invalid");
+ if(actor.role!=="Admin"&&actor.school!==body.school_id)
+  throw Error("room_forbidden");
+ const args={p_staff_token:body.staff_token,p_ma_gv:safe(body.teacher_code),
+  p_truong_id:body.school_id,p_phong_id:body.room_id};
+ const inventory=async()=>{
+  const {data,error}=await db.rpc("rpc_omr_room_delete_inventory",args);
+  if(error)throw Error("cleanup_inventory_unavailable");
+  if(data?.status!=="success")throw Error(safe(data?.code)||"cleanup_room_forbidden");
+  return data as Json;
+ };
+ const first=await inventory();
+ if(!Array.isArray(first.paths)||first.paths.length>1000)
+  throw Error("cleanup_inventory_invalid");
+ const school=String(body.school_id),room=String(body.room_id);
+ const allowed=["test/","official/"].map(mode=>mode+school+"/"+room+"/");
+ const paths=first.paths.map(path=>{
+  if(typeof path!=="string"||!allowed.some(prefix=>path.startsWith(prefix))||
+     path.includes("..")||path.length>512)throw Error("cleanup_path_invalid");
+  return path;
+ });
+ if(new Set(paths).size!==paths.length)throw Error("cleanup_duplicate_path");
+ // Fail closed on any Storage API error. Repeating the same deletion is safe:
+ // the SQL inventory returns only objects still present in Storage.
+ for(let i=0;i<paths.length;i+=100){
+  const {error}=await db.storage.from(BUCKET).remove(paths.slice(i,i+100));
+  if(error)throw Error("cleanup_storage_failed");
+ }
+ const remaining=await inventory();
+ if(!Array.isArray(remaining.paths)||remaining.paths.length!==0)
+  throw Error("cleanup_storage_not_empty");
+ return respond(req,200,{status:"success",deleted_files:paths.length,
+  estimated_bytes:Number(first.file_bytes)||0});
+}
+
 Deno.serve(async req=>{
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:originHeaders(req)});
  if(req.method!=="POST")return error(req,405,"method_not_allowed");
@@ -252,6 +291,7 @@ Deno.serve(async req=>{
    case "save":return await save(req,body,actor);
    case "list":return await list(req,body,actor);
    case "get":return await get(req,body,actor);
+   case "cleanup_room":return await cleanupRoom(req,body,actor);
    default:return error(req,400,"action_not_supported");
   }
  }catch(e){
