@@ -85,7 +85,9 @@ function image(input:unknown) {
  return {bytes,mime,ext:mime==="image/webp"?"webp":"jpg"};
 }
 async function sha256(bytes:Uint8Array) {
- const hash=await crypto.subtle.digest("SHA-256",bytes);
+ const buffer=new ArrayBuffer(bytes.byteLength);
+ new Uint8Array(buffer).set(bytes);
+ const hash=await crypto.subtle.digest("SHA-256",buffer);
  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
 function boundedJson(v:unknown,limit=60000) {
@@ -147,7 +149,7 @@ async function save(req:Request,body:Json,actor:Actor) {
    exam_code:safe(body.exam_code),mode,status:submission?"COMPLETE":"TEST",
    capture_path:capturePath,annotated_path:annotatedPath,
    sha256:digest,file_bytes:annotated.bytes.byteLength,engine_version:meta.version,
-   preview_score:Number(meta.grade?.total)||0,final_score:submission?.score??null,
+   preview_score:Number((meta.grade as Json|undefined)?.total)||0,final_score:submission?.score??null,
    evidence:meta};
   const {data:inserted,error:ie}=await db.from("omr_artifacts")
     .insert(row).select("id,status").single();
