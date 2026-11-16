@@ -166,12 +166,17 @@ async function save(req:Request,body:Json,actor:Actor) {
  // Immutable paths: a retry may encounter an already-uploaded object if the
  // network failed between Storage upload and DB registration. Verify SHA-256
  // rather than overwriting another request's image or deleting shared paths.
+ const freshUploads:string[]=[];
  for(const f of [{path:capturePath,body:capture},{path:annotatedPath,body:annotated}]){
   const {error:e}=await db.storage.from(BUCKET).upload(f.path,f.body.bytes,
     {contentType:f.body.mime,cacheControl:"3600",upsert:false});
+  if(!e)freshUploads.push(f.path);
   if(e){
    const msg=String(e.message||"")+" "+String((e as {statusCode?:string|number}).statusCode||"");
-   if(!/exists|duplicate|409/i.test(msg))throw Error("storage_upload_failed");
+   if(!/exists|duplicate|409/i.test(msg)){
+    if(freshUploads.length)await db.storage.from(BUCKET).remove(freshUploads);
+    throw Error("storage_upload_failed");
+   }
    const {data:existing,error:downloadError}=await db.storage.from(BUCKET).download(f.path);
    if(downloadError||!existing)throw Error("storage_retry_unavailable");
    const prior=new Uint8Array(await existing.arrayBuffer());
@@ -195,6 +200,13 @@ async function save(req:Request,body:Json,actor:Actor) {
   if(existing&&existing.sha256===digest)
    return respond(req,200,{status:"success",artifact_id:existing.id,
      phase:existing.status,idempotent:true});
+  // E.g. the room was deleted after image upload but before DB insertion.
+  // Remove ONLY objects created by this request; never remove pre-existing
+  // paths from an idempotent retry or another confirmed artifact.
+  if(freshUploads.length){
+   const {error:cleanupError}=await db.storage.from(BUCKET).remove(freshUploads);
+   if(cleanupError)throw Error("artifact_registration_orphan_cleanup_failed");
+  }
   throw Error("artifact_registration_failed");
  }
  return respond(req,200,{status:"success",artifact_id:inserted.id,phase:inserted.status,
