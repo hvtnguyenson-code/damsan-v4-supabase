@@ -92,6 +92,7 @@ async function openBySbd(sbd){
  const roomId=state.room.id;
  info.textContent='Đang mở phiếu '+item.student_code+' — '+item.student_name+'...';
  img.removeAttribute('src');
+ if(state.viewerObjectUrl){URL.revokeObjectURL(state.viewerObjectUrl);state.viewerObjectUrl=null;}
  try{
   const signed=await Client.signed(root.DamSanOmrEvidenceRuntime?.getClient?.(),accessToken(),item.id);
   if(state.drawerId!==item.id||state.room?.id!==roomId)return;
