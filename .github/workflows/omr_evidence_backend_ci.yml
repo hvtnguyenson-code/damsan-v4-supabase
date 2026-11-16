@@ -1,0 +1,21 @@
+name: OMR Evidence Backend CI
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/functions/omr-evidence/**'
+      - 'docs/omr-evidence-ddl-proposal.sql'
+      - '.github/workflows/omr_evidence_backend_ci.yml'
+  workflow_dispatch:
+
+jobs:
+  deno-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check OMR Evidence Edge Function
+        run: deno check supabase/functions/omr-evidence/index.ts
