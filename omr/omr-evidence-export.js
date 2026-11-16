@@ -81,12 +81,16 @@ async function xlsx(records,ExcelJS){
 async function ensureExcelJS(){
  if(typeof window==='undefined')throw Error('browser_required');
  if(window.ExcelJS?.Workbook)return window.ExcelJS;
- const path=location.pathname.includes('/teacher/')?'../vendor/exceljs-4.3.0.bare.min.js':
-   'vendor/exceljs-4.3.0.bare.min.js';
- await new Promise((resolve,reject)=>{
-  const s=document.createElement('script');s.src=path;s.onload=resolve;
-  s.onerror=()=>reject(Error('exceljs_load_failed'));document.head.appendChild(s);
+ const prefix=location.pathname.includes('/teacher/')?'../vendor/':'vendor/';
+ const load=path=>new Promise((resolve,reject)=>{
+  const s=document.createElement('script');s.src=prefix+path;s.onload=resolve;
+  s.onerror=()=>reject(Error('exceljs_dependency_load_failed'));document.head.appendChild(s);
  });
+ // The repo's ExcelJS *bare* bundle requires regeneratorRuntime to be loaded
+ // first. Desktop already loads it, while PWA must load it on demand.
+ if(typeof window.regeneratorRuntime==='undefined')
+   await load('regenerator-runtime-0.13.11.min.js');
+ await load('exceljs-4.3.0.bare.min.js');
  if(!window.ExcelJS?.Workbook)throw Error('exceljs_unavailable');
  return window.ExcelJS;
 }
