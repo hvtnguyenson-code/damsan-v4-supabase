@@ -103,6 +103,8 @@ jobs:
         run: node tests/omr_evidence_print_052_simulation.js
       - name: OMR 053 desktop private evidence viewer CSP and blob lifecycle
         run: node tests/omr_room_evidence_preview_053_simulation.js
+      - name: OMR 054 room-scoped Storage cleanup before DB delete
+        run: node tests/omr_room_delete_054_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

@@ -504,6 +504,30 @@ async function adminImportAccounts(kind, rows) {
 
 async function staffRpc(rpcName, args) {
     const token = ensureControlSession('staff');
+    // Only full-room deletion needs a private Storage purge. Keep this inside
+    // the existing control RPC path so the teacher has ONE delete action.
+    let storageCleanup = null;
+    if (rpcName === 'rpc_xoa_phong_thi') {
+        if (!sb?.functions?.invoke) throw new Error('Chưa có dịch vụ dọn minh chứng OMR; phòng chưa bị xóa.');
+        const { data: cleaned, error: cleanupError } = await sb.functions.invoke('omr-evidence', {
+            body: {
+                action: 'cleanup_room',
+                staff_token: token,
+                teacher_code: args.p_ma_gv,
+                school_id: args.p_truong_id,
+                room_id: args.p_phong_id
+            }
+        });
+        if (cleaned?.code === 'staff_session_invalid') {
+            if (gvLogoutInProgress) throw new Error('logout_in_progress');
+            clearGvSessionAndReturnToLogin('Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.');
+            throw new Error('staff_session_invalid');
+        }
+        if (cleanupError || cleaned?.status !== 'success') {
+            throw new Error('Chưa dọn sạch ảnh OMR trong Storage. Phòng thi và điểm vẫn được giữ lại; có thể thử xóa lại.');
+        }
+        storageCleanup = cleaned;
+    }
     const { data, error } = await sb.rpc(rpcName, { p_staff_token: token, ...args });
     if (data?.code === 'staff_session_invalid') {
         if (gvLogoutInProgress) throw new Error('logout_in_progress');
@@ -511,6 +535,9 @@ async function staffRpc(rpcName, args) {
         throw new Error('staff_session_invalid');
     }
     if (error) throw error;
+    if (storageCleanup && data?.status === 'success') {
+        return { ...data, storage_cleanup: storageCleanup };
+    }
     return data;
 }
 
@@ -3937,7 +3964,7 @@ async function dieuKhienFast(roomId, trangThai) {
 async function xoaPhongHoanToan(roomId) {
     const cached = (allRoomsData || []).find((room) => String(room.id) === String(roomId));
     const maPhong = cached?.MaPhong || '';
-    if (!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nToàn bộ Đề Thi và Điểm Số của phòng này sẽ bị xóa khỏi máy chủ.`)) {
+    if (!confirm(`XÓA VĨNH VIỄN phòng [${maPhong}]?\nĐề thi, bài làm, điểm số và tất cả ảnh minh chứng OMR của phòng này sẽ bị xóa vĩnh viễn.\\nHãy xuất Excel + PDF cần lưu trước khi xác nhận.`)) {
         return { status: 'cancelled' };
     }
 
@@ -3973,7 +4000,10 @@ async function xoaPhongHoanToan(roomId) {
             }
 
             fetchRadar();
-            alert("Đã xóa sạch dữ liệu phòng thi!");
+            const cleanedFiles = Number(data.storage_cleanup?.deleted_files || 0);
+            const cleanedMB = Number(data.storage_cleanup?.estimated_bytes || 0) / (1024 * 1024);
+            alert("Đã xóa phòng thi và dữ liệu liên quan. Đã dọn " + cleanedFiles
+                + " tệp minh chứng OMR (khoảng " + cleanedMB.toFixed(2) + " MB).");
             return { status: 'success', data };
         } catch (e) {
             alert("Lỗi khi xóa: " + e.message);
