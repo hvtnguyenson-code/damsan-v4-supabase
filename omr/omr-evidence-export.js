@@ -14,8 +14,21 @@ function crc32(bytes){
  for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);
  return (c^0xffffffff)>>>0;
 }
-function zip(files){
+function zip(files, exportDate=new Date()){
  if(!Array.isArray(files)||!files.length)throw Error('zip_files_required');
+ if(!(exportDate instanceof Date)||!Number.isFinite(exportDate.getTime()))
+  throw Error('zip_date_invalid');
+ // ZIP's MS-DOS timestamps use a *nonzero* date: year 1980..2107,
+ // month 1..12 and day 1..31. All-zero fields were shown as 30/11/1979.
+ // Store local date/time consistently in both the local header and
+ // central directory. ExcelJS manages its nested XLSX timestamps.
+ const year=exportDate.getFullYear();
+ const stamp=year<1980?new Date(1980,0,1):year>2107?
+  new Date(2107,11,31,23,59,58):exportDate;
+ const dosDate=((stamp.getFullYear()-1980)<<9)|
+  ((stamp.getMonth()+1)<<5)|stamp.getDate();
+ const dosTime=(stamp.getHours()<<11)|(stamp.getMinutes()<<5)|
+  Math.floor(stamp.getSeconds()/2);
  const chunks=[],central=[];let offset=0;
  const u16=(d,o,n)=>d.setUint16(o,n,true),u32=(d,o,n)=>d.setUint32(o,n>>>0,true);
  const append=bytes=>{chunks.push(bytes);offset+=bytes.length;};
@@ -28,11 +41,13 @@ function zip(files){
   const basename=enc.encode(name),checksum=crc32(body),start=offset;
   const h=new Uint8Array(30+basename.length),v=new DataView(h.buffer);
   u32(v,0,0x04034b50);u16(v,4,20);u16(v,6,0x0800);u16(v,8,0); // UTF-8, store
+  u16(v,10,dosTime);u16(v,12,dosDate);
   u32(v,14,checksum);u32(v,18,body.length);u32(v,22,body.length);
   u16(v,26,basename.length);h.set(basename,30);
   append(h);append(body);
   const d=new Uint8Array(46+basename.length),w=new DataView(d.buffer);
   u32(w,0,0x02014b50);u16(w,4,20);u16(w,6,20);u16(w,8,0x0800);u16(w,10,0);
+  u16(w,12,dosTime);u16(w,14,dosDate);
   u32(w,16,checksum);u32(w,20,body.length);u32(w,24,body.length);
   u16(w,28,basename.length);u32(w,42,start);d.set(basename,46);
   central.push(d);

@@ -9,8 +9,8 @@ assert(moduleJs.includes("EvidenceClient.prepareDownload(output.archive,output.f
 assert(moduleJs.includes('download:false'),'never rely solely on an async auto-download');
 assert(moduleJs.includes("status.scrollIntoView?.("),'mobile errors must be brought into view');
 assert(moduleJs.includes("link.scrollIntoView?.("),'ready link must be brought into view');
-assert(html.includes('20261116-teacher-pwa-043'));
-assert(sw.includes("const VERSION='20261116-teacher-pwa-043'"));
+assert(html.includes('20261116-teacher-pwa-044'));
+assert(sw.includes("const VERSION='20261116-teacher-pwa-044'"));
 const urls=new Set();
 const oldCreate=URL.createObjectURL,oldRevoke=URL.revokeObjectURL;
 let next=0;

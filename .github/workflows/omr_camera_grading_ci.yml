@@ -93,6 +93,8 @@ jobs:
         run: node tests/omr_v7_evidence_integration_045_simulation.js
       - name: OMR 048 mobile evidence export ZIP with durable download link
         run: node tests/omr_evidence_mobile_export_048_simulation.js
+      - name: OMR 049 ZIP date-time metadata valid local and central header
+        run: node tests/omr_evidence_zip_timestamp_049_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
