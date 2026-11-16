@@ -105,6 +105,8 @@ jobs:
         run: node tests/omr_room_evidence_preview_053_simulation.js
       - name: OMR 054 room-scoped Storage cleanup before DB delete
         run: node tests/omr_room_delete_054_simulation.js
+      - name: OMR 055 full room score reset clears private evidence
+        run: node tests/omr_room_reset_055_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
