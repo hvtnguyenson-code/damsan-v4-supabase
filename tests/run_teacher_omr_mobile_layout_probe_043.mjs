@@ -52,6 +52,10 @@ try{
     if(!area||!panel||!map)return 'missing result DOM';
     area.style.display='block';
     panel.style.display='block';
+    // Mobile controls now start inside a collapsed review panel by design.
+    // Open that panel when measuring their responsiveness (not in production).
+    const review=document.getElementById('omrReviewDetails');
+    if(review)review.open=true;
     map.width=820;map.height=1500;
     document.getElementById('omrSbd').value='00100434';
     document.getElementById('omrMaDe').value='0103';
