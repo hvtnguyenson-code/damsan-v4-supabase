@@ -37,11 +37,10 @@ assert.strictEqual(Naming.pathFromStem(first,'jpg'),'anh-jpg/'+base+'.jpg');
 assert.strictEqual(Naming.pathFromStem(first,'json'),'doi-chieu-json/'+base+'.json');
 (async()=>{
  const zip=Export.zip([
-  {name:Naming.pathFromStem(base,'pdf'),data:pdf},
-  {name:Naming.pathFromStem(base,'jpg'),data:jpeg},
-  {name:Naming.pathFromStem(base,'json'),data:'{"scan_id":"c38f32d1"}'}
+  {name:'thong-ke-omr.xlsx',data:new Uint8Array(1000)},
+  {name:Naming.pathFromStem(base,'pdf'),data:pdf}
  ]);
- assert(zip.size>pdf.length+jpeg.length);
+ assert(zip.size>pdf.length+1000);
  const data=Buffer.from(await zip.arrayBuffer());
  const {execFileSync}=require('child_process');
  const check=[
@@ -49,13 +48,13 @@ assert.strictEqual(Naming.pathFromStem(first,'json'),'doi-chieu-json/'+base+'.js
   'z=zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()))',
   'assert z.testzip() is None',
   'names=z.namelist()',
-  'assert len(names)==3',
+  'assert len(names)==2',
   'assert any(n.endswith(".pdf") for n in names)',
-  'assert any(n.endswith(".jpg") for n in names)',
-  'assert not any(".webp" in n or "c38f32d1" in n for n in names)',
+  'assert any(n.endswith(".xlsx") for n in names)',
+  'assert not any(n.endswith(".jpg") or n.endswith(".json") or "c38f32d1" in n for n in names)',
   'print(json.dumps(names,ensure_ascii=False))'
  ].join('\n');
  const names=JSON.parse(execFileSync('python3',['-c',check],{input:data,encoding:'utf8'}));
  assert(names[0].includes('H Hồng Niê'));
- console.log('PASS OMR 052: printable one-page PDF, JPG, readable Unicode filename and collision fallback');
+ console.log('PASS OMR 052: printable A4 PDF plus XLSX only, readable Unicode filename');
 })().catch(e=>{console.error(e);process.exitCode=1;});
