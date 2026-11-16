@@ -34,3 +34,11 @@ Ngày: 16/11/2026 · PR #193 · Không có chi phí trả phí.
 
 ### Performance isolation
 - Frontend Stage A must not generate or display annotated evidence for any room except `OMR_V7_TEST`. This protects live V7 grading responsiveness and low-memory Android phones. Official rollout can only be introduced after separate acceptance.
+
+## Trạng thái triển khai sandbox trên dự án Free hiện có (16/11/2026)
+
+- Đã áp dụng migration `omr_evidence_trial_private_free_20261116` chỉ tạo `public.omr_artifacts` và bucket `omr-evidence`, không thay đổi bảng điểm cũ.
+- Đã xác minh RLS bật, bucket `public=false`, `anon/authenticated` không được đọc bảng trực tiếp, không có bản ghi minh chứng sau migration.
+- Đã triển khai phiên bản 1 của Edge Function `omr-evidence`, `verify_jwt=false` vì dùng xác thực `staff_token` riêng; `OMR_EVIDENCE_OFFICIAL_ENABLED` mặc định false.
+- Cổng bảo mật mới OMR 047 kiểm tra endpoint thật từ bên ngoài với token giả, không ghi dữ liệu. Cổng này không chứng minh quyền truy cập của giáo viên hợp lệ; bước đó cần thử trên PWA test.
+- 200 bản ghi thử là **ngưỡng dừng**, không phải cam kết lưu trữ vĩnh viễn. Không tự xóa dữ liệu, không tự nâng cấp hoặc chuyển gói phí.
