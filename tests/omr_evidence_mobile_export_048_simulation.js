@@ -9,8 +9,8 @@ assert(moduleJs.includes("EvidenceClient.prepareDownload(output.archive,output.f
 assert(moduleJs.includes('download:false'),'never rely solely on an async auto-download');
 assert(moduleJs.includes("status.scrollIntoView?.("),'mobile errors must be brought into view');
 assert(moduleJs.includes("link.scrollIntoView?.("),'ready link must be brought into view');
-assert(html.includes('20261116-teacher-pwa-045'));
-assert(sw.includes("const VERSION='20261116-teacher-pwa-045'"));
+assert(html.includes('20261116-teacher-pwa-046'));
+assert(sw.includes("const VERSION='20261116-teacher-pwa-046'"));
 const urls=new Set();
 const oldCreate=URL.createObjectURL,oldRevoke=URL.revokeObjectURL;
 let next=0;
@@ -66,7 +66,11 @@ const client={
 };
 (async()=>{
  const result=await Export.exportBatch([{id:'12345678-1234-4234-8234-123456789abc',scan_id:'abc',
-  exam_code:'105'}],client,null,null,{download:false,part:1});
+  exam_code:'105'}],client,null,null,{download:false,part:1,
+  printEngine:{
+   bytesToJpeg:async()=>({bytes:new Uint8Array([255,216,0,255,217]),width:4,height:6}),
+   pdfFromJpeg:()=>new TextEncoder().encode('%PDF-1.4\n%%EOF')
+  }});
  assert.equal(opened,1,'retrieve one private annotated image');
  assert.equal(automatic,0,'the UI must prepare a visible link instead of depending on auto-download');
  assert(result.filename.startsWith('OMR-minh-chung-'));assert(result.filename.endsWith('-phan-01.zip'));

@@ -34,18 +34,20 @@ async function browserTest(){
  const png=out.canvas.toDataURL('image/png');
  const evidence=E.record(preview,original,out.report,{scanId:'synthetic',mode:'test'});
  const X=window.DamSanOmrEvidenceExport,C=window.DamSanOmrEvidenceClient;
- const workbook=await X.xlsx([{status:'TEST',filename:'sheets/001-synthetic.webp',
+ const workbook=await X.xlsx([{status:'TEST',filename:'phieu-minh-chung/100412 - Example Student - 10A4 - MD105 - L01.pdf',
   record:{scan_id:'synthetic',evidence}}],await X.ensureExcelJS());
  const zip=X.zip([{name:'thong-ke-omr.xlsx',data:workbook}]);
  // Real browser end-to-end export path, with mock private signed URL and image bytes.
  const previousFetch=window.fetch;
- let downloads=0,linkValid=false,batchBytes=0;
+ const sampleWebp=await new Promise((resolve,reject)=>out.canvas.toBlob(
+  b=>b?resolve(b):reject(Error('sample_webp_encode_failed')),'image/webp',.75));
+ const sampleBytes=new Uint8Array(await sampleWebp.arrayBuffer());
+ let downloads=0,linkValid=false,batchBytes=0,validPdf=false,validJpg=false,noOpaqueId=false;
  try{
   window.fetch=async (url,opts)=>{
    if(String(url).includes('example.supabase.co')){
     if(opts?.credentials!=='omit')throw Error('invalid signed file credentials');
-    return new Response(new Uint8Array([82,73,70,70,9,8,7,6,87,69,66,80]),{
-     status:200,headers:{'content-type':'image/webp'}});
+    return new Response(sampleBytes,{status:200,headers:{'content-type':'image/webp'}});
    }
    return previousFetch(url,opts);
   };
@@ -61,15 +63,30 @@ async function browserTest(){
   // Inspect the exact archive bytes backing the prepared link. Fetching blob:
   // again can be blocked by the isolated Chromium CI download context.
   const blob=await bundle.archive.arrayBuffer();
+  const bytes=new Uint8Array(blob),view=new DataView(blob);
   linkValid=!!offered.href.startsWith('blob:')&&
-    anchor.download.endsWith('.zip')&&new Uint8Array(blob).length===batchBytes;
+    anchor.download.endsWith('.zip')&&bytes.length===batchBytes;
+  const names=[];let pos=0;
+  while(pos+30<bytes.length&&view.getUint32(pos,true)===0x04034b50){
+   const fileSize=view.getUint32(pos+18,true),nameLen=view.getUint16(pos+26,true),
+     extraLen=view.getUint16(pos+28,true),start=pos+30+nameLen+extraLen;
+   const name=new TextDecoder().decode(bytes.subarray(pos+30,pos+30+nameLen));
+   const content=bytes.subarray(start,start+fileSize);
+   names.push(name);
+   if(name.endsWith('.pdf'))validPdf=new TextDecoder().decode(content.subarray(0,8)).startsWith('%PDF-1.4');
+   if(name.endsWith('.jpg'))validJpg=content[0]===255&&content[1]===216;
+   pos=start+fileSize;
+  }
+  noOpaqueId=names.some(n=>n.endsWith(' - L01.pdf'))&&
+   !names.some(n=>n.endsWith('.webp')||/ - [a-f0-9]{8}\\.(jpg|pdf)$/.test(n));
   C.clearPreparedDownload(anchor);anchor.remove();
  }finally{window.fetch=previousFetch;}
  return {width:out.canvas.width,height:out.canvas.height,preview:preview.grade.score,
   diff:out.report.edits.length,ring:out.report.marks.find(m=>m.key==='P2.1b')?.kind,
   encoded:png.startsWith('data:image/png;base64,'),photoBytes:png.length,serial:evidence.version,
   xlsxBytes:workbook.length,zipBytes:zip.size,imageEncoded:C.imageUrl(out.canvas).startsWith('data:image/'),
-  downloadLinkValid:linkValid,exportedBatchBytes:batchBytes,automaticDownloads:downloads};
+  downloadLinkValid:linkValid,exportedBatchBytes:batchBytes,automaticDownloads:downloads,
+  validPdf,validJpg,noOpaqueId};
 }
 try{
  await call('Runtime.enable');
@@ -91,7 +108,8 @@ try{
  if(!result?.encoded||result.width!==180||result.height!==448||
     result.diff!==1||result.ring!=='wrong'||result.serial!=='OMR_EVIDENCE_01'||
     !result.imageEncoded||result.xlsxBytes<1000||result.zipBytes<1000||
-    !result.downloadLinkValid||result.exportedBatchBytes<1000||result.automaticDownloads!==0)
+    !result.downloadLinkValid||result.exportedBatchBytes<1000||result.automaticDownloads!==0||
+    !result.validPdf||!result.validJpg||!result.noOpaqueId)
   throw Error('OMR 046 invalid evidence canvas: '+JSON.stringify(result));
  console.log('PASS OMR 046 Chromium: composite annotated sheet, manual edit, PNG encoding',JSON.stringify(result));
 }finally{ws.close();}

@@ -7,6 +7,9 @@
 const Naming=(typeof module==='object'&&module.exports)
  ?require('./omr-evidence-naming.js')
  :root.DamSanOmrEvidenceNaming;
+const Print=(typeof module==='object'&&module.exports)
+ ?require('./omr-evidence-print.js')
+ :root.DamSanOmrEvidencePrint;
 const enc=new TextEncoder();
 const crcTable=Array.from({length:256},(_,n)=>{
  let c=n;for(let k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;
@@ -166,11 +169,15 @@ async function ensureExcelJS(){
  return window.ExcelJS;
 }
 async function exportBatch(list,client,sb,token,{download,status,part=1,
- maxItems=20,roster=null,roomLabel=''}={}){
+ maxItems=20,roster=null,roomLabel='',printEngine=Print}={}){
  if(!Array.isArray(list)||!list.length)throw Error('no_evidence_records');
  if(!client?.signed||!client?.downloadBlob)throw Error('client_required');
  const selected=[...list].sort(Naming.codeSort).slice(0,Math.max(1,Math.min(60,Number(maxItems)||20)));
- const records=[],files=[],manifest={version:1,generated_at:new Date().toISOString(),items:[]};
+ if(!printEngine?.bytesToJpeg||!printEngine?.pdfFromJpeg)
+  throw Error('omr_export_print_engine_unavailable');
+ const records=[],files=[],seenNames=new Set();
+ const manifest={version:2,generated_at:new Date().toISOString(),
+  formats:['pdf','jpg','json','xlsx'],items:[]};
  for(let i=0;i<selected.length;i++){
   const item=selected[i];
   if(status)status('Đang chuẩn bị phiếu '+(i+1)+'/'+selected.length);
@@ -181,23 +188,30 @@ async function exportBatch(list,client,sb,token,{download,status,part=1,
   if(!response.ok)throw Error('evidence_download_failed');
   const bytes=new Uint8Array(await response.arrayBuffer());
   if(!bytes.length||bytes.length>2000000)throw Error('evidence_download_size_invalid');
-  const extension=response.headers.get('content-type')?.includes('webp')?'webp':'jpg';
   const evidence=signed.record?.evidence||{};
-  // Canonical identity from the authenticated server list takes precedence.
+  // The authenticated staff list is the preferred identity source.
   const entry={...item,student_code:item.student_code||evidence.student_code,
     student_name:item.student_name||evidence.student_name,
     class_name:item.class_name||evidence.class_name,
     exam_code:item.exam_code||evidence.exam_code};
-  const filename=Naming.imagePath(entry,extension),jsonName=Naming.jsonPath(entry);
+  const stem=Naming.uniqueStem(entry,seenNames);
+  const pdfName=Naming.pathFromStem(stem,'pdf');
+  const jpgName=Naming.pathFromStem(stem,'jpg');
+  const jsonName=Naming.pathFromStem(stem,'json');
+  const mime=response.headers.get('content-type')||'image/webp';
+  // Storage retains compressed private WebP; exports use common, printable formats.
+  const jpg=await printEngine.bytesToJpeg(bytes,mime);
+  const pdf=printEngine.pdfFromJpeg(jpg.bytes,jpg.width,jpg.height);
   const record={...signed.record,evidence:{...evidence,
     student_code:entry.student_code,student_name:entry.student_name,
     class_name:entry.class_name,exam_code:entry.exam_code}};
-  records.push({...entry,filename,record});
-  files.push({name:filename,data:bytes});
+  records.push({...entry,filename:pdfName,imageFilename:jpgName,record});
+  files.push({name:pdfName,data:pdf});
+  files.push({name:jpgName,data:jpg.bytes});
   files.push({name:jsonName,data:JSON.stringify(record.evidence,null,2)});
-  manifest.items.push({id:item.id,filename,json:jsonName,sbd:entry.student_code,
-    student_name:entry.student_name,scan_id:item.scan_id,revision:item.revision,
-    exam_code:entry.exam_code});
+  manifest.items.push({id:item.id,filename:pdfName,pdf:pdfName,image:jpgName,
+    json:jsonName,sbd:entry.student_code,student_name:entry.student_name,
+    scan_id:item.scan_id,revision:item.revision,exam_code:entry.exam_code});
  }
  if(status)status('Đang tạo Excel và gói ZIP...');
  const excel=await xlsx(records,await ensureExcelJS(),{roster});

@@ -99,6 +99,8 @@ jobs:
         run: node tests/omr_room_evidence_050_simulation.js
       - name: OMR 051 full-room Excel and Unicode ZIP linkage
         run: node tests/omr_room_evidence_export_051_simulation.js
+      - name: OMR 052 printable PDF JPG and readable evidence naming
+        run: node tests/omr_evidence_print_052_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
