@@ -1,0 +1,35 @@
+'use strict';
+const fs=require('fs'),assert=require('assert');
+const desktop=fs.readFileSync('omr/omr-teacher-module.js','utf8');
+const mobile=fs.readFileSync('teacher/omr-v7-runtime-20261116-046.js','utf8');
+const backend=fs.readFileSync('supabase/functions/omr-evidence/index.ts','utf8');
+const ddl=fs.readFileSync('supabase/migrations/20261116233000_omr_one_final_student_evidence_056.sql','utf8');
+const html=fs.readFileSync('teacher/index.html','utf8');
+const desktopHtml=fs.readFileSync('giaovien.html','utf8');
+const sw=fs.readFileSync('teacher/sw.js','utf8');
+for(const [name,code] of [['desktop',desktop],['mobile',mobile]]){
+ const render=code.slice(code.indexOf('function renderEvidence(){'),code.indexOf('async function saveTestEvidence('));
+ assert(!render.includes('saveTestEvidence(false)'),name+' auto-save preview must be removed');
+ assert(render.includes('chỉ lưu một phiếu cuối cùng khi bấm Xác nhận & Lưu'));
+ const save=code.slice(code.indexOf('async function saveCurrent(){'),code.indexOf('function updateProgress()'));
+ const score=save.indexOf('await W.submitConfirmed(state.lastPreview,staffRpc)');
+ const evidence=save.indexOf('await saveTestEvidence(true)');
+ assert(score>0&&evidence>score,name+' may only save final evidence after score commit');
+ assert(save.indexOf('renderEvidence();')>score&&save.indexOf('renderEvidence();')<evidence);
+ assert(save.includes('savedEvidence?.status'),name+' must handle failed evidence upload');
+ assert(save.includes('return;')&&save.includes('KHÔNG quét lại'),name+' must leave retry UI for failed upload');
+ assert(code.includes('return {status:\'error\',message:'),name+' must report storage error');
+}
+assert(backend.includes('test_submission_not_confirmed'));
+assert(backend.includes('test_answers_mismatch'));
+assert(backend.includes('test_score_mismatch'));
+assert(backend.includes('canonicalTest?.score'));
+assert(backend.indexOf('test_submission_not_confirmed')<backend.indexOf('const prefix='));
+assert(backend.includes('expected.length!==28||submitted.length!==28'));
+assert(ddl.includes('create unique index if not exists omr_artifacts_one_final_per_student'));
+assert(ddl.includes('on public.omr_artifacts(room_id,student_id)'));
+assert(!/delete\s+from\s+storage\.objects/i.test(ddl));
+assert(html.includes('omr-final=056'));
+assert(desktopHtml.includes('omr-final=056'));
+assert(sw.includes('omr056'));
+console.log('PASS OMR 056: final only after grade; backend verifies 28 answers; DB uniqueness');

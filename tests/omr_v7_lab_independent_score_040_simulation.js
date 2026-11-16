@@ -13,7 +13,7 @@ assert(html.includes('omr-v7-lab-score.js?v='+rev));
 assert(sw.includes("'../omr/omr-v7-lab-score.js'"));
 const a=html.indexOf('omr-v7-lab-score.js'),b=html.indexOf('omr-teacher-module.js');
 assert(a>=0&&b>a);
-assert(html.includes('src="./'+bridge+'?v='+rev+'"'));
+assert(html.includes('src="./'+bridge+'?v='+rev+'&amp;omr-final=056"'));
 assert(sw.includes("'./"+bridge+"'"));
 const bundled=fs.readFileSync('teacher/'+bridge,'utf8');
 assert.strictEqual(bundled,(adapter+'\n;\n'+teacherModule).replace(/\n+$/,'\n'));
