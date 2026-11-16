@@ -21,7 +21,7 @@ assert(source.includes('Read-only annotated preview in every room'),
 assert(source.includes("if(evidenceRoomCode()==='OMR_V7_TEST')"),
  'Cloud upload remains restricted to OMR_V7_TEST');
 assert(source.includes("state.evidenceData={record,preview,result,capture,signature:confirmed}"));
-assert(source.includes("if(info.signature!==state.evidenceData?.signature)return;"));
+assert(source.includes("if(info.signature!==state.evidenceData?.signature)return {status:'stale'};"));
 assert(source.includes('await W.submitConfirmed(state.lastPreview,staffRpc)'));
 assert(source.includes("officialEngine:'v7'"));
 for(const asset of ['omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-naming.js','omr-evidence-print.js','omr-evidence-export.js']){
