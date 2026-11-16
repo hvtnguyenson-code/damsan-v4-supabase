@@ -60,7 +60,9 @@ async function signed(sb,token,id,kind='annotated'){
 function downloadBlob(blob,filename){
  if(typeof document==='undefined')throw Error('evidence_browser_required');
  const href=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=href;a.download=filename.replace(/[^a-zA-Z0-9._-]/g,'-').slice(0,100);
+ a.href=href;a.download=String(filename||'minh-chung').normalize('NFC')
+   .replace(/[\u0000-\u001f\u007f<>:"/\\|?*]/g,' ').replace(/\s+/g,' ')
+   .trim().slice(0,140);
  document.body.appendChild(a);a.click();a.remove();
  // Keep the blob alive while Android's download manager accepts it.
  setTimeout(()=>URL.revokeObjectURL(href),60000);

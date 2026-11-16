@@ -15,19 +15,21 @@ assert(source.includes('id="omrEvidenceCanvas"'));
 assert(source.includes('id="omrEvidenceHistory"'));
 assert(source.includes('id="omrEvidenceExport"'));
 assert(source.includes("evidenceRoomCode()==='OMR_V7_TEST'"));
-assert(/function scheduleEvidence\(\)\{[\s\S]*?if\(evidenceRoomCode\(\)!=='OMR_V7_TEST'\)/.test(source),
- 'The evidence render must not run on production classroom rooms');
+assert(source.includes('Read-only annotated preview in every room'),
+ 'Only annotated image is shown for valid V7 preview');
+assert(source.includes("if(evidenceRoomCode()==='OMR_V7_TEST')"),
+ 'Cloud upload remains restricted to OMR_V7_TEST');
 assert(source.includes("state.evidenceData={record,preview,result,capture,signature:confirmed}"));
 assert(source.includes("if(info.signature!==state.evidenceData?.signature)return;"));
 assert(source.includes('await W.submitConfirmed(state.lastPreview,staffRpc)'));
 assert(source.includes("officialEngine:'v7'"));
-for(const asset of ['omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-export.js']){
+for(const asset of ['omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-naming.js','omr-evidence-export.js']){
  assert(html.includes(asset),'PWA missing '+asset);
  assert(sw.includes(asset),'worker missing '+asset);
  assert(desktop.includes(asset),'desktop missing '+asset);
 }
-assert(html.includes('20261116-teacher-pwa-044'));
-assert(sw.includes("const VERSION='20261116-teacher-pwa-044'"));
+assert(html.includes('20261116-teacher-pwa-045'));
+assert(sw.includes("const VERSION='20261116-teacher-pwa-045'"));
 assert(backend.includes('const OFFICIAL_ENABLED = Deno.env.get("OMR_EVIDENCE_OFFICIAL_ENABLED") === "true"'));
 assert(backend.includes('if(mode==="test"&&room.ma_phong!=="OMR_V7_TEST")'));
 assert(backend.includes('if(mode==="official"&&!OFFICIAL_ENABLED)'));

@@ -1,4 +1,4 @@
-const VERSION='20261116-teacher-pwa-044';
+const VERSION='20261116-teacher-pwa-045';
 const CACHE='damsan-teacher-'+VERSION;
 const CORE=[
   './',
@@ -29,9 +29,10 @@ const CORE=[
   '../omr/omr-v7-lab-score.js',
   '../omr/omr-v7-evidence.js',
   '../omr/omr-evidence-client.js',
+  '../omr/omr-evidence-naming.js',
   '../omr/omr-evidence-export.js',
   '../omr/omr-teacher-module.js',
-  './omr-v7-runtime-20261116-044.js'
+  './omr-v7-runtime-20261116-045.js'
 ];
 self.addEventListener('install',event=>{
   // One-time recovery for clients whose previous SW remains WAITING. Activate

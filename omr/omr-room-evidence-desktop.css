@@ -1,0 +1,32 @@
+/* OMR Evidence – desktop grade-room integration, scoped to avoid affecting old dashboards. */
+#omrRoomEvidencePanel{margin:18px 0 10px;padding:14px 16px;background:#f8fafc;border:1px solid #dbe4ee;
+ border-radius:12px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+#omrRoomEvidencePanel .omr-room-copy{flex:1;min-width:220px}
+#omrRoomEvidencePanel h3{margin:0 0 4px;font-size:17px;color:#0f172a}
+#omrRoomEvidencePanel p{margin:0;font-size:13px;color:#475569}
+#omrRoomEvidencePanel .omr-room-buttons{display:flex;flex-wrap:wrap;gap:8px}
+#omrRoomEvidencePanel button,.omr-room-view-btn{border:0;border-radius:8px;padding:9px 12px;
+ font-weight:700;background:#e2e8f0;color:#0f172a;cursor:pointer}
+#omrRoomEvidenceExport{background:#047857!important;color:#fff!important}
+#omrRoomEvidenceExport:disabled{opacity:.65;cursor:wait}
+#omrRoomExportStatus{color:#475569;font-size:13px;margin:0 0 12px;overflow-wrap:anywhere}
+#omrRoomEvidenceDownload{display:none;background:#047857;color:#fff;text-align:center;
+ padding:12px 16px;border-radius:10px;font-weight:700;text-decoration:none;margin-bottom:12px;overflow-wrap:anywhere}
+.omr-room-view-btn{padding:6px 9px;background:#dbeafe;color:#1d4ed8;white-space:nowrap}
+#omrRoomEvidenceDrawer[hidden]{display:none}
+#omrRoomEvidenceDrawer{position:fixed;inset:0;z-index:6000;display:flex;justify-content:flex-end}
+#omrRoomEvidenceBackdrop{position:absolute;inset:0;background:rgba(15,23,42,.62)}
+#omrRoomEvidenceDrawer .omr-room-panel{position:relative;z-index:2;background:#fff;
+ width:min(600px,90vw);height:100vh;overflow-y:auto;box-sizing:border-box;
+ padding:18px 20px;box-shadow:-12px 0 35px #0002}
+#omrRoomEvidenceDrawer .omr-room-panel header{display:flex;gap:10px;justify-content:space-between;
+ align-items:center;position:sticky;top:-18px;padding:10px 0;background:#fff;border-bottom:1px solid #e2e8f0}
+#omrRoomEvidenceDrawer h3{margin:0;font-size:18px}
+#omrRoomEvidenceClose{border:0;background:#fee2e2;color:#991b1b;padding:10px 15px;border-radius:8px;font-weight:700;cursor:pointer}
+#omrRoomEvidenceInfo{margin:12px 0;color:#334155;line-height:1.55;font-size:14px}
+#omrRoomEvidenceImage{display:block;max-width:100%;width:100%;height:auto;object-fit:contain;border:1px solid #cbd5e1;border-radius:9px}
+@media(max-width:620px){
+ #omrRoomEvidenceDrawer .omr-room-panel{width:100vw}
+ #omrRoomEvidencePanel .omr-room-buttons{width:100%}
+ #omrRoomEvidencePanel button{flex:1}
+}

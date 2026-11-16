@@ -2,6 +2,7 @@
 const SUPABASE_URL = 'https://xcervjnwlchwfqvbeahy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhjZXJ2am53bGNod2ZxdmJlYWh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNzY4NjksImV4cCI6MjA5MDY1Mjg2OX0.xjrY4YPDb5Q9BTenHrh2dUOnmZbegtKSZQPqzyJdxBo';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+window.DamSanOmrEvidenceRuntime={getClient:()=>sb};
 
 let gvData = null;
 let gvLogoutInProgress = false;
@@ -1836,6 +1837,7 @@ function renderDashboardTable() {
             <td>${p2Display}</td>
             <td>${p3Display}</td>
             <td>${viPhamDisplay}</td>
+            <td data-omr-sbd="${encodeURIComponent(String(hs.MaHS||''))}">—</td>
         </tr>`; 
     }); 
     
@@ -4827,6 +4829,7 @@ async function fetchDashboard(isAuto = false) {
 
         renderDashboardSubTabs();
         renderDashboardTable();
+        void window.DamSanOmrRoomEvidence?.refreshForRoom?.(currentRoom,{force:!isAuto});
         return { status: 'success' };
     } catch(e) {
         console.error("Lỗi fetchDashboard:", e);
@@ -4930,6 +4933,37 @@ async function khoiPhucChamDiemPhong() {
         return { status: 'success', data };
     });
 }
+
+function getOmrDashboardRoster(){
+ const room=getSelectedRoom('dashMaPhong');if(!room)return [];
+ const wanted=currentDashFilter!=='TatCa'?currentDashFilter:
+   (room.DoiTuong||room.doi_tuong||'TatCa');
+ const classes=wanted&&wanted!=='TatCa'?String(wanted).split(',').map(x=>x.trim()).filter(Boolean):[];
+ const bySbd=new Map();
+ if(classes.length){
+  for(const student of allStudents)if(classes.includes(String(student.Lop||'').trim()))
+   bySbd.set(String(student.MaHS).trim(),{
+    MaHS:String(student.MaHS),HoTen:student.HoTen,Lop:student.Lop,id:student.id});
+ }
+ const assessment=room.assessment_type||'LEGACY',config=room.scoring_config||{};
+ for(const result of duLieuBangDiem){
+  if(classes.length&&currentDashFilter!=='TatCa'&&!classes.includes(String(result.Lop).trim()))continue;
+  const code=String(result.MaHS||'').trim();if(!code)continue;
+  const current=bySbd.get(code)||{};
+  const student=allStudents.find(x=>String(x.MaHS).trim()===code);
+  const pres=computeDisplayPartContributions(result,assessment,config);
+  bySbd.set(code,{
+   ...current,MaHS:code,HoTen:result.HoTen||current.HoTen||'',
+   Lop:result.Lop||current.Lop||'',id:current.id||student?.id||null,
+   MaDe:result.MaDe||'',officialScore:pres.isSubmitted?pres.finalScore:null,
+   P1:pres.isSubmitted?pres.p1:null,P2:pres.isSubmitted?pres.p2:null,
+   P3:pres.isSubmitted?pres.p3:null
+  });
+ }
+ return [...bySbd.values()].sort((a,b)=>
+  String(a.MaHS).localeCompare(String(b.MaHS),'vi',{numeric:true}));
+}
+window.getOmrDashboardRoster=getOmrDashboardRoster;
 
 async function xuatExcel() {
     return runDashboardAction('export', () => xuatExcelCore());
