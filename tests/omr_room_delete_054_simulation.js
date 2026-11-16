@@ -45,7 +45,7 @@ function harness(cleanup,deleted){
  await assert.rejects(unsupported.call('rpc_xoa_phong_thi',args),/Chưa dọn sạch/);
  assert.deepStrictEqual(unsupported.events,['storage']);
  const ordinary=harness({data:null,error:new Error('would fail if invoked')});
- const generic=await ordinary.call('rpc_reset_room_results',args);
+ const generic=await ordinary.call('rpc_grade_pending_room',args);
  assert.equal(generic.status,'success');
  assert.deepStrictEqual(ordinary.events,['db'],'normal RPCs must not purge Storage');
  assert(migration.includes("from storage.objects"),'Postgres inventory must include unregistered objects');
