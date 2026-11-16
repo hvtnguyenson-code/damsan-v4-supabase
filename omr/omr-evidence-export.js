@@ -176,8 +176,6 @@ async function exportBatch(list,client,sb,token,{download,status,part=1,
  if(!printEngine?.bytesToJpeg||!printEngine?.pdfFromJpeg)
   throw Error('omr_export_print_engine_unavailable');
  const records=[],files=[],seenNames=new Set();
- const manifest={version:2,generated_at:new Date().toISOString(),
-  formats:['pdf','jpg','json','xlsx'],items:[]};
  for(let i=0;i<selected.length;i++){
   const item=selected[i];
   if(status)status('Đang chuẩn bị phiếu '+(i+1)+'/'+selected.length);
@@ -196,8 +194,6 @@ async function exportBatch(list,client,sb,token,{download,status,part=1,
     exam_code:item.exam_code||evidence.exam_code};
   const stem=Naming.uniqueStem(entry,seenNames);
   const pdfName=Naming.pathFromStem(stem,'pdf');
-  const jpgName=Naming.pathFromStem(stem,'jpg');
-  const jsonName=Naming.pathFromStem(stem,'json');
   const mime=response.headers.get('content-type')||'image/webp';
   // Storage retains compressed private WebP; exports use common, printable formats.
   const jpg=await printEngine.bytesToJpeg(bytes,mime);
@@ -205,18 +201,12 @@ async function exportBatch(list,client,sb,token,{download,status,part=1,
   const record={...signed.record,evidence:{...evidence,
     student_code:entry.student_code,student_name:entry.student_name,
     class_name:entry.class_name,exam_code:entry.exam_code}};
-  records.push({...entry,filename:pdfName,imageFilename:jpgName,record});
+  records.push({...entry,filename:pdfName,record});
   files.push({name:pdfName,data:pdf});
-  files.push({name:jpgName,data:jpg.bytes});
-  files.push({name:jsonName,data:JSON.stringify(record.evidence,null,2)});
-  manifest.items.push({id:item.id,filename:pdfName,pdf:pdfName,image:jpgName,
-    json:jsonName,sbd:entry.student_code,student_name:entry.student_name,
-    scan_id:item.scan_id,revision:item.revision,exam_code:entry.exam_code});
  }
- if(status)status('Đang tạo Excel và gói ZIP...');
+ if(status)status('Đang đóng gói Excel và phiếu PDF...');
  const excel=await xlsx(records,await ensureExcelJS(),{roster});
  files.unshift({name:'thong-ke-omr.xlsx',data:excel});
- files.push({name:'manifest.json',data:JSON.stringify(manifest,null,2)});
  const safeRoom=Naming.clean(roomLabel,'minh-chung').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
   .replace(/[^a-zA-Z0-9._-]+/g,'-').slice(0,38);
  const archive=zip(files),name='OMR-'+safeRoom+'-'+new Date().toISOString().slice(0,10)+
