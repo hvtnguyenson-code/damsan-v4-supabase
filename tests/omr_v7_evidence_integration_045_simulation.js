@@ -15,6 +15,8 @@ assert(source.includes('id="omrEvidenceCanvas"'));
 assert(source.includes('id="omrEvidenceHistory"'));
 assert(source.includes('id="omrEvidenceExport"'));
 assert(source.includes("evidenceRoomCode()==='OMR_V7_TEST'"));
+assert(/function scheduleEvidence\(\)\{[\s\S]*?if\(evidenceRoomCode\(\)!=='OMR_V7_TEST'\)/.test(source),
+ 'The evidence render must not run on production classroom rooms');
 assert(source.includes("state.evidenceData={record,preview,result,capture,signature:confirmed}"));
 assert(source.includes("if(info.signature!==state.evidenceData?.signature)return;"));
 assert(source.includes('await W.submitConfirmed(state.lastPreview,staffRpc)'));

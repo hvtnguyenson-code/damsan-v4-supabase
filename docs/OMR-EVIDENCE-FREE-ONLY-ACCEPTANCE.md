@@ -31,3 +31,6 @@ Ngày: 16/11/2026 · PR #193 · Không có chi phí trả phí.
 - CI OMR, Submission Safety, Deno và container PostgreSQL đều xanh.
 - Hệ thống đang chạy `main` không bị sửa.
 - Phải có kiểm thử cuối bằng phiếu thật, đếm dung lượng và tốc độ upload/download trên mạng điện thoại trước khi bật `OMR_V7_TEST` dùng backend thật.
+
+### Performance isolation
+- Frontend Stage A must not generate or display annotated evidence for any room except `OMR_V7_TEST`. This protects live V7 grading responsiveness and low-memory Android phones. Official rollout can only be introduced after separate acceptance.

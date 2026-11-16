@@ -1072,6 +1072,12 @@
   }
   function scheduleEvidence(){
     if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
+    // Phase A is a strictly isolated experiment: do not allocate warped
+    // evidence canvases or change UI timing in any real examination room.
+    if(evidenceRoomCode()!=='OMR_V7_TEST'){
+      if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
+      return;
+    }
     if(!Evidence||!state.evidenceCtx||!state.lastPreview?.ok)return;
     state.evidenceTimer=setTimeout(renderEvidence,420);
   }
