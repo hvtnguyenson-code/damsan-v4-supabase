@@ -122,9 +122,33 @@ async function save(req:Request,body:Json,actor:Actor) {
   if(old.sha256!==digest)throw Error("artifact_revision_conflict");
   return respond(req,200,{status:"success",artifact_id:old.id,idempotent:true,phase:old.status});
  }
+ // A test evidence is no longer a stored draft: it must reflect an
+ // already confirmed canonical OMR submission, including all 28 answers.
+ // Old/offline clients that still auto-upload previews are rejected.
+ let canonicalTest=null;
  if(mode==="test"){
-  // 200 records x 2 images x 1.5MB => no more than 600MB of test images,
-  // leaving headroom inside the 1GB Free storage quota.
+  if(!student)throw Error("test_student_required");
+  const {data:s,error:e}=await db.from("exam_submissions")
+   .select("id,source,truong_id,phong_id,hs_id,ma_de,raw_answers,status,score,submitted_by_staff_id")
+   .eq("phong_id",room.id).eq("hs_id",student.id).maybeSingle();
+  if(e||!s||s.source!=="OMR"||s.status!=="graded"||
+    s.truong_id!==actor.school||s.phong_id!==room.id||s.hs_id!==student.id||
+    s.ma_de!==safe(body.exam_code)||s.ma_de!==meta.exam_code||
+    (!adminRole(actor.role)&&s.submitted_by_staff_id!==actor.id))
+    throw Error("test_submission_not_confirmed");
+  if(!Number.isFinite(Number(s.score))||Math.abs(previewScore-Number(s.score))>.001)
+    throw Error("test_score_mismatch");
+  const confirmed=meta.confirmed as Json|undefined;
+  const p1=typeof confirmed?.p1==="string"?Array.from(confirmed.p1):[];
+  const p2=Array.isArray(confirmed?.p2)?confirmed.p2:[];
+  const p3=Array.isArray(confirmed?.p3)?confirmed.p3:[];
+  const expected=[...p1,...p2,...p3].map(x=>String(x??""));
+  const submitted=Array.isArray(s.raw_answers)?
+    s.raw_answers.map((x:{chon?:unknown})=>String(x?.chon??"")):[];
+  if(expected.length!==28||submitted.length!==28||
+     JSON.stringify(expected)!==JSON.stringify(submitted))
+    throw Error("test_answers_mismatch");
+  canonicalTest=s;
   const {count,error:countError}=await db.from("omr_artifacts")
     .select("id",{count:"exact",head:true}).eq("mode","test");
   if(countError)throw Error("test_quota_check_failed");
@@ -189,7 +213,7 @@ async function save(req:Request,body:Json,actor:Actor) {
   exam_code:safe(body.exam_code),mode,status:submission?"COMPLETE":"TEST",
   capture_path:capturePath,annotated_path:annotatedPath,
   sha256:digest,file_bytes:annotated.bytes.byteLength,engine_version:meta.version,
-  preview_score:previewScore,final_score:submission?.score??null,
+  preview_score:previewScore,final_score:submission?.score??canonicalTest?.score??null,
   evidence:meta};
  const {data:inserted,error:ie}=await db.from("omr_artifacts")
    .insert(row).select("id,status").single();
