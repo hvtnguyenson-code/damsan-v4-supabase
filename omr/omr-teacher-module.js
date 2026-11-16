@@ -3,7 +3,7 @@
   const T=root.DamSanOmrTemplate, O=root.DamSanOmr, B=root.DamSanOmrRoomBinding, S=root.DamSanOmrScoring, W=root.DamSanOmrResultWrite, E=root.DamSanOmrScanAdapter;
   const V7=root.DamSanOmrV7Candidate;
   const LabScore=root.DamSanOmrV7LabScore;
-  const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport;
+  const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport, Naming=root.DamSanOmrEvidenceNaming;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
   const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null};
@@ -178,6 +178,20 @@
       #omrTeacherOverlay .omr-identity-grid select{white-space:nowrap;overflow:hidden}
       #omrTeacherOverlay #omrEvidenceCanvas{display:block;width:100%;max-width:100%;height:auto;max-height:72dvh;object-fit:contain;background:white;border:1px solid #dbe3ed;border-radius:8px}
       #omrTeacherOverlay #omrEvidenceStatus{font-size:12px;margin-top:8px;overflow-wrap:anywhere}
+      #omrTeacherOverlay #omrEvidenceCard{margin-top:0}
+      #omrTeacherOverlay #omrEvidenceCard>strong{display:block;font-size:16px;margin-bottom:5px}
+      #omrTeacherOverlay .omr-evidence-extra{margin-top:12px;border-top:1px solid #e2e8f0;padding-top:10px}
+      #omrTeacherOverlay .omr-evidence-extra>summary,#omrTeacherOverlay #omrReviewDetails>summary,
+      #omrTeacherOverlay #omrTechnicalDetails>summary{cursor:pointer;font-weight:700;line-height:1.45;color:#334155}
+      #omrTeacherOverlay #omrReviewDetails .omr-identity-grid{margin-top:10px}
+      #omrTeacherOverlay #omrEvidenceCanvas{cursor:zoom-in}
+      #omrTeacherOverlay #omrScanArea>.omr-actions{position:sticky;bottom:0;z-index:2;
+         padding:10px 5px;background:#fff;border-top:1px solid #e2e8f0;justify-content:center}
+      #omrTeacherOverlay #omrScanArea>.omr-actions button{min-height:43px}
+      #omrTeacherOverlay #omrTechnicalDetails:not([open]){padding:9px 12px;font-size:12px}
+      /* Explicit display:grid/block rules on child canvases used to override
+         the browser's native closed-details styles. Guarantee one visible image. */
+      #omrTeacherOverlay details:not([open]) > :not(summary){display:none!important}
       #omrTeacherOverlay #omrEvidenceArchiveList{font-size:13px;line-height:1.5;max-height:250px;overflow:auto}
       #omrTeacherOverlay .omr-evidence-tools{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
       #omrTeacherOverlay #omrEvidenceReady{display:none;box-sizing:border-box;width:100%;margin-top:10px;
@@ -220,6 +234,27 @@
           <div class="omr-muted" style="margin-top:8px">Camera chỉ đọc phiếu trên máy. Điểm chỉ được ghi sau khi giáo viên bấm Xác nhận & Lưu.</div>
         </div>
         <div id="omrScanArea" style="display:none">
+          <section id="omrEvidenceCard" class="omr-card" style="display:none" aria-label="Phiếu minh chứng đã đánh dấu đúng sai">
+            <strong>Phiếu có đánh dấu đúng/sai</strong>
+            <div class="omr-muted">Xanh: đúng • Đỏ: lựa chọn sai • Vàng: đáp án đúng • Cam: chưa rõ • Tím: GV sửa. Phiếu minh chứng không thay đổi điểm chính thức.</div>
+            <canvas id="omrEvidenceCanvas" role="img" aria-label="Ảnh phiếu trắc nghiệm đã đánh dấu đáp án đúng sai"></canvas>
+            <div id="omrEvidenceStatus" role="status"></div>
+            <details id="omrEvidenceToolsDetails" class="omr-evidence-extra">
+           <summary>Công cụ minh chứng và xuất file</summary>
+           <div class="omr-evidence-tools">
+              <button type="button" class="omr-light" id="omrEvidenceDownload">Tải ảnh minh chứng</button>
+              <button type="button" class="omr-light" id="omrEvidenceJson">Tải JSON đối chiếu</button>
+              <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu thử đã lưu</button>
+              <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + ZIP</button>
+              <button type="button" class="omr-light" id="omrEvidenceRetry" style="display:none">Lưu lại minh chứng</button>
+            </div>
+            <a id="omrEvidenceReady" href="#" download style="display:none">Tải gói ZIP đã tạo</a>
+            <div id="omrEvidenceArchiveList" style="display:none"></div>
+           </details>
+          </section>
+
+          <details id="omrTechnicalDetails" class="omr-card" open>
+          <summary>Ảnh nguồn và bản đồ mốc — xem khi cần kiểm tra kỹ thuật</summary>
           <div class="omr-card">
             <div class="omr-photo-head"><span class="omr-muted" id="omrPhotoHint">Ảnh phiếu sau khi chụp</span><button type="button" id="omrPhotoExpand">Xem chi tiết</button></div>
             <canvas id="omrTeacherCanvas" aria-label="Ảnh phiếu để đối chiếu kết quả nhận dạng"></canvas>
@@ -230,19 +265,20 @@
              <canvas id="omrV7OverlayCanvas" role="img" aria-label="Bản đồ vị trí nhận dạng V7, chỉ xem"></canvas>
              <div class="omr-muted" id="omrV7OverlayStatus" role="status"></div>
           </section>
+          </details>
            <div id="omrEngineResult" class="omr-muted" style="margin:8px 0;font-weight:700"></div>
            <div id="omrWarning" class="omr-card omr-warn" style="display:none"></div>
           <label id="omrReviewUncertainWrap" class="omr-card omr-warn" style="display:none;cursor:pointer">
             <input id="omrReviewUncertain" type="checkbox" style="width:auto;margin-right:8px"> Tôi đã kiểm tra đúng các vị trí được đánh dấu và xác nhận dữ liệu đang hiển thị là đúng.
           </label>
-          <div class="omr-card">
-            <div class="omr-identity-grid">
+          <details id="omrReviewDetails" class="omr-card">
+          <summary>Thông tin và đáp án đọc được — chạm để kiểm tra / sửa</summary>
+          <div class="omr-identity-grid">
               <div class="omr-field"><label for="omrSbd">SBD / mã học sinh</label><input id="omrSbd" type="text" inputmode="numeric" autocomplete="off"></div>
               <div class="omr-field"><label for="omrMaDe">Mã đề</label><input id="omrMaDe" type="text" autocomplete="off"></div>
               <div class="omr-field omr-field-student"><label for="omrStudent">Học sinh</label><select id="omrStudent"></select></div>
             </div>
-          </div>
-          <details class="omr-card" open><summary><b>Đáp án đọc được</b> — có thể sửa trước khi chấm</summary>
+          <div style="margin-top:12px;font-weight:700">Đáp án V7 nhận dạng</div>
             <div class="omr-grid" style="margin-top:10px">
               <div class="omr-answer"><label>Phần I (18 ký tự A/B/C/D)</label><input id="omrP1" type="text" maxlength="18"></div>
               <div class="omr-answer"><label>P2 Câu 1</label><input id="omrP2_1" type="text"></div>
@@ -256,30 +292,17 @@
               <div class="omr-answer"><label>P3 Câu 5</label><input id="omrP3_5" type="text"></div>
               <div class="omr-answer"><label>P3 Câu 6</label><input id="omrP3_6" type="text"></div>
             </div>
-          </details>
-          <div class="omr-card omr-ok" id="omrGradeCard" style="display:none">
+          <div style="margin-top:10px"><button type="button" class="omr-light" id="omrRecheck">Kiểm tra lại</button></div>
+         </details>
+         <div class="omr-card omr-ok" id="omrGradeCard" style="display:none">
             <div id="omrStudentName" style="font-weight:800"></div>
             <div>Mã đề: <b id="omrGradeCode"></b></div>
             <div>Điểm dự kiến (<span id="omrGradeEngine">V7</span>): <span class="omr-score" id="omrScore">-</span></div>
             <div id="omrPartScores" class="omr-muted"></div>
           </div>
-          <section id="omrEvidenceCard" class="omr-card" style="display:none" aria-label="Phiếu minh chứng đã đánh dấu đúng sai">
-            <strong>Phiếu có đánh dấu đúng/sai</strong>
-            <div class="omr-muted">Xanh: đúng • Đỏ: lựa chọn sai • Vàng: đáp án đúng • Cam: chưa rõ • Tím: GV sửa. Phiếu minh chứng không thay đổi điểm chính thức.</div>
-            <canvas id="omrEvidenceCanvas" role="img" aria-label="Ảnh phiếu trắc nghiệm đã đánh dấu đáp án đúng sai"></canvas>
-            <div id="omrEvidenceStatus" role="status"></div>
-            <div class="omr-evidence-tools">
-              <button type="button" class="omr-light" id="omrEvidenceDownload">Tải ảnh minh chứng</button>
-              <button type="button" class="omr-light" id="omrEvidenceJson">Tải JSON đối chiếu</button>
-              <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu thử đã lưu</button>
-              <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + ZIP</button>
-              <button type="button" class="omr-light" id="omrEvidenceRetry" style="display:none">Lưu lại minh chứng</button>
-            </div>
-            <a id="omrEvidenceReady" href="#" download style="display:none">Tải gói ZIP đã tạo</a>
-            <div id="omrEvidenceArchiveList" style="display:none"></div>
-          </section>
+
           <div class="omr-actions">
-            <button class="omr-light" id="omrRecheck">Kiểm tra lại</button>
+            <button type="button" class="omr-light" id="omrEditAnswers">Kiểm tra / sửa</button>
             <button class="omr-green" id="omrSave" disabled>Xác nhận & Lưu</button>
             <button class="omr-light" id="omrNext">Quét lại</button>
           </div>
@@ -303,6 +326,11 @@
     q('omrCameraSwitch').onclick=()=>{state.facing=state.facing==='environment'?'user':'environment';openCamera();};
     q('omrCameraCapture').onclick=()=>capture('manual');
     q('omrPhotoExpand').onclick=openPhotoDetail;
+    q('omrEvidenceCanvas').onclick=()=>openPhotoDetail({fromEvidence:true});
+    q('omrEditAnswers').onclick=()=>{
+      const details=q('omrReviewDetails');details.open=!details.open;
+      if(details.open)details.scrollIntoView?.({block:'nearest',behavior:'smooth'});
+    };
     q('omrTeacherCanvas').onclick=openPhotoDetail;
     q('omrPhotoClose').onclick=()=>{if(!root.DamSanTeacherNav?.backFrom?.('photo'))closePhotoDetail();};
     q('omrPhotoPlus').onclick=()=>setPhotoZoom(state.photoZoom+.45);
@@ -319,13 +347,29 @@
     q('omrRecheck').onclick=reviewCurrent;
     q('omrEvidenceDownload').onclick=()=>{
       if(state.evidenceData&&EvidenceClient)
-        EvidenceClient.canvasDownload(q('omrEvidenceCanvas'),'omr-'+state.evidenceData.record.scan_id+'-v'+state.evidenceData.record.revision);
+        EvidenceClient.canvasDownload(q('omrEvidenceCanvas'),Naming.stem({
+          ...state.evidenceData.record,
+          exam_code:state.evidenceData.preview.variant.code,
+          student_code:state.evidenceData.preview.student.ma_hs,
+          student_name:state.evidenceData.preview.student.ho_ten,
+          class_name:state.evidenceData.preview.student.lop
+        }));
     };
     q('omrEvidenceJson').onclick=()=>{
       if(state.evidenceData&&EvidenceClient)
-        EvidenceClient.downloadBlob(new Blob([JSON.stringify(state.evidenceData.record,null,2)],{type:'application/json'}),'omr-'+state.evidenceData.record.scan_id+'.json');
+        EvidenceClient.downloadBlob(new Blob([JSON.stringify(state.evidenceData.record,null,2)],{type:'application/json'}),
+         Naming.stem({...state.evidenceData.record,
+          exam_code:state.evidenceData.preview.variant.code,
+          student_code:state.evidenceData.preview.student.ma_hs,
+          student_name:state.evidenceData.preview.student.ho_ten,
+          class_name:state.evidenceData.preview.student.lop})+'.json');
     };
     q('omrEvidenceHistory').onclick=showEvidenceArchive;
+    // A keyboard-accessible reader can expand the optional tools when needed.
+    q('omrEvidenceToolsDetails').addEventListener('toggle',()=>{
+      if(q('omrEvidenceToolsDetails').open&&state.evidenceData)
+        q('omrEvidenceStatus').setAttribute('aria-live','polite');
+    });
     q('omrEvidenceExport').onclick=exportEvidenceRoom;
     q('omrEvidenceRetry').onclick=()=>saveTestEvidence(true);
     q('omrNext').onclick=()=>{
@@ -572,8 +616,9 @@
     const c=q('omrPhotoZoomCanvas');
     if(c)c.style.width=Math.round(state.photoZoom*100)+'%';
   }
-  function openPhotoDetail({navigation='push'}={}){
-    const src=q('omrTeacherCanvas'),viewer=q('omrPhotoLightbox');
+  function openPhotoDetail({navigation='push',fromEvidence=false}={}){
+    const src=fromEvidence&&state.evidenceData?q('omrEvidenceCanvas'):
+      q('omrTeacherCanvas'),viewer=q('omrPhotoLightbox');
     if(!src?.width||!src?.height||!viewer)return;
     const zoom=q('omrPhotoZoomCanvas');
     zoom.width=src.width;zoom.height=src.height;
@@ -592,6 +637,8 @@
     const c=q('omrTeacherCanvas'),ctx=c.getContext('2d',{willReadFrequently:true});
     state.lastScan=null;state.lastPreview=null;
     state.evidenceCtx=null;state.evidenceData=null;
+    if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
+    if(q('omrTechnicalDetails'))q('omrTechnicalDetails').open=true;
     if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
     q('omrSave').disabled=true;
     try{
@@ -939,6 +986,7 @@
     const reviewed=hasUncertain && q('omrReviewUncertain').checked;
     preview.reviewedUncertain=reviewed;
     q('omrReviewUncertainWrap').style.display=hasUncertain?'block':'none';
+    if(hasUncertain&&q('omrReviewDetails'))q('omrReviewDetails').open=true;
     state.lastPreview=preview;
     scheduleEvidence();
     q('omrStudentName').textContent=`${st.ma_hs} — ${st.ho_ten} (${st.lop})`;
@@ -970,12 +1018,8 @@
   }
   function scheduleEvidence(){
     if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
-    // Phase A is a strictly isolated experiment: do not allocate warped
-    // evidence canvases or change UI timing in any real examination room.
-    if(evidenceRoomCode()!=='OMR_V7_TEST'){
-      if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
-      return;
-    }
+    // Read-only annotated preview in every room. The only cloud writer remains
+    // saveTestEvidence() guarded by OMR_V7_TEST on client and Edge Function.
     if(!Evidence||!state.evidenceCtx||!state.lastPreview?.ok)return;
     state.evidenceTimer=setTimeout(renderEvidence,420);
   }
@@ -990,10 +1034,11 @@
         return;
       }
       ctx.signature=confirmed;ctx.revision++;
+      const trial=evidenceRoomCode()==='OMR_V7_TEST';
       const meta={studentName:preview.student.ho_ten,studentCode:preview.student.ma_hs,
         roomName:preview.room?.ten_dot||preview.room?.TenDot||'',
-        status:'test',timestamp:new Date().toISOString(),
-        scanId:ctx.scanId,revision:ctx.revision,mode:'test'};
+        status:trial?'test':'preview',timestamp:new Date().toISOString(),
+        scanId:ctx.scanId,revision:ctx.revision,mode:trial?'test':'preview'};
       const result=Evidence.compose(q('omrEvidenceCanvas'),ctx.rect,T.template,
         preview,ctx.original,meta);
       const record=Evidence.record(preview,ctx.original,result.report,meta);
@@ -1005,6 +1050,9 @@
       capture.getContext('2d').drawImage(source,0,0,capture.width,capture.height);
       state.evidenceData={record,preview,result,capture,signature:confirmed};
       q('omrEvidenceCard').style.display='block';
+      if(q('omrTechnicalDetails'))q('omrTechnicalDetails').open=false;
+      if(q('omrEvidenceHistory'))q('omrEvidenceHistory').style.display=trial?'':'none';
+      if(q('omrEvidenceExport'))q('omrEvidenceExport').style.display=trial?'':'none';
       q('omrEvidenceStatus').textContent='Đã tạo ảnh minh chứng • '+
         result.report.summary.manual+' vị trí GV sửa'+
         (evidenceRoomCode()==='OMR_V7_TEST'?' • đang lưu bản thử...':' • chỉ lưu ảnh chính thức sau khi bật tính năng');
@@ -1159,6 +1207,9 @@
     state.evidenceCtx=null;state.evidenceData=null;state.evidenceSave=null;
     if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
     if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
+    if(q('omrTechnicalDetails'))q('omrTechnicalDetails').open=true;
+    if(q('omrReviewDetails'))q('omrReviewDetails').open=false;
+    if(q('omrEvidenceToolsDetails'))q('omrEvidenceToolsDetails').open=false;
     if(q('omrEvidenceArchiveList'))q('omrEvidenceArchiveList').style.display='none';
     if(q('omrV7OverlayPanel'))q('omrV7OverlayPanel').style.display='none';
     if(q('omrV6Comparison'))q('omrV6Comparison').style.display='none';
@@ -1202,7 +1253,12 @@
       details.map(d=>'<li><b>'+escapeHtml(d.label||d.key)+'</b>: '+escapeHtml(d.reason||'Cần kiểm tra lại')+'</li>').join('')+
       '</ul><div class="omr-muted" style="margin-top:8px">Các ô liên quan đã được đánh dấu màu vàng bên dưới.</div>';
   }
-  function showWarning(msg){const el=q('omrWarning');if(!el)return;clearWarningHighlights();el.style.display='block';el.textContent=msg;}
+  function showWarning(msg){
+    const el=q('omrWarning');if(!el)return;
+    clearWarningHighlights();el.style.display='block';el.textContent=msg;
+    if(!state.lastPreview&&state.lastScan&&q('omrReviewDetails'))
+      q('omrReviewDetails').open=true;
+  }
   function hideWarning(){const el=q('omrWarning');if(el){el.style.display='none';el.textContent='';}}
 
   root.DamSanOmrTeacher={open,close,isOpen,restoreNavigationStage,loadRoom,reviewCurrent,

@@ -10,7 +10,7 @@ const names=['omr-template-moet-18-4-6.js','omr-core.js','omr-room-binding.js',
  'omr-v7-local-refinement.js','omr-v7-quality.js','omr-v7-geometry.js',
  'omr-v7-overlay.js','omr-v7-lighting.js','omr-v7-marks.js',
  'omr-v7-numeric.js','omr-v7-sparse-p3.js','omr-v7-candidate.js',
- 'omr-v7-lab-score.js','omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-export.js','omr-teacher-module.js'];
+ 'omr-v7-lab-score.js','omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-naming.js','omr-evidence-export.js','omr-teacher-module.js'];
 for(const list of [d,m]){
  const indexes=names.map(file=>{
   const path='omr/'+file;
@@ -19,7 +19,7 @@ for(const list of [d,m]){
  });
  assert(indexes.every((x,i)=>i===0||x>indexes[i-1]),'V7 dependency order');
 }
-assert(d.filter(x=>x.path.startsWith('omr/')).every(x=>x.url.split('?v=')[1]==='20261116-omr-desktop-v7-046'));
+assert(d.filter(x=>x.path.startsWith('omr/')).every(x=>x.url.split('?v=')[1]==='20261116-omr-desktop-v7-047'));
 assert(moduleSrc.includes("officialEngine:'v7'"));
 assert(moduleSrc.includes("const mode='v7'"));
 assert(!moduleSrc.includes('id="omrEngineSelect"')&&!moduleSrc.includes('id="omrV6Lab"'));

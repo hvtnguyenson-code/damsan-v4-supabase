@@ -95,6 +95,10 @@ jobs:
         run: node tests/omr_evidence_mobile_export_048_simulation.js
       - name: OMR 049 ZIP date-time metadata valid local and central header
         run: node tests/omr_evidence_zip_timestamp_049_simulation.js
+      - name: OMR 050 Vietnamese student filename and authoritative room roster
+        run: node tests/omr_room_evidence_050_simulation.js
+      - name: OMR 051 full-room Excel and Unicode ZIP linkage
+        run: node tests/omr_room_evidence_export_051_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
@@ -148,6 +152,10 @@ jobs:
           fi
           if [ "$PROBE_EXIT" -eq 0 ]; then
             timeout 70s node tests/run_teacher_omr_evidence_browser_probe_046.mjs
+            PROBE_EXIT=$?
+          fi
+          if [ "$PROBE_EXIT" -eq 0 ]; then
+            timeout 45s node tests/run_teacher_omr_unified_mobile_052.mjs
             PROBE_EXIT=$?
           fi
           set -e

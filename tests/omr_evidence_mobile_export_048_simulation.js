@@ -9,8 +9,8 @@ assert(moduleJs.includes("EvidenceClient.prepareDownload(output.archive,output.f
 assert(moduleJs.includes('download:false'),'never rely solely on an async auto-download');
 assert(moduleJs.includes("status.scrollIntoView?.("),'mobile errors must be brought into view');
 assert(moduleJs.includes("link.scrollIntoView?.("),'ready link must be brought into view');
-assert(html.includes('20261116-teacher-pwa-044'));
-assert(sw.includes("const VERSION='20261116-teacher-pwa-044'"));
+assert(html.includes('20261116-teacher-pwa-045'));
+assert(sw.includes("const VERSION='20261116-teacher-pwa-045'"));
 const urls=new Set();
 const oldCreate=URL.createObjectURL,oldRevoke=URL.revokeObjectURL;
 let next=0;
@@ -69,7 +69,7 @@ const client={
   exam_code:'105'}],client,null,null,{download:false,part:1});
  assert.equal(opened,1,'retrieve one private annotated image');
  assert.equal(automatic,0,'the UI must prepare a visible link instead of depending on auto-download');
- assert.equal(result.filename,'omr-minh-chung-'+new Date().toISOString().slice(0,10)+'-phan-01.zip');
+ assert(result.filename.startsWith('OMR-minh-chung-'));assert(result.filename.endsWith('-phan-01.zip'));
  assert(result.archive.size>1500);
  const bytes=new Uint8Array(await result.archive.arrayBuffer());
  assert.equal(new DataView(bytes.buffer).getUint32(0,true),0x04034b50);
