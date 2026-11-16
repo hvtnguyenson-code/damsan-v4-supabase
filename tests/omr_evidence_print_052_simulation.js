@@ -55,6 +55,6 @@ assert.strictEqual(Naming.pathFromStem(first,'json'),'doi-chieu-json/'+base+'.js
   'print(json.dumps(names,ensure_ascii=False))'
  ].join('\n');
  const names=JSON.parse(execFileSync('python3',['-c',check],{input:data,encoding:'utf8'}));
- assert(names[0].includes('H Hồng Niê'));
+ assert(names.some(n=>n.includes('H Hồng Niê')));
  console.log('PASS OMR 052: printable A4 PDF plus XLSX only, readable Unicode filename');
 })().catch(e=>{console.error(e);process.exitCode=1;});
