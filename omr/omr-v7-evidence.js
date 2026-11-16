@@ -89,13 +89,17 @@ function makeMarks(preview,T,original){
    if(gotSlots)for(let j=0;j<4;j++)if(gotSlots[j])push(pointAt(T,'P3',i,j,gotSlots[j]),'correct',key+'.'+(j+1),edited);
    summary.correct++;
   }else{
-   if(gotSlots)for(let j=0;j<4;j++)if(gotSlots[j])push(pointAt(T,'P3',i,j,gotSlots[j]),'wrong',key+'.'+(j+1),edited);
    if(!got||got==='?'){summary.blank++;if(got==='?')summary.review++;}
-   // Numeric equivalents and invalid lengths cannot safely be drawn as expected bubbles.
-   // In those cases only the textual correct answer is shown in the report.
-   if(correctSlots)for(let j=0;j<4;j++)if(correctSlots[j])
-    push(pointAt(T,'P3',i,j,correctSlots[j]),'expected',key+'.'+(j+1));
-   else{}
+   // Each digit position gets its own verdict. Do not mark a correct digit
+   // red just because another digit in the same numeric answer is wrong.
+   for(let j=0;j<4;j++){
+    const g=gotSlots?.[j]||'',c=correctSlots?.[j]||'',partKey=key+'.'+(j+1);
+    if(g&&c&&g===c){push(pointAt(T,'P3',i,j,g),'correct',partKey,edited);continue;}
+    if(g)push(pointAt(T,'P3',i,j,g),'wrong',partKey,edited);
+    if(c)push(pointAt(T,'P3',i,j,c),'expected',partKey);
+   }
+   // Invalid/unrepresentable answer forms cannot be mapped to physical
+   // bubbles, so show the expected number as text in the retained JSON.
    if(!correctSlots){summary.unsafeP3Answer++;warnings.push(key+': correct numeric form not drawable; show text');}
    summary.wrong++;
   }
