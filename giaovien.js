@@ -504,11 +504,12 @@ async function adminImportAccounts(kind, rows) {
 
 async function staffRpc(rpcName, args) {
     const token = ensureControlSession('staff');
-    // Only full-room deletion needs a private Storage purge. Keep this inside
-    // the existing control RPC path so the teacher has ONE delete action.
+    // Both full-room deletion and score reset must first purge room-scoped
+    // OMR evidence through the private Storage API. One user action only.
+    const mustCleanOmr = rpcName === 'rpc_xoa_phong_thi' || rpcName === 'rpc_reset_room_results';
     let storageCleanup = null;
-    if (rpcName === 'rpc_xoa_phong_thi') {
-        if (!sb?.functions?.invoke) throw new Error('Chưa có dịch vụ dọn minh chứng OMR; phòng chưa bị xóa.');
+    if (mustCleanOmr) {
+        if (!sb?.functions?.invoke) throw new Error('Chưa có dịch vụ dọn minh chứng OMR; dữ liệu phòng chưa bị thay đổi.');
         const { data: cleaned, error: cleanupError } = await sb.functions.invoke('omr-evidence', {
             body: {
                 action: 'cleanup_room',
@@ -524,7 +525,7 @@ async function staffRpc(rpcName, args) {
             throw new Error('staff_session_invalid');
         }
         if (cleanupError || cleaned?.status !== 'success') {
-            throw new Error('Chưa dọn sạch ảnh OMR trong Storage. Phòng thi và điểm vẫn được giữ lại; có thể thử xóa lại.');
+            throw new Error('Chưa dọn sạch ảnh OMR trong Storage. Không thể hoàn tất thao tác; hãy thử lại.');
         }
         storageCleanup = cleaned;
     }
@@ -4680,9 +4681,9 @@ const DASHBOARD_ACTIONS = {
     delete: {
         id: 'dashDeleteResultsBtn',
         normal: '🗑️ Xóa điểm phòng này',
-        busy: '⏳ Đang xóa điểm...',
-        success: '✅ Đã xóa điểm',
-        error: '❌ Xóa điểm lỗi'
+        busy: '⏳ Đang dọn dữ liệu...',
+        success: '✅ Đã dọn sạch',
+        error: '❌ Dọn dữ liệu lỗi'
     }
 };
 
@@ -4914,7 +4915,7 @@ async function xoaDiemPhong() {
             return { status: 'no_room' };
         }
         const maPhong = currentRoom.MaPhong || currentRoom.ma_phong || 'PhongThi';
-        if (!confirm(`🚨 BẠN CÓ CHẮC CHẮN XÓA TOÀN BỘ điểm bài làm của phòng [${maPhong}]?\nHành động này không thể hoàn tác!`)) {
+        if (!confirm(`XÓA TOÀN BỘ DỮ LIỆU CHẤM PHÒNG [${maPhong}]?\nĐiểm, bài nộp, phiếu OMR, ảnh minh chứng và lượt làm bài cũ sẽ bị xóa vĩnh viễn.\nPhòng và mã đề được giữ nguyên. Hãy xuất Excel/PDF cần lưu trước khi tiếp tục.`)) {
             return { status: 'cancelled' };
         }
         setDashboardActionState('delete', 'busy');
@@ -4928,7 +4929,9 @@ async function xoaDiemPhong() {
             alert("❌ Lỗi máy chủ Supabase khi xóa: " + (data?.message || 'Lỗi không xác định'));
             return { status: 'error', error: data?.message };
         }
-        alert(`✅ Đã reset phòng: xóa ${data.ket_qua_deleted || 0} kết quả và ${data.submissions_deleted || 0} receipt bài làm.`);
+        const files = Number(data.storage_cleanup?.deleted_files || 0);
+        const mb = Number(data.storage_cleanup?.estimated_bytes || 0) / (1024 * 1024);
+        alert(`Đã dọn dữ liệu chấm phòng: ${data.ket_qua_deleted || 0} điểm, ${data.submissions_deleted || 0} bài nộp, ${data.artifacts_deleted || 0} minh chứng OMR, ${files} ảnh (khoảng ${mb.toFixed(2)} MiB). Phòng và mã đề vẫn còn.`);
         if (typeof clearReceiptStatusDisplay === 'function') clearReceiptStatusDisplay('dashboard');
         taiDanhSachPhong();
         fetchDashboard();
