@@ -42,6 +42,8 @@ assert(backend.includes('student_code:student?.ma_hs'));
 assert(source.includes("item.student_code||'Chưa rõ SBD'"));
 assert(backend.includes('if((count||0)>=200)throw Error("test_evidence_quota_reached")'));
 assert(source.includes('1900/Math.max(source.width,source.height)'));
+assert(source.includes("if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';"));
+assert(source.includes('if(ctx.signature===confirmed)'));
 assert(!/console\.log\([^\n]*staff_token/.test(backend));
 assert(ddl.includes('alter table public.omr_artifacts enable row level security'));
 assert(ddl.includes('revoke all on public.omr_artifacts from public, anon, authenticated'));

@@ -368,7 +368,7 @@
           </div>
           <section id="omrEvidenceCard" class="omr-card" style="display:none" aria-label="Phiếu minh chứng đã đánh dấu đúng sai">
             <strong>Phiếu có đánh dấu đúng/sai</strong>
-            <div class="omr-muted">Xanh: đúng • Đỏ: lựa chọn sai • Vàng: đáp án đúng • Tím: vị trí giáo viên sửa. Phiếu minh chứng không thay đổi điểm chính thức.</div>
+            <div class="omr-muted">Xanh: đúng • Đỏ: lựa chọn sai • Vàng: đáp án đúng • Cam: chưa rõ • Tím: GV sửa. Phiếu minh chứng không thay đổi điểm chính thức.</div>
             <canvas id="omrEvidenceCanvas" role="img" aria-label="Ảnh phiếu trắc nghiệm đã đánh dấu đáp án đúng sai"></canvas>
             <div id="omrEvidenceStatus" role="status"></div>
             <div class="omr-evidence-tools">
@@ -436,7 +436,21 @@
     };
     q('omrSave').onclick=saveCurrent;
     q('omrReviewUncertain').onchange=reviewCurrent;
-    ['omrSbd','omrMaDe','omrStudent','omrP1','omrP2_1','omrP2_2','omrP2_3','omrP2_4','omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'].forEach(id=>q(id).addEventListener('change',reviewCurrent));
+    const gradeInputs=['omrSbd','omrMaDe','omrStudent','omrP1',
+      'omrP2_1','omrP2_2','omrP2_3','omrP2_4',
+      'omrP3_1','omrP3_2','omrP3_3','omrP3_4','omrP3_5','omrP3_6'];
+    let gradeDebounce=null;
+    for(const id of gradeInputs){
+      q(id).addEventListener('change',()=>{
+        if(gradeDebounce)clearTimeout(gradeDebounce);
+        reviewCurrent();
+      });
+      if(id==='omrStudent')continue;
+      q(id).addEventListener('input',()=>{
+        if(gradeDebounce)clearTimeout(gradeDebounce);
+        gradeDebounce=setTimeout(reviewCurrent,300);
+      });
+    }
   }
 
   async function open(){
@@ -980,6 +994,10 @@
   }
   function selectedStudent(){return state.roomModel?.students.find(s=>String(s.id)===String(q('omrStudent').value));}
   function reviewCurrent(){
+    // Never show the previous student's evidence when a changed identity or
+    // exam code temporarily fails validation.
+    if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
+    if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
     q('omrSave').disabled=true;
     q('omrSave').hidden=!!state.lastScan?._labReadOnly;
     q('omrGradeCard').style.display='none';state.lastPreview=null;
@@ -1063,7 +1081,10 @@
     try{
       const confirmed=JSON.stringify([preview.scan.p1,preview.scan.p2,
         preview.scan.p3,preview.variant.code,preview.student.id]);
-      if(ctx.signature===confirmed)return;
+      if(ctx.signature===confirmed){
+        if(state.evidenceData)q('omrEvidenceCard').style.display='block';
+        return;
+      }
       ctx.signature=confirmed;ctx.revision++;
       const meta={studentName:preview.student.ho_ten,studentCode:preview.student.ma_hs,
         roomName:preview.room?.ten_dot||preview.room?.TenDot||'',

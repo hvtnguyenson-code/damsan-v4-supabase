@@ -29,6 +29,11 @@ const p2b=report.marks.filter(m=>m.key==='P2.1b');
 assert.deepStrictEqual(p2b.map(m=>m.kind).sort(),['expected','wrong']);
 assert(p2b.some(m=>m.edited));
 assert(report.marks.some(m=>m.key==='P1.1'&&m.kind==='correct'));
+const unsure=E.makeMarks({...preview,grade:{...grade,details:grade.details.map((d,i)=>
+ i===0?{...d,chon:'?'}:i===18?{...d,chon:'S-?-Đ-Đ'}:i===22?{...d,chon:'?'}:d)}},T,prior);
+assert(unsure.marks.some(m=>m.key==='P1.1'&&m.kind==='review'));
+assert(unsure.marks.some(m=>m.key==='P2.1b'&&m.kind==='review'));
+assert(unsure.marks.some(m=>m.key==='P3.1'&&m.kind==='review'));
 assert(report.marks.some(m=>m.key==='P1.2'&&m.kind==='wrong'));
 assert(report.marks.some(m=>m.key==='P1.2'&&m.kind==='expected'));
 assert.deepStrictEqual(E.slotsOf('150'),['1','5','0','']);

@@ -57,7 +57,10 @@ function makeMarks(preview,T,original){
   if(got===correct){push(pointAt(T,'P1',i,0,got),'correct',key,edited);summary.correct++;}
   else{
    if(isChoice(got)){push(pointAt(T,'P1',i,0,got),'wrong',key,edited);summary.wrong++;}
-   else{summary.blank++;if(got==='?'){summary.review++;warnings.push(key+': uncertain');}}
+   else{summary.blank++;if(got==='?'){
+     summary.review++;warnings.push(key+': uncertain');
+     push(T.p1[i]?.[0],'review',key);
+   }}
    push(pointAt(T,'P1',i,0,correct),'expected',key);
   }
  });
@@ -73,7 +76,10 @@ function makeMarks(preview,T,original){
     push(pointAt(T,'P2',i,j,g),'correct',key,edited);summary.correct++;
    }else{
     if(isDs(g)){push(pointAt(T,'P2',i,j,g),'wrong',key,edited);summary.wrong++;}
-    else{summary.blank++;if(g==='?'){summary.review++;warnings.push(key+': uncertain');}}
+    else{summary.blank++;if(g==='?'){
+      summary.review++;warnings.push(key+': uncertain');
+      push(T.p2[i*4+j]?.[0],'review',key);
+    }}
     push(pointAt(T,'P2',i,j,c),'expected',key);
    }
   }
@@ -89,7 +95,10 @@ function makeMarks(preview,T,original){
    if(gotSlots)for(let j=0;j<4;j++)if(gotSlots[j])push(pointAt(T,'P3',i,j,gotSlots[j]),'correct',key+'.'+(j+1),edited);
    summary.correct++;
   }else{
-   if(!got||got==='?'){summary.blank++;if(got==='?')summary.review++;}
+   if(!got||got==='?'){summary.blank++;if(got==='?'){
+     summary.review++;warnings.push(key+': uncertain');
+     push(T.p3[i]?.[0]?.find(Boolean),'review',key);
+   }}
    // Each digit position gets its own verdict. Do not mark a correct digit
    // red just because another digit in the same numeric answer is wrong.
    for(let j=0;j<4;j++){
@@ -129,6 +138,11 @@ function renderImage(canvas,gray,T,report,{markersVisible=false}={}){
  }
  for(const m of report.marks){
   const [x,y]=px(m.pt);
+  if(m.kind==='review'){
+   ctx.fillStyle=COLORS.review;ctx.font='bold '+Math.max(12,Math.round(radius*3))+'px Arial, sans-serif';
+   ctx.fillText('?',x+radius,y-radius*.7);
+   continue;
+  }
   ctx.strokeStyle=COLORS[m.kind];ctx.lineWidth=Math.max(2,radius*.35);
   ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.stroke();
   if(m.edited){ctx.strokeStyle=COLORS.edited;ctx.lineWidth=1.2;
@@ -162,7 +176,7 @@ function compose(canvas,gray,T,preview,original,meta={},options={}){
  ctx.font='14px Arial, sans-serif';ctx.fillStyle='#475569';
  const status=meta.status==='official'?'ĐÃ LƯU CHÍNH THỨC':'DỰ KIẾN / THỬ NGHIỆM';
  ctx.fillText(status+'  •  '+VERSION+'  •  '+text(meta.timestamp||new Date().toISOString()),gutter,159,out.width-2*gutter);
- ctx.fillText('Xanh: đúng • Đỏ: chọn sai • Vàng: đáp án đúng • Tím: giáo viên đã sửa',gutter,180,out.width-2*gutter);
+ ctx.fillText('Xanh: đúng • Đỏ: chọn sai • Vàng: đáp án đúng • Cam: chưa rõ • Tím: GV sửa',gutter,180,out.width-2*gutter);
  ctx.drawImage(photo,0,header);
  return {canvas:out,report};
 }
