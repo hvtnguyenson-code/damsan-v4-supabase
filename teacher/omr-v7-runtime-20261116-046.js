@@ -350,11 +350,9 @@
             <details id="omrEvidenceToolsDetails" class="omr-evidence-extra">
            <summary>Công cụ minh chứng và xuất file</summary>
            <div class="omr-evidence-tools">
-              <button type="button" class="omr-light" id="omrEvidenceDownload">Tải ảnh JPG</button>
                <button type="button" class="omr-light" id="omrEvidencePdf">Tải phiếu PDF</button>
-              <button type="button" class="omr-light" id="omrEvidenceJson">Tải JSON đối chiếu</button>
               <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu thử đã lưu</button>
-              <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + ZIP</button>
+              <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + phiếu PDF</button>
               <button type="button" class="omr-light" id="omrEvidenceRetry" style="display:none">Lưu lại minh chứng</button>
             </div>
             <a id="omrEvidenceReady" href="#" download style="display:none">Tải gói ZIP đã tạo</a>
@@ -462,10 +460,6 @@
         student_name:state.evidenceData.preview.student.ho_ten,
         class_name:state.evidenceData.preview.student.lop});
     };
-    q('omrEvidenceDownload').onclick=()=>{
-      if(state.evidenceData&&EvidenceClient)
-        EvidenceClient.canvasDownload(q('omrEvidenceCanvas'),evidenceFileStem());
-    };
     q('omrEvidencePdf').onclick=async()=>{
       const btn=q('omrEvidencePdf');
       if(!state.evidenceData||!EvidencePrint||btn.disabled)return;
@@ -477,11 +471,6 @@
       }catch(err){
         q('omrEvidenceStatus').textContent='Không tạo được PDF: '+(err?.message||err);
       }finally{btn.disabled=false;}
-    };
-    q('omrEvidenceJson').onclick=()=>{
-      if(state.evidenceData&&EvidenceClient)
-        EvidenceClient.downloadBlob(new Blob([JSON.stringify(state.evidenceData.record,null,2)],{type:'application/json'}),
-          evidenceFileStem()+'.json');
     };
     q('omrEvidenceHistory').onclick=showEvidenceArchive;
     // A keyboard-accessible reader can expand the optional tools when needed.
@@ -1243,7 +1232,7 @@
     }
     if(btn.disabled)return;
     btn.disabled=true;btn.setAttribute('aria-busy','true');
-    btn.textContent='Đang tạo Excel + ZIP...';
+    btn.textContent='Đang tạo Excel + phiếu PDF...';
     EvidenceClient.clearPreparedDownload(link);
     status.textContent='Đang đọc danh sách minh chứng của phòng...';
     try{
