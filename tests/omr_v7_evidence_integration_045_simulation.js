@@ -38,6 +38,8 @@ assert(backend.includes('next_offset:(data||[]).length===200?offset+200:null'));
 assert(backend.includes('storage_revision_content_conflict'));
 assert(backend.includes('await sha256(prior)'));
 assert(backend.includes('evidence_score_invalid'));
+assert(backend.includes('if((count||0)>=200)throw Error("test_evidence_quota_reached")'));
+assert(source.includes('1900/Math.max(source.width,source.height)'));
 assert(!/console\.log\([^\n]*staff_token/.test(backend));
 assert(ddl.includes('alter table public.omr_artifacts enable row level security'));
 assert(ddl.includes('revoke all on public.omr_artifacts from public, anon, authenticated'));

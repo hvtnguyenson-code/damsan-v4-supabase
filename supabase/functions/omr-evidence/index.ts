@@ -122,6 +122,14 @@ async function save(req:Request,body:Json,actor:Actor) {
   if(old.sha256!==digest)throw Error("artifact_revision_conflict");
   return respond(req,200,{status:"success",artifact_id:old.id,idempotent:true,phase:old.status});
  }
+ if(mode==="test"){
+  // 200 records x 2 images x 1.5MB => no more than 600MB of test images,
+  // leaving headroom inside the 1GB Free storage quota.
+  const {count,error:countError}=await db.from("omr_artifacts")
+    .select("id",{count:"exact",head:true}).eq("mode","test");
+  if(countError)throw Error("test_quota_check_failed");
+  if((count||0)>=200)throw Error("test_evidence_quota_reached");
+ }
  let submission=null;
  if(mode==="official"){
   if(!student||!uuid(body.submission_id))throw Error("official_submission_required");

@@ -967,8 +967,10 @@
       const record=Evidence.record(preview,ctx.original,result.report,meta);
       const source=q('omrTeacherCanvas');
       const capture=document.createElement('canvas');
-      capture.width=source.width;capture.height=source.height;
-      capture.getContext('2d').drawImage(source,0,0);
+      const scale=Math.min(1,1900/Math.max(source.width,source.height));
+      capture.width=Math.max(1,Math.round(source.width*scale));
+      capture.height=Math.max(1,Math.round(source.height*scale));
+      capture.getContext('2d').drawImage(source,0,0,capture.width,capture.height);
       state.evidenceData={record,preview,result,capture,signature:confirmed};
       q('omrEvidenceCard').style.display='block';
       q('omrEvidenceStatus').textContent='Đã tạo ảnh minh chứng • '+

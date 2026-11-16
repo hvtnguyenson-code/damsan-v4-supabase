@@ -33,3 +33,8 @@
 - OMR 044: đúng/sai, P2 bốn ý, Phần III và sửa thủ công.
 - OMR 045: UI, CRC32 ZIP, cấu trúc Excel, xác thực backend.
 - Hồi quy OMR 001–043 và Submission Safety CI PASS.
+
+## Giới hạn bảo vệ Free plan
+- Chặn tạo thêm hồ sơ thử mới khi có 200 minh chứng TEST (lượt sửa tính là bản ghi riêng), tương đương tối đa lý thuyết 600MB ảnh (2 ảnh x 1,5MB).
+- Bản ghi đã tồn tại cùng scan_id/revision và checksum được trả về idempotent, không nhân bản.
+- Ảnh nguồn tạm trên điện thoại được giảm cạnh dài xuống tối đa 1900px, tránh giữ bản 12MP trong RAM. Ảnh nguồn gốc vẫn được giữ nguyên trên canvas chụp đến khi chuyển phiếu.
