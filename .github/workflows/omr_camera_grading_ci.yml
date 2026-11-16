@@ -13,6 +13,8 @@ on:
       - 'tests/teacher_pwa_install_entry_007_simulation.js'
       - 'tests/run_teacher_pwa_installability_probe_008.mjs'
       - 'supabase/migrations/20261105143000_omr_staff_submission_004.sql'
+      - 'supabase/functions/omr-evidence/**'
+      - 'docs/omr-evidence-ddl-proposal.sql'
       - '.github/workflows/omr_camera_grading_ci.yml'
   workflow_dispatch:
 
@@ -85,6 +87,10 @@ jobs:
         run: node tests/omr_v7_score_display_042_simulation.js
       - name: OMR 043 V7 fixed overlay and mobile identity layout
         run: node tests/omr_v7_mobile_ui_043_simulation.js
+      - name: OMR 044 V7 correct/wrong evidence colors and manual edits
+        run: node tests/omr_v7_evidence_044_simulation.js
+      - name: OMR 045 private evidence and Excel/ZIP integration
+        run: node tests/omr_v7_evidence_integration_045_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
