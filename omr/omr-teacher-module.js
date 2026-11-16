@@ -1047,6 +1047,7 @@
       for(let i=0;i<entries.length;i+=20){
         const slice=entries.slice(i,i+20);
         await EvidenceExport.exportBatch(slice,EvidenceClient,sb,token,{
+          part:Math.floor(i/20)+1,
           status:message=>{status.textContent=message;}
         });
       }

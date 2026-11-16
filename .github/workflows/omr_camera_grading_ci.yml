@@ -143,7 +143,7 @@ jobs:
             PROBE_EXIT=$?
           fi
           if [ "$PROBE_EXIT" -eq 0 ]; then
-            timeout 40s node tests/run_teacher_omr_evidence_browser_probe_046.mjs
+            timeout 70s node tests/run_teacher_omr_evidence_browser_probe_046.mjs
             PROBE_EXIT=$?
           fi
           set -e

@@ -8,12 +8,21 @@ const FUNCTION='omr-evidence';
 const MAX_IMAGE_BYTES=1500000;
 function imageUrl(canvas){
  if(!canvas?.width||!canvas?.height)throw Error('evidence_canvas_empty');
- const webp=canvas.toDataURL('image/webp',.68);
- const image=webp.startsWith('data:image/webp;base64,')?webp:canvas.toDataURL('image/jpeg',.75);
- if(!/^data:image\/(webp|jpeg);base64,/.test(image))throw Error('evidence_image_format_invalid');
- if(Math.ceil((image.length-image.indexOf(',')-1)*.75)>MAX_IMAGE_BYTES)
-  throw Error('evidence_image_too_large');
- return image;
+ if(typeof document==='undefined')throw Error('evidence_browser_required');
+ let target=canvas;
+ const maximum=1900,scale=Math.min(1,maximum/Math.max(canvas.width,canvas.height));
+ if(scale<1){
+  target=document.createElement('canvas');
+  target.width=Math.max(1,Math.round(canvas.width*scale));
+  target.height=Math.max(1,Math.round(canvas.height*scale));
+  target.getContext('2d').drawImage(canvas,0,0,target.width,target.height);
+ }
+ for(const [format,quality] of [['image/webp',.72],['image/webp',.55],['image/jpeg',.58]]){
+  const image=target.toDataURL(format,quality);
+  if(!image.startsWith('data:'+format+';base64,'))continue;
+  if(Math.ceil((image.length-image.indexOf(',')-1)*.75)<=MAX_IMAGE_BYTES)return image;
+ }
+ throw Error('evidence_image_too_large');
 }
 async function call(sb,token,request){
  if(!sb?.functions?.invoke||typeof token!=='string'||token.length<20)
@@ -32,7 +41,18 @@ function save(sb,token,{scanId,revision,preview,original,report,canvas,capture,m
   evidence:report
  });
 }
-async function list(sb,token,roomId){return (await call(sb,token,{action:'list',room_id:roomId})).items||[];}
+async function list(sb,token,roomId){
+ const items=[];let offset=0;
+ for(let page=0;page<50;page++){
+  const response=await call(sb,token,{action:'list',room_id:roomId,offset});
+  const segment=response.items||[];
+  items.push(...segment);
+  if(response.next_offset==null)return items;
+  if(response.next_offset<=offset||segment.length!==200)throw Error('evidence_pagination_invalid');
+  offset=response.next_offset;
+ }
+ throw Error('evidence_max_pages_exceeded');
+}
 async function signed(sb,token,id,kind='annotated'){
  const res=await call(sb,token,{action:'get',artifact_id:id,kind});
  return res;

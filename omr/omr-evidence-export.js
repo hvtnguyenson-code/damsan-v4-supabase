@@ -90,7 +90,7 @@ async function ensureExcelJS(){
  if(!window.ExcelJS?.Workbook)throw Error('exceljs_unavailable');
  return window.ExcelJS;
 }
-async function exportBatch(list,client,sb,token,{download,status}={}){
+async function exportBatch(list,client,sb,token,{download,status,part=1}={}){
  if(!Array.isArray(list)||!list.length)throw Error('no_evidence_records');
  if(!client?.signed||!client?.downloadBlob)throw Error('client_required');
  const selected=list.slice(0,20);
@@ -115,7 +115,7 @@ async function exportBatch(list,client,sb,token,{download,status}={}){
  const excel=await xlsx(records,await ensureExcelJS());
  files.unshift({name:'thong-ke-omr.xlsx',data:excel});
  files.push({name:'manifest.json',data:JSON.stringify(manifest,null,2)});
- const archive=zip(files),name='omr-minh-chung-'+new Date().toISOString().slice(0,10)+'.zip';
+ const archive=zip(files),name='omr-minh-chung-'+new Date().toISOString().slice(0,10)+'-phan-'+String(part).padStart(2,'0')+'.zip';
  if(download!==false)client.downloadBlob(archive,name);
  if(status)status('Đã tạo ZIP: '+records.length+' phiếu, '+(archive.size/1024/1024).toFixed(1)+' MB');
  return {archive,records:records.length,bytes:archive.size};

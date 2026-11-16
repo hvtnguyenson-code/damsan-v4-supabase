@@ -34,12 +34,18 @@ assert(backend.includes('actor.school'));
 assert(backend.includes('room.mon_id!==actor.subject'));
 assert(backend.includes('student.truong_id!==room.truong_id'));
 assert(backend.includes('.createSignedUrl(path,60)'));
+assert(backend.includes('next_offset:(data||[]).length===200?offset+200:null'));
+assert(backend.includes('storage_revision_content_conflict'));
+assert(backend.includes('await sha256(prior)'));
+assert(backend.includes('evidence_score_invalid'));
 assert(!/console\.log\([^\n]*staff_token/.test(backend));
 assert(ddl.includes('alter table public.omr_artifacts enable row level security'));
 assert(ddl.includes('revoke all on public.omr_artifacts from public, anon, authenticated'));
 assert(ddl.includes("'omr-evidence','omr-evidence',false"));
 assert(!ddl.includes('create policy'));
 assert.strictEqual(Export.crc32(new TextEncoder().encode('123456789')),0xcbf43926);
+assert(fs.readFileSync('omr/omr-evidence-client.js','utf8').includes("for(let page=0;page<50;page++)"));
+assert(fs.readFileSync('omr/omr-evidence-export.js','utf8').includes("padStart(2,'0')+'.zip'"));
 (async()=>{
  const archive=Export.zip([
   {name:'manifest.json',data:'{"ok":true}'},

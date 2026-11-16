@@ -15,7 +15,7 @@ await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:tr
 function call(method,params={}){const id=++serial;return new Promise((resolve,reject)=>{
  pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));
 });}
-function browserTest(){
+async function browserTest(){
  const E=window.DamSanOmrEvidence,S=window.DamSanOmrScoring,T=window.DamSanOmrTemplate.template;
  const items=[...Array.from({length:18},()=>({phan:'1',dap_an_dung:'B'})),
   {phan:'2',dap_an_dung:'S-Đ-Đ-Đ'},
@@ -33,9 +33,13 @@ function browserTest(){
   roomName:'OMR V7 TEST',scanId:'synthetic',mode:'test'});
  const png=out.canvas.toDataURL('image/png');
  const evidence=E.record(preview,original,out.report,{scanId:'synthetic',mode:'test'});
+ const X=window.DamSanOmrEvidenceExport,C=window.DamSanOmrEvidenceClient;
+ const workbook=await X.xlsx([{status:'TEST',record:{scan_id:'synthetic',evidence}}],await X.ensureExcelJS());
+ const zip=X.zip([{name:'thong-ke-omr.xlsx',data:workbook}]);
  return {width:out.canvas.width,height:out.canvas.height,preview:preview.grade.score,
   diff:out.report.edits.length,ring:out.report.marks.find(m=>m.key==='P2.1b')?.kind,
-  encoded:png.startsWith('data:image/png;base64,'),photoBytes:png.length,serial:evidence.version};
+  encoded:png.startsWith('data:image/png;base64,'),photoBytes:png.length,serial:evidence.version,
+  xlsxBytes:workbook.length,zipBytes:zip.size,imageEncoded:C.imageUrl(out.canvas).startsWith('data:image/')};
 }
 try{
  await call('Runtime.enable');
@@ -55,7 +59,8 @@ try{
  if(out.exceptionDetails)throw Error('OMR 046 '+(out.exceptionDetails.exception?.description||out.exceptionDetails.text));
  const result=out.result?.value;
  if(!result?.encoded||result.width!==180||result.height!==448||
-    result.diff!==1||result.ring!=='wrong'||result.serial!=='OMR_EVIDENCE_01')
+    result.diff!==1||result.ring!=='wrong'||result.serial!=='OMR_EVIDENCE_01'||
+    !result.imageEncoded||result.xlsxBytes<1000||result.zipBytes<1000)
   throw Error('OMR 046 invalid evidence canvas: '+JSON.stringify(result));
  console.log('PASS OMR 046 Chromium: composite annotated sheet, manual edit, PNG encoding',JSON.stringify(result));
 }finally{ws.close();}

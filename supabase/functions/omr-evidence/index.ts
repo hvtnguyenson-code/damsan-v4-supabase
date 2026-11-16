@@ -146,7 +146,7 @@ async function save(req:Request,body:Json,actor:Actor) {
   const {error:e}=await db.storage.from(BUCKET).upload(f.path,f.body.bytes,
     {contentType:f.body.mime,cacheControl:"3600",upsert:false});
   if(e){
-   const msg=String(e.message||"")+" "+String(e.statusCode||"");
+   const msg=String(e.message||"")+" "+String((e as {statusCode?:string|number}).statusCode||"");
    if(!/exists|duplicate|409/i.test(msg))throw Error("storage_upload_failed");
    const {data:existing,error:downloadError}=await db.storage.from(BUCKET).download(f.path);
    if(downloadError||!existing)throw Error("storage_retry_unavailable");
@@ -178,11 +178,15 @@ async function save(req:Request,body:Json,actor:Actor) {
 }
 async function list(req:Request,body:Json,actor:Actor){
  const room=await roomFor(actor,body.room_id);
+ const offset=Number(body.offset??0);
+ if(!Number.isSafeInteger(offset)||offset<0||offset>10000)throw Error("list_offset_invalid");
  const {data, error:e}=await db.from("omr_artifacts")
    .select("id,scan_id,revision,mode,status,student_id,exam_code,preview_score,final_score,file_bytes,created_at,submission_id")
-   .eq("room_id",room.id).eq("school_id",actor.school).order("created_at",{ascending:false}).limit(200);
+   .eq("room_id",room.id).eq("school_id",actor.school)
+   .order("created_at",{ascending:false}).order("id",{ascending:false})
+   .range(offset,offset+199);
  if(e)throw Error("artifact_list_failed");
- return respond(req,200,{status:"success",items:data||[]});
+ return respond(req,200,{status:"success",items:data||[],next_offset:(data||[]).length===200?offset+200:null});
 }
 async function get(req:Request,body:Json,actor:Actor){
  if(!uuid(body.artifact_id))throw Error("artifact_invalid");
