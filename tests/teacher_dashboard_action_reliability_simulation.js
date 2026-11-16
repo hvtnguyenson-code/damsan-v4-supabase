@@ -753,7 +753,7 @@ async function runAllTests() {
 
     const res = await sandbox.xoaDiemPhong();
     assert.strictEqual(res.status, 'error');
-    assert.strictEqual(btn.innerText, '❌ Xóa điểm lỗi');
+    assert.strictEqual(btn.innerText, '❌ Dọn dữ liệu lỗi');
 
     advanceTimers();
     assert.strictEqual(btn.innerText, '🗑️ Xóa điểm phòng này');
@@ -777,7 +777,7 @@ async function runAllTests() {
 
     const res = await sandbox.xoaDiemPhong();
     assert.strictEqual(res.status, 'error');
-    assert.strictEqual(btn.innerText, '❌ Xóa điểm lỗi');
+    assert.strictEqual(btn.innerText, '❌ Dọn dữ liệu lỗi');
 
     advanceTimers();
     assert.strictEqual(btn.innerText, '🗑️ Xóa điểm phòng này');
