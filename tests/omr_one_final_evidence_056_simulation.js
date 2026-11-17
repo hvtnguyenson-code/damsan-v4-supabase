@@ -31,5 +31,5 @@ assert(ddl.includes('on public.omr_artifacts(room_id,student_id)'));
 assert(!/delete\s+from\s+storage\.objects/i.test(ddl));
 assert(html.includes('omr-final=056'));
 assert(desktopHtml.includes('omr-final=056'));
-assert(sw.includes('omr057'));
+assert(sw.includes('omr059'));
 console.log('PASS OMR 056: final only after grade; backend verifies 28 answers; DB uniqueness');

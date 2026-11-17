@@ -12,7 +12,7 @@ const numerical=fs.readFileSync('omr/omr-v7-numeric.js','utf8');
 const candidate=fs.readFileSync('omr/omr-v7-candidate.js','utf8');
 assert.strictEqual(bundle,(adapter+'\n;\n'+teacherModule).replace(/\n+$/,'\n'),
  'V7 bridge must load SAME module as canonical source');
-assert(html.includes('src="./'+bridge+'?v='+rev+'&amp;omr-final=056&amp;omr-official=057&amp;precision-room=058"'));
+assert(html.includes('src="./'+bridge+'?v='+rev+'&amp;omr-final=056&amp;omr-official=057&amp;precision-room=058&amp;queue=059"'));
 assert(html.includes('src="../omr/omr-v7-numeric.js?v='+rev+'"'));
 assert(html.indexOf('src="./'+bridge)>
  html.indexOf('src="../omr/omr-teacher-module.js'));
