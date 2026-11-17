@@ -109,6 +109,8 @@ jobs:
         run: node tests/omr_room_reset_055_simulation.js
       - name: OMR 056 one final evidence per student after score save
         run: node tests/omr_one_final_evidence_056_simulation.js
+      - name: OMR 057 official evidence in all exam rooms without test quota
+        run: node tests/omr_official_evidence_057_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
