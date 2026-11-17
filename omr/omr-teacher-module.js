@@ -7,7 +7,10 @@
     EvidencePrint=root.DamSanOmrEvidencePrint;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const precisionCapture=typeof location!=='undefined'&&new URLSearchParams(location.search).get('omrPrecision')==='1'&&!!root.DamSanOmrPrecisionCapture;
+  // The experimental capture gate is isolated to one dedicated test room.
+  // Do not allow a global URL parameter to alter normal V7 rooms.
+  const PRECISION_TEST_ROOM_CODE='OMR_V7_PRECISION_TEST';
+  const precisionCapture=!!root.DamSanOmrPrecisionCapture;
   const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null,evidenceCommittedSubmissionId:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
@@ -511,7 +514,7 @@
         pctx.drawImage(v,0,0,probe.width,probe.height);
         const img=pctx.getImageData(0,0,probe.width,probe.height);
         const gray=O.grayscale(img.data,probe.width,probe.height);
-        if(precisionCapture){
+        if(precisionCapture&&evidenceRoomCode()===PRECISION_TEST_ROOM_CODE){
           const assessment=root.DamSanOmrPrecisionCapture.evaluate(gray,probe.width,probe.height,T.template,O);
           if(!assessment.ready){
             state.autoScanStable=0;state.autoScanLastCorners=null;
