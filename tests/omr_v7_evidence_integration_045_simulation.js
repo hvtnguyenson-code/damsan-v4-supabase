@@ -16,10 +16,10 @@ assert(source.includes('id="omrEvidenceHistory"'));
 assert(source.includes('id="omrEvidenceExport"'))
 assert(source.includes('id="omrEvidencePdf"'));;
 assert(source.includes("evidenceRoomCode()==='OMR_V7_TEST'"));
-assert(source.includes('Read-only annotated preview in every room'),
- 'Only annotated image is shown for valid V7 preview');
-assert(source.includes("if(evidenceRoomCode()==='OMR_V7_TEST')"),
- 'Cloud upload remains restricted to OMR_V7_TEST');
+assert(source.includes('Render an in-memory preview in every V7 room'),
+ 'Annotated draft remains in memory until confirmed grading');
+assert(source.includes("mode:evidenceRoomCode()==='OMR_V7_TEST'?'test':'official'"),
+ 'Cloud upload now uses OFFICIAL for real rooms, TEST only for research room');
 assert(source.includes("state.evidenceData={record,preview,result,capture,signature:confirmed}"));
 assert(source.includes("if(info.signature!==state.evidenceData?.signature)return {status:'stale'};"));
 assert(source.includes('await W.submitConfirmed(state.lastPreview,staffRpc)'));
@@ -31,7 +31,7 @@ for(const asset of ['omr-v7-evidence.js','omr-evidence-client.js','omr-evidence-
 }
 assert(html.includes('20261116-teacher-pwa-046'));
 assert(sw.includes("const VERSION='20261116-teacher-pwa-046'"));
-assert(backend.includes('const OFFICIAL_ENABLED = Deno.env.get("OMR_EVIDENCE_OFFICIAL_ENABLED") === "true"'));
+assert(backend.includes('const OFFICIAL_ENABLED = true;'));
 assert(backend.includes('if(mode==="test"&&room.ma_phong!=="OMR_V7_TEST")'));
 assert(backend.includes('if(mode==="official"&&!OFFICIAL_ENABLED)'));
 assert(backend.includes('tokenHash(token)'));
@@ -48,7 +48,9 @@ assert(backend.includes('s.ma_de!==safe(body.exam_code)'));
 assert(backend.includes('s.truong_id!==actor.school'));
 assert(backend.includes('student_code:student?.ma_hs'));
 assert(source.includes("item.student_code||'Chưa rõ SBD'"));
-assert(backend.includes('if((count||0)>=200)throw Error("test_evidence_quota_reached")'));
+assert(!backend.includes('test_evidence_quota_reached'));
+assert(backend.includes('official_submission_required'));
+assert(backend.includes('official_answers_mismatch'));
 assert(source.includes('1900/Math.max(source.width,source.height)'));
 assert(source.includes("if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';"));
 assert(source.includes('if(ctx.signature===confirmed)'));
