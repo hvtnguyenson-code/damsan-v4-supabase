@@ -3,7 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.58.0";
 const URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const BUCKET = "omr-evidence";
-const OFFICIAL_ENABLED = Deno.env.get("OMR_EVIDENCE_OFFICIAL_ENABLED") === "true";
+const OFFICIAL_ENABLED = true; // OMR 057: staff-authenticated, grade-bound official evidence enabled.
 const MAX_IMAGE = 1_500_000;
 const MAX_BODY = 5_000_000;
 const DEFAULT_HASH = "8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92";
@@ -101,6 +101,8 @@ async function save(req:Request,body:Json,actor:Actor) {
  const mode=body.mode==="official"?"official":"test";
  if(mode==="test"&&room.ma_phong!=="OMR_V7_TEST")throw Error("test_room_only");
  if(mode==="official"&&!OFFICIAL_ENABLED)throw Error("official_evidence_disabled");
+ // OFFICIAL mode is authorized separately for every real room and MUST be
+ // backed by the canonical graded submission before Storage uploads.
  const student=await studentFor(room,body.student_id);
  const scanId=body.scan_id,revision=Number(body.revision);
  if(!uuid(scanId)||!Number.isInteger(revision)||revision<1||revision>1000)
@@ -149,10 +151,9 @@ async function save(req:Request,body:Json,actor:Actor) {
      JSON.stringify(expected)!==JSON.stringify(submitted))
     throw Error("test_answers_mismatch");
   canonicalTest=s;
-  const {count,error:countError}=await db.from("omr_artifacts")
-    .select("id",{count:"exact",head:true}).eq("mode","test");
-  if(countError)throw Error("test_quota_check_failed");
-  if((count||0)>=200)throw Error("test_evidence_quota_reached");
+  // No artificial 200-record trial cap. One final artifact/student/room is
+  // enforced by the partial unique index; 1.5 MB/image and the Free plan's
+  // actual Storage quota still apply.
  }
  let submission=null;
  if(mode==="official"){
