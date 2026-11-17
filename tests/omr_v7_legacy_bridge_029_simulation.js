@@ -9,7 +9,7 @@ assert.strictEqual(bundle,(oldAdapter+'\n;\n'+officialModule).replace(/\n+$/,'\n
 const html=fs.readFileSync('teacher/index.html','utf8'),
  sw=fs.readFileSync('teacher/sw.js','utf8'),
  app=fs.readFileSync('teacher/app.js','utf8');
-assert(html.includes('src="./omr-v7-runtime-20261116-046.js?v=20261116-teacher-pwa-046&amp;omr-final=056&amp;omr-official=057"'));
+assert(html.includes('src="./omr-v7-runtime-20261116-046.js?v=20261116-teacher-pwa-046&amp;omr-final=056&amp;omr-official=057&amp;precision-room=058"'));
 const bootIndex=html.indexOf('src="./omr-v7-runtime-20261116-046.js');
 assert(bootIndex>html.indexOf('src="../omr/omr-v7-candidate.js'));
 assert(bootIndex>html.indexOf('src="../omr/omr-teacher-module.js'));

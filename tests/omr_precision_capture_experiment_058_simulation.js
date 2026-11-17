@@ -17,7 +17,8 @@ const badInternal=P.evaluate(gray,w,h,T,{...core,matchTemplateMarkers:()=>({pair
 assert(!badInternal.ready&&badInternal.reasons.includes('internal_controls_unverified'));
 assert(P.chooseBest([{result:{ready:false,score:99}},{result:{ready:true,score:10}},{result:{ready:true,score:20}}]).frame.result.score===20);
 const mod=fs.readFileSync('omr/omr-teacher-module.js','utf8');
-assert(mod.includes("get('omrPrecision')==='1'"),'must be opt-in only');
+assert(mod.includes("const PRECISION_TEST_ROOM_CODE='OMR_V7_PRECISION_TEST'"),'Must identify the dedicated test room');
+assert(mod.includes('if(precisionCapture&&evidenceRoomCode()===PRECISION_TEST_ROOM_CODE)'), 'Experimental gate must be room-scoped');
 assert(mod.includes("capture('auto');"),'capture must use current frame immediately');
-assert(!mod.includes("omrPrecision')!=='0'"),'must not turn on by default');
-console.log('PASS precision capture opt-in, safety gates and best-frame selection');
+assert(!mod.includes("get('omrPrecision')"), 'Global URL parameter must not enable experimental capture');
+console.log('PASS precision capture test-room isolation, safety gates and best-frame selection');

@@ -2,7 +2,7 @@
 Ngày: 17/11/2026. Nguồn: 25 ảnh gốc đã lưu trong phòng OMR_V7_TEST (mỗi học sinh 1 ảnh gốc), tải tạm về laptop NGUYENSON; không tải lên repository.
 ## Phạm vi
 - Module mới `omr/omr-precision-capture-experiment.js` kiểm tra hình học bốn góc, 5 mốc kiểm tra bên trong, ánh sáng, độ nét và độ tương phản/chi tiết.
-- Chỉ hoạt động khi mở giao diện với query `omrPrecision=1`; mặc định giữ nguyên quy trình cũ.
+- Chỉ hoạt động trong phòng `OMR_V7_PRECISION_TEST`, tự động bật khi giáo viên chọn phòng đó. Bỏ tùy chọn kích hoạt toàn hệ thống qua URL; mọi phòng khác vẫn dùng V7 cũ.
 - Khi bật, yêu cầu 3 khung hình ổn định, thay vì 2; không đụng thuật toán tô, đáp án, điểm, RPC, DB, Storage hay bằng chứng.
 - Các ngưỡng hiện tại là **ngưỡng thử nghiệm**, chưa được hiệu chuẩn bằng ảnh camera trực tiếp trên điện thoại.
 ## Kết quả đối chứng
@@ -19,7 +19,7 @@ Tất cả ảnh được đưa về chiều dài 720 px cho phép so sánh đú
 - Không xóa, ghi hay cập nhật bất kỳ bài nộp, điểm, ảnh hay bảng DB nào.
 - Đã chạy unit test 058, regression 035 và 028; thử nghiệm ảnh thật 25 và 75 ảnh suy giảm.
 - Không đưa ảnh học sinh, URL ký, token hoặc khóa vào git.
-- Chưa bật cho giáo viên sử dụng chính thức. Chỉ mở opt-in để thử nghiệm thực địa; cần kiểm tra PWA cache/version trước khi phát hành.
+- Mở thử nghiệm cho phòng riêng `OMR_V7_PRECISION_TEST` sau khi CI xanh và đã xác nhận 8 mã đề được sao chép; không thay đổi các phòng khác.
 ## Cần tiếp tục
 1. Nghiệm thu trên điện thoại thật: giữ camera 3–5 giây, đo tốc độ, tỷ lệ chụp thành công, tỷ lệ báo sai và rung/nhòe.
 2. Tạo lớp overlay 4 mốc riêng biệt; xác minh ánh sáng vùng phiếu khi có bóng đổ.
