@@ -32,10 +32,11 @@ async function call(sb,token,request){
  if(data?.status!=='success')throw Error(data?.code||'evidence_request_failed');
  return data;
 }
-function save(sb,token,{scanId,revision,preview,original,report,canvas,capture,mode='test'}){
+function save(sb,token,{scanId,revision,submissionId=null,preview,original,report,canvas,capture,mode='official'}){
  if(!preview?.ok||!scanId||!Number.isInteger(revision))throw Error('evidence_invalid_preview');
  return call(sb,token,{
-  action:'save',mode,scan_id:scanId,revision,room_id:preview.room.id,
+  action:'save',mode,scan_id:scanId,revision,
+  submission_id:submissionId,room_id:preview.room.id,
   student_id:preview.student?.id||null,exam_code:preview.variant.code,
   annotated_image:imageUrl(canvas),capture_image:imageUrl(capture),
   evidence:report

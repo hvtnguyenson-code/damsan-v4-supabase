@@ -10,7 +10,7 @@ const sw=fs.readFileSync('teacher/sw.js','utf8');
 for(const [name,code] of [['desktop',desktop],['mobile',mobile]]){
  const render=code.slice(code.indexOf('function renderEvidence(){'),code.indexOf('async function saveTestEvidence('));
  assert(!render.includes('saveTestEvidence(false)'),name+' auto-save preview must be removed');
- assert(render.includes('chỉ lưu một phiếu cuối cùng khi bấm Xác nhận & Lưu'));
+ assert(render.includes('chỉ lưu một phiếu cuối cùng sau khi bấm Xác nhận & Lưu'));
  const save=code.slice(code.indexOf('async function saveCurrent(){'),code.indexOf('function updateProgress()'));
  const score=save.indexOf('await W.submitConfirmed(state.lastPreview,staffRpc)');
  const evidence=save.indexOf('await saveTestEvidence(true)');
@@ -31,5 +31,5 @@ assert(ddl.includes('on public.omr_artifacts(room_id,student_id)'));
 assert(!/delete\s+from\s+storage\.objects/i.test(ddl));
 assert(html.includes('omr-final=056'));
 assert(desktopHtml.includes('omr-final=056'));
-assert(sw.includes('omr056'));
+assert(sw.includes('omr057'));
 console.log('PASS OMR 056: final only after grade; backend verifies 28 answers; DB uniqueness');
