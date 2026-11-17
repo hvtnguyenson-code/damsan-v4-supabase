@@ -111,13 +111,14 @@
   const V7=root.DamSanOmrV7Candidate;
   const LabScore=root.DamSanOmrV7LabScore;
   const Evidence=root.DamSanOmrEvidence, EvidenceClient=root.DamSanOmrEvidenceClient, EvidenceExport=root.DamSanOmrEvidenceExport, Naming=root.DamSanOmrEvidenceNaming,
-    EvidencePrint=root.DamSanOmrEvidencePrint;
+    EvidencePrint=root.DamSanOmrEvidencePrint, EvidenceQueue=root.DamSanOmrEvidenceQueue;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
   // The experimental capture gate is isolated to one dedicated test room.
   // Do not allow a global URL parameter to alter normal V7 rooms.
   const PRECISION_TEST_ROOM_CODE='OMR_V7_PRECISION_TEST';
   const precisionCapture=!!root.DamSanOmrPrecisionCapture;
+  let precisionEvidenceQueue=null;
   const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null,evidenceCommittedSubmissionId:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
@@ -328,7 +329,7 @@
             </div>
             <div class="omr-room-info">
               <div class="omr-room-info-item"><span class="omr-muted">Phiếu chuẩn</span><strong>BGD 2025 • 18–4–6</strong></div>
-              <div class="omr-room-info-item"><span class="omr-muted">Tiến độ phiên này</span><div id="omrProgress" class="omr-progress">0 phiếu đã lưu</div></div>
+              <div class="omr-room-info-item"><span class="omr-muted">Tiến độ phiên này</span><div id="omrProgress" class="omr-progress">0 phiếu đã lưu</div><button type="button" id="omrEvidenceQueueRetry" class="omr-light" style="display:none;margin-top:6px;padding:6px 9px;font-size:12px">Thử tải lại minh chứng</button></div>
             </div>
           </div>
           <div id="omrRoomSummary" class="omr-muted" style="margin-top:8px">Chọn phòng để bắt đầu.</div>
@@ -488,7 +489,18 @@
       resetScan();
       if(!root.DamSanTeacherNav?.resumeCamera?.())openCamera({navigation:'replace'});
     };
+    q('omrEvidenceQueueRetry').onclick=()=>{
+      if(!precisionEvidenceQueue)return;
+      const btn=q('omrEvidenceQueueRetry');
+      btn.disabled=true;
+      void precisionEvidenceQueue.drain()
+        .catch(err=>showWarning('Tải minh chứng lỗi: '+(err.message||err)))
+        .finally(()=>{btn.disabled=false;});
+    };
     q('omrSave').onclick=saveCurrent;
+    if(typeof window!=='undefined')window.addEventListener('online',()=>{
+      if(precisionEvidenceQueue)void precisionEvidenceQueue.drain().catch(()=>{});
+    });
     q('omrReviewUncertain').onchange=reviewCurrent;
     const gradeInputs=['omrSbd','omrMaDe','omrStudent','omrP1',
       'omrP2_1','omrP2_2','omrP2_3','omrP2_4',
@@ -584,6 +596,13 @@
       fillStudentSelect();
       q('omrRoomSummary').textContent=`${state.roomModel.students.length} học sinh • ${state.roomModel.codes.length} mã đề: ${state.roomModel.codes.join(', ')}`;
       updateProgress();
+      if(isPrecisionRoom()){
+        try{
+          const queue=getPrecisionEvidenceQueue();
+          await queue.publish();
+          void queue.drain().catch(err=>console.warn('OMR queue recovery:',err?.message||err));
+        }catch(err){console.warn('OMR queue unavailable:',err?.message||err);}
+      }
       if(!state.restoring)rememberOmr({clearDraft:true});
     }catch(e){q('omrRoomSummary').textContent='Không tải được phòng: '+e.message;}
   }
@@ -638,8 +657,8 @@
           }
           const motion=cornerMotion(assessment.corners,state.autoScanLastCorners,Math.min(probe.width,probe.height));
           state.autoScanLastCorners=assessment.corners.map(p=>p.slice());
-          state.autoScanStable=motion<0.009?state.autoScanStable+1:1;
-          const need=3;
+          state.autoScanStable=motion<0.014?state.autoScanStable+1:1;
+          const need=2;
           updateAutoHud('Precision Capture • '+assessment.internalMatches+' mốc nội bộ • giữ yên '+Math.min(state.autoScanStable,need)+'/'+need,true);
           if(state.autoScanStable>=need){
             state.autoScanBusy=true;
@@ -1151,6 +1170,25 @@
     }
   }
 
+  function isPrecisionRoom(){
+    return evidenceRoomCode()===PRECISION_TEST_ROOM_CODE;
+  }
+  function getPrecisionEvidenceQueue(){
+    if(!EvidenceQueue||!EvidenceClient?.prepare||!EvidenceClient?.sendPrepared)
+      throw Error('precision_queue_module_missing');
+    if(!precisionEvidenceQueue){
+      precisionEvidenceQueue=EvidenceQueue.create({
+        getOwner:omrOwner,
+        getToken:()=>sessionStorage.getItem('damSan_StaffToken'),
+        send:(token,body)=>EvidenceClient.sendPrepared(sb,token,body),
+        onChange:jobs=>{
+          state.precisionEvidenceQueueJobs=jobs;
+          updateProgress();
+        }
+      });
+    }
+    return precisionEvidenceQueue;
+  }
   function evidenceRoomCode(){
     return String(state.roomModel?.room?.MaPhong||
       state.roomModel?.room?.ma_phong||'').trim();
@@ -1183,6 +1221,26 @@
       const result=Evidence.compose(q('omrEvidenceCanvas'),ctx.rect,T.template,
         preview,ctx.original,meta);
       const record=Evidence.record(preview,ctx.original,result.report,meta);
+      if(isPrecisionRoom()&&Array.isArray(ctx.candidate?.p3Evidence)){
+        // Record only uncertain P3 ink/eraser signals for later validation.
+        // Diagnostic metadata NEVER changes the decoded answers or score.
+        const items=[];
+        ctx.candidate.p3Evidence.forEach((question,qi)=>{
+          (question?.columns||[]).forEach((c,ci)=>{
+            if(c?.state!=='review'&&c?.state!=='multiple')return;
+            items.push({key:'P3.'+(qi+1)+'.'+(ci+1),reason:c.reason,
+              top:c.top??null,second:c.second??null,margin:c.margin??null,
+              relative:c.relative??null,topFill:c.topFill??null,
+              secondFill:c.secondFill??null});
+          });
+        });
+        record.eraser_diagnostic_v1={capture:'precision_059',
+          calibration:{markReference:ctx.candidate.p3Calibration?.markReference??null,
+            background:ctx.candidate.p3Calibration?.background??null,
+            markGate:ctx.candidate.p3Calibration?.markGate??null,
+            separationGate:ctx.candidate.p3Calibration?.separationGate??null},
+          uncertain:items};
+      }
       const source=q('omrTeacherCanvas');
       const capture=document.createElement('canvas');
       const scale=Math.min(1,1900/Math.max(source.width,source.height));
@@ -1326,7 +1384,7 @@
     }
     const st=state.lastPreview.student;
     if(state.saved.has(String(st.id))){showWarning('Học sinh này đã được lưu trong phiên chấm hiện tại.');return;}
-    if(!confirm(`Lưu điểm ${formatScore(state.lastPreview.grade.score)} cho ${st.ho_ten} — mã đề ${state.lastPreview.variant.code}?`))return;
+    if(!isPrecisionRoom()&&!confirm(`Lưu điểm ${formatScore(state.lastPreview.grade.score)} cho ${st.ho_ten} — mã đề ${state.lastPreview.variant.code}?`))return;
     const btn=q('omrSave'),old=btn.textContent;btn.disabled=true;btn.textContent='Đang lưu...';
     try{
       const data=await W.submitConfirmed(state.lastPreview,staffRpc);
@@ -1340,6 +1398,33 @@
       state.evidenceCommittedSubmissionId=data.submission_id||null;
       if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
       renderEvidence();
+      if(isPrecisionRoom()){
+        // Score is already committed. Encode the final two immutable photos
+        // once and DURABLY enqueue them before releasing the camera.
+        // The upload continues in the background; never send a second score.
+        try{
+          if(!data.submission_id||!state.evidenceData)throw Error('evidence_snapshot_missing');
+          const info=state.evidenceData;
+          const payload=EvidenceClient.prepare({
+            scanId:info.record.scan_id,revision:info.record.revision,
+            submissionId:data.submission_id,preview:info.preview,
+            original:state.evidenceCtx?.original,report:info.record,
+            canvas:q('omrEvidenceCanvas'),capture:info.capture,
+            mode:'official'
+          });
+          const queue=getPrecisionEvidenceQueue();
+          await queue.add({submissionId:data.submission_id,roomId:info.preview.room.id,payload});
+          void queue.drain().catch(err=>console.warn('OMR evidence queue:',err?.message||err));
+        }catch(err){
+          q('omrEvidenceRetry').style.display='inline-block';
+          showWarning('Điểm của '+st.ho_ten+' đã lưu, nhưng chưa xếp hàng ảnh an toàn: '+
+            (err?.message||err)+'. Bấm Lưu lại minh chứng; KHÔNG quét lại học sinh này.');
+          return;
+        }
+        resetScan();
+        if(!root.DamSanTeacherNav?.resumeCamera?.())await openCamera({navigation:'replace'});
+        return;
+      }
       const savedEvidence=await saveTestEvidence(true);
       if(savedEvidence?.status!=='success'){
         showWarning('Điểm của '+st.ho_ten+' đã lưu thành công ('+
@@ -1354,7 +1439,13 @@
   }
   function updateProgress(){
     const total=state.roomModel?.students.length||0;
-    q('omrProgress').textContent=`${state.saved.size} phiếu đã lưu trong phiên${total?' / '+total+' học sinh':''}`;
+    const pending=state.precisionEvidenceQueueJobs||[];
+    const failed=pending.filter(job=>job.error).length;
+    const retry=q('omrEvidenceQueueRetry');
+    if(retry)retry.style.display=isPrecisionRoom()&&pending.length?'inline-block':'none';
+    q('omrProgress').textContent=`${state.saved.size} phiếu đã lưu trong phiên${total?' / '+total+' học sinh':''}`+
+      (isPrecisionRoom()?(pending.length?' • '+pending.length+' ảnh minh chứng chờ tải'+
+        (failed?' ('+failed+' cần thử lại)':''):' • Minh chứng đã đồng bộ'):'');
   }
   function resetScan(){
     closePhotoDetail();

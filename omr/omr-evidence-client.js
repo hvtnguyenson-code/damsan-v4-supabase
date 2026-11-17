@@ -32,15 +32,24 @@ async function call(sb,token,request){
  if(data?.status!=='success')throw Error(data?.code||'evidence_request_failed');
  return data;
 }
-function save(sb,token,{scanId,revision,submissionId=null,preview,original,report,canvas,capture,mode='official'}){
+function prepare({scanId,revision,submissionId=null,preview,original,report,canvas,capture,mode='official'}){
  if(!preview?.ok||!scanId||!Number.isInteger(revision))throw Error('evidence_invalid_preview');
- return call(sb,token,{
+ return {
   action:'save',mode,scan_id:scanId,revision,
   submission_id:submissionId,room_id:preview.room.id,
   student_id:preview.student?.id||null,exam_code:preview.variant.code,
   annotated_image:imageUrl(canvas),capture_image:imageUrl(capture),
   evidence:report
- });
+ };
+}
+function sendPrepared(sb,token,body){
+ if(body?.action!=='save'||!body.submission_id||!body.room_id||!body.student_id)
+   throw Error('evidence_queue_invalid_payload');
+ return call(sb,token,body);
+}
+function save(sb,token,options){
+ const body=prepare(options);
+ return call(sb,token,body);
 }
 async function list(sb,token,roomId){
  const items=[];let offset=0;
@@ -99,6 +108,6 @@ function canvasDownload(canvas,name){
   downloadBlob(blob,name+'.jpg');
  },'image/jpeg',.88);
 }
-return {FUNCTION,MAX_IMAGE_BYTES,imageUrl,call,save,list,signed,downloadBlob,canvasDownload,
+return {FUNCTION,MAX_IMAGE_BYTES,imageUrl,call,save,prepare,sendPrepared,list,signed,downloadBlob,canvasDownload,
  prepareDownload,clearPreparedDownload};
 });

@@ -113,6 +113,8 @@ jobs:
         run: node tests/omr_official_evidence_057_simulation.js
       - name: OMR 058 opt-in Precision Capture preflight safety
         run: node tests/omr_precision_capture_experiment_058_simulation.js
+      - name: OMR 059 durable evidence queue / async uploads
+        run: node tests/omr_precision_save_queue_059_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

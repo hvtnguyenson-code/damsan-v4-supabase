@@ -45,8 +45,8 @@ assert(backend.includes('eq("scan_id",scanId).eq("revision",revision)'));
 assert(backend.includes('freshUploads.length'));
 assert(html.includes('omr-official=057'));
 assert(desktopHtml.includes('omr-official=057'));
-assert(sw.includes('omr057'));
-assert(client.save.toString().includes("submission_id:submissionId"));
+assert(sw.includes('omr059'));
+assert(client.prepare.toString().includes("submission_id:submissionId"));
 (async()=>{
  const calls=[];
  global.document={};
