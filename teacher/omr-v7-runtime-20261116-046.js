@@ -114,7 +114,7 @@
     EvidencePrint=root.DamSanOmrEvidencePrint;
   if(!T||!O||!B||!S||!W){console.error('OMR modules missing');return;}
 
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null,evidenceCommittedSubmissionId:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
   // loaded with V7 modules, compares V6/V7 without any second route or RPC.
@@ -351,7 +351,7 @@
            <summary>Công cụ minh chứng và xuất file</summary>
            <div class="omr-evidence-tools">
                <button type="button" class="omr-light" id="omrEvidencePdf">Tải phiếu PDF</button>
-              <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu thử đã lưu</button>
+              <button type="button" class="omr-light" id="omrEvidenceHistory">Phiếu OMR đã lưu</button>
               <button type="button" class="omr-light" id="omrEvidenceExport">Xuất Excel + phiếu PDF</button>
               <button type="button" class="omr-light" id="omrEvidenceRetry" style="display:none">Lưu lại minh chứng</button>
             </div>
@@ -1126,8 +1126,8 @@
   }
   function scheduleEvidence(){
     if(state.evidenceTimer)clearTimeout(state.evidenceTimer);
-    // Read-only annotated preview in every room. The only cloud writer remains
-    // saveTestEvidence() guarded by OMR_V7_TEST on client and Edge Function.
+    // Render an in-memory preview in every V7 room; persisted evidence is written
+    // once AFTER the canonical score commit, with a verified submission ID.
     if(!Evidence||!state.evidenceCtx||!state.lastPreview?.ok)return;
     state.evidenceTimer=setTimeout(renderEvidence,420);
   }
@@ -1136,7 +1136,8 @@
     if(!ctx||!preview?.ok||!Evidence)return;
     try{
       const confirmed=JSON.stringify([preview.scan.p1,preview.scan.p2,
-        preview.scan.p3,preview.variant.code,preview.student.id]);
+        preview.scan.p3,preview.variant.code,preview.student.id,
+        state.evidenceCommittedSubmissionId||'draft']);
       if(ctx.signature===confirmed){
         if(state.evidenceData)q('omrEvidenceCard').style.display='block';
         return;
@@ -1145,8 +1146,9 @@
       const trial=evidenceRoomCode()==='OMR_V7_TEST';
       const meta={studentName:preview.student.ho_ten,studentCode:preview.student.ma_hs,
         roomName:preview.room?.ten_dot||preview.room?.TenDot||'',
-        status:trial?'test':'preview',timestamp:new Date().toISOString(),
-        scanId:ctx.scanId,revision:ctx.revision,mode:trial?'test':'preview'};
+        status:trial?'test':(state.evidenceCommittedSubmissionId?'official':'preview'),
+        timestamp:new Date().toISOString(),
+        scanId:ctx.scanId,revision:ctx.revision,mode:trial?'test':'official'};
       const result=Evidence.compose(q('omrEvidenceCanvas'),ctx.rect,T.template,
         preview,ctx.original,meta);
       const record=Evidence.record(preview,ctx.original,result.report,meta);
@@ -1159,13 +1161,11 @@
       state.evidenceData={record,preview,result,capture,signature:confirmed};
       q('omrEvidenceCard').style.display='block';
       if(q('omrTechnicalDetails'))q('omrTechnicalDetails').open=false;
-      if(q('omrEvidenceHistory'))q('omrEvidenceHistory').style.display=trial?'':'none';
-      if(q('omrEvidenceExport'))q('omrEvidenceExport').style.display=trial?'':'none';
+      if(q('omrEvidenceHistory'))q('omrEvidenceHistory').style.display='';
+      if(q('omrEvidenceExport'))q('omrEvidenceExport').style.display='';
       q('omrEvidenceStatus').textContent='Đã tạo ảnh minh chứng • '+
         result.report.summary.manual+' vị trí GV sửa'+
-        (evidenceRoomCode()==='OMR_V7_TEST'
-          ?' • chỉ lưu một phiếu cuối cùng khi bấm Xác nhận & Lưu'
-          :' • chỉ lưu ảnh chính thức sau khi bật tính năng');
+        ' • chỉ lưu một phiếu cuối cùng sau khi bấm Xác nhận & Lưu';
       q('omrEvidenceRetry').style.display='none';
       // NEVER upload a preview or an intermediate correction to Storage.
       // Only saveCurrent(), after a successful canonical score write, can
@@ -1176,16 +1176,18 @@
   }
   async function saveTestEvidence(force){
     const info=state.evidenceData;
-    if(!info||evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceClient)return {status:'skipped'};
+    if(!info||!EvidenceClient)return {status:'skipped'};
     if(!force&&state.evidenceSave===info.signature)return {status:'success',idempotent:true};
     if(info.signature!==state.evidenceData?.signature)return {status:'stale'};
     try{
       const result=await EvidenceClient.save(sb,
         sessionStorage.getItem('damSan_StaffToken'),{
           scanId:info.record.scan_id,revision:info.record.revision,
+          submissionId:state.evidenceCommittedSubmissionId,
           preview:info.preview,original:state.evidenceCtx?.original,
           report:info.record,canvas:q('omrEvidenceCanvas'),
-          capture:info.capture,mode:'test'});
+          capture:info.capture,
+          mode:evidenceRoomCode()==='OMR_V7_TEST'?'test':'official'});
       state.evidenceSave=info.signature;
       if(state.evidenceData?.signature===info.signature)
         q('omrEvidenceStatus').textContent='Phiếu cuối cùng đã lưu an toàn • mã '+result.artifact_id;
@@ -1201,8 +1203,7 @@
   async function showEvidenceArchive(){
     const panel=q('omrEvidenceArchiveList');
     panel.style.display='block';
-    panel.textContent='Đang đọc danh sách minh chứng thử...';
-    if(evidenceRoomCode()!=='OMR_V7_TEST'){panel.textContent='Danh sách thử chỉ dùng trong phòng OMR_V7_TEST.';return;}
+    panel.textContent='Đang đọc danh sách minh chứng OMR của phòng...';
     try{
       const token=sessionStorage.getItem('damSan_StaffToken');
       const list=await EvidenceClient.list(sb,token,state.roomModel.room.id);
@@ -1230,8 +1231,8 @@
   }
   async function exportEvidenceRoom(){
     const status=q('omrEvidenceStatus'),btn=q('omrEvidenceExport'),link=q('omrEvidenceReady');
-    if(evidenceRoomCode()!=='OMR_V7_TEST'||!EvidenceExport||!EvidenceClient){
-      status.textContent='Chỉ xuất minh chứng thử nghiệm của OMR_V7_TEST ở giai đoạn này.';return;
+    if(!EvidenceExport||!EvidenceClient||!state.roomModel?.room?.id){
+      status.textContent='Chưa thể xuất minh chứng OMR: chưa chọn phòng hoặc thiếu mô-đun.';return;
     }
     if(btn.disabled)return;
     btn.disabled=true;btn.setAttribute('aria-busy','true');
@@ -1302,18 +1303,17 @@
       if(data.status!=='success') throw new Error(data.message||'Không lưu được kết quả.');
       state.saved.add(String(st.id));updateProgress();
       q('omrGradeCard').classList.add('omr-ok');
-      if(evidenceRoomCode()==='OMR_V7_TEST'){
-        // Final snapshot only: render from exactly the answers the canonical
-        // score writer has already accepted. Keep the scan for explicit retry
-        // if the evidence upload fails after the grade was committed.
-        if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
-        renderEvidence();
-        const savedEvidence=await saveTestEvidence(true);
-        if(savedEvidence?.status!=='success'){
-          showWarning('Điểm của '+st.ho_ten+' đã lưu thành công ('+
-            formatScore(data.score)+'). Ảnh phiếu chưa lưu; nhấn Thử lại lưu minh chứng. KHÔNG quét lại học sinh này.');
-          return;
-        }
+      // Every V7 room now persists the FINAL artifact after the canonical
+      // score commit; the submission ID binds OFFICIAL evidence to its receipt.
+      // Keep the current scan for an explicit retry if Storage is unavailable.
+      state.evidenceCommittedSubmissionId=data.submission_id||null;
+      if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
+      renderEvidence();
+      const savedEvidence=await saveTestEvidence(true);
+      if(savedEvidence?.status!=='success'){
+        showWarning('Điểm của '+st.ho_ten+' đã lưu thành công ('+
+          formatScore(data.score)+'). Ảnh phiếu chưa lưu; nhấn Lưu lại minh chứng. KHÔNG quét lại học sinh này và không đóng màn hình.');
+        return;
       }
       alert(`Đã lưu: ${st.ho_ten} — ${formatScore(data.score)} điểm.`);
       resetScan();
@@ -1329,6 +1329,7 @@
     closePhotoDetail();
     state.lastScan=null;state.lastPreview=null;state.lastV6=null;
     state.evidenceCtx=null;state.evidenceData=null;state.evidenceSave=null;
+    state.evidenceCommittedSubmissionId=null;
     if(state.evidenceTimer){clearTimeout(state.evidenceTimer);state.evidenceTimer=null;}
     if(q('omrEvidenceCard'))q('omrEvidenceCard').style.display='none';
     if(q('omrTechnicalDetails'))q('omrTechnicalDetails').open=true;
