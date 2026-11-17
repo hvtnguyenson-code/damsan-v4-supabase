@@ -111,6 +111,8 @@ jobs:
         run: node tests/omr_one_final_evidence_056_simulation.js
       - name: OMR 057 official evidence in all exam rooms without test quota
         run: node tests/omr_official_evidence_057_simulation.js
+      - name: OMR 058 opt-in Precision Capture preflight safety
+        run: node tests/omr_precision_capture_experiment_058_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

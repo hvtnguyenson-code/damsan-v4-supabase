@@ -1,5 +1,5 @@
 const VERSION='20261116-teacher-pwa-046';
-const CACHE='damsan-teacher-'+VERSION+'-omr057';
+const CACHE='damsan-teacher-'+VERSION+'-omr057-precision-room-058';
 const CORE=[
   './',
   './index.html',
@@ -32,6 +32,7 @@ const CORE=[
   '../omr/omr-evidence-naming.js',
   '../omr/omr-evidence-print.js',
   '../omr/omr-evidence-export.js',
+  '../omr/omr-precision-capture-experiment.js',
   '../omr/omr-teacher-module.js',
   './omr-v7-runtime-20261116-046.js'
 ];
