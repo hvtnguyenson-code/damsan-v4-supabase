@@ -1,0 +1,51 @@
+name: OMR 060 Read-only Field PWA CI
+
+on:
+  pull_request:
+    paths:
+      - 'omr/field-060/**'
+      - 'tests/omr_062_fieldtrial_static_simulation.js'
+      - 'tests/run_omr_062_fieldtrial_browser.mjs'
+      - '.github/workflows/omr_field_060_preview_ci.yml'
+  workflow_dispatch:
+
+jobs:
+  field_pwa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only safety and offline asset inventory
+        run: node tests/omr_062_fieldtrial_static_simulation.js
+      - name: Real Chromium field capture, IndexedDB, ZIP, offline
+        run: |
+          set -e
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium not found on runner"
+            exit 1
+          fi
+          python3 -m http.server 8769 --bind 127.0.0.1 >/tmp/omr060-field-http.log 2>&1 &
+          SERVER_PID=$!
+          "$CHROME" --headless=new --no-sandbox --disable-gpu \
+            --disable-dev-shm-usage --disable-background-timer-throttling \
+            --remote-debugging-address=127.0.0.1 --remote-debugging-port=9236 \
+            --user-data-dir=/tmp/damsan-omr060-field-chrome about:blank \
+            >/tmp/omr060-field-chrome.out 2>/tmp/omr060-field-chrome.log &
+          CHROME_PID=$!
+          cleanup() {
+            kill "$CHROME_PID" >/dev/null 2>&1 || true
+            kill "$SERVER_PID" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8769/omr/field-060/index.html >/dev/null &&
+               curl -fsS http://127.0.0.1:9236/json/version >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          timeout 120s node tests/run_omr_062_fieldtrial_browser.mjs
