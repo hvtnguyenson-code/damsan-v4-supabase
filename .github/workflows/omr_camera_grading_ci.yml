@@ -115,6 +115,10 @@ jobs:
         run: node tests/omr_precision_capture_experiment_058_simulation.js
       - name: OMR 059 durable evidence queue / async uploads
         run: node tests/omr_precision_save_queue_059_simulation.js
+      - name: OMR 060 isolated optimization 18-4-6 and camera geometry
+        run: node tests/omr_v7_optimization_060_simulation.js
+      - name: OMR 060 ink topology and erasure diagnostics
+        run: node tests/omr_v7_ink_060_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
