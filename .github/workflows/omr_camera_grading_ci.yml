@@ -119,6 +119,8 @@ jobs:
         run: node tests/omr_v7_optimization_060_simulation.js
       - name: OMR 060 ink topology and erasure diagnostics
         run: node tests/omr_v7_ink_060_simulation.js
+      - name: OMR 060 writer boundary and dry-run save safety
+        run: node tests/omr_060_writer_safety_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

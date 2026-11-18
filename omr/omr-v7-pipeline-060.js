@@ -95,8 +95,8 @@ function analyze(imageData,T,{core,V7,reference=null,longSide=1800,expectedStude
    issues:[...measured.issues,...bindingIssues]};
  // The same perspective-normalized pixels are used for SBD, variant and
  // P1/II/III. No second warp and NO legacy three-part V5 analysis.
- const candidate=V7.analyzeValidatedRectified(rect,T,null,
-  {experimentalRefinement:true});
+ const candidate={...V7.analyzeValidatedRectified(rect,T,null,
+  {experimentalRefinement:true}),omr060ResearchOnly:true};
  const ink=Ink.inspect(rect,T,candidate);
  const answers={p1:candidate.p1,p2:candidate.p2,p3:candidate.p3};
  const issues=[...identity.issues,...(candidate.issues||[])];
