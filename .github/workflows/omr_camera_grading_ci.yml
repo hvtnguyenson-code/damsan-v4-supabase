@@ -7,6 +7,8 @@ on:
       - 'giaovien.html'
       - 'teacher/**'
       - 'tests/omr_*'
+      - 'tests/run_omr_061_browser_lab.mjs'
+      - 'tests/sql/omr_061_postgres_contract.sql'
       - 'tests/teacher_pwa_006_simulation.js'
       - 'tests/teacher_navigation_011_simulation.js'
       - 'tests/teacher_password_012_simulation.js'
@@ -183,6 +185,37 @@ jobs:
             PROBE_EXIT=$?
           fi
           set -e
+          if [ "$PROBE_EXIT" -eq 0 ]; then
+            timeout 75s node tests/run_omr_061_browser_lab.mjs
+            PROBE_EXIT=$?
+          fi
           echo "=== Teacher PWA Chrome diagnostics ==="
           tail -n 120 /tmp/teacher-pwa-chrome.log || true
           exit "$PROBE_EXIT"
+
+  postgres_contract:
+    name: OMR 061 isolated PostgreSQL 17 writer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: omr061
+          POSTGRES_PASSWORD: omr061_ci_only
+          POSTGRES_DB: omr061
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U omr061 -d omr061"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actual checked-in OMR writer SQL in a rolled-back synthetic transaction
+        env:
+          PGPASSWORD: omr061_ci_only
+        run: |
+          psql --version
+          psql -h 127.0.0.1 -p 5432 -U omr061 -d omr061 -v ON_ERROR_STOP=1 -f tests/sql/omr_061_postgres_contract.sql
