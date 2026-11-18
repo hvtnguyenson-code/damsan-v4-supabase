@@ -1,8 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict');
 const W=require('../omr/omr-result-write.js');
-const Adapter=require('../omr/omr-scan-adapter.js');
-assert.throws(()=>Adapter.fromV7({ok:true},{omr060ResearchOnly:true}),/omr060_research_never_promotes/);
+const Pipeline=require('../omr/omr-v7-pipeline-060.js');
+const researchResult={readOnly:true,validForSave:false,_labReadOnly:true,
+  captureMode:'compare',recognitionEngine:'V7_060',
+  candidate:{engine:'OMR060_RESEARCH_CANDIDATE'}};
+const researchScan=Pipeline.toResearchScan(researchResult);
+assert.throws(()=>Pipeline.toResearchScan({readOnly:false}),/omr060_invalid_research_result/);
 const defaultScan={recognitionEngine:'V7',captureMode:'v7',
   templateId:'MOET_TLTN_2025_18_4_6_V1',uncertain:[],invalidMarks:[]};
 function preview(scan=defaultScan){
@@ -18,11 +22,11 @@ function preview(scan=defaultScan){
   await assert.rejects(W.submitConfirmed(p,rpc),new RegExp(reason));
   assert.equal(writes,before,'a rejected preview must not reach RPC');
  }
- await blocked(preview({readOnly:true,validForSave:false}),'experimental_omr_never_writes');
- await blocked(preview({validForSave:false}),'experimental_omr_never_writes');
- await blocked(preview({readOnly:true}),'experimental_omr_never_writes');
- await blocked(preview({captureMode:'omr060'}),'experimental_omr_never_writes');
- await blocked(preview({recognitionEngine:'V7_060'}),'experimental_omr_never_writes');
+ await blocked(preview(researchScan),'comparison_mode_never_writes');
+ await blocked(preview({...researchScan,captureMode:'v7'}),'comparison_mode_never_writes');
+ await blocked(preview({...researchScan,_labReadOnly:false}),'comparison_mode_never_writes');
+ await blocked(preview({...researchScan,recognitionEngine:'V7'}),'comparison_mode_never_writes');
+ await blocked(preview({...researchScan,captureMode:'omr060'}),'comparison_mode_never_writes');
  await blocked(preview({...defaultScan,_labReadOnly:true}),'comparison_mode_never_writes');
  await blocked(preview({...defaultScan,captureMode:'compare'}),'comparison_mode_never_writes');
  await blocked(preview({...defaultScan,_requiresRetake:true}),'unreliable_omr_requires_retake');

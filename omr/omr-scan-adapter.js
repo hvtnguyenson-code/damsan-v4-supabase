@@ -83,9 +83,6 @@
   // offline candidate into the existing canonical scan/write contract.
   // Candidate modules themselves never contain a submission function.
   function fromV7(v5,candidate){
-    // A V7 candidate derived from experimental OMR 060 remains research-only,
-    // even if the other calibrated geometry and ink checks pass.
-    if(candidate?.omr060ResearchOnly===true)throw Error('omr060_research_never_promotes');
     if(!v5?.ok)throw Error('V7 cần xác định bốn góc và SBD/mã đề trước');
     validateCandidate(candidate);
     if(candidate.engine!=='V7_COMPLETE_CANDIDATE'

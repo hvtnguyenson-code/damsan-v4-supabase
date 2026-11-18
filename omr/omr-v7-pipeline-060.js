@@ -96,12 +96,14 @@ function analyze(imageData,T,{core,V7,reference=null,longSide=1800,expectedStude
  // The same perspective-normalized pixels are used for SBD, variant and
  // P1/II/III. No second warp and NO legacy three-part V5 analysis.
  const candidate={...V7.analyzeValidatedRectified(rect,T,null,
-  {experimentalRefinement:true}),omr060ResearchOnly:true};
+  {experimentalRefinement:true}),
+   engine:'OMR060_RESEARCH_CANDIDATE',omr060ResearchOnly:true};
  const ink=Ink.inspect(rect,T,candidate);
  const answers={p1:candidate.p1,p2:candidate.p2,p3:candidate.p3};
  const issues=[...identity.issues,...(candidate.issues||[])];
  const analysis={ok:identity.valid&&candidate.ok===true,
   readOnly:true,validForSave:false,
+  _labReadOnly:true,captureMode:'compare',recognitionEngine:'V7_060',
   requiresReview:issues.length>0||!!candidate.requiresReview,
   requiresRetake:!identity.valid||candidate.requiresRetake===true,
   identity,answers,issues,
@@ -120,5 +122,14 @@ function analyze(imageData,T,{core,V7,reference=null,longSide=1800,expectedStude
  analysis.comparison=compareAnswers(reference,analysis);
  return analysis;
 }
-return {analyze,readIdentity,compareAnswers};
+// The only supported bridge to a preview keeps the 060 result explicitly
+// research-only. The untouched V7 ScanAdapter rejects the distinct engine.
+function toResearchScan(result){
+ if(!result||result.readOnly!==true||result.validForSave!==false
+   ||result.candidate?.engine!=='OMR060_RESEARCH_CANDIDATE')
+  throw Error('omr060_invalid_research_result');
+ return {...result,_labReadOnly:true,captureMode:'compare',
+   recognitionEngine:'V7_060'};
+}
+return {analyze,readIdentity,compareAnswers,toResearchScan};
 });

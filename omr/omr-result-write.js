@@ -8,11 +8,6 @@
     if(!preview?.ok) throw new Error('preview_required');
     if(preview.scan?._labReadOnly||preview.scan?.captureMode==='compare')
       throw new Error('comparison_mode_never_writes');
-    // OMR 060 research output is NEVER a write-authorized scan. A missing
-    // adapter cannot silently promote its readOnly candidate to production.
-    if(preview.scan?.readOnly===true||preview.scan?.validForSave===false
-      ||preview.scan?.captureMode==='omr060'||preview.scan?.recognitionEngine==='V7_060')
-      throw new Error('experimental_omr_never_writes');
     if(preview.scan?._requiresRetake)throw new Error('unreliable_omr_requires_retake');
     if((preview.scan?.uncertain||[]).length && preview.reviewedUncertain !== true) throw new Error('uncertain_scan_requires_review');
     if(!preview.student?.id) throw new Error('student_id_required');

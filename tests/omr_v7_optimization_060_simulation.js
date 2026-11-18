@@ -2,6 +2,7 @@ const assert=require('assert'),fs=require('fs');
 const C=require('../omr/omr-core.js'),T=require('../omr/omr-template-moet-18-4-6.js').template;
 const G=require('../omr/omr-v7-geometry-060.js');
 const P=require('../omr/omr-v7-pipeline-060.js');
+const Adapter=require('../omr/omr-scan-adapter.js');
 const V7=require('../omr/omr-v7-candidate.js');
 const w=1080,h=608,k=548/2254,sourceDpi=200/2.54,x0=350,y0=21;
 const at=point=>[x0+point[0]*sourceDpi*k,y0+point[1]*sourceDpi*k];
@@ -81,6 +82,10 @@ assert(wrongVariant.identity.issues.some(x=>x.key==='MADE_BINDING'));
 assert.deepStrictEqual([grayscale,warps,legacyReads],[1,1,0],
  'new research path must gray+warp exactly once and skip legacy 3-part scoring');
 assert(out.readOnly&&!out.validForSave,'never create a write-enabled candidate');
+assert(out._labReadOnly&&out.captureMode==='compare','060 must be read-only for canonical writer');
+assert.equal(out.candidate.engine,'OMR060_RESEARCH_CANDIDATE');
+assert.throws(()=>Adapter.fromV7({ok:true},out.candidate),
+ /V7 chưa đạt điều kiện nhận dạng/,'canonical V7 adapter must reject 060 candidate');
 assert(out.ink?.diagnosticOnly&&out.ink.changesAnswers===false);
 const dup=P.analyze(image({duplicateId:true}),T,{core:C,V7,longSide:1300});
 assert(!dup.ok&&!dup.identity.valid,

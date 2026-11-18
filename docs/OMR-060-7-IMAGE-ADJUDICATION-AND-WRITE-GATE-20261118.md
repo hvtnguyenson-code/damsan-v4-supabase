@@ -35,17 +35,18 @@ Bộ mẫu là **7 ảnh WebP gốc** thuộc hai phòng OMR đã lưu. Chúng g
 
 Ảnh cắt vùng tô **phù hợp với các chỉnh sửa do giáo viên thực hiện**, nhưng việc đọc đúng không được chứng minh bằng cách lấy `confirmed` làm dự đoán của máy. Máy vẫn nhận `?` cho các câu trên và đề nghị giáo viên rà soát. Đây là hành vi an toàn, nhưng **chưa phải tối ưu tự động hóa triệt để**.
 
-## Kiểm thử tầng ghi điểm
+## Kiểm thử tầng ghi điểm và bảo toàn V7
 
-Đã bổ sung hai chốt chặn **chỉ trên nhánh 060**:
+**Điều chỉnh sau CI:** Bài thử `OMR 029` phát hiện mã nguồn trong gói phục hồi PWA cũ yêu cầu khớp byte với hai tệp V7 chuẩn. Vì vậy **không chỉnh sửa hai tệp dùng chung** `omr-scan-adapter.js` và `omr-result-write.js`. Cả hai được khôi phục chính xác blob của `main`; kiểm tra hồi quy cuối trên CI Linux.
 
-1. `omr-v7-pipeline-060.js` gắn `omr060ResearchOnly=true` cho candidate.
-2. `omr-scan-adapter.js` từ chối nâng cấp candidate 060 thành một lượt quét được ghi.
-3. `omr-result-write.js` từ chối trực tiếp `readOnly=true`, `validForSave=false`, `captureMode=omr060`, `recognitionEngine=V7_060`.
+Các chốt chặn được đặt **ngay trong `omr-v7-pipeline-060.js`**:
+1. Candidate nghiên cứu có engine khác biệt `OMR060_RESEARCH_CANDIDATE` và `omr060ResearchOnly=true`. Adapter V7 chính thức hiện chỉ chấp nhận `V7_COMPLETE_CANDIDATE`, nên không thể tự nâng cấp candidate 060 thành kết quả ghi điểm.
+2. Kết quả 060 gắn `readOnly=true`, `validForSave=false`, `_labReadOnly=true`, `captureMode=compare`, `recognitionEngine=V7_060`; ngay khi đặt nguyên kết quả vào preview, bộ ghi điểm V7 hiện có từ chối.
+3. Hàm `toResearchScan` trong 060 kiểm tra nghiêm ngặt nguồn dữ liệu và vẫn giữ các cờ chỉ đọc. Không có chức năng gọi `staffRpc`, cấp quyền hoặc lưu kết quả.
 
-`tests/omr_060_writer_safety_simulation.js` có **9 trường hợp bị từ chối** và **2 trường hợp V7 canonical hợp lệ được mô phỏng ghi thành công qua RPC giả**. Không có kết nối ghi Supabase thật. Bộ thử hàng đợi minh chứng 059 cũng PASS.
+`tests/omr_060_writer_safety_simulation.js`: **9 trường hợp không hợp lệ bị từ chối**, **2 trường hợp V7 chuẩn hợp lệ được ghi qua RPC giả**; không thực hiện bất kỳ RPC ghi thật nào. `tests/omr_v7_optimization_060_simulation.js` còn xác minh chính adapter V7 hiện hành từ chối candidate 060 có engine riêng. Bộ kiểm thử hàng đợi minh chứng 059 cũng PASS.
 
-`tests/omr_060_adjudication_private.js` giữ lại khung chạy riêng tư cho 7 ảnh thật, cần biến môi trường `OMR060_CORPUS_DIR` và `OMR060_SHARP_PATH`. Tệp ảnh, JSON có mã học sinh và nhãn riêng tư không thuộc repository; CI công khai không được chạy bộ ảnh riêng tư nếu chưa có phương án nạp bí mật được duyệt.
+Bộ kiểm thử riêng `tests/omr_060_adjudication_private.js` tái lập kiểm tra 7 ảnh, yêu cầu `OMR060_CORPUS_DIR` và tùy chọn `OMR060_SHARP_PATH`; không được đưa ảnh học sinh, nhãn riêng tư hoặc khóa đọc lên GitHub. **Không chạy bài thử ảnh riêng tư trong CI công khai**.
 
 ## Điều kiện merge
 
