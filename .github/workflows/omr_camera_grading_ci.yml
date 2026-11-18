@@ -7,6 +7,9 @@ on:
       - 'giaovien.html'
       - 'teacher/**'
       - 'tests/omr_*'
+      - 'tests/run_omr_061_browser_lab.mjs'
+      - 'tests/run_omr_062_fieldtrial_browser.mjs'
+      - 'tests/sql/omr_061_postgres_contract.sql'
       - 'tests/teacher_pwa_006_simulation.js'
       - 'tests/teacher_navigation_011_simulation.js'
       - 'tests/teacher_password_012_simulation.js'
@@ -115,6 +118,16 @@ jobs:
         run: node tests/omr_precision_capture_experiment_058_simulation.js
       - name: OMR 059 durable evidence queue / async uploads
         run: node tests/omr_precision_save_queue_059_simulation.js
+      - name: OMR 060 isolated optimization 18-4-6 and camera geometry
+        run: node tests/omr_v7_optimization_060_simulation.js
+      - name: OMR 060 ink topology and erasure diagnostics
+        run: node tests/omr_v7_ink_060_simulation.js
+      - name: OMR 060 writer boundary and dry-run save safety
+        run: node tests/omr_060_writer_safety_simulation.js
+      - name: OMR 061 isolated lab and durable local integration (no live DB)
+        run: node tests/omr_060_integration_061_simulation.js
+      - name: OMR 062 field trial PWA offline and data safety static gate
+        run: node tests/omr_062_fieldtrial_static_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
@@ -175,6 +188,41 @@ jobs:
             PROBE_EXIT=$?
           fi
           set -e
+          if [ "$PROBE_EXIT" -eq 0 ]; then
+            timeout 75s node tests/run_omr_061_browser_lab.mjs
+            PROBE_EXIT=$?
+          fi
+          if [ "$PROBE_EXIT" -eq 0 ]; then
+            timeout 120s node tests/run_omr_062_fieldtrial_browser.mjs
+            PROBE_EXIT=$?
+          fi
           echo "=== Teacher PWA Chrome diagnostics ==="
           tail -n 120 /tmp/teacher-pwa-chrome.log || true
           exit "$PROBE_EXIT"
+
+  postgres_contract:
+    name: OMR 061 isolated PostgreSQL 17 writer contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: omr061
+          POSTGRES_PASSWORD: omr061_ci_only
+          POSTGRES_DB: omr061
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U omr061 -d omr061"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actual checked-in OMR writer SQL in a rolled-back synthetic transaction
+        env:
+          PGPASSWORD: omr061_ci_only
+        run: |
+          psql --version
+          psql -h 127.0.0.1 -p 5432 -U omr061 -d omr061 -v ON_ERROR_STOP=1 -f tests/sql/omr_061_postgres_contract.sql
