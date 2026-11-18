@@ -27,3 +27,12 @@ Vì vậy:
 Dùng một đường truy xuất đã được phê duyệt cho bucket private (ví dụ nguồn file trong giao diện giáo viên có quyền, hoặc công cụ kết nối Storage được cấp quyền phù hợp) để đưa **32 ảnh capture.webp nguyên bản** vào một môi trường kiểm thử cô lập, theo thứ tự được đối chiếu với bản ghi `omr_artifacts`. Chạy V7 nguyên trạng và 060 song song, xuất thống kê từng câu I/II/III và SBD/mã đề, ưu tiên 3 vị trí P3.2.3/P3.2.4/P3.5.2 của mã đề 106; phân biệt sai khác so với nhãn đã xác minh và khác biệt so với V7 cũ.
 
 **Không yêu cầu giáo viên quét lại. PR #205 vẫn Draft.**
+
+## Nhật ký thực thi tiếp theo khi người quản trị đã cấp quyền (18/11/2026)
+- Đã xác minh đọc qua giao thức truy xuất tạm thời nhận danh sách **32/32 ảnh gốc** và phát hành liên kết tải xuống ngắn hạn đúng hai phòng.
+- **Không tải/giải mã được các file WebP** trước khi liên kết và quyền tạm thời hết hạn; kiểm tra ở nơi nhận gặp lỗi xử lý phiên và không tạo được tập ảnh có SHA256 đối chiếu.
+- Gia hạn dịch vụ đọc tạm thời bị chặn bởi lớp kiểm tra an toàn. Không thử lách chính sách hoặc mở bucket public.
+- Đã đóng dịch vụ tạm `omr-060-audit-read-once`: phiên bản 2 chỉ trả `410 audit_closed`, đồng thời bật `verify_jwt=true`. Không còn endpoint truy xuất dữ liệu học sinh.
+- Đã kiểm tra tệp đi kèm cuộc trò chuyện: chỉ có ảnh annotated/vẽ vòng đáp án hoặc ảnh nhỏ, không phải 32 file `capture.webp` nguyên bản; vì thế chưa sử dụng làm bằng chứng phân loại vết tẩy.
+- Việc tái chạy pixel `OMR 060 vs V7` trên 32 ảnh gốc **vẫn chưa được thực hiện**, không tuyên bố đã hoàn tất. Cần xuất có xác thực theo phiên giáo viên hoặc đưa các ảnh gốc vào vùng kiểm thử riêng tư, rồi tính hash và chạy offline.
+- Giữ nguyên `main`, điểm, Storage và trạng thái Draft của PR #205.
