@@ -75,7 +75,10 @@ async function probe(){
   const started=Date.now();
   while(Date.now()-started<25000){
    const records=await store.list();
-   if(records.length>0&&records.some(x=>x.report?.expected?.sbd===expectedSbd))
+   const completed=$('status').textContent.startsWith('Đã tự lưu')&&
+    !$('fileInput').disabled&&$('expectedSbd').value==='';
+   if(completed&&records.length>0&&
+    records.some(x=>x.report?.expected?.sbd===expectedSbd))
     return records;
    await new Promise(r=>setTimeout(r,120));
   }
