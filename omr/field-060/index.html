@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="theme-color" content="#174b73">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="OMR 060 Thử">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; worker-src 'self'">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="./icon.svg">
+<title>Đam San – Thử phiếu OMR 060</title>
+<style>
+:root{font-family:system-ui,-apple-system,Roboto,sans-serif;color:#173047;background:#f0f4f8;font-size:16px;line-height:1.45}
+*{box-sizing:border-box}body{margin:0}main{max-width:760px;margin:0 auto;padding:10px 12px 50px}
+h1{font-size:1.28rem;line-height:1.2;margin:4px 0 7px}h2{font-size:1.08rem;margin:0 0 12px}p{margin:7px 0}
+.card{background:white;border:1px solid #dce6ef;border-radius:13px;padding:15px;margin:10px 0;box-shadow:0 2px 8px #102b4610}
+.banner{background:#fff9e9;border-left:4px solid #ce9215;font-size:.89rem;padding:10px 12px;border-radius:6px}
+.tag{display:inline-block;padding:3px 9px;border-radius:99px;background:#e0eaf2;color:#174b73;font-weight:700;font-size:.78rem}
+.small{color:#5a6e7e;font-size:.84rem}.muted{color:#5a6e7e}.error{color:#ae2525}.good{color:#12624d}
+.controls{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.action,button,.link-btn{border:1px solid #98aec0;background:white;border-radius:10px;min-height:46px;padding:10px 14px;font:inherit;font-weight:650;cursor:pointer;color:#123b58;display:inline-flex;align-items:center;justify-content:center;text-align:center;text-decoration:none}
+.action{background:#155c8b;color:white;border-color:#155c8b;flex:1;min-width:145px}
+button:disabled,.action.disabled{opacity:.5;cursor:default}.secondary{background:#eef5fa;color:#174d73;border-color:#bdd0df}
+button.danger{border-color:#f4b6b6;color:#b42323}
+input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+input[type=text],textarea,select{font:inherit;border:1px solid #a9b7c5;border-radius:8px;padding:10px;width:100%;background:white;min-height:43px;color:#172b3c}
+textarea{min-height:60px;resize:vertical}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label.field{display:block;font-size:.88rem;font-weight:600}
+label.field>input{margin-top:5px}
+details{border:1px solid #e2e8ef;border-radius:10px;padding:10px;margin:8px 0}
+summary{cursor:pointer;font-weight:650;color:#24547c}
+canvas{width:100%;height:auto;max-height:54vh;object-fit:contain;background:#131b28;border-radius:8px}
+#photoCanvas{display:none}#preview{width:100%;max-height:56vh;object-fit:contain;background:#e8eef4;border-radius:8px}
+.kpi{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.kpi>div{border:1px solid #dbe5ee;padding:10px 6px;border-radius:9px;text-align:center;min-width:0}
+.kpi strong{display:block;font-size:1.15rem;overflow-wrap:anywhere}
+.kpi small{display:block;font-size:.72rem;color:#5e7080}
+.result{background:#f5f8fc;padding:10px 12px;border-radius:9px;overflow-wrap:anywhere;font-size:.9rem}
+.result dl{margin:0;display:grid;grid-template-columns:52px 1fr;gap:6px}
+.result dt{font-weight:700}.result dd{margin:0}
+.record{border-bottom:1px solid #e5ebf2;padding:10px 0;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.record:last-child{border:0}.record-label{min-width:0;font-size:.89rem}
+.record-label strong{display:block}.record small{display:block;color:#637482}
+footer{font-size:.77rem;color:#657788;text-align:center;padding:12px}
+#downloadLink{width:100%;background:#14774b;border-color:#14774b;color:white}
+#downloadLink[hidden], [hidden]{display:none!important}
+@media(max-width:360px){.fields{grid-template-columns:1fr}main{padding:8px 9px 34px}}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+<span class="tag">THỬ NGHIỆM OMR 060 · CHỈ ĐỌC</span>
+<h1>Đam San – Quét phiếu thực tế</h1>
+<p class="small">Chụp một lần, tự ghi nhận kết quả và ảnh minh chứng. Không kết nối hệ thống điểm, không gửi ảnh lên máy chủ.</p>
+<div class="banner">Đây là ứng dụng nghiên cứu độc lập, <strong>không phải màn hình chấm điểm chính thức</strong>. Ảnh chỉ nằm trong bộ nhớ trình duyệt của thiết bị này cho đến khi mày xuất ZIP hoặc xóa.</div>
+</section>
+
+<section class="card" id="captureCard">
+<h2>1. Chụp phiếu</h2>
+<div class="controls">
+<label class="action" for="cameraInput">Chụp phiếu</label>
+<label class="action secondary" for="fileInput">Chọn ảnh có sẵn</label>
+<input id="cameraInput" type="file" accept="image/*" capture="environment">
+<input id="fileInput" type="file" accept="image/*">
+</div>
+<details id="bindingOptions">
+<summary>Đối chiếu SBD / mã đề dự kiến (không bắt buộc)</summary>
+<div class="fields">
+<label class="field">SBD 8 chữ số<input id="expectedSbd" type="text" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="00xxxxxx"></label>
+<label class="field">Mã đề 4 chữ số<input id="expectedCode" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0103"></label>
+</div>
+<p class="small">Nếu nhập, phiếu không khớp sẽ được cảnh báo; ô SBD sẽ xóa sau mỗi lần quét để tránh áp vào học sinh tiếp theo.</p>
+</details>
+<p id="status" role="status" aria-live="polite" class="small">Sẵn sàng quét phiếu.</p>
+<img id="preview" alt="Ảnh phiếu vừa chụp" hidden>
+<canvas id="photoCanvas" width="1" height="1" aria-hidden="true"></canvas>
+</section>
+
+<section class="card" id="currentCard" hidden>
+<h2>2. Kết quả phiếu vừa quét</h2>
+<div class="kpi">
+<div><strong id="sbdOut">—</strong><small>SBD</small></div>
+<div><strong id="codeOut">—</strong><small>Mã đề</small></div>
+<div><strong id="reviewOut">—</strong><small>Trạng thái</small></div>
+</div>
+<p class="small" id="v7Out"></p>
+<div class="result"><dl>
+<dt>Phần I</dt><dd id="p1Out">—</dd>
+<dt>Phần II</dt><dd id="p2Out">—</dd>
+<dt>Phần III</dt><dd id="p3Out">—</dd>
+</dl></div>
+<details id="warningsDetails">
+<summary id="warningsSummary">Cảnh báo nhận dạng</summary>
+<div id="warningsOut" class="small"></div>
+</details>
+<details>
+<summary>Đánh giá của giáo viên (tùy chọn)</summary>
+<label class="field">Kết quả đối chiếu với phiếu thật
+<select id="humanVerdict">
+<option value="unchecked">Chưa kiểm tra thủ công</option>
+<option value="correct">Máy đọc đúng</option>
+<option value="needs_review">Máy đọc sai / cần kiểm tra</option>
+</select></label>
+<label class="field">Ghi chú (ví dụ: P3.2 đúng là 11)
+<textarea id="humanNotes" maxlength="1000" placeholder="Chỉ ghi những vị trí cần sửa..."></textarea></label>
+<button id="saveReview" type="button">Lưu đánh giá</button>
+</details>
+<p class="small" id="savedStatus"></p>
+</section>
+
+<section class="card">
+<h2>3. Minh chứng đã lưu</h2>
+<div class="kpi">
+<div><strong id="countOut">0</strong><small>Phiếu</small></div>
+<div><strong id="flagOut">0</strong><small>Cần xem lại</small></div>
+<div><strong id="bytesOut">0 MB</strong><small>Ảnh lưu</small></div>
+</div>
+<div class="controls" style="margin-top:12px">
+<button id="prepareExport" type="button" class="secondary" disabled>Tạo gói ZIP minh chứng</button>
+<button id="removeAll" type="button" class="danger" disabled>Xóa dữ liệu thử</button>
+</div>
+<p class="small" id="exportStatus">Gói ZIP gồm ảnh JPG, bảng CSV và kết quả JSON của từng phiếu. Tối đa 20 phiếu mỗi gói để tránh quá tải điện thoại.</p>
+<a id="downloadLink" class="link-btn" download hidden>Tải ZIP minh chứng</a>
+<div id="recordsList"></div>
+</section>
+<footer id="offlineStatus">PWA độc lập · không ghi điểm · bản nghiên cứu 060</footer>
+</main>
+<script src="../omr-template-moet-18-4-6.js"></script>
+<script src="../omr-core.js"></script>
+<script src="../omr-reliability-v6.js"></script>
+<script src="../omr-v7-research.js"></script>
+<script src="../omr-reliability-v7-baseline.js"></script>
+<script src="../omr-v7-local-refinement.js"></script>
+<script src="../omr-v7-quality.js"></script>
+<script src="../omr-v7-geometry.js"></script>
+<script src="../omr-v7-lighting.js"></script>
+<script src="../omr-v7-marks.js"></script>
+<script src="../omr-v7-numeric.js"></script>
+<script src="../omr-v7-sparse-p3.js"></script>
+<script src="../omr-v7-candidate.js"></script>
+<script src="./omr-v7-geometry-060.js"></script>
+<script src="./omr-v7-ink-060.js"></script>
+<script src="./omr-v7-pipeline-060.js"></script>
+<script src="../omr-evidence-naming.js"></script>
+<script src="../omr-evidence-print.js"></script>
+<script src="../omr-evidence-export.js"></script>
+<script src="./field-store-060.js"></script>
+<script src="./field-app-060.js"></script>
+</body>
+</html>
