@@ -1,3 +1,5 @@
+> **Cập nhật 18/11/2026:** Đã truy xuất và chạy thành công 32/32 ảnh gốc. Báo cáo này giữ lại nhật ký vướng mắc trước đó; kết quả mới tại [`OMR-060-REAL-IMAGE-REPLAY-20261118.md`](./OMR-060-REAL-IMAGE-REPLAY-20261118.md).
+
 # OMR 060 — kiểm thử đối chứng trên dữ liệu đã lưu (18/11/2026)
 
 **Trạng thái:** PARTIAL / IMAGE_REPLAY_BLOCKED. Báo cáo chỉ chứa số liệu tổng hợp, không chứa danh tính hay ảnh học sinh.

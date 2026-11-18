@@ -48,7 +48,12 @@ function readIdentity(rect,T,Core){
   issues:[...new Map(issues.map(e=>[e.key,e])).values()]};
 }
 function compareAnswers(reference,candidate){
- const changes=[],add=(k,a,b)=>{if(String(a??'')!==String(b??''))changes.push({key:k,old:a??null,proposed:b??null});};
+ const changes=[],add=(k,a,b)=>{
+   const lhs=String(a??''),rhs=String(b??'');
+   const numeric=(k==='SBD'||k==='MADE')&&/^[0-9]+$/.test(lhs)&&/^[0-9]+$/.test(rhs);
+   if(!(numeric?Number(lhs)===Number(rhs):lhs===rhs))
+     changes.push({key:k,old:a??null,proposed:b??null});
+ };
  if(reference){
   add('SBD',reference.sbd,candidate.identity?.sbd);
   add('MADE',reference.maDe,candidate.identity?.maDe);
@@ -60,7 +65,7 @@ function compareAnswers(reference,candidate){
  }
  return {compared:!!reference,changes,count:changes.length};
 }
-function analyze(imageData,T,{core,V7,reference=null,longSide=1800}={}){
+function analyze(imageData,T,{core,V7,reference=null,longSide=1800,expectedStudentCode=null,expectedExamCode=null}={}){
  const {width:w,height:h,data}=imageData||{};
  if(!core||!V7||!data||!Number.isInteger(w)||!Number.isInteger(h)
    ||data.length!==w*h*4||w<80||h<80)
@@ -71,8 +76,23 @@ function analyze(imageData,T,{core,V7,reference=null,longSide=1800}={}){
  if(!registration.ok)return {ok:false,readOnly:true,
   reason:registration.reason,stage:'registration',
   registration,answers:null,identity:null};
- const rect=core.warpTemplateGray(gray,w,h,registration.H,T,longSide);
- const identity=readIdentity(rect,T,core);
+ // 32 captured sheets replayed at 1500px produced P3 differences, whereas
+ // 1800px matched all recorded automatic decisions. Preserve that resolution.
+ const requested=Number(longSide);
+ const safeLongSide=Math.max(1800,Math.min(2254,Number.isFinite(requested)?Math.round(requested):1800));
+ const rect=core.warpTemplateGray(gray,w,h,registration.H,T,safeLongSide);
+ const measured=readIdentity(rect,T,core);
+ // Optional binding against an already selected DB student/variant: fail
+ // closed on mismatch. NEVER invent or correct answer marks from DB identity.
+ const sameDigits=(a,b)=>/^[0-9]+$/.test(String(a))&&/^[0-9]+$/.test(String(b))
+   &&Number(a)===Number(b);
+ const bindingIssues=[];
+ if(expectedStudentCode!=null&&!sameDigits(measured.sbd,expectedStudentCode))
+   bindingIssues.push({key:'SBD_BINDING',reason:'SBD trên phiếu không trùng hồ sơ được gắn'});
+ if(expectedExamCode!=null&&!sameDigits(measured.maDe,expectedExamCode))
+   bindingIssues.push({key:'MADE_BINDING',reason:'Mã đề trên phiếu không trùng mã đề đã gắn'});
+ const identity={...measured,valid:measured.valid&&bindingIssues.length===0,
+   issues:[...measured.issues,...bindingIssues]};
  // The same perspective-normalized pixels are used for SBD, variant and
  // P1/II/III. No second warp and NO legacy three-part V5 analysis.
  const candidate=V7.analyzeValidatedRectified(rect,T,null,

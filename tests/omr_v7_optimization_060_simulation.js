@@ -65,6 +65,19 @@ assert.deepStrictEqual(out.answers.p2,Array(4).fill('Đ-S-Đ-S'));
 assert.deepStrictEqual(out.answers.p3,['012','123','234','345','456','567']);
 assert.equal(out.geometryStatus,'ok');
 assert.equal(out.registration.internalMatches,5);
+assert(out.normalization.height>=1800,
+ 'Do not permit 1500px downsampling that regresses real-photo P3');
+const bound=P.analyze(source,T,{core:C,V7,longSide:1300,
+ expectedStudentCode:'120601',expectedExamCode:'103'});
+assert(bound.ok,'numeric identity binding with leading zeros should pass');
+const wrongSbd=P.analyze(source,T,{core:C,V7,
+ expectedStudentCode:'120602',expectedExamCode:'103'});
+assert(!wrongSbd.ok&&wrongSbd.requiresRetake);
+assert(wrongSbd.identity.issues.some(x=>x.key==='SBD_BINDING'));
+const wrongVariant=P.analyze(source,T,{core:C,V7,
+ expectedStudentCode:'120601',expectedExamCode:'104'});
+assert(!wrongVariant.ok&&wrongVariant.requiresRetake);
+assert(wrongVariant.identity.issues.some(x=>x.key==='MADE_BINDING'));
 assert.deepStrictEqual([grayscale,warps,legacyReads],[1,1,0],
  'new research path must gray+warp exactly once and skip legacy 3-part scoring');
 assert(out.readOnly&&!out.validForSave,'never create a write-enabled candidate');
