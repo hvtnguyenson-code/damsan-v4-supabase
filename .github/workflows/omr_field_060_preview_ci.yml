@@ -5,6 +5,7 @@ on:
     paths:
       - 'omr/field-060/**'
       - 'tests/omr_062_fieldtrial_static_simulation.js'
+      - 'tests/omr_063_field_comparison_regression.js'
       - 'tests/run_omr_062_fieldtrial_browser.mjs'
       - '.github/workflows/omr_field_060_preview_ci.yml'
   workflow_dispatch:
@@ -20,6 +21,8 @@ jobs:
           node-version: '22'
       - name: Read-only safety and offline asset inventory
         run: node tests/omr_062_fieldtrial_static_simulation.js
+      - name: OMR 063 field comparison excludes unavailable V7 identity
+        run: node tests/omr_063_field_comparison_regression.js
       - name: Real Chromium field capture, IndexedDB, ZIP, offline
         run: |
           set -e

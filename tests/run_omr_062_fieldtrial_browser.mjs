@@ -63,6 +63,10 @@ async function probe(){
  synthetic.getContext('2d').putImageData(new ImageData(data,w,h),0,0);
  const blob=await new Promise((resolve,reject)=>
   synthetic.toBlob(b=>b?resolve(b):reject(Error('PNG encode failed')),'image/png'));
+ const comp=window.DamSanOmrFieldComparison060.answerOnly({count:2,changes:[
+  {key:'SBD',old:null,proposed:'00120001'},
+  {key:'MADE',old:null,proposed:'0103'}]});
+ if(comp?.count!==0||comp?.changes.length!==0)throw Error('V7 missing identity falsely counted as answers');
  const store=window.DamSanOmrFieldStore060.create(window.indexedDB);
  const initial=await store.list();
  if(initial.length!==0)throw Error('Field browser fixture not empty');
