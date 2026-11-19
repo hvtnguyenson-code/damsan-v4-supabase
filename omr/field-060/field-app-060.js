@@ -5,6 +5,7 @@ const $=id=>document.getElementById(id);
 const Core=window.DamSanOmr,V7=window.DamSanOmrV7Candidate,
  Pipeline=window.DamSanOmrV7Pipeline060,Template=window.DamSanOmrTemplate.template;
 const Zip=window.DamSanOmrEvidenceExport;
+const Compare=window.DamSanOmrFieldComparison060;
 const db=window.DamSanOmrFieldStore060.create(window.indexedDB);
 const canvas=$('photoCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
 let busy=false,currentId=null,previewUrl=null,zipUrl=null,exportOffset=0;
@@ -29,7 +30,7 @@ function summarize(next,legacy,legacyError,expected,frame){
  const oldOk=legacy?.ok===true;
  const reference=oldOk&&Array.isArray(legacy?.p2)&&Array.isArray(legacy?.p3)
    ?legacy:null;
- const comparison=reference?Pipeline.compareAnswers(reference,next):null;
+ const comparison=reference?Compare.answerOnly(Pipeline.compareAnswers(reference,next)):null;
  const inkFlags=Array.isArray(next?.ink?.flags)?next.ink.flags.slice(0,160).map(x=>({
   key:x.key,kind:x.kind,state:x.state,
   topFill:x.topFill??null,secondFill:x.secondFill??null
@@ -67,13 +68,13 @@ function summarize(next,legacy,legacyError,expected,frame){
     identity:{sbd:legacy?.sbd||'',maDe:legacy?.maDe||''},
     answers:reference?{p1:legacy.p1,p2:legacy.p2,p3:legacy.p3}:null
   },
-  comparison:comparison?{count:comparison.count,changes:comparison.changes}:null
+  comparison:comparison
  };
 }
 function compareLabel(report){
  if(!report?.legacyV7?.ok)return 'V7: từ chối hoặc không đọc được ảnh này; 060 được đánh giá riêng.';
- const n=report.comparison?.count;
- return 'So với V7 trên cùng ảnh: '+(n==null?'không đủ dữ liệu':n+' vị trí khác biệt')+'.';
+ const n=Compare.answerOnly(report.comparison)?.count;
+ return 'So với V7 trên cùng ảnh: '+(n==null?'không đủ dữ liệu':n+' vị trí đáp án khác biệt (phần I, II, III)')+'.';
 }
 function viewReport(record){
  const r=record.report;
@@ -233,14 +234,15 @@ async function prepareArchive(records,offset,total){
  let number=offset;
  for(const record of records){
   number++;
-  const r=record.report||{},sbd=sanitizeDigits(r.identity?.sbd,8),
+  const r=record.report||{},exportReport=Compare.exportWithAudit(r),
+   sbd=sanitizeDigits(r.identity?.sbd,8),
    code=sanitizeDigits(r.identity?.maDe,4);
   const prefix='Phieu-'+String(number).padStart(3,'0')+'-SBD'+sbd+'-MD'+code;
   const jpgName='anh-phieu/'+prefix+'.jpg';
   const jsonName='ket-qua/'+prefix+'.json';
   files.push({name:jpgName,data:new Uint8Array(await record.image.arrayBuffer())});
   files.push({name:jsonName,data:JSON.stringify({id:record.id,
-   capturedAt:record.createdAt,report:r,review:record.review||null,
+   capturedAt:record.createdAt,report:exportReport,review:record.review||null,
    imageFile:jpgName},null,2)});
   manifest.push({id:record.id,createdAt:record.createdAt,
    sbd:r.identity?.sbd||'',maDe:r.identity?.maDe||'',imageFile:jpgName,
@@ -248,7 +250,7 @@ async function prepareArchive(records,offset,total){
   csv.push([number,humanTime(record.createdAt),r.identity?.sbd||'',
    r.identity?.maDe||'',r.ok?'YES':'NO',r.identity?.valid?'YES':'NO',
    r.requiresReview?'YES':'NO',r.legacyV7?.ok?'YES':'NO',
-   r.comparison?.count??'',record.review?.verdict||'unchecked',
+   exportReport.comparison?.count??'',record.review?.verdict||'unchecked',
    record.review?.notes||'',jpgName,record.id].map(quoteCsv).join(','));
  }
  files.unshift({name:'bao-cao.csv',data:'\ufeff'+csv.join('\r\n')});
