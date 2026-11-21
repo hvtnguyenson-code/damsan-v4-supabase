@@ -1,0 +1,28 @@
+name: OMR066 source-only replay export
+on:
+  push:
+    branches: [research/omr066-local-replay-export-20261121]
+    paths: ['.github/workflows/omr066_replay_export.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: '9f10be89cd2b84de6e5c80da67dccdf0c7b6b9f7'
+      - name: Pack original commit code only
+        run: |
+          git rev-parse HEAD > REPLAY_COMMIT.txt
+          mkdir -p replay_code/omr
+          cp omr/*.js replay_code/omr/
+          cp REPLAY_COMMIT.txt replay_code/
+          cd replay_code
+          sha256sum omr/*.js > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omr066-pinned-source
+          path: replay_code/
+          retention-days: 1
