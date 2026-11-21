@@ -89,7 +89,9 @@ async function probe(){
   throw Error('Capture timed out '+$('status').textContent);
  }
  const invalid=await feed('synthetic-1.png','00120602','0104');
- if(invalid.length!==1||invalid[0].report.identity.valid!==false||
+ if(invalid.length!==1||invalid[0].report.build!=='OMR060_FIELD_064'||
+  invalid[0].report.identityVerification.rosterVerified!==false||
+  invalid[0].report.identity.valid!==false||
   !invalid[0].report.warnings.some(x=>x.key==='SBD_BINDING')||
   !invalid[0].report.warnings.some(x=>x.key==='MADE_BINDING')||
   invalid[0].report.validForSave!==false||invalid[0].report.readOnly!==true)
@@ -97,7 +99,8 @@ async function probe(){
  if($('expectedSbd').value!=='')throw Error('Old student ID remained for next scan');
  await feed('synthetic-2.png','00120601','0103');
  const saved=await store.list();
- if(saved.length!==2||saved[0].report.ok!==true||saved[0].report.identity.valid!==true)
+ if(saved.length!==2||saved[0].report.ok!==true||saved[0].report.identity.valid!==true||
+  saved[0].report.identityVerification.matchedExpectedCode!==true)
   throw Error('Second captured scan failed '+JSON.stringify(saved.map(x=>({ok:x.report.ok,valid:x.report.identity.valid}))));
  if($('countOut').textContent!=='2'||$('preview').hidden)
   throw Error('UI did not update count or photo preview');
@@ -144,7 +147,7 @@ async function probe(){
   throw Error('ZIP contents invalid: '+JSON.stringify(names));
  const manifest=JSON.parse(new TextDecoder().decode(parts['manifest.json']));
  const report1=manifest.records.find(x=>x.id===target.id);
- if(manifest.records.length!==2||!report1)
+ if(manifest.records.length!==2||!report1||manifest.exportBuild!=='OMR060_FIELD_064')
   throw Error('ZIP manifest not linked');
  const savedDetails=JSON.parse(new TextDecoder().decode(parts[report1.resultFile]));
  if(savedDetails.review.notes!=='P3.2 dung la 11'||

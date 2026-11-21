@@ -8,8 +8,9 @@ const Zip=window.DamSanOmrEvidenceExport;
 const Compare=window.DamSanOmrFieldComparison060;
 const db=window.DamSanOmrFieldStore060.create(window.indexedDB);
 const canvas=$('photoCanvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-let busy=false,currentId=null,previewUrl=null,zipUrl=null,exportOffset=0;
+let busy=false,currentId=null,previewUrl=null,zipUrl=null;
 const BATCH_SIZE=20;
+const APP_VERSION="OMR060_FIELD_064";
 const now=()=>new Date().toISOString();
 function putText(id,text){$(id).textContent=String(text??'');}
 function status(message,bad=false){
@@ -39,7 +40,9 @@ function summarize(next,legacy,legacyError,expected,frame){
  const items=slimIssues(next?.issues);
  const retake=next?.requiresRetake===true||next?.ok===false;
  return {
-  version:2,engine:'OMR060_RESEARCH_ONLY',createdAt:now(),
+  version:3,build:APP_VERSION,engine:'OMR060_RESEARCH_ONLY',createdAt:now(),
+  identityVerification:{source:expected.sbd?'MANUALLY_ENTERED_EXPECTATION':'UNBOUND_TO_ROOM_ROSTER',
+   rosterVerified:false,matchedExpectedCode:!!expected.sbd&&identity.valid===true},
   readOnly:true,validForSave:false,
   ok:next?.ok===true,requiresReview:!!next?.requiresReview||retake||
     items.length>0,requiresRetake:retake,
@@ -86,6 +89,9 @@ function viewReport(record){
  putText('reviewOut',verdict);
  $('reviewOut').className=r.ok&&!r.requiresReview?'good':'error';
  putText('v7Out',compareLabel(r));
+ putText('identityScopeNote',r.identityVerification?.matchedExpectedCode?
+  'SBD khớp giá trị nhập để đối chứng, nhưng chưa xác minh với danh sách học sinh/phòng thi.':
+  'SBD chỉ được đọc từ ô tô và chưa đối chiếu với danh sách học sinh/phòng thi.');
  putText('p1Out',r.answers?.p1||'—');
  putText('p2Out',r.answers?.p2?.length?r.answers.p2.join(' / '):'—');
  putText('p3Out',r.answers?.p3?.length?r.answers.p3.join(' ; '):'—');
@@ -118,6 +124,17 @@ async function refreshList(){
  putText('bytesOut',(bytes/1048576).toFixed(1)+' MB');
  $('prepareExport').disabled=rows.length===0;
  $('removeAll').disabled=rows.length===0;
+ // Batch ranges are explicit; the second ZIP remains selectable after a PWA
+ // restart, not solely through a transient in-memory offset.
+ const select=$('exportPart'),previous=select.value||'0';
+ select.replaceChildren();
+ for(let start=0;start<rows.length;start+=BATCH_SIZE){
+  const option=document.createElement('option');
+  option.value=String(start);
+  option.textContent='Phiếu '+(start+1)+'–'+Math.min(start+BATCH_SIZE,rows.length)+' / '+rows.length;
+  select.appendChild(option);
+ }
+ if(Array.from(select.options).some(o=>o.value===previous))select.value=previous;
  const container=$('recordsList');
  container.replaceChildren();
  for(const row of rows.slice(0,35)){
@@ -255,7 +272,8 @@ async function prepareArchive(records,offset,total){
  }
  files.unshift({name:'bao-cao.csv',data:'\ufeff'+csv.join('\r\n')});
  files.unshift({name:'manifest.json',data:JSON.stringify({
-  schema:'DAMSAN_OMR060_FIELD_V2',readOnly:true,productionWrites:false,
+  schema:'DAMSAN_OMR060_FIELD_V2',exportBuild:APP_VERSION,
+  readOnly:true,productionWrites:false,
   generatedAt:now(),part:Math.floor(offset/BATCH_SIZE)+1,totalRecords:total,
   records:manifest},null,2)});
  const blob=Zip.zip(files);
@@ -278,20 +296,24 @@ async function createExport(){
  try{
   const all=(await db.list()).reverse();
   if(!all.length)throw Error('Chưa có phiếu nào');
-  if(exportOffset>=all.length)exportOffset=0;
-  const selected=all.slice(exportOffset,exportOffset+BATCH_SIZE);
+  const start=Math.max(0,Math.floor(Number($('exportPart').value||0)/BATCH_SIZE)*BATCH_SIZE);
+  const selected=all.slice(start,start+BATCH_SIZE);
   const records=[];
   for(const meta of selected){
    const row=await db.get(meta.id);
    if(!row?.image)throw Error('Thiếu ảnh phiếu '+meta.id);
    records.push(row);
   }
-  await prepareArchive(records,exportOffset,all.length);
-  exportOffset+=records.length;
-  putText('prepareExport',exportOffset<all.length?'Tạo ZIP phần tiếp theo':'Tạo lại ZIP từ đầu');
+  await prepareArchive(records,start,all.length);
+  if(start+BATCH_SIZE<all.length)$('exportPart').value=String(start+BATCH_SIZE);
+  putText('prepareExport','Tạo gói ZIP minh chứng');
  }catch(e){putText('exportStatus','Lỗi tạo ZIP: '+e.message);}
  finally{$('prepareExport').disabled=false;}
 }
+$('applyUpdate').addEventListener('click',()=>{
+ if(busy)return status('Hãy hoàn tất phiếu đang xử lý trước khi cập nhật.',true);
+ location.reload();
+});
 $('cameraInput').addEventListener('change',e=>void processFile(e.target.files?.[0],'camera'));
 $('fileInput').addEventListener('change',e=>void processFile(e.target.files?.[0],'file'));
 $('saveReview').addEventListener('click',async()=>{
@@ -307,7 +329,7 @@ $('prepareExport').addEventListener('click',()=>void createExport());
 $('removeAll').addEventListener('click',async()=>{
  if(!confirm('Xóa TOÀN BỘ minh chứng OMR 060 trên điện thoại này? Chỉ thực hiện sau khi đã tải ZIP.'))return;
  try{
-  await db.clear();currentId=null;exportOffset=0;
+  await db.clear();currentId=null;
   if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;
   if(zipUrl)URL.revokeObjectURL(zipUrl);zipUrl=null;
   $('currentCard').hidden=true;$('preview').hidden=true;
@@ -326,8 +348,14 @@ async function init(){
   '. Hãy dùng Safari/Chrome thường, không ở chế độ riêng tư.',true);}
  if('serviceWorker' in navigator){
   try{
-   await navigator.serviceWorker.register('./sw.js',{scope:'./'});
-   putText('offlineStatus','PWA 060 · có thể lưu vào màn hình chính · dữ liệu nằm trên thiết bị');
+   const wasControlled=!!navigator.serviceWorker.controller;
+   navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(wasControlled)$('updateBanner').hidden=false;
+   });
+   const registration=await navigator.serviceWorker.register('./sw.js',{scope:'./'});
+   // Request an update on every online launch; installation does not reset IndexedDB.
+   if(navigator.onLine)void registration.update().catch(()=>{});
+   putText('offlineStatus','PWA 060 · '+APP_VERSION+' · dữ liệu nằm trên thiết bị');
   }catch(e){
    putText('offlineStatus','Không cài được chế độ offline: '+e.message+
     '. Có thể tiếp tục quét khi có Internet.');
