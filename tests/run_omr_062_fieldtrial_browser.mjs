@@ -89,7 +89,7 @@ async function probe(){
   throw Error('Capture timed out '+$('status').textContent);
  }
  const invalid=await feed('synthetic-1.png','00120602','0104');
- if(invalid.length!==1||invalid[0].report.build!=='OMR060_FIELD_064'||
+ if(invalid.length!==1||invalid[0].report.build!=='OMR060_FIELD_065'||
   invalid[0].report.identityVerification.rosterVerified!==false||
   invalid[0].report.identity.valid!==false||
   !invalid[0].report.warnings.some(x=>x.key==='SBD_BINDING')||
@@ -147,7 +147,7 @@ async function probe(){
   throw Error('ZIP contents invalid: '+JSON.stringify(names));
  const manifest=JSON.parse(new TextDecoder().decode(parts['manifest.json']));
  const report1=manifest.records.find(x=>x.id===target.id);
- if(manifest.records.length!==2||!report1||manifest.exportBuild!=='OMR060_FIELD_064')
+ if(manifest.records.length!==2||!report1||manifest.exportBuild!=='OMR060_FIELD_065')
   throw Error('ZIP manifest not linked');
  const savedDetails=JSON.parse(new TextDecoder().decode(parts[report1.resultFile]));
  if(savedDetails.review.notes!=='P3.2 dung la 11'||

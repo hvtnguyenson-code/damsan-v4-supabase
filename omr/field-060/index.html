@@ -55,7 +55,7 @@ footer{font-size:.77rem;color:#657788;text-align:center;padding:12px}
 <body>
 <main>
 <section class="card">
-<span class="tag">THỬ NGHIỆM OMR 060 · CHỈ ĐỌC · BẢN 064</span>
+<span class="tag">THỬ NGHIỆM OMR 060 · CHỈ ĐỌC · BẢN 065</span>
 <h1>Đam San – Quét phiếu thực tế</h1>
 <p class="small">Chụp một lần, tự ghi nhận kết quả và ảnh minh chứng. Không kết nối hệ thống điểm, không gửi ảnh lên máy chủ.</p>
 <div class="banner">Đây là ứng dụng nghiên cứu độc lập, <strong>không phải màn hình chấm điểm chính thức</strong>. Ảnh chỉ nằm trong bộ nhớ trình duyệt của thiết bị này cho đến khi xuất ZIP hoặc xóa.</div>
@@ -124,11 +124,12 @@ footer{font-size:.77rem;color:#657788;text-align:center;padding:12px}
 <div><strong id="bytesOut">0 MB</strong><small>Ảnh lưu</small></div>
 </div>
 <label class="field">Chọn nhóm phiếu cần xuất
-<select id="exportPart" aria-label="Chọn nhóm phiếu cần xuất"><option value="0">Phiếu 1–20</option></select></label>
+<select id="exportPart" aria-label="Chọn nhóm phiếu cần xuất"><option value="0">Đang tải nhóm phiếu…</option></select></label>
 <div class="controls" style="margin-top:12px">
 <button id="prepareExport" type="button" class="secondary" disabled>Tạo gói ZIP minh chứng</button>
 <button id="removeAll" type="button" class="danger" disabled>Xóa dữ liệu thử</button>
 </div>
+<p class="small" id="appBuildStatus">Đang xác minh phiên bản ứng dụng…</p>
 <p class="small" id="exportStatus">Gói ZIP gồm ảnh JPG, bảng CSV và kết quả JSON của từng phiếu. Tối đa 20 phiếu mỗi gói để tránh quá tải điện thoại.</p>
 <a id="downloadLink" class="link-btn" download hidden>Tải ZIP minh chứng</a>
 <div id="recordsList"></div>
@@ -156,6 +157,6 @@ footer{font-size:.77rem;color:#657788;text-align:center;padding:12px}
 <script src="../omr-evidence-export.js"></script>
 <script src="./field-comparison-060.js"></script>
 <script src="./field-store-060.js"></script>
-<script src="./field-app-060.js"></script>
+<script src="./field-app-065.js"></script>
 </body>
 </html>

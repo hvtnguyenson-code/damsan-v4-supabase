@@ -1,10 +1,10 @@
 'use strict';
 // Non-production field-trial SW. Scoped ONLY to /omr/field-060/.
-const VERSION='omr060-field-v3-20261121';
+const VERSION='omr060-field-v4-20261121';
 const CACHE='damsan-'+VERSION;
 const ASSETS=[
  './','./index.html','./manifest.webmanifest','./icon.svg',
- './field-comparison-060.js','./field-store-060.js','./field-app-060.js',
+ './field-comparison-060.js','./field-store-060.js','./field-app-065.js',
  '../omr-template-moet-18-4-6.js','../omr-core.js',
  '../omr-reliability-v6.js','../omr-v7-research.js',
  '../omr-reliability-v7-baseline.js','../omr-v7-local-refinement.js',

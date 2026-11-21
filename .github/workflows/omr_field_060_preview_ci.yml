@@ -7,6 +7,7 @@ on:
       - 'tests/omr_062_fieldtrial_static_simulation.js'
       - 'tests/omr_063_field_comparison_regression.js'
       - 'tests/run_omr_062_fieldtrial_browser.mjs'
+      - 'tests/run_omr_065_batch_28_browser.mjs'
       - '.github/workflows/omr_field_060_preview_ci.yml'
   workflow_dispatch:
 
@@ -52,3 +53,4 @@ jobs:
             sleep 1
           done
           timeout 120s node tests/run_omr_062_fieldtrial_browser.mjs
+          timeout 120s node tests/run_omr_065_batch_28_browser.mjs
