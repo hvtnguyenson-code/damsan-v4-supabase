@@ -35,7 +35,15 @@ assert(store.includes('indexedDB.open(DB_NAME,1)'),'real IndexedDB needed');
 assert(store.includes('MAX_RECORDS=60'),'storage capacity bounded');
 assert(store.includes("record.image.type!=='image/jpeg'"),'normalized export image must be JPEG');
 assert(manifest.scope==='./'&&manifest.start_url==='./index.html'&&manifest.display==='standalone');
-assert(!sw.includes('clients.claim()'),'do not take over uncontrolled sessions');
+assert(sw.includes('self.clients.claim()'),'field-only SW should claim its own scoped clients on update');
+assert(sw.includes('self.skipWaiting()'),'updated SW must not remain waiting behind stale offline clients');
+assert(sw.includes("'omr060-field-v3-20261121'"),'field SW cache version must advance');
+assert(app.includes('build:APP_VERSION'),'each new image report must retain capture build');
+assert(app.includes('rosterVerified:false'),'bubble decoding must never imply roster identity proof');
+assert(html.includes('id="updateBanner"'),'PWA must offer a safe update action');
+assert(html.includes('id="identityScopeNote"'),'PWA must label unverified SBD');
+assert(html.includes('id="exportPart"'),'explicit batch selector must survive PWA reload');
+assert(app.includes("const start=Math.max(0"),'export selected batch must not depend on transient offset');
 assert(!sw.includes('/teacher/'),'field SW must not touch teacher PWA');
 for(const name of ['teacher/index.html','teacher/sw.js','omr/omr-result-write.js']){
  assert(!fs.readFileSync(name,'utf8').includes('field-060'),'field app must not enter official writer');

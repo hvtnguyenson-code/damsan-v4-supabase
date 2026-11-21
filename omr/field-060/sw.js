@@ -1,6 +1,6 @@
 'use strict';
 // Non-production field-trial SW. Scoped ONLY to /omr/field-060/.
-const VERSION='omr060-field-v2-20261119';
+const VERSION='omr060-field-v3-20261121';
 const CACHE='damsan-'+VERSION;
 const ASSETS=[
  './','./index.html','./manifest.webmanifest','./icon.svg',
@@ -17,12 +17,12 @@ const ASSETS=[
  '../omr-evidence-export.js'
 ];
 self.addEventListener('install',event=>{
- event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));
+ event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
  event.waitUntil(caches.keys().then(keys=>Promise.all(
   keys.filter(key=>key.startsWith('damsan-omr060-field-')&&key!==CACHE)
-   .map(key=>caches.delete(key)))));
+   .map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
 });
 self.addEventListener('fetch',event=>{
  const req=event.request;
