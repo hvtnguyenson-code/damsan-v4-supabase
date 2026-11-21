@@ -130,6 +130,8 @@ jobs:
         run: node tests/omr_066_multihypothesis_fiducial_simulation.js
       - name: OMR 066 seeded 48-photo geometry stress + 16 false-page veto
         run: node tests/omr_066_seeded_adversarial_benchmark.js
+      - name: OMR 066 4 camera sizes and orientation stress
+        run: node tests/omr_066_multiresolution_benchmark.js
       - name: OMR 062 field trial PWA offline and data safety static gate
         run: node tests/omr_062_fieldtrial_static_simulation.js
       - name: Teacher PWA refresh restoration 020
