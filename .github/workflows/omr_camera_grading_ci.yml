@@ -126,6 +126,8 @@ jobs:
         run: node tests/omr_060_writer_safety_simulation.js
       - name: OMR 061 isolated lab and durable local integration (no live DB)
         run: node tests/omr_060_integration_061_simulation.js
+      - name: OMR 066 independent multi-hypothesis fiducial and negative-case regression
+        run: node tests/omr_066_multihypothesis_fiducial_simulation.js
       - name: OMR 062 field trial PWA offline and data safety static gate
         run: node tests/omr_062_fieldtrial_static_simulation.js
       - name: Teacher PWA refresh restoration 020
