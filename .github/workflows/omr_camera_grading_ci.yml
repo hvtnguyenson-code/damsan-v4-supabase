@@ -115,6 +115,12 @@ jobs:
         run: node tests/omr_precision_capture_experiment_058_simulation.js
       - name: OMR 059 durable evidence queue / async uploads
         run: node tests/omr_precision_save_queue_059_simulation.js
+      - name: OMR 067 archived dual photometry benchmark
+        run: node tests/omr_067_photometry_benchmark.js
+      - name: OMR 068 spatial consensus and mixed degradation benchmark
+        run: node tests/omr_068_spatial_consensus_benchmark.js
+      - name: OMR 068 production release adapter and no-write research isolation
+        run: node tests/omr_068_release_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview
@@ -172,6 +178,10 @@ jobs:
           fi
           if [ "$PROBE_EXIT" -eq 0 ]; then
             timeout 45s node tests/run_teacher_omr_unified_mobile_052.mjs
+            PROBE_EXIT=$?
+          fi
+          if [ "$PROBE_EXIT" -eq 0 ]; then
+            timeout 65s node tests/run_teacher_omr_068_release.mjs
             PROBE_EXIT=$?
           fi
           set -e
