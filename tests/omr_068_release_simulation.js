@@ -6,8 +6,9 @@ const W=require('../omr/omr-result-write'),E=require('../omr/omr-v7-evidence'),A
 const {makeFixture}=require('./omr_068_release_fixture');
 const bundleFiles=['omr-v7-geometry-060','omr-v7-geometry-066','omr-v7-ink-060','omr-v7-photometry-067','omr-v7-photometry-068','omr-v7-pipeline-068','omr-result-write','omr-v7-evidence','omr-release-068','omr-teacher-module-068'];
 const bundle=bundleFiles.map(n=>fs.readFileSync('omr/'+n+'.js','utf8').trimEnd()).join('\n;\n')+'\n';
-assert.equal(fs.readFileSync('omr/omr-runtime-068-20261122.js','utf8'),bundle,'versioned bundle must equal reviewed sources');
-for(const path of ['teacher/index.html','giaovien.html','teacher/sw.js'])assert(fs.readFileSync(path,'utf8').includes('omr-runtime-068-20261122.js'));
+assert.equal(fs.readFileSync('omr/omr-runtime-068-default-20261122.js','utf8'),bundle,'current 068 bundle must equal reviewed sources');
+assert(fs.existsSync('omr/omr-runtime-068-20261122.js'),'previous 068 PWA bundle must remain available for older installed clients');
+for(const path of ['teacher/index.html','giaovien.html','teacher/sw.js'])assert(fs.readFileSync(path,'utf8').includes('omr-runtime-068-default-20261122.js'));
 assert(fs.readFileSync('teacher/index.html','utf8').includes('omr-v7-runtime-20261116-046.js'));
 assert(R.available()&&W.supports068&&E.supports068);
 const f=makeFixture(T),model=B.buildRoomModel(f.room,f.exams,f.students);
