@@ -1,5 +1,5 @@
 const VERSION='20261116-teacher-pwa-046';
-const CACHE='damsan-teacher-'+VERSION+'-omr068';
+const CACHE='damsan-teacher-'+VERSION+'-omr059-omr068';
 const CORE=[
   './',
   './index.html',

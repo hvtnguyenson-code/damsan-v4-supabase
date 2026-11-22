@@ -7,7 +7,8 @@ const ddl=fs.readFileSync('supabase/migrations/20261116233000_omr_one_final_stud
 const html=fs.readFileSync('teacher/index.html','utf8');
 const desktopHtml=fs.readFileSync('giaovien.html','utf8');
 const sw=fs.readFileSync('teacher/sw.js','utf8');
-for(const [name,code] of [['desktop',desktop],['mobile',mobile]]){
+const parallel=fs.readFileSync('omr/omr-teacher-module-068.js','utf8');
+for(const [name,code] of [['desktop',desktop],['mobile',mobile],['parallel068',parallel]]){
  const render=code.slice(code.indexOf('function renderEvidence(){'),code.indexOf('async function saveTestEvidence('));
  assert(!render.includes('saveTestEvidence(false)'),name+' auto-save preview must be removed');
  assert(render.includes('chỉ lưu một phiếu cuối cùng sau khi bấm Xác nhận & Lưu'));
