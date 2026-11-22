@@ -14,7 +14,7 @@
   const PRECISION_TEST_ROOM_CODE='OMR_V7_PRECISION_TEST';
   const precisionCapture=!!root.DamSanOmrPrecisionCapture;
   let precisionEvidenceQueue=null;
-  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null,evidenceCommittedSubmissionId:null};
+  const state={rooms:[],roomModel:null,stream:null,lastScan:null,lastPreview:null,saved:new Set(),facing:'environment',autoScanEnabled:true,autoScanTimer:null,autoScanBusy:false,autoScanStable:0,autoScanLastCorners:null,lastCaptureMode:'manual',photoZoom:1.65,cameraRequestSerial:0,labEnabled:false,officialEngine:'v7_068',lastV6:null,evidenceCtx:null,evidenceData:null,evidenceTimer:null,evidenceSave:null,evidenceExportNext:0,evidenceExportRoom:null,evidenceCommittedSubmissionId:null};
   const q=id=>document.getElementById(id);
   // Desktop keeps its V5/V6 fallback comparison. The teacher PWA, when
   // loaded with V7 modules, compares V6/V7 without any second route or RPC.
@@ -231,10 +231,10 @@
            <div class="omr-card" id="omrEngineWrap">
               <strong>Chọn thuật toán OMR</strong>
                <select id="omrEngineReleaseSelect" aria-label="Chọn thuật toán OMR" style="width:100%;margin-top:6px">
-                 <option value="v7">V7 — ổn định (dự phòng)</option>
-                 <option value="v7_068">068 — nhận dạng cải tiến</option>
+                 <option value="v7_068">068 — mặc định (nhận dạng cải tiến)</option>
+                 <option value="v7">V7 — dự phòng</option>
                </select>
-               <div class="omr-muted" style="margin-top:6px">Chọn 068 để chấm bằng thuật toán mới. V7 vẫn hoạt động độc lập. Kiểm tra SBD, mã đề và cảnh báo trước khi lưu.</div>
+               <div class="omr-muted" style="margin-top:6px">068 được chọn mặc định. Có thể đổi sang V7 khi cần; đổi thuật toán sẽ yêu cầu quét lại phiếu. Kiểm tra SBD, mã đề và cảnh báo trước khi lưu.</div>
               <div class="omr-muted" id="omrV7LoadStatus" style="display:none;margin-top:6px" role="status"></div>
             </div>
         </div>
@@ -445,8 +445,19 @@
       &&draft.scan.captureMode==='v7'
       &&draft.scan._labReadOnly===false
       &&draft.scan._requiresRetake===false);
+    // A committed score may still need its final evidence upload: never
+    // change its engine or clear its receipt. Preserve a valid V7 draft.
+    // Otherwise start a new grading session on 068.
+    const resumeCommitted=!!state.evidenceCommittedSubmissionId;
+    const inMemoryEngine=state.lastScan?.ok&&state.lastScan?._labReadOnly===false&&
+      state.lastScan.captureMode===state.officialEngine&&
+      ['v7','v7_068'].includes(state.officialEngine)?state.officialEngine:null;
+    const targetEngine=resumeCommitted?state.officialEngine:
+      (inMemoryEngine||(resumeDraft?'v7':'v7_068'));
     state.restoring=true;
-    state.officialEngine=saved?.engine==='v7_068'?'v7_068':'v7';
+    if(!resumeCommitted&&state.officialEngine!==targetEngine&&state.lastScan)
+      resetScan(); // clear stale in-memory results without deleting an on-disk draft
+    state.officialEngine=targetEngine;
     state.labEnabled=false;
     q('omrEngineReleaseSelect').value=state.officialEngine;
     q('omrSbd').readOnly=state.officialEngine==='v7_068';q('omrMaDe').readOnly=state.officialEngine==='v7_068';
