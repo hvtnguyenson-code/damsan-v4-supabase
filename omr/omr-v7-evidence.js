@@ -166,7 +166,7 @@ function compose(canvas,gray,T,preview,original,meta={},options={}){
  const student=text(meta.studentCode||preview.student?.ma_hs||'');
  const code=text(preview.variant?.code||'');
  ctx.fillStyle='#0f172a';ctx.font='bold 24px Arial, sans-serif';
- ctx.fillText('KẾT QUẢ CHẤM OMR V7',gutter,36,out.width-2*gutter);
+ ctx.fillText('KẾT QUẢ CHẤM OMR '+(preview.scan?.recognitionEngine==='V7_068'?'068':'V7'),gutter,36,out.width-2*gutter);
  ctx.font='18px Arial, sans-serif';
  ctx.fillText('Bài: '+room,gutter,70,out.width-2*gutter);
  ctx.fillText('Học sinh: '+name+'  |  SBD: '+student+'  |  Mã đề: '+code,gutter,100,out.width-2*gutter);
@@ -182,7 +182,7 @@ function compose(canvas,gray,T,preview,original,meta={},options={}){
 }
 function record(preview,original,report,meta={}){
  const grade=preview.grade,part=grade.parts;
- return {schema:1,version:VERSION,scan_id:meta.scanId||null,revision:meta.revision||1,
+ return {schema:1,version:VERSION,recognition_engine:preview.scan?.recognitionEngine==='V7_068'?'V7_068':'V7',scan_id:meta.scanId||null,revision:meta.revision||1,
   room_id:preview.room?.id||null,student_id:preview.student?.id||null,
   student_name:preview.student?.ho_ten||'',student_code:preview.student?.ma_hs||'',
   class_name:preview.student?.lop||'',room_name:preview.room?.ten_dot||preview.room?.MaPhong||'',
@@ -193,5 +193,5 @@ function record(preview,original,report,meta={}){
   edits:report.edits,uncertain_details:preview.scan?.uncertainDetails||[],
   report_summary:report.summary,notes:report.warnings,created_at:meta.timestamp||new Date().toISOString()};
 }
-return {VERSION,COLORS,slotsOf,pointAt,makeMarks,renderImage,compose,record,displayScore};
+return {supports068:true,VERSION,COLORS,slotsOf,pointAt,makeMarks,renderImage,compose,record,displayScore};
 });
