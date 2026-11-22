@@ -134,6 +134,8 @@ jobs:
         run: node tests/omr_066_multiresolution_benchmark.js
       - name: OMR 067 independent dual photometry 108-case benchmark and pipeline safety
         run: node tests/omr_067_photometry_benchmark.js
+      - name: OMR 068 cached optical sampling, spatial consensus and mixed mark stress
+        run: node tests/omr_068_spatial_consensus_benchmark.js
       - name: OMR 062 field trial PWA offline and data safety static gate
         run: node tests/omr_062_fieldtrial_static_simulation.js
       - name: Teacher PWA refresh restoration 020
