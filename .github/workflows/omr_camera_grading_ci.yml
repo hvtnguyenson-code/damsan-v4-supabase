@@ -121,6 +121,8 @@ jobs:
         run: node tests/omr_068_spatial_consensus_benchmark.js
       - name: OMR 068 production release adapter and no-write research isolation
         run: node tests/omr_068_release_simulation.js
+      - name: OMR 069 default 068, V7 fallback and PWA version isolation
+        run: node tests/omr_068_default_release_069_simulation.js
       - name: Teacher PWA refresh restoration 020
         run: node tests/teacher_refresh_restore_020_simulation.js
       - name: OMR 010 teacher photo preview

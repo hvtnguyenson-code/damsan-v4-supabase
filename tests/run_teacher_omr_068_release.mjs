@@ -28,7 +28,7 @@ async function browserTest(makeFixture){
  sessionStorage.removeItem('damSan_TeacherOmrReload_v1');
  await app.open();
  const q=id=>document.getElementById(id),selector=q('omrEngineReleaseSelect'),state=app._state;
- if(!selector||selector.options.length!==2||selector.value!=='v7')throw Error('Expected V7 default and 068 option');
+ if(!selector||selector.options.length!==2||selector.value!=='v7_068'||selector.options[0].value!=='v7_068'||selector.options[1].value!=='v7')throw Error('Expected 068 default and V7 fallback');
  const f=makeFixture(T);
  q('omrRoomSelect').add(new Option(f.room.MaPhong,f.room.id));q('omrRoomSelect').value=f.room.id;
  state.roomModel=B.buildRoomModel(f.room,f.exams,f.students);
@@ -69,6 +69,41 @@ async function browserTest(makeFixture){
  const legacy=await load();
  if(legacy.scan.recognitionEngine!=='V7'||legacy.scan.captureMode!=='v7'||legacy.grade.score!==9.5)
   throw Error('V7 fallback no longer operational '+JSON.stringify({engine:legacy.scan.recognitionEngine,score:legacy.grade.score}));
+ // A pending, in-memory V7 result must survive reopening this same page.
+ app.close();await app.open();
+ if(state.officialEngine!=='v7'||q('omrEngineReleaseSelect').value!=='v7'||
+   !state.lastScan||!state.lastPreview)
+  throw Error('Unfinished in-memory V7 scan must keep V7');
+ // Once the pending scan is cleared, the next session selects 068.
+ choose('v7_068');
+ if(state.lastScan||state.lastPreview||!q('omrSave').disabled)
+  throw Error('Switching engines must clear the previous scan');
+ app.close();await app.open();
+ if(state.officialEngine!=='v7_068'||q('omrEngineReleaseSelect').value!=='v7_068')
+  throw Error('Fresh OMR session must revert to 068 default');
+ // An actual unsaved V7 draft is protected from silent algorithm changes.
+ sessionStorage.setItem('damSan_GVSession',JSON.stringify({id:'synthetic-grader'}));
+ sessionStorage.setItem('damSan_TeacherOmrReload_v1',JSON.stringify({
+  v:1,owner:'synthetic-grader',at:Date.now(),roomId:'synthetic-room',engine:'v7',compare:false,
+  draft:{photo:'data:image/jpeg;base64,AA',roomId:'synthetic-room',engine:'v7',compare:false,
+   scan:{ok:true,recognitionEngine:'V7',captureMode:'v7',_labReadOnly:false,_requiresRetake:false}}
+ }));
+ app.close();await app.open();
+ if(state.officialEngine!=='v7'||q('omrEngineReleaseSelect').value!=='v7')
+  throw Error('Unfinished V7 draft must keep V7 on recovery');
+ sessionStorage.removeItem('damSan_TeacherOmrReload_v1');
+ sessionStorage.removeItem('damSan_GVSession');
+ app.close();await app.open();
+ if(state.officialEngine!=='v7_068')throw Error('068 must return after draft is cleared');
+ // Committed score with pending evidence must keep its original engine.
+ state.officialEngine='v7';q('omrEngineReleaseSelect').value='v7';
+ state.evidenceCommittedSubmissionId='synthetic-receipt';
+ app.close();await app.open();
+ if(state.officialEngine!=='v7'||state.evidenceCommittedSubmissionId!=='synthetic-receipt')
+  throw Error('Committed evidence must retain the selected engine');
+ state.evidenceCommittedSubmissionId=null;
+ app.close();await app.open();
+ if(state.officialEngine!=='v7_068')throw Error('068 must resume after evidence finishes');
  const width=q('omrTeacherOverlay').querySelector('.omr-shell');
  if(width.scrollWidth>width.clientWidth+2)throw Error('068 selector overflows mobile');
  return {options:[...selector.options].map(x=>x.textContent.trim()),newEngine:newPreview.scan.recognitionEngine,oldEngine:legacy.scan.recognitionEngine,
@@ -85,5 +120,5 @@ try{
  }
  if(!loaded)throw Error('068 versioned release did not load');
  const report=await evaluate('('+browserTest.toString()+')('+makeFixture.toString()+')');
- console.log('PASS OMR 068 Chromium parallel release and V7 fallback',JSON.stringify(report));
+ console.log('PASS OMR 068 Chromium default, V7 fallback and unfinished V7 draft safety',JSON.stringify(report));
 }finally{ws.close();}
