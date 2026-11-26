@@ -3327,11 +3327,13 @@ const controlRoomList = new Map();
 let controlMetadataRequest = 0;
 let controlListRequest = 0;
 let controlListScope = null;
+let roomRadarReadGeneration = 0;
 
 function resetRoomControlRuntime() {
     controlRoomDrafts.clear();
     controlRoomList.clear();
     controlListScope = null;
+    ++roomRadarReadGeneration;
     ++controlListRequest;
     ++controlMetadataRequest;
     const control = document.getElementById('ctrlMaPhong');
@@ -3943,8 +3945,12 @@ function reconcileRadarRooms(nextRooms) {
 }
 
 async function refreshRadarDataSilently() {
+    const generation = ++roomRadarReadGeneration;
+    const scope = String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId);
     try {
         let data = await rpcLayDanhSachPhongThi();
+        if (generation !== roomRadarReadGeneration || scope !== String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId))
+            return { status: 'stale' };
         let now = Date.now();
         if (data) {
             for (let r of data) {
@@ -3980,6 +3986,8 @@ async function refreshRadarDataSilently() {
         reconcileRadarRooms(allRoomsData);
         return { status: 'success' };
     } catch (err) {
+        if (generation !== roomRadarReadGeneration || scope !== String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId))
+            return { status: 'stale' };
         console.error("Lỗi cập nhật Radar ngầm:", err);
         return { status: 'error', error: err };
     }
@@ -4059,6 +4067,7 @@ async function dieuKhienFast(roomId, trangThai) {
             if (config) applySavedControlSettings(room, config);
 
             // In-place direct model update and row sync (zero redraw)
+            room = (allRoomsData || []).find(r => String(r.id) === String(roomId)) || room;
             room.TrangThai = trangThai;
             if (trangThai === 'MO_PHONG') {
                 room.ThoiGianMo = result?.thoi_gian_mo ?? Date.now();
@@ -4252,8 +4261,12 @@ function khoiDongDongHoGiaoVien() {
 
 
 async function fetchRadar() {
+    const generation = ++roomRadarReadGeneration;
+    const scope = String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId);
     try {
         let data = await rpcLayDanhSachPhongThi();
+        if (generation !== roomRadarReadGeneration || scope !== String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId))
+            return { status: 'stale' };
 
         let now = Date.now();
         if (data) {
@@ -4351,6 +4364,8 @@ async function fetchRadar() {
         khoiDongDongHoGiaoVien();
         return { status: 'success' };
     } catch (err) {
+        if (generation !== roomRadarReadGeneration || scope !== String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId))
+            return { status: 'stale' };
         console.error("Lỗi tải Radar:", err);
         let tbody = document.getElementById('radarBody');
         if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red; font-weight:bold;">❌ Lỗi tải dữ liệu phòng thi</td></tr>';
@@ -6341,7 +6356,7 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
             const titleOk = tenDot == null || String(fresh.TenDotKiemTra ?? fresh.ten_dot ?? '') === String(tenDot);
             const durationOk = thoiGian == null || Number(fresh.ThoiGian ?? fresh.thoi_gian) === Number(thoiGian);
             const actualStart = Number(fresh.ThoiGianMo ?? fresh.thoi_gian_mo);
-            const oldStart = Number(room.ThoiGianMo ?? room.thoi_gian_mo ?? 0);
+            const oldStart = priorStart;
             const startOk = !setOpenTime || (Number.isFinite(actualStart) && actualStart > oldStart && actualStart > 0);
             // Even a mismatched result can reveal an already-open room. Keep that
             // authoritative status locally, rather than inviting a timer-resetting retry.
@@ -6351,7 +6366,9 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
                 ThoiGian: fresh.ThoiGian ?? fresh.thoi_gian,
                 ThoiGianMo: fresh.ThoiGianMo ?? fresh.thoi_gian_mo
             };
-            for (const item of [room, controlRoomList.get(String(roomId))]) {
+            ++roomRadarReadGeneration;
+            ++controlListRequest;
+            for (const item of [room, controlRoomList.get(String(roomId)), (allRoomsData || []).find(r => String(r.id) === String(roomId))]) {
                 if (!item) continue;
                 for (const [key, value] of Object.entries(observed)) {
                     if (value !== undefined) item[key] = value;
@@ -6367,6 +6384,7 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
     if (trangThai === 'MO_PHONG' && (room.TrangThai ?? room.trang_thai) === 'MO_PHONG')
         throw new Error('Phòng đang thi. Không mở lại để tránh đặt lại đồng hồ.');
 
+    const priorStart = Number(room.ThoiGianMo ?? room.thoi_gian_mo ?? 0);
     const rpcPromise = staffRpc('rpc_dieu_khien_phong_thi', {
         p_ma_gv: gvData.ma_gv,
         p_truong_id: getRoomTargetSchoolId(room),
@@ -6383,7 +6401,20 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
         if (!data || data.status !== 'success') {
             throw new Error(data?.message || 'Không thể điều khiển phòng thi');
         }
-        return data;
+        // A prior Radar/list read may have replaced the object captured before the RPC.
+        // Invalidate old reads and update the current record, not just the captured reference.
+        ++roomRadarReadGeneration;
+        ++controlListRequest;
+        const newStart = setOpenTime ? (data.thoi_gian_mo ?? Date.now()) : null;
+        for (const item of [room, controlRoomList.get(String(roomId)), (allRoomsData || []).find(r => String(r.id) === String(roomId))]) {
+            if (!item) continue;
+            if (trangThai != null) item.TrangThai = trangThai;
+            if (doiTuong != null) item.DoiTuong = doiTuong;
+            if (tenDot != null) item.TenDotKiemTra = tenDot;
+            if (thoiGian != null) item.ThoiGian = thoiGian;
+            if (setOpenTime) item.ThoiGianMo = newStart;
+        }
+        return setOpenTime ? { ...data, thoi_gian_mo: newStart } : data;
     } catch (err) {
         const networkFailure = /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(String(err?.message ?? err));
         if (err?.code !== 'room_control_timeout' && !networkFailure) throw err;
