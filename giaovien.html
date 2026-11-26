@@ -810,11 +810,14 @@
                         </div></div>
                         <div class="flex-mobile-col" style="display: flex; gap: 15px; margin-bottom: 15px;">
                             <div class="input-group" style="flex: 2; background: #e8f0fe; padding: 15px; border-radius: 8px; border-left: 5px solid #1a73e8; margin-bottom: 0;"><label style="color: #1a73e8;">Tên Đợt Kiểm Tra (Tùy chọn):</label><input type="text" id="ctrlTenDot" placeholder="VD: Kiểm tra 15 phút..." style="border-color: #1a73e8;"></div>
-                            <div class="input-group" style="flex: 1; background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 5px solid #27ae60; margin-bottom: 0;"><label style="color: #27ae60;">Thời gian thi (phút):</label><input type="number" id="ctrlThoiGian" value="45" min="1" style="border-color: #27ae60;"></div>
+                            <div class="input-group" style="flex: 1; background: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 5px solid #27ae60; margin-bottom: 0;"><label style="color: #27ae60;">Thời gian thi (phút):</label><input type="number" id="ctrlThoiGian" min="1" step="1" style="border-color: #27ae60;"></div>
                         </div>
-                        <div class="input-group" style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 5px solid #f39c12;"><label style="color: #d35400;">Giao bài cho Lớp:</label><select id="ctrlDoiTuong" style="border-color: #f39c12; font-weight:bold;"><option value="TatCa">⏳ Đang tải...</option></select></div>
+                        <div class="input-group" style="background: #fff3cd; padding: 15px; border-radius: 8px; border-left: 5px solid #f39c12;"><label style="color: #d35400;">Giao bài cho Lớp:</label><select id="ctrlDoiTuong" style="border-color: #f39c12; font-weight:bold;"><option value="">— Chọn phòng trước —</option></select></div>
                         
                         <div class="btn-group">
+                            <button id="roomSaveSettingsBtn" type="button" class="room-action-btn" style="background:#1f2937;" onclick="saveRoomControlSettings()">💾 Lưu thiết lập phòng</button>
+                        </div>
+                        <div class="btn-group" style="margin-top:10px;">
                             <button id="roomOpenBtn" class="room-action-btn" style="background: #27ae60;" onclick="dieuKhien('MO_PHONG')">🟢 Mở Phòng (Đếm giờ)</button>
                             <button id="roomLockBtn" class="room-action-btn" style="background: #c0392b;" onclick="dieuKhien('THU_BAI')">🔴 Khóa Phòng & Ép Thu Bài</button>
                         </div>
@@ -1196,7 +1199,7 @@
         }
     </script>
     <script src="canonical_exam_print_bridge.js?v=20261013-canonical-room-print-080"></script>
-    <script src="giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-097&amp;omr=20261116-050&amp;room-cleanup=054&amp;room-reset=055"></script>
+    <script src="giaovien.js?v=20261103-autoheight-multiroom-094&amp;login=20261108-desktop-teacher-vault-097&amp;omr=20261116-050&amp;room-cleanup=054&amp;room-reset=055&amp;room-control=20261126-01"></script>
     <script src="admin_system_status_083a.js?v=20261018-admin-system-status-083a"></script>
     <script src="admin_system_maintenance_083b.js?v=20261018-admin-maintenance-083b"></script>
     <script src="teacher_canonical_export_079.js?v=20261013-canonical-room-print-080"></script>

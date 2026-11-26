@@ -1524,7 +1524,73 @@ async function runAllTests() {
     console.log('  -> PASSED');
   }
 
-  console.log('\n=== ALL 70 TEACHER ROOM CONTROL RELIABILITY TESTS PASSED SUCCESSFULLY ===');
+  console.log('ROOM-CONTROL-01: main open sends numeric duration and exact target');
+  {
+    const {sandbox, elements, metrics} = createHarness();
+    elements.ctrlTenDot.value = 'Luyện tập';
+    elements.ctrlThoiGian.value = '50';
+    elements.ctrlDoiTuong.value = '12A3';
+    const result = await sandbox.dieuKhien('MO_PHONG');
+    assert.strictEqual(result.status, 'success');
+    const params = metrics.rpcCalls[0].params;
+    assert.strictEqual(params.p_thoi_gian, 50);
+    assert.strictEqual(params.p_doi_tuong, '12A3');
+    assert.strictEqual(params.p_ten_dot, 'Luyện tập');
+  }
+  console.log('ROOM-CONTROL-02: saving metadata does not open or restart room');
+  {
+    const {sandbox, elements, metrics} = createHarness();
+    elements.ctrlTenDot.value = 'Luyện tập';
+    elements.ctrlThoiGian.value = '20';
+    elements.ctrlDoiTuong.value = '10A4, 10A5';
+    const result = await sandbox.saveRoomControlSettings();
+    assert.strictEqual(result.status, 'success');
+    const params = metrics.rpcCalls[0].params;
+    assert.strictEqual(params.p_thoi_gian, 20);
+    assert.strictEqual(params.p_doi_tuong, '10A4, 10A5');
+    assert.strictEqual(params.p_trang_thai, null);
+    assert.strictEqual(params.p_set_open_time, false);
+  }
+  console.log('ROOM-CONTROL-03: invalid duration cannot trigger opening');
+  {
+    const {sandbox, elements, metrics} = createHarness();
+    elements.ctrlThoiGian.value = '';
+    const result = await sandbox.dieuKhien('MO_PHONG');
+    assert.strictEqual(result.status, 'error');
+    assert.strictEqual(metrics.rpcCalls.length, 0);
+  }
+  console.log('ROOM-CONTROL-04: quick opening applies the draft of that exact room');
+  {
+    const {sandbox, elements, metrics} = createHarness();
+    elements.ctrlMaPhong.value = 'room-uuid-101';
+    elements.ctrlThoiGian.value = '50';
+    elements.ctrlDoiTuong.value = '12A3';
+    elements.ctrlTenDot.value = 'Luyện tập';
+    sandbox.rememberControlDraft();
+    const result = await sandbox.dieuKhienFast('room-uuid-101','MO_PHONG');
+    assert.strictEqual(result.status, 'success');
+    assert.strictEqual(metrics.rpcCalls[0].params.p_thoi_gian, 50);
+    assert.strictEqual(metrics.rpcCalls[0].params.p_doi_tuong, '12A3');
+  }
+  console.log('ROOM-CONTROL-05: lost response requires exact saved metadata and new start time');
+  {
+    const {sandbox, elements} = createHarness({mockStaffRpc: async () => { throw new Error('TypeError: Failed to fetch'); }});
+    elements.ctrlThoiGian.value = '50';
+    elements.ctrlDoiTuong.value = '12A3';
+    elements.ctrlTenDot.value = 'Luyện tập';
+    sandbox.rpcLayDanhSachPhongThi = async () => [{id:'room-uuid-101', trang_thai:'MO_PHONG', doi_tuong:'12A3', thoi_gian:45, ten_dot:'Luyện tập', thoi_gian_mo: Date.now()}];
+    assert.strictEqual((await sandbox.dieuKhien('MO_PHONG')).status, 'error');
+    sandbox.rpcLayDanhSachPhongThi = async () => [{id:'room-uuid-101', trang_thai:'MO_PHONG', doi_tuong:'12A3', thoi_gian:50, ten_dot:'Luyện tập', thoi_gian_mo: Date.now()}];
+    assert.strictEqual((await sandbox.dieuKhien('MO_PHONG')).status, 'success');
+  }
+  console.log('ROOM-CONTROL-06: known active room cannot be opened again');
+  {
+    const room = {id:'active', MaPhong:'ACTIVE', TrangThai:'MO_PHONG', ThoiGian:45, DoiTuong:'12A3'};
+    const {sandbox, metrics} = createHarness({defaultRoom:room});
+    assert.strictEqual((await sandbox.dieuKhien('MO_PHONG')).status, 'error');
+    assert.strictEqual(metrics.rpcCalls.length, 0);
+  }
+  console.log('\n=== ROOM CONTROL RELIABILITY TESTS PASSED SUCCESSFULLY ===');
 }
 
 runAllTests().catch(err => {
