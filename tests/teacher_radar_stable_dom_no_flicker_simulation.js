@@ -1261,6 +1261,21 @@ async function runAllTests() {
   // PART G: VERSION INVARIANTS & INTEGRATION (STABLE-39 - 44)
   // =======================================================================
 
+  console.log('ROOM-CONTROL: a delayed Radar response cannot revert a newer lock');
+  {
+    const room = {id:'stale-radar', MaPhong:'STALE', TrangThai:'MO_PHONG', ThoiGian:50, DoiTuong:'12A3'};
+    const {sandbox} = createHarness({allRooms:[room]});
+    let release;
+    sandbox.rpcLayDanhSachPhongThi = () => new Promise(resolve => { release = resolve; });
+    const delayed = sandbox.refreshRadarDataSilently();
+    const finishOldRead = release;
+    const locked = await sandbox.dieuKhienFast('stale-radar','THU_BAI');
+    assert.strictEqual(locked.status,'success');
+    finishOldRead([{id:'stale-radar',ma_phong:'STALE',trang_thai:'MO_PHONG',thoi_gian:50,doi_tuong:'12A3'}]);
+    assert.strictEqual((await delayed).status,'stale');
+    assert.strictEqual(sandbox.allRoomsData.find(r => r.id === 'stale-radar').TrangThai,'THU_BAI');
+    if (release !== finishOldRead) release([{id:'stale-radar',ma_phong:'STALE',trang_thai:'THU_BAI',thoi_gian:50,doi_tuong:'12A3'}]);
+  }
   console.log('Test STABLE-39: giaovien.html loads giaovien.js?v=20261103-autoheight-multiroom-094');
   {
     assert(gvHtmlSource.includes('giaovien.js?v=20261103-autoheight-multiroom-094'), 'Must load 20261103-autoheight-multiroom-094');
