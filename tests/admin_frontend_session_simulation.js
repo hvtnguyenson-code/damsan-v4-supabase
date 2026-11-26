@@ -76,7 +76,7 @@ const targetSchool = body('getExamTargetSchoolId');
 must(/activeWorkspaceTruongId === 'ALL'[\s\S]*Vui lòng chọn TRƯỜNG ĐÍCH cụ thể/, 'F32-F33 tạo phòng Admin yêu cầu trường đích cụ thể');
 const roomSelectors = body('taiDanhSachPhong');
 assert(!/new Set\(data\.map\(d=>d\.ma_phong/.test(roomSelectors), 'F34 không dedupe room toàn cục theo mã');
-must(/option value="\$\{room\.id\}" data-ma-phong/, 'F35 selector dùng UUID');
+assert(/opt\.value = String\(room\.id\)/.test(roomSelectors) && /opt\.dataset\.maPhong = code/.test(roomSelectors), 'F35 selector dùng UUID và mã phòng chỉ là nhãn');
 must(/function getSelectedRoom[\s\S]*room\.id/, 'F36 resolve action theo UUID');
 must(/candidates\.length > 1/, 'F37 room code trùng không tự chọn record đầu tiên');
 const preview = body('xemTruocDeThi');

@@ -441,10 +441,7 @@ function isAccountManagementActive() {
 
 function clearAccountRuntimeState() {
     sessionStorage.removeItem('cache_students');
-    controlRoomDrafts.clear();
-    controlRoomList.clear();
-    ++controlListRequest;
-    ++controlMetadataRequest;
+    if (typeof resetRoomControlRuntime === 'function') resetRoomControlRuntime();
     allStudents = [];
     allTeachers = [];
     currentStudentFilter = 'TatCa';
@@ -1650,8 +1647,16 @@ async function mc_luuChonLop() {
 
     let btn = document.querySelector('#multiClassModal button[onclick="mc_luuChonLop()"]');
     let oldText = btn.innerText; btn.innerText = "⏳ ĐANG LƯU..."; btn.disabled = true;
-    await capNhatNhanhPhong(roomId, 'doi_tuong', finalVal);
-    btn.innerText = oldText; btn.disabled = false; document.getElementById('multiClassModal').style.display = 'none'; fetchRadar(); 
+    try {
+        await capNhatNhanhPhong(roomId, 'doi_tuong', finalVal);
+        document.getElementById('multiClassModal').style.display = 'none';
+        fetchRadar();
+    } catch (e) {
+        alert('Không lưu được đối tượng thi: ' + e.message);
+    } finally {
+        btn.innerText = oldText;
+        btn.disabled = false;
+    }
 }
 
 function phanQuyenGiaoVien() {
@@ -3297,7 +3302,13 @@ async function loadMetaData() {
     const room = getSelectedRoom('ctrlMaPhong');
     const targetSchoolId = room?.truong_id || getActiveTargetSchoolId();
     if (!targetSchoolId) return;
-    const { data, error } = await sb.from('hoc_sinh').select('lop').eq('truong_id', targetSchoolId);
+    let data, error;
+    try {
+        ({ data, error } = await sb.from('hoc_sinh').select('lop').eq('truong_id', targetSchoolId));
+    } catch (e) {
+        console.warn('Không tải được danh sách lớp:', e);
+        return;
+    }
     if (request !== controlMetadataRequest ||
         roomId !== (document.getElementById('ctrlMaPhong')?.value || '')) return;
     if (error || !Array.isArray(data)) return;
@@ -3315,6 +3326,17 @@ const controlRoomDrafts = new Map();
 const controlRoomList = new Map();
 let controlMetadataRequest = 0;
 let controlListRequest = 0;
+let controlListScope = null;
+
+function resetRoomControlRuntime() {
+    controlRoomDrafts.clear();
+    controlRoomList.clear();
+    controlListScope = null;
+    ++controlListRequest;
+    ++controlMetadataRequest;
+    const control = document.getElementById('ctrlMaPhong');
+    if (control) control.value = '';
+}
 
 function renderControlTargets(value, classes = []) {
     const select = document.getElementById('ctrlDoiTuong');
@@ -3985,7 +4007,7 @@ async function dieuKhien(trangThai) {
 
         try {
             const config = trangThai === 'MO_PHONG' ? validateControlSettings(captureControlSettings()) : null;
-            await rpcDieuKhienPhongThi(
+            const result = await rpcDieuKhienPhongThi(
                 cachedRoom.id,
                 trangThai,
                 config?.doiTuong ?? null,
@@ -3994,6 +4016,13 @@ async function dieuKhien(trangThai) {
                 trangThai === 'MO_PHONG'
             );
             if (config) applySavedControlSettings(cachedRoom, config);
+            cachedRoom.TrangThai = trangThai;
+            const listed = controlRoomList.get(String(cachedRoom.id));
+            if (listed) listed.TrangThai = trangThai;
+            if (trangThai === 'MO_PHONG') {
+                cachedRoom.ThoiGianMo = result?.thoi_gian_mo ?? Date.now();
+                if (listed) listed.ThoiGianMo = cachedRoom.ThoiGianMo;
+            }
 
             if (logEl) logEl.innerText = `✅ THÀNH CÔNG!`;
             fetchRadar();
@@ -4139,7 +4168,10 @@ async function capNhatNhanhPhong(roomId, field, value) {
         if (controlRoomList.has(id)) controlRoomList.get(id).DoiTuong = value;
         const draft = controlRoomDrafts.get(id);
         if (draft) draft.doiTuong = value;
-        if (document.getElementById('ctrlMaPhong')?.value === id) renderControlTargets(value);
+        if (document.getElementById('ctrlMaPhong')?.value === id) {
+            renderControlTargets(value);
+            void loadMetaData();
+        }
         return;
     }
     throw new Error("Truong cap nhat khong duoc phep: " + field);
@@ -4691,6 +4723,22 @@ async function taiDanhSachPhong() {
     const control = document.getElementById('ctrlMaPhong');
     const dashboard = document.getElementById('dashMaPhong');
     const scope = String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId);
+    if (controlListScope !== scope) {
+        controlListScope = scope;
+        controlRoomList.clear();
+        ++controlMetadataRequest;
+        // Scope changes cannot leave an actionable selection from another school/subject.
+        if (control) {
+            control.replaceChildren();
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Đang tải danh sách phòng...';
+            control.appendChild(option);
+            control.value = '';
+            populateControlSettings(null);
+        }
+        if (dashboard) dashboard.value = '';
+    }
     try {
         const data = await rpcLayDanhSachPhongThi();
         if (request !== controlListRequest || scope !== String(activeWorkspaceTruongId) + ':' + String(activeWorkspaceMonId))

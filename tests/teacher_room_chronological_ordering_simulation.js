@@ -63,12 +63,14 @@ function createHarness(options = {}) {
           contains(c) { return this.classes.has(c); }
         },
         attributes: {},
+        dataset: {},
         setAttribute(k, v) { this.attributes[k] = v; },
         getAttribute(k) { return this.attributes[k]; },
         removeAttribute(k) { delete this.attributes[k]; },
         parentNode: null,
         parentElement: null,
         children: [],
+        replaceChildren() { this.children = []; this.value = ''; },
         appendChild(child) {
           this.children.push(child);
           child.parentNode = this;
@@ -109,6 +111,9 @@ function createHarness(options = {}) {
   // Pre-seed select boxes
   const ctrlMaPhong = getOrCreateElement('ctrlMaPhong', 'select');
   const dashMaPhong = getOrCreateElement('dashMaPhong', 'select');
+  getOrCreateElement('ctrlThoiGian', 'input').value = '45';
+  getOrCreateElement('ctrlTenDot', 'input').value = '';
+  getOrCreateElement('ctrlDoiTuong', 'select').value = 'TatCa';
 
   // Timers
   const pendingTimers = [];
@@ -194,7 +199,11 @@ function createHarness(options = {}) {
       return isNaN(parsed) ? (parseInt(ts) || 0) : parsed;
     },
     getRoomTargetSchoolId: (r) => r?.truong_id || '11111111-1111-1111-1111-111111111111',
-    getSelectedRoom: () => options.defaultRoom || options.allRooms?.[0] || null,
+    getSelectedRoom: () => options.defaultRoom || options.allRooms?.find(r => r.id === ctrlMaPhong.value) || options.allRooms?.[0] || null,
+    getActiveTargetSchoolId: () => 'school',
+    g_danhSachLopCache: [],
+    fetchDashboard: () => {},
+    sb: { from: () => ({select: () => ({eq: (_field, school) => options.metadata ? options.metadata(school) : Promise.resolve({data:[]})})}) },
     staffRpc: async (name, args) => {
       metrics.staffRpcCalls.push({ name, args });
       if (options.mockStaffRpc) return options.mockStaffRpc(name, args);
@@ -231,7 +240,11 @@ function createHarness(options = {}) {
   assert(rpcDieuKhienIdx >= 0, 'rpcDieuKhienPhongThi marker must be found in giaovien.js');
   const rpcDieuKhienBlock = gvJsSource.slice(rpcDieuKhienIdx, sortIdx);
 
+  const metadataIdx = gvJsSource.indexOf('async function loadMetaData() {');
+  assert(metadataIdx >= 0);
+  const metadataBlock = gvJsSource.slice(metadataIdx, helperIdx);
   const scriptCode = `
+    ${metadataBlock}
     ${roomBlock}
     ${rpcDieuKhienBlock}
     ${sortBlock}
@@ -626,7 +639,9 @@ async function runAllTests() {
 
     // Set select box value to roomA (oldest room) and invoke dieuKhien('MO_PHONG')
     elements['ctrlMaPhong'].value = 'rA';
-    await sandbox.dieuKhien('MO_PHONG');
+    const result = await sandbox.dieuKhien('MO_PHONG');
+    assert.strictEqual(result.status, 'success');
+    assert.strictEqual(roomA.trang_thai, 'MO_PHONG');
 
     // Refetch and verify order
     await sandbox.fetchRadar();
@@ -955,15 +970,52 @@ async function runAllTests() {
 
     await sandbox.taiDanhSachPhong();
 
-    const selectHtml = elements['ctrlMaPhong'].innerHTML;
-    const idxNew = selectHtml.indexOf('ANEW');
-    const idxOld = selectHtml.indexOf('ZOLD');
+    const ids = elements['ctrlMaPhong'].children.map(option => option.value);
+    const idxNew = ids.indexOf('a-new');
+    const idxOld = ids.indexOf('z-old');
 
     assert(idxNew >= 0 && idxOld >= 0, 'Both options must be rendered');
     assert(idxNew < idxOld, 'Newest room ANEW must appear before older room ZOLD in dropdown options');
     console.log('  -> PASSED');
   }
 
+  console.log('ROOM-CONFIG: asynchronous metadata and room switching preserve exact room-specific settings');
+  {
+    const rooms = [
+      {id:'room-A', ma_phong:'A', truong_id:'school-A', thoi_gian:20, doi_tuong:'10A4, 10A5', ten_dot:'A', trang_thai:'CHO_THI'},
+      {id:'room-B', ma_phong:'B', truong_id:'school-B', thoi_gian:50, doi_tuong:'12A3', ten_dot:'B', trang_thai:'CHO_THI'}
+    ];
+    const pending = [];
+    const {sandbox,elements} = createHarness({
+      allRooms:rooms,
+      mockStaffRpc: async () => ({status:'success',rooms}),
+      metadata: school => new Promise(resolve => pending.push({school,resolve}))
+    });
+    assert.strictEqual((await sandbox.taiDanhSachPhong()).status,'success');
+    const select = elements.ctrlMaPhong;
+    select.value = 'room-A'; select.onchange();
+    assert.strictEqual(elements.ctrlThoiGian.value,'20');
+    assert.strictEqual(elements.ctrlDoiTuong.value,'10A4, 10A5');
+    elements.ctrlThoiGian.value = '25'; elements.ctrlThoiGian.oninput();
+    select.value = 'room-B'; select.onchange();
+    assert.strictEqual(elements.ctrlThoiGian.value,'50');
+    assert.strictEqual(elements.ctrlDoiTuong.value,'12A3');
+    pending[1].resolve({data:[{lop:'12A3'},{lop:'12A4'}]});
+    await Promise.resolve(); await Promise.resolve();
+    pending[0].resolve({data:[{lop:'10A4'}]});
+    await Promise.resolve(); await Promise.resolve();
+    assert.strictEqual(elements.ctrlDoiTuong.value,'12A3');
+    assert(elements.ctrlDoiTuong.children.some(o => o.value === '12A4'));
+    assert(!elements.ctrlDoiTuong.children.some(o => o.value === '10A4'));
+    select.value = 'room-A'; select.onchange();
+    assert.strictEqual(elements.ctrlThoiGian.value,'25');
+    assert.strictEqual(elements.ctrlDoiTuong.value,'10A4, 10A5');
+    await sandbox.taiDanhSachPhong();
+    assert.strictEqual(select.value,'room-A');
+    assert.strictEqual(elements.ctrlThoiGian.value,'25');
+    assert.strictEqual(elements.ctrlDoiTuong.value,'10A4, 10A5');
+    for (const req of pending.slice(2)) req.resolve({data:[{lop:'10A4'},{lop:'10A5'}]});
+  }
   console.log('Test ORDER-38: CreatedAt is mapped into allRoomsData without duplicate alias');
   {
     const testCreatedAt = '2026-09-03T08:30:00.123Z';
