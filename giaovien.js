@@ -3362,8 +3362,8 @@ function renderControlTargets(value, classes = []) {
 function roomControlSettings(room) {
     return {
         tenDot: String(room?.TenDotKiemTra ?? room?.ten_dot ?? ''),
-        thoiGian: String(room?.ThoiGian ?? room?.thoi_gian ?? 45),
-        doiTuong: String(room?.DoiTuong ?? room?.doi_tuong ?? 'TatCa')
+        thoiGian: String(room?.ThoiGian ?? room?.thoi_gian ?? ''),
+        doiTuong: String(room?.DoiTuong ?? room?.doi_tuong ?? '')
     };
 }
 
@@ -6343,6 +6343,20 @@ async function rpcDieuKhienPhongThi(roomId, trangThai, doiTuong = null, tenDot =
             const actualStart = Number(fresh.ThoiGianMo ?? fresh.thoi_gian_mo);
             const oldStart = Number(room.ThoiGianMo ?? room.thoi_gian_mo ?? 0);
             const startOk = !setOpenTime || (Number.isFinite(actualStart) && actualStart > oldStart && actualStart > 0);
+            // Even a mismatched result can reveal an already-open room. Keep that
+            // authoritative status locally, rather than inviting a timer-resetting retry.
+            const observed = {
+                TrangThai: actualStatus, DoiTuong: actualTarget,
+                TenDotKiemTra: fresh.TenDotKiemTra ?? fresh.ten_dot,
+                ThoiGian: fresh.ThoiGian ?? fresh.thoi_gian,
+                ThoiGianMo: fresh.ThoiGianMo ?? fresh.thoi_gian_mo
+            };
+            for (const item of [room, controlRoomList.get(String(roomId))]) {
+                if (!item) continue;
+                for (const [key, value] of Object.entries(observed)) {
+                    if (value !== undefined) item[key] = value;
+                }
+            }
             return statusOk && targetOk && titleOk && durationOk && startOk ? fresh : false;
         } catch (_) {
             return false;

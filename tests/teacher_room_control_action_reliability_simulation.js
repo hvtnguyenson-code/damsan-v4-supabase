@@ -1574,14 +1574,15 @@ async function runAllTests() {
   }
   console.log('ROOM-CONTROL-05: lost response requires exact saved metadata and new start time');
   {
-    const {sandbox, elements} = createHarness({mockStaffRpc: async () => { throw new Error('TypeError: Failed to fetch'); }});
-    elements.ctrlThoiGian.value = '50';
-    elements.ctrlDoiTuong.value = '12A3';
-    elements.ctrlTenDot.value = 'Luyện tập';
-    sandbox.rpcLayDanhSachPhongThi = async () => [{id:'room-uuid-101', trang_thai:'MO_PHONG', doi_tuong:'12A3', thoi_gian:45, ten_dot:'Luyện tập', thoi_gian_mo: Date.now()}];
-    assert.strictEqual((await sandbox.dieuKhien('MO_PHONG')).status, 'error');
-    sandbox.rpcLayDanhSachPhongThi = async () => [{id:'room-uuid-101', trang_thai:'MO_PHONG', doi_tuong:'12A3', thoi_gian:50, ten_dot:'Luyện tập', thoi_gian_mo: Date.now()}];
-    assert.strictEqual((await sandbox.dieuKhien('MO_PHONG')).status, 'success');
+    for (const [duration, expected] of [[45, 'error'], [50, 'success']]) {
+      const {sandbox, elements, metrics} = createHarness({mockStaffRpc: async () => { throw new Error('TypeError: Failed to fetch'); }});
+      elements.ctrlThoiGian.value = '50';
+      elements.ctrlDoiTuong.value = '12A3';
+      elements.ctrlTenDot.value = 'Luyện tập';
+      sandbox.rpcLayDanhSachPhongThi = async () => [{id:'room-uuid-101', trang_thai:'MO_PHONG', doi_tuong:'12A3', thoi_gian:duration, ten_dot:'Luyện tập', thoi_gian_mo: Date.now()}];
+      assert.strictEqual((await sandbox.dieuKhien('MO_PHONG')).status, expected);
+      assert.strictEqual(metrics.rpcCallsByName.rpc_dieu_khien_phong_thi, 1, 'Never retry an ambiguous mutation automatically');
+    }
   }
   console.log('ROOM-CONTROL-06: known active room cannot be opened again');
   {
